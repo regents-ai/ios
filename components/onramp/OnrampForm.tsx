@@ -84,6 +84,7 @@
  */
 
 import { Ionicons } from '@expo/vector-icons';
+import { useCurrentUser } from '@coinbase/cdp-hooks';
 import { useRegentsAuth } from '@/hooks/useRegentsAuth';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Image, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
@@ -95,7 +96,7 @@ import { SwipeToConfirm } from '../ui/SwipeToConfirm';
 import { fetchUserLimits, UserLimit } from '../../utils/fetchUserLimits';
 import { getAccessTokenGlobal } from '../../utils/getAccessTokenGlobal';
 
-const { BLUE, DARK_BG, CARD_BG, BORDER, TEXT_PRIMARY, TEXT_SECONDARY, ORANGE } = COLORS;
+const { BLUE, DARK_BG, CARD_BG, CARD_ALT, BORDER, TEXT_PRIMARY, TEXT_SECONDARY, ORANGE, DANGER, BACKDROP } = COLORS;
 
 export type OnrampFormData = {
   amount: string;
@@ -152,7 +153,8 @@ export function OnrampForm({
   buyConfig,
   footerContent
 }: OnrampFormProps) {
-  const { regentsUserId } = useRegentsAuth();
+  const { isAuthenticated, linkedEmail, linkedPhone, regentsUserId } = useRegentsAuth();
+  const { currentUser } = useCurrentUser();
 
   const [asset, setAsset] = useState("USDC");
   const [network, setNetwork] = useState("Base");
@@ -187,6 +189,10 @@ const usSubs = useMemo(() => {
   const src = buyConfig?.countries ?? options?.countries;
   return src?.find((c: any) => c.id === 'US')?.subdivisions ?? [];
 }, [buyConfig, options]);
+  const verifiedPhone = getVerifiedPhone();
+  const hasFreshVerifiedPhone = !!linkedPhone && verifiedPhone === linkedPhone && isPhoneFresh60d();
+  const needsGuestCheckoutVerification = !localSandboxEnabled && isGuestCheckout && (!linkedEmail || !linkedPhone || !hasFreshVerifiedPhone);
+  const isUnsupportedGuestCheckoutRegion = !localSandboxEnabled && isGuestCheckout && country !== 'US';
 
   const isEvmNetwork = (() => {
     const n = (network || '').toLowerCase();
@@ -905,6 +911,34 @@ const usSubs = useMemo(() => {
         </View>
       )}
 
+      {isUnsupportedGuestCheckoutRegion ? (
+        <View style={[styles.notificationCard, { borderLeftWidth: 4, borderLeftColor: ORANGE, backgroundColor: ORANGE + '08' }]}>
+          <View style={styles.notificationHeader}>
+            <Ionicons name="warning" size={20} color={ORANGE} />
+            <Text style={[styles.notificationTitle, { color: ORANGE }]}>Region not supported</Text>
+          </View>
+          <Text style={styles.notificationText}>
+            Apple Pay checkout from this app is only available in the United States right now. Use the hosted checkout instead, or switch to test mode to keep exploring.
+          </Text>
+        </View>
+      ) : null}
+
+      {needsGuestCheckoutVerification ? (
+        <View style={[styles.notificationCard, styles.errorCard]}>
+          <View style={styles.notificationHeader}>
+            <Ionicons name="alert-circle" size={20} color="#FF6B6B" />
+            <Text style={[styles.notificationTitle, { color: '#FF6B6B' }]}>Verification needed</Text>
+          </View>
+          <Text style={styles.notificationText}>
+            {linkedEmail
+              ? linkedPhone
+                ? 'Verify your phone again before using Apple Pay from this app.'
+                : 'Link a phone number before using Apple Pay from this app.'
+              : 'Link an email and phone number before using Apple Pay from this app.'}
+          </Text>
+        </View>
+      ) : null}
+
       {/* Wallet Notification */}
       {!localSandboxEnabled && !isEvmNetwork && !isSolanaNetwork ? (
         <View style={styles.notificationCard}>
@@ -961,7 +995,7 @@ const usSubs = useMemo(() => {
             You can change this address any time from <Text style={styles.badgeProd}>Settings</Text>.
           </Text>
         </View>
-      ) : isSignedIn ? (
+      ) : isAuthenticated ? (
         <View style={[styles.notificationCard, styles.productionCard]}>
           <View style={styles.notificationHeader}>
             <Ionicons name="warning" size={20} color="#FF6B6B" />
@@ -1424,7 +1458,7 @@ const styles = StyleSheet.create({
   currencyTag: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: BORDER,
+    backgroundColor: CARD_ALT,
     paddingHorizontal: 12,      
     paddingVertical: 8,        
     borderRadius: 16,
@@ -1460,7 +1494,7 @@ const styles = StyleSheet.create({
   assetSelect: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: BORDER,
+    backgroundColor: CARD_ALT,
     paddingHorizontal: 12,    
     paddingVertical: 8,        
     borderRadius: 16,
@@ -1496,7 +1530,7 @@ const styles = StyleSheet.create({
   networkSelect: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: BORDER,
+    backgroundColor: CARD_ALT,
     paddingHorizontal: 12,     
     paddingVertical: 8,        
     borderRadius: 16,
@@ -1534,7 +1568,7 @@ const styles = StyleSheet.create({
   paymentSelect: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: BORDER,
+    backgroundColor: CARD_ALT,
     paddingHorizontal: 12,     
     paddingVertical: 8,        
     borderRadius: 16,
@@ -1629,8 +1663,8 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     overflow: 'hidden',
     fontWeight: '600',
-    backgroundColor: 'rgba(37, 99, 235, 0.12)',
-    color: '#2563EB',
+    backgroundColor: BLUE + '12',
+    color: BLUE,
   },
   input: {
     backgroundColor: CARD_BG,
@@ -1684,13 +1718,13 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   errorText: {
-    color: "#FF6B6B",           
+    color: DANGER,
     fontSize: 12,
     marginTop: 6,
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(10, 11, 13, 0.8)", 
+    backgroundColor: BACKDROP,
     justifyContent: "flex-end",
   },
   modalHandle: {
@@ -1704,8 +1738,10 @@ const styles = StyleSheet.create({
   },
   modalSheet: {
     backgroundColor: CARD_BG,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderWidth: 1,
+    borderColor: BORDER,
     maxHeight: '50%',
     width: '100%',
     minHeight: 320,
@@ -1784,20 +1820,19 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: CARD_BG,
-    borderRadius: 12,           
+    borderRadius: 20,
     padding: 16,                
     borderWidth: 1,
     borderColor: BORDER,
-    
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },  
-    shadowOpacity: 0.05,        
-    shadowRadius: 4,            
-    elevation: 2,              
+    shadowColor: BLUE,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.06,
+    shadowRadius: 16,
+    elevation: 2,
   },
   cardTitle: {
-    fontSize: 14,              
-    color: TEXT_SECONDARY,
+    fontSize: 14,
+    color: BLUE,
     marginBottom: 12,          
     fontFamily: FONTS.heading,
   },
@@ -1823,7 +1858,7 @@ const styles = StyleSheet.create({
   },
   notificationCard: {
     backgroundColor: CARD_BG,
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
     borderWidth: 1,
     borderColor: BORDER,
@@ -1831,8 +1866,8 @@ const styles = StyleSheet.create({
   },
   errorCard: {
     borderLeftWidth: 4,
-    borderLeftColor: '#FF6B6B',
-    backgroundColor: '#FF6B6B' + '08', // Very light red tint
+    borderLeftColor: DANGER,
+    backgroundColor: DANGER + '08',
   },
   sandboxCard: {
     borderLeftWidth: 4,
@@ -1841,8 +1876,8 @@ const styles = StyleSheet.create({
   },
   productionCard: {
     borderLeftWidth: 4,
-    borderLeftColor: '#FF6B6B',
-    backgroundColor: '#FF6B6B08', // Very light red tint
+    borderLeftColor: DANGER,
+    backgroundColor: DANGER + '08',
   },
   regionCard: {
     padding: 12,
@@ -1855,7 +1890,7 @@ const styles = StyleSheet.create({
   regionSelect: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: BORDER,
+    backgroundColor: CARD_ALT,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 12,

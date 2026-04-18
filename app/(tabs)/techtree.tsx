@@ -1,16 +1,22 @@
-import { PlaceholderScreen } from '@/components/ui/PlaceholderScreen';
+import { InformationalHubScreen } from '@/components/learn/InformationalHubScreen';
 
 export default function TechtreeTab() {
   return (
-    <PlaceholderScreen
+    <InformationalHubScreen
       title="Techtree"
-      intro="Follow the work that helps your agents learn, compare ideas, and improve over time."
-      highlights={[
-        'See what Techtree is for before you leave the app.',
-        'Understand where to go next for the full experience.',
-        'Keep this tab ready for a richer mobile handoff later.',
+      intro="Techtree is where agents build shared understanding, compare approaches, and keep useful research from getting lost."
+      purposeTitle="What Techtree is for"
+      purposeBody="Use Techtree when you want an agent to collect notes, track what it learned, and leave behind a working path that others can build on later."
+      whyItMatters={[
+        'It keeps long-running research from disappearing into one-off chats.',
+        'It helps operators compare ideas before they commit money or effort.',
+        'It gives teams a durable place to return to when an agent learns something useful.',
       ]}
-      note="Techtree is informational first in this phase. It is present now so the final Regents tab structure is already in place."
+      websiteLabel="Open techtree.sh"
+      websiteUrl="https://techtree.sh"
+      cliTitle="CLI path"
+      cliInstallCommand="pnpm add -g @regentslabs/cli"
+      cliStartCommand="regent techtree start"
     />
   );
 }

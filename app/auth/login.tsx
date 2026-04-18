@@ -15,7 +15,7 @@ import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 
-const { DARK_BG, CARD_BG, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, WHITE, BORDER } = COLORS;
+const { DARK_BG, CARD_BG, TEXT_SECONDARY, BLUE, WHITE, BORDER, BLUE_WASH } = COLORS;
 
 export default function LoginScreen() {
   const { isAuthenticated } = useRegentsAuth();
@@ -73,14 +73,17 @@ export default function LoginScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
-        {/* App Title */}
-        <Text style={styles.title}>Regents Mobile</Text>
-        <Text style={styles.subtitle}>
-          Move money between cash and stablecoins{'\n'}
-          and stay close to your agents
-        </Text>
+        <View style={styles.heroCard}>
+          <View style={styles.eyebrowRow}>
+            <View style={styles.eyebrowDot} />
+            <Text style={styles.eyebrow}>Regents Mobile</Text>
+          </View>
+          <Text style={styles.title}>Move money with a calmer wallet.</Text>
+          <Text style={styles.subtitle}>
+            Buy stablecoins, move funds between cash and crypto, and keep close to your agents from one place.
+          </Text>
+        </View>
 
-        {/* Auth Method Selection */}
         <View style={styles.authButtonsContainer}>
           <Pressable
             style={({ pressed }) => [
@@ -107,7 +110,6 @@ export default function LoginScreen() {
           </Pressable>
         </View>
 
-        {/* Footer */}
         <View style={styles.footer}>
           <Text style={styles.footerText}>
             Secure sign in for your mobile wallet
@@ -126,23 +128,51 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     justifyContent: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 24,
+  },
+  heroCard: {
+    backgroundColor: CARD_BG,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 24,
+    padding: 24,
+    marginBottom: 24,
+    gap: 14,
+    shadowColor: BLUE,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 18,
+    elevation: 3,
+  },
+  eyebrowRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 32,
+    gap: 10,
+  },
+  eyebrowDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: BLUE,
+  },
+  eyebrow: {
+    fontSize: 12,
+    letterSpacing: 1.2,
+    color: BLUE,
+    textTransform: 'uppercase',
+    fontFamily: FONTS.body,
   },
   title: {
-    fontSize: 32,
-    color: TEXT_PRIMARY,
-    marginBottom: 12,
-    textAlign: 'center',
-    marginTop: -12,
+    fontSize: 30,
+    lineHeight: 36,
+    color: BLUE,
     fontFamily: FONTS.heading,
   },
   subtitle: {
     fontSize: 16,
     color: TEXT_SECONDARY,
-    textAlign: 'center',
     lineHeight: 24,
-    marginBottom: 64,
     fontFamily: FONTS.body,
   },
   authButtonsContainer: {
@@ -153,7 +183,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingHorizontal: 24,
     paddingVertical: 18,
-    borderRadius: 30,
+    borderRadius: 16,
     width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
@@ -161,15 +191,15 @@ const styles = StyleSheet.create({
   primaryAuthButton: {
     backgroundColor: BLUE,
     shadowColor: BLUE,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 4,
   },
   secondaryAuthButton: {
-    backgroundColor: CARD_BG,
-    borderWidth: 2,
-    borderColor: BLUE,
+    backgroundColor: BLUE_WASH,
+    borderWidth: 1,
+    borderColor: BORDER,
   },
   buttonIcon: {
     marginRight: 12,
@@ -185,28 +215,31 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.body,
   },
   footer: {
-    position: 'absolute',
-    bottom: 40,
-    alignItems: 'center',
+    marginTop: 18,
+    paddingHorizontal: 6,
   },
   footerText: {
     fontSize: 12,
     color: TEXT_SECONDARY,
-    textAlign: 'center',
     lineHeight: 18,
     fontFamily: FONTS.body,
   },
   testMessageContainer: {
-    alignItems: 'center',
     backgroundColor: CARD_BG,
     padding: 32,
-    borderRadius: 16,
+    borderRadius: 24,
     borderWidth: 1,
     borderColor: BORDER,
+    alignItems: 'center',
+    shadowColor: BLUE,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 18,
+    elevation: 3,
   },
   testTitle: {
     fontSize: 24,
-    color: TEXT_PRIMARY,
+    color: BLUE,
     marginBottom: 8,
     fontFamily: FONTS.heading,
   },

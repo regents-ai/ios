@@ -2,7 +2,7 @@ import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
 import { StyleSheet, Text, View } from 'react-native';
 
-const { CARD_BG, TEXT_PRIMARY, TEXT_SECONDARY, BORDER, BLUE } = COLORS;
+const { DARK_BG, CARD_BG, CARD_ALT, TEXT_PRIMARY, TEXT_SECONDARY, BORDER, BLUE, VIOLET } = COLORS;
 
 type PlaceholderScreenProps = {
   title: string;
@@ -15,7 +15,10 @@ export function PlaceholderScreen({ title, intro, highlights, note }: Placeholde
   return (
     <View style={styles.container}>
       <View style={styles.heroCard}>
-        <Text style={styles.eyebrow}>Regents Mobile</Text>
+        <View style={styles.eyebrowRow}>
+          <View style={styles.eyebrowDot} />
+          <Text style={styles.eyebrow}>Regents Mobile</Text>
+        </View>
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.intro}>{intro}</Text>
       </View>
@@ -43,7 +46,7 @@ export function PlaceholderScreen({ title, intro, highlights, note }: Placeholde
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: CARD_BG,
+    backgroundColor: DARK_BG,
     padding: 20,
     gap: 16,
   },
@@ -51,9 +54,25 @@ const styles = StyleSheet.create({
     backgroundColor: CARD_BG,
     borderWidth: 1,
     borderColor: BORDER,
-    borderRadius: 20,
-    padding: 20,
+    borderRadius: 24,
+    padding: 22,
+    gap: 12,
+    shadowColor: BLUE,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 18,
+    elevation: 3,
+  },
+  eyebrowRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 10,
+  },
+  eyebrowDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: VIOLET,
   },
   eyebrow: {
     color: BLUE,
@@ -63,7 +82,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   title: {
-    color: TEXT_PRIMARY,
+    color: BLUE,
     fontSize: 28,
     lineHeight: 32,
     fontFamily: FONTS.heading,
@@ -75,7 +94,7 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.body,
   },
   card: {
-    backgroundColor: CARD_BG,
+    backgroundColor: CARD_ALT,
     borderWidth: 1,
     borderColor: BORDER,
     borderRadius: 16,
@@ -83,7 +102,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   sectionTitle: {
-    color: TEXT_PRIMARY,
+    color: BLUE,
     fontSize: 18,
     lineHeight: 22,
     fontFamily: FONTS.heading,

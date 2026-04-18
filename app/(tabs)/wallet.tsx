@@ -90,7 +90,8 @@
  * @see utils/sharedState.ts for address resolution
  */
 
-import { useCurrentUser, useEvmAddress, useIsSignedIn, useSignOut, useSolanaAddress } from "@coinbase/cdp-hooks";
+import { useCurrentUser, useEvmAddress, useSignOut, useSolanaAddress } from "@coinbase/cdp-hooks";
+import { useRegentsAuth } from "@/hooks/useRegentsAuth";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
@@ -99,11 +100,12 @@ import { CoinbaseAlert } from "../../components/ui/CoinbaseAlerts";
 import { WalletDetailsSection } from "../../components/wallet/WalletDetailsSection";
 import { COLORS } from "../../constants/Colors";
 import { TEST_ACCOUNTS } from "../../constants/TestAccounts";
+import { FONTS } from "../../constants/Typography";
 import { clearPhoneVerifyWasCanceled, getCountry, getCurrentNetwork, getCurrentWalletAddress, getPendingForm, getPhoneVerifyWasCanceled, getSandboxMode, getSubdivision, getTestWalletEvm, getTestWalletSol, getVerifiedPhone, isPhoneFresh60d, isTestSessionActive, setCurrentSolanaAddress, setCurrentWalletAddress, setPendingForm } from "../../utils/sharedState";
 import { createGuestCheckoutDebugInfo, openSupportEmail, SUPPORT_EMAIL } from "../../utils/supportEmail";
 
 
-const { BLUE, DARK_BG, CARD_BG, BORDER, TEXT_PRIMARY, TEXT_SECONDARY, WHITE } = COLORS;
+const { BLUE, DARK_BG, CARD_BG, BORDER, TEXT_PRIMARY, TEXT_SECONDARY, WHITE, DANGER } = COLORS;
 
 export default function Index() {
   const [address, setAddress] = useState("");
@@ -126,17 +128,17 @@ export default function Index() {
   const testSession = isTestSessionActive();
 
   // CDP hooks (overridden for test session)
-  const { isSignedIn } = useIsSignedIn();
+  const { isAuthenticated, linkedPhone, signOut: signOutIdentity } = useRegentsAuth();
   const { currentUser } = useCurrentUser();
   const { evmAddress: cdpEvmAddress } = useEvmAddress();
   const { solanaAddress: cdpSolanaAddress } = useSolanaAddress();
-  const { signOut } = useSignOut();
+  const { signOut: signOutWallet } = useSignOut();
 
   // Override addresses for test session
   const evmAddress = testSession ? getTestWalletEvm() : cdpEvmAddress;
   const solanaAddress = testSession ? getTestWalletSol() : cdpSolanaAddress;
 
-  const effectiveIsSignedIn = testSession || isSignedIn;
+  const effectiveIsSignedIn = testSession || isAuthenticated;
 
   const [trackedNetwork, setTrackedNetwork] = useState(getCurrentNetwork());
 
@@ -526,7 +528,7 @@ export default function Index() {
         // Use test phone for test sessions, real phone for production
         const cdpPhone = testSession
           ? TEST_ACCOUNTS.phone
-          : currentUser?.authenticationMethods?.sms?.phoneNumber;
+          : linkedPhone;
 
         // If phone is linked to CDP but not verified/expired, use re-verify flow
         if (cdpPhone) {
@@ -545,7 +547,8 @@ export default function Index() {
                 // Sign out first (skip for test sessions)
                 if (!testSession) {
                   console.log('🔄 [INDEX] Signing out for re-verification');
-                  await signOut();
+                  await signOutIdentity();
+                  await signOutWallet();
                   // Wait for sign out to complete
                   await new Promise(resolve => setTimeout(resolve, 500));
                 } else {
@@ -610,7 +613,8 @@ export default function Index() {
               console.log('🔄 [INDEX] Starting phone re-verification - signing out');
 
               // Sign out first
-              await signOut();
+              await signOutIdentity();
+              await signOutWallet();
 
               // Wait for sign out to complete
               await new Promise(resolve => setTimeout(resolve, 500));
@@ -686,7 +690,7 @@ export default function Index() {
       console.error('Error submitting form:', error);
       setIsProcessingPayment(false);
     }
-  }, [createOrder, createWidgetSession, router, currentUser, evmAddress, solanaAddress, getNetworkNameFromDisplayName, getAssetSymbolFromName, signOut, currentTransaction, setIsProcessingPayment, testSession]);
+  }, [createOrder, createWidgetSession, router, currentUser, evmAddress, linkedPhone, solanaAddress, getNetworkNameFromDisplayName, getAssetSymbolFromName, signOutIdentity, signOutWallet, currentTransaction, setIsProcessingPayment, testSession]);
     
   
   return (
@@ -811,15 +815,15 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: CARD_BG, 
+    paddingVertical: 18,
+    backgroundColor: CARD_BG,
     borderBottomWidth: 1,
     borderBottomColor: BORDER,
   },
   title: {
     fontSize: 20,
-    fontWeight: "600",
-    color: TEXT_PRIMARY,
+    color: BLUE,
+    fontFamily: FONTS.heading,
   },
   headerButton: {
     // Button styling
@@ -877,34 +881,35 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: CARD_BG,
     borderWidth: 1,
-    borderColor: '#FF6B6B', // Error red (same as alert icon)
-    borderRadius: 12,
-    padding: 16,
+    borderColor: DANGER,
+    borderRadius: 16,
+    padding: 18,
     marginHorizontal: 20,
     marginTop: 16,
     gap: 12,
   },
   errorTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: TEXT_PRIMARY,
+    color: BLUE,
     marginBottom: 4,
+    fontFamily: FONTS.heading,
   },
   errorMessage: {
     fontSize: 14,
     color: TEXT_SECONDARY,
     lineHeight: 20,
+    fontFamily: FONTS.body,
   },
   retryButton: {
     backgroundColor: BLUE,
     paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 20,
+    borderRadius: 14,
   },
   retryButtonText: {
     color: WHITE,
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: FONTS.body,
   },
   sandboxToggleContainer: {
     flexDirection: 'row',

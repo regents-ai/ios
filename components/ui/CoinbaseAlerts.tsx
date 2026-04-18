@@ -4,7 +4,7 @@ import { Animated, Dimensions, Modal, Pressable, StyleSheet, Text, View } from '
 import { COLORS } from '../../constants/Colors';
 import { FONTS } from '../../constants/Typography';
 
-const { BLUE, CARD_BG, BORDER, TEXT_PRIMARY, TEXT_SECONDARY, WHITE } = COLORS;
+const { BLUE, CARD_BG, CARD_ALT, BORDER, TEXT_PRIMARY, TEXT_SECONDARY, WHITE, SUCCESS, DANGER, BACKDROP } = COLORS;
 
 type AlertType = 'success' | 'error' | 'info';
 
@@ -33,8 +33,8 @@ export function CoinbaseAlert({
 }: CoinbaseAlertProps) {
   const getIcon = () => {
     switch (type) {
-      case 'success': return { name: 'checkmark-circle' as const, color: '#4ADE80' };
-      case 'error': return { name: 'close-circle' as const, color: '#FF6B6B' };
+      case 'success': return { name: 'checkmark-circle' as const, color: SUCCESS };
+      case 'error': return { name: 'close-circle' as const, color: DANGER };
       case 'info': return { name: 'information-circle' as const, color: BLUE };
     }
   };
@@ -70,7 +70,7 @@ export function CoinbaseAlert({
     >
       <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'transparent' }}>
         <Animated.View
-              style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.5)', opacity: backdropOpacity }]}
+              style={[StyleSheet.absoluteFillObject, { backgroundColor: BACKDROP, opacity: backdropOpacity }]}
               pointerEvents="auto"
             >
               <Pressable style={StyleSheet.absoluteFillObject} onPress={onConfirm} />
@@ -142,18 +142,20 @@ const styles = StyleSheet.create({
   },
   alertCard: {
     backgroundColor: CARD_BG,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderWidth: 1,
+    borderColor: BORDER,
     paddingHorizontal: 20,
     paddingTop: 16,
     paddingBottom: 34,
-    minHeight: 220,        // ensure room for content
-    maxHeight: '85%',      // avoid full-screen takeover
+    minHeight: 220,
+    maxHeight: '85%',
   },
   handle: {
     width: 36,
     height: 4,
-    backgroundColor: BORDER,
+    backgroundColor: CARD_ALT,
     borderRadius: 2,
     marginBottom: 20,
     alignSelf: 'center',
@@ -189,7 +191,7 @@ const styles = StyleSheet.create({
     backgroundColor: BLUE,
     paddingHorizontal: 48,
     paddingVertical: 16,
-    borderRadius: 25,
+    borderRadius: 16,
     minWidth: 200,
     alignSelf: 'center',
   },
@@ -197,15 +199,15 @@ const styles = StyleSheet.create({
     backgroundColor: BLUE,
     paddingHorizontal: 24,
     paddingVertical: 16,
-    borderRadius: 25,
+    borderRadius: 16,
     flex: 1,
     minWidth: 120,
   },
   buttonSecondary: {
-    backgroundColor: 'transparent',
+    backgroundColor: CARD_ALT,
     paddingHorizontal: 24,
     paddingVertical: 16,
-    borderRadius: 25,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: BORDER,
     flex: 1,

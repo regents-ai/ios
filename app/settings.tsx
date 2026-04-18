@@ -52,7 +52,7 @@ import {
   View,
 } from 'react-native';
 
-const { CARD_BG, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, BORDER, WHITE } = COLORS;
+const { DARK_BG, CARD_BG, CARD_ALT, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, BORDER, WHITE, DANGER, BACKDROP } = COLORS;
 
 export default function SettingsScreen() {
   const testSession = isTestSessionActive();
@@ -571,7 +571,7 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: CARD_BG,
+    backgroundColor: DARK_BG,
   },
   content: {
     padding: 20,
@@ -580,7 +580,7 @@ const styles = StyleSheet.create({
   },
   loadingContainer: {
     flex: 1,
-    backgroundColor: CARD_BG,
+    backgroundColor: DARK_BG,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
@@ -599,25 +599,30 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: BORDER,
+    backgroundColor: CARD_ALT,
     alignItems: 'center',
     justifyContent: 'center',
   },
   title: {
-    color: TEXT_PRIMARY,
+    color: BLUE,
     fontSize: 22,
     fontFamily: FONTS.heading,
   },
   card: {
     backgroundColor: CARD_BG,
-    borderRadius: 16,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: BORDER,
-    padding: 16,
+    padding: 18,
     gap: 16,
+    shadowColor: BLUE,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.06,
+    shadowRadius: 16,
+    elevation: 2,
   },
   cardTitle: {
-    color: TEXT_PRIMARY,
+    color: BLUE,
     fontSize: 18,
     fontFamily: FONTS.heading,
   },
@@ -652,7 +657,7 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     backgroundColor: BLUE,
-    borderRadius: 12,
+    borderRadius: 14,
     paddingHorizontal: 16,
     paddingVertical: 12,
     alignItems: 'center',
@@ -667,7 +672,8 @@ const styles = StyleSheet.create({
     flex: 1,
     borderWidth: 1,
     borderColor: BORDER,
-    borderRadius: 12,
+    backgroundColor: CARD_ALT,
+    borderRadius: 14,
     paddingHorizontal: 16,
     paddingVertical: 12,
     alignItems: 'center',
@@ -679,8 +685,8 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.body,
   },
   signOutButton: {
-    backgroundColor: '#B54A3E',
-    borderColor: '#B54A3E',
+    backgroundColor: DANGER,
+    borderColor: DANGER,
   },
   disabledButton: {
     opacity: 0.55,
@@ -688,7 +694,7 @@ const styles = StyleSheet.create({
   numberInput: {
     borderWidth: 1,
     borderColor: BORDER,
-    backgroundColor: BORDER,
+    backgroundColor: CARD_ALT,
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -707,7 +713,7 @@ const styles = StyleSheet.create({
     flex: 1,
     borderWidth: 1,
     borderColor: BORDER,
-    backgroundColor: BORDER,
+    backgroundColor: CARD_ALT,
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -721,12 +727,13 @@ const styles = StyleSheet.create({
     borderRadius: 21,
     borderWidth: 1,
     borderColor: BORDER,
+    backgroundColor: CARD_ALT,
     alignItems: 'center',
     justifyContent: 'center',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: BACKDROP,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,
@@ -735,14 +742,14 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 420,
     backgroundColor: CARD_BG,
-    borderRadius: 16,
+    borderRadius: 24,
     borderWidth: 1,
     borderColor: BORDER,
     padding: 20,
     gap: 16,
   },
   modalTitle: {
-    color: TEXT_PRIMARY,
+    color: BLUE,
     fontSize: 18,
     fontFamily: FONTS.heading,
   },
