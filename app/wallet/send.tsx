@@ -16,7 +16,7 @@
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
-import { isTestSessionActive } from '@/utils/sharedState';
+import { isTestSessionActive, recordPendingAgentFunding } from '@/utils/sharedState';
 import { useCurrentUser, useSendSolanaTransaction, useSendUserOperation, useSolanaAddress } from '@coinbase/cdp-hooks';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
@@ -45,6 +45,9 @@ const { DARK_BG, CARD_BG, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, WHITE, BORDER } = 
 export default function TransferScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const recipientLabel = typeof params.recipientLabel === 'string' ? params.recipientLabel : null;
+  const sourceAgentId = typeof params.sourceAgentId === 'string' ? params.sourceAgentId : null;
+  const sourceAgentName = typeof params.sourceAgentName === 'string' ? params.sourceAgentName : recipientLabel;
 
   const [recipientAddress, setRecipientAddress] = useState('');
   const [amount, setAmount] = useState('');
@@ -156,7 +159,10 @@ export default function TransferScreen() {
     if (params.network) {
       setNetwork(params.network as string);
     }
-  }, [params.token, params.network]);
+    if (typeof params.recipientAddress === 'string') {
+      setRecipientAddress(params.recipientAddress);
+    }
+  }, [params.network, params.recipientAddress, params.token]);
 
   // Validate address format
   const validateAddress = (address: string) => {
@@ -239,6 +245,16 @@ export default function TransferScreen() {
     setSending(true);
     try {
       if (isTestSessionActive()) {
+        if (sourceAgentId && sourceAgentName) {
+          recordPendingAgentFunding({
+            agentId: sourceAgentId,
+            agentName: sourceAgentName,
+            amount,
+            currency: selectedToken.token.symbol,
+            network,
+            createdAt: new Date().toISOString(),
+          });
+        }
         await new Promise(resolve => setTimeout(resolve, 1500));
         showAlert(
           'Review transfer complete',
@@ -307,6 +323,17 @@ export default function TransferScreen() {
             data: calldata as `0x${string}`,
           }],
           useCdpPaymaster: isPaymasterSupported
+        });
+      }
+
+      if (sourceAgentId && sourceAgentName) {
+        recordPendingAgentFunding({
+          agentId: sourceAgentId,
+          agentName: sourceAgentName,
+          amount,
+          currency: selectedToken.token?.symbol || 'Token',
+          network,
+          createdAt: new Date().toISOString(),
         });
       }
     } catch (error) {
@@ -448,6 +475,19 @@ export default function TransferScreen() {
         network: cdpNetwork as any,
         transaction: serializedTransaction
       });
+
+      if (sourceAgentId && sourceAgentName) {
+        recordPendingAgentFunding({
+          agentId: sourceAgentId,
+          agentName: sourceAgentName,
+          amount,
+          currency: tokenSymbol,
+          network,
+          createdAt: new Date().toISOString(),
+          transactionId: result.transactionSignature,
+        });
+      }
+
       const explorerUrl = isDevnet
         ? `https://explorer.solana.com/tx/${result.transactionSignature}?cluster=devnet`
         : `https://solscan.io/tx/${result.transactionSignature}`;
@@ -475,6 +515,10 @@ export default function TransferScreen() {
   const handleAlertDismiss = () => {
     setAlertVisible(false);
     if (alertType === 'success') {
+      if (sourceAgentId) {
+        router.replace({ pathname: '/agent/[id]' as any, params: { id: sourceAgentId } });
+        return;
+      }
       router.back();
     }
   };
@@ -571,6 +615,11 @@ export default function TransferScreen() {
 
           <View style={styles.card}>
             <Text style={styles.label}>Recipient</Text>
+            {recipientLabel ? (
+              <Text style={styles.helper}>
+                Funds will be sent to {recipientLabel}.
+              </Text>
+            ) : null}
             <View style={styles.inputContainer}>
               <TextInput
                 style={[styles.input, { flex: 1 } , addressError && { borderColor: '#FF6B6B' }]}

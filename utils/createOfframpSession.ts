@@ -1,4 +1,4 @@
-import { BASE_URL } from "../constants/BASE_URL";
+import { getBaseUrl } from "../constants/BASE_URL";
 import { authenticatedFetch } from "./authenticatedFetch";
 
 // Maps profile balance network name → Coinbase blockchain identifier
@@ -40,7 +40,7 @@ export async function createOfframpSession({
   console.log('📤 [OFFRAMP] Creating session token', { address, blockchain, asset, userId });
 
   // 1. Fetch a single-use session token from the backend proxy
-  const tokenRes = await authenticatedFetch(`${BASE_URL}/server/api`, {
+  const tokenRes = await authenticatedFetch(`${getBaseUrl()}/server/api`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

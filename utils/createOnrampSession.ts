@@ -1,4 +1,4 @@
-import { BASE_URL } from "../constants/BASE_URL";
+import { getBaseUrl } from "../constants/BASE_URL";
 import { authenticatedFetch } from "./authenticatedFetch";
 
 export async function createOnrampSession(payload: any) {
@@ -16,7 +16,7 @@ try {
 
   console.log('API request →', requestBody);
 
-  const res = await authenticatedFetch(`${BASE_URL}/server/api`, {
+  const res = await authenticatedFetch(`${getBaseUrl()}/server/api`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json"

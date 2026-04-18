@@ -1,5 +1,5 @@
 
-import { BASE_URL } from '@/constants/BASE_URL';
+import { getBaseUrl } from '@/constants/BASE_URL';
 import { authenticatedFetch } from './authenticatedFetch';
 import { createGuestCheckoutOrder } from './createGuestCheckoutOrder';
 import { demoAddressForNetwork } from './randomAddresses';
@@ -11,6 +11,7 @@ export async function fetchBuyQuote(payload: {
   paymentAmount: string;
   destinationNetwork: string;
   paymentMethod: string;
+  partnerUserRef: string;
 }) {
   // In sandbox mode, use the current wallet address (could be manual override)
   // In production, fall back to demo address for quote purposes
@@ -37,7 +38,6 @@ export async function fetchBuyQuote(payload: {
         phoneNumber: '+12345678901',
         agreementAcceptedAt: new Date().toISOString(),
         phoneNumberVerifiedAt: new Date().toISOString(),
-        partnerUserRef: isSandbox ? 'sandbox-HSAHDSBDFH' : 'HSAHDSBDFH',
         destinationAddress,
       });
 
@@ -85,7 +85,7 @@ export async function fetchBuyQuote(payload: {
     console.log('📤 [API] fetchBuyQuote (Widget)');
 
     // v2 quote for Coinbase Widget (session endpoint)
-    const response = await authenticatedFetch(`${BASE_URL}/server/api`, {
+    const response = await authenticatedFetch(`${getBaseUrl()}/server/api`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

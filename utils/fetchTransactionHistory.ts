@@ -1,4 +1,4 @@
-import { BASE_URL } from "../constants/BASE_URL";
+import { getBaseUrl } from "../constants/BASE_URL";
 
 export async function fetchTransactionHistory(
   userId: string,
@@ -20,7 +20,7 @@ export async function fetchTransactionHistory(
       hasToken: !!accessToken
     });
 
-    const response = await fetch(`${BASE_URL}/server/api`, {
+    const response = await fetch(`${getBaseUrl()}/server/api`, {
       method: "POST", // Calling local proxy with POST
       headers: {
         "Content-Type": "application/json",

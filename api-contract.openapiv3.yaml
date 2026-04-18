@@ -1,0 +1,364 @@
+openapi: 3.0.3
+info:
+  title: Regents Mobile API
+  version: 0.1.0
+  description: Mobile contract for Regents wallet and agent surfaces.
+paths:
+  /mobile/agents:
+    get:
+      summary: List the signed-in user's agents
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Agent list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [agents]
+                properties:
+                  agents:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AgentSummary'
+  /mobile/agents/{id}:
+    get:
+      summary: Fetch one agent
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Agent detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentDetail'
+        '404':
+          description: Agent not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /mobile/agents/{id}/paperclip:
+    get:
+      summary: Fetch the mobile Paperclip summary for one agent
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Paperclip mobile summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaperclipDetail'
+        '404':
+          description: Paperclip summary not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /mobile/agents/{id}/withdrawals:
+    post:
+      summary: Create a withdrawal request from an agent back to the mobile wallet
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema:
+            type: string
+          description: Reuse the same value if the same withdrawal request is retried.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWithdrawalRequest'
+      responses:
+        '201':
+          description: Withdrawal request created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [withdrawal]
+                properties:
+                  withdrawal:
+                    $ref: '#/components/schemas/AgentWithdrawal'
+        '404':
+          description: Agent not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /mobile/agents/{id}/withdrawals/{withdrawal_id}:
+    get:
+      summary: Fetch one withdrawal request
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: withdrawal_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Withdrawal request detail
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [withdrawal]
+                properties:
+                  withdrawal:
+                    $ref: '#/components/schemas/AgentWithdrawal'
+        '404':
+          description: Withdrawal request not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    AgentStatus:
+      type: string
+      enum: [active, attention, paused]
+    RuntimeStatus:
+      type: string
+      enum: [online, waiting, offline]
+    AgentSummary:
+      type: object
+      required:
+        - id
+        - name
+        - status
+        - runtimeStatus
+        - walletAddress
+        - stablecoinSymbol
+        - stablecoinBalance
+        - stablecoinBalanceUsd
+        - lastActiveAt
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        status:
+          $ref: '#/components/schemas/AgentStatus'
+        runtimeStatus:
+          $ref: '#/components/schemas/RuntimeStatus'
+        walletAddress:
+          type: string
+        stablecoinSymbol:
+          type: string
+        stablecoinBalance:
+          type: string
+        stablecoinBalanceUsd:
+          type: string
+        lastActiveAt:
+          type: string
+          format: date-time
+        treasuryNote:
+          type: string
+    AgentActivity:
+      type: object
+      required: [id, title, detail, at]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        detail:
+          type: string
+        at:
+          type: string
+          format: date-time
+    AgentWithdrawal:
+      type: object
+      required:
+        - id
+        - agentId
+        - amount
+        - currency
+        - destinationWalletAddress
+        - status
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+        agentId:
+          type: string
+        amount:
+          type: string
+        currency:
+          type: string
+        destinationWalletAddress:
+          type: string
+        status:
+          type: string
+          enum: [requested, approved, broadcasting, confirmed, failed]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    AgentDetail:
+      allOf:
+        - $ref: '#/components/schemas/AgentSummary'
+        - type: object
+          required:
+            - runtimeHeadline
+            - mission
+            - recentActivity
+            - withdrawals
+          properties:
+            runtimeHeadline:
+              type: string
+            mission:
+              type: string
+            recentActivity:
+              type: array
+              items:
+                $ref: '#/components/schemas/AgentActivity'
+            withdrawals:
+              type: array
+              items:
+                $ref: '#/components/schemas/AgentWithdrawal'
+    PaperclipGoal:
+      type: object
+      required: [id, title, status]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        status:
+          type: string
+        note:
+          type: string
+    PaperclipTask:
+      type: object
+      required: [id, title, status]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        status:
+          type: string
+        owner:
+          type: string
+        note:
+          type: string
+    PaperclipEvent:
+      type: object
+      required: [id, title, detail, at]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        detail:
+          type: string
+        at:
+          type: string
+          format: date-time
+    PaperclipRosterMember:
+      type: object
+      required: [id, name, role, status]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        role:
+          type: string
+        status:
+          type: string
+    PaperclipDetail:
+      type: object
+      required:
+        - agentId
+        - headline
+        - companySummary
+        - dashboardUrl
+        - goals
+        - activeTasks
+        - recentEvents
+        - roster
+      properties:
+        agentId:
+          type: string
+        headline:
+          type: string
+        companySummary:
+          type: string
+        dashboardUrl:
+          type: string
+          format: uri
+        goals:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaperclipGoal'
+        activeTasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaperclipTask'
+        recentEvents:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaperclipEvent'
+        roster:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaperclipRosterMember'
+    CreateWithdrawalRequest:
+      type: object
+      required: [amount, currency, destinationWalletAddress]
+      properties:
+        amount:
+          type: string
+        currency:
+          type: string
+        destinationWalletAddress:
+          type: string
+    ErrorEnvelope:
+      type: object
+      required: [error, message]
+      properties:
+        error:
+          type: string
+        message:
+          type: string

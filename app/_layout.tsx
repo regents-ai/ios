@@ -80,9 +80,9 @@ export default function RootLayout() {
   if (!privyAppId || !privyClientId || !cdpProjectId) {
     return (
       <View style={styles.missingConfigContainer}>
-        <Text style={styles.missingConfigTitle}>Missing app setup</Text>
+        <Text style={styles.missingConfigTitle}>This build is not ready yet</Text>
         <Text style={styles.missingConfigText}>
-          Add the Privy app ID, Privy client ID, and Coinbase project ID before opening the wallet.
+          Finish the wallet sign-in setup, then reopen the app.
         </Text>
       </View>
     );
@@ -124,6 +124,30 @@ export default function RootLayout() {
               options={{
                 presentation: 'card',
                 animation: 'slide_from_bottom',
+              }}
+            />
+
+            <Stack.Screen
+              name="agent/[id]"
+              options={{
+                presentation: 'card',
+                animation: 'slide_from_right',
+              }}
+            />
+
+            <Stack.Screen
+              name="agent/[id]/paperclip"
+              options={{
+                presentation: 'card',
+                animation: 'slide_from_right',
+              }}
+            />
+
+            <Stack.Screen
+              name="terminal/[id]"
+              options={{
+                presentation: 'card',
+                animation: 'slide_from_right',
               }}
             />
 

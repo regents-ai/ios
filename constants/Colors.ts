@@ -1,30 +1,25 @@
-/**
- * Brand colors + dark theme
- * Used throughout app for consistent styling
- * Import COLORS, destructure needed colors
- */
 export const COLORS = {
-  BLACK: '#0A0B0D', // Brand black color
-  WHITE: '#FFFFFF', // Text primary color
-  SILVER: '#B8C9C8', // Text secondary color
-  BLUE: '#1652F0',  // Primary brand color, Primary actions, highlights
-  
-  // Secondary
-  VIOLET: '#6991FF', // Additional secondary color
-  ORANGE: '#FF7800', // Additional secondary color
-  
-  // App Theme (Dark Mode)
-  DARK_BG: '#0A0B0D', // Main app background
-  CARD_BG: '#1A1B1D', // Cards, modals, inputs
-  BORDER: '#2A2B2D', // Borders, dividers, outlines
-  TEXT_PRIMARY: '#FFFFFF', // Main text
-  TEXT_SECONDARY: '#B8C9C8', // Secondary text
-
-  // Button color tokens (mapped to semantic names)
-  primaryButton: '#1652F0',      // BLUE
-  textOnColor: '#FFFFFF',        // WHITE  
-  textPrimary: '#FFFFFF',        // TEXT_PRIMARY
-  border: '#2A2B2D',            // BORDER
-  error: '#FF6B6B',             // Red for destructive
+  BLACK: '#315569',
+  WHITE: '#FBF4DE',
+  SILVER: '#6E6B64',
+  BLUE: '#034568',
+  VIOLET: '#8C6A2B',
+  ORANGE: '#A3703A',
+  DARK_BG: '#FBF4DE',
+  CARD_BG: '#F2E9D0',
+  CARD_ALT: '#E9DFC3',
+  BORDER: '#D7C7A1',
+  TEXT_PRIMARY: '#315569',
+  TEXT_SECONDARY: '#6E6B64',
+  SUCCESS: '#1F7A57',
+  DANGER: '#B54A3E',
+  BLUE_WASH: '#E7EEF2',
+  SURFACE_STRONG: '#D7C7A1',
+  BACKDROP: 'rgba(3, 69, 104, 0.18)',
+  primaryButton: '#034568',
+  textOnColor: '#FBF4DE',
+  textPrimary: '#315569',
+  border: '#D7C7A1',
+  error: '#B54A3E',
   transparent: 'transparent',
 };

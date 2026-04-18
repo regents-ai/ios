@@ -17,6 +17,8 @@
  */
 
 import structuredClone from "@ungap/structured-clone";
+import "fast-text-encoding";
+import "@ethersproject/shims";
 import { Buffer } from "buffer";
 import "react-native-get-random-values";
 import "react-native-url-polyfill/auto";

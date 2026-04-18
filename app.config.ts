@@ -17,7 +17,8 @@ const config: ExpoConfig = {
       buildNumber: process.env.IOS_BUILD_NUMBER ?? '1.0.0', // bump each submit
       supportsTablet: false,
       infoPlist: {
-        ITSAppUsesNonExemptEncryption: false
+        ITSAppUsesNonExemptEncryption: false,
+        UIBackgroundModes: ['fetch', 'remote-notification'],
       }
     },
 

@@ -458,6 +458,11 @@ export function useOnramp() {
       setIsLoadingQuote(true);
       const assetSymbol = getAssetSymbolFromName(formData.asset);
       const networkName = getNetworkNameFromDisplayName(formData.network);
+      const userId = regentsUserId || 'unknown-user';
+      const sandboxPrefix =
+        formData.paymentMethod === 'GUEST_CHECKOUT_APPLE_PAY' || formData.paymentMethod === 'GUEST_CHECKOUT_GOOGLE_PAY'
+          ? (getSandboxMode() ? 'sandbox-' : '')
+          : '';
 
       // Auth handled by authenticatedFetch
       const quote = await fetchBuyQuote({
@@ -465,7 +470,8 @@ export function useOnramp() {
         paymentCurrency: formData.paymentCurrency,
         purchaseCurrency: assetSymbol,
         destinationNetwork: networkName,
-        paymentMethod: formData.paymentMethod || 'COINBASE_WIDGET'
+        paymentMethod: formData.paymentMethod || 'COINBASE_WIDGET',
+        partnerUserRef: `${sandboxPrefix}${userId}`,
       });
 
       setCurrentQuote(quote);
@@ -475,7 +481,7 @@ export function useOnramp() {
     } finally {
       setIsLoadingQuote(false);
     }
-  }, [getAssetSymbolFromName, getNetworkNameFromDisplayName]);
+  }, [getAssetSymbolFromName, getNetworkNameFromDisplayName, regentsUserId]);
 
   // Helper functions that use the stored options
   const getAvailableNetworks = useCallback((selectedAsset?: string) => {

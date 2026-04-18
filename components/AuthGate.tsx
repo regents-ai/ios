@@ -17,18 +17,21 @@ import { router, useRootNavigationState, useSegments } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
-const { DARK_BG, BLUE } = COLORS;
+const { DARK_BG, BLUE, TEXT_PRIMARY, TEXT_SECONDARY, CARD_BG, BORDER } = COLORS;
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const { isInitialized } = useIsInitialized();
-  const { isAuthenticated: isPrivyAuthenticated, isReady: isPrivyReady } = useRegentsAuth();
+  const { error: authError, isAuthenticated: isPrivyAuthenticated, isReady: isPrivyReady } = useRegentsAuth();
   const segments = useSegments();
   const navigationState = useRootNavigationState();
   const testSession = isTestSessionActive();
   const [isReady, setIsReady] = useState(false);
   const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
+  const [startupTimeoutReached, setStartupTimeoutReached] = useState(false);
 
   const isAuthenticated = testSession || isPrivyAuthenticated;
+  const requiresWalletInitialization = !testSession && isPrivyAuthenticated;
+  const walletReady = !requiresWalletInitialization || isInitialized;
 
   useEffect(() => {
     if (navigationState?.key) {
@@ -37,20 +40,33 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   }, [navigationState?.key]);
 
   useEffect(() => {
-    if (isPrivyReady && isInitialized) {
+    if (isPrivyReady && walletReady) {
       const timer = setTimeout(() => {
         setHasCheckedAuth(true);
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [isInitialized, isPrivyReady]);
+  }, [isPrivyReady, walletReady]);
+
+  useEffect(() => {
+    if (testSession || isAuthenticated || isPrivyReady) {
+      setStartupTimeoutReached(false);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setStartupTimeoutReached(true);
+    }, 4000);
+
+    return () => clearTimeout(timer);
+  }, [isAuthenticated, isPrivyReady, testSession]);
 
   useEffect(() => {
     if (!isReady) {
       return;
     }
 
-    if (!isPrivyReady || !isInitialized) {
+    if (!isPrivyReady || !walletReady) {
       return;
     }
 
@@ -79,9 +95,22 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         }
       }, 0);
     }
-  }, [hasCheckedAuth, isAuthenticated, isInitialized, isPrivyReady, isReady, segments, testSession]);
+  }, [hasCheckedAuth, isAuthenticated, isPrivyReady, isReady, segments, testSession, walletReady]);
 
-  if (!isReady || !isPrivyReady || !isInitialized || !hasCheckedAuth) {
+  if (!isReady || !isPrivyReady || !walletReady || !hasCheckedAuth) {
+    if (!isAuthenticated && !testSession && (authError || startupTimeoutReached)) {
+      return (
+        <View style={styles.loadingContainer}>
+          <View style={styles.issueCard}>
+            <Text style={styles.issueTitle}>Sign-in is unavailable</Text>
+            <Text style={styles.issueText}>
+              This build cannot open the wallet right now. Finish setup, then try again.
+            </Text>
+          </View>
+        </View>
+      );
+    }
+
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={BLUE} />
@@ -99,11 +128,40 @@ const styles = StyleSheet.create({
     backgroundColor: DARK_BG,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: 24,
   },
   loadingText: {
     marginTop: 16,
     fontSize: 15,
-    color: '#D0D5DA',
+    color: TEXT_SECONDARY,
+    fontFamily: FONTS.body,
+  },
+  issueCard: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: CARD_BG,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 24,
+    padding: 24,
+    gap: 12,
+    shadowColor: BLUE,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 18,
+    elevation: 3,
+  },
+  issueTitle: {
+    color: TEXT_PRIMARY,
+    fontSize: 24,
+    textAlign: 'center',
+    fontFamily: FONTS.heading,
+  },
+  issueText: {
+    color: TEXT_SECONDARY,
+    fontSize: 15,
+    lineHeight: 22,
+    textAlign: 'center',
     fontFamily: FONTS.body,
   },
 });

@@ -6,7 +6,7 @@ import { FONTS } from '../../constants/Typography';
 
 export default function TabLayout() {
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.CARD_BG }} edges={['top']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.DARK_BG }} edges={['top']}>
       <Tabs
         screenOptions={{
           headerShown: false,
@@ -16,9 +16,16 @@ export default function TabLayout() {
             fontFamily: FONTS.body,
             fontSize: 12,
           },
+          tabBarItemStyle: {
+            paddingTop: 6,
+          },
           tabBarStyle: {
             backgroundColor: COLORS.CARD_BG,
             borderTopColor: COLORS.BORDER,
+            borderTopWidth: 1,
+            height: 78,
+            paddingBottom: 10,
+            paddingTop: 8,
           },
         }}
       >

@@ -123,6 +123,64 @@ let pendingOfframpBalance: any = null;
 export const setPendingOfframpBalance = (balance: any) => { pendingOfframpBalance = balance; };
 export const getPendingOfframpBalance = () => pendingOfframpBalance;
 
+type PendingAgentFunding = {
+  agentId: string;
+  agentName: string;
+  amount: string;
+  currency: string;
+  network: string;
+  createdAt: string;
+  transactionId?: string;
+};
+
+let pendingAgentFundings: PendingAgentFunding[] = [];
+let terminalNoticeMarks = new Set<string>();
+
+export const recordPendingAgentFunding = (funding: PendingAgentFunding) => {
+  pendingAgentFundings = [
+    funding,
+    ...pendingAgentFundings.filter(
+      (item) =>
+        !(
+          item.agentId === funding.agentId &&
+          item.amount === funding.amount &&
+          item.currency === funding.currency &&
+          item.network === funding.network
+        )
+    ),
+  ].slice(0, 8);
+};
+
+export const getPendingAgentFundings = (agentId?: string) => {
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+  pendingAgentFundings = pendingAgentFundings.filter((item) => new Date(item.createdAt).getTime() >= cutoff);
+
+  if (!agentId) {
+    return pendingAgentFundings;
+  }
+
+  return pendingAgentFundings.filter((item) => item.agentId === agentId);
+};
+
+export const clearPendingAgentFundings = (agentId?: string) => {
+  if (!agentId) {
+    pendingAgentFundings = [];
+    return;
+  }
+
+  pendingAgentFundings = pendingAgentFundings.filter((item) => item.agentId !== agentId);
+};
+
+export const hasSeenTerminalNotice = (noticeKey: string) => terminalNoticeMarks.has(noticeKey);
+
+export const markTerminalNoticeSeen = (noticeKey: string) => {
+  terminalNoticeMarks.add(noticeKey);
+};
+
+export const clearTerminalNoticeMarks = () => {
+  terminalNoticeMarks = new Set<string>();
+};
+
 export const getCountry = () => currentCountry;
 export const setCountry = (c: string) => { currentCountry = c; };
 

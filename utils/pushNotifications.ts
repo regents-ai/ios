@@ -1,3 +1,4 @@
+import { getBaseUrl } from '@/constants/BASE_URL';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
@@ -59,9 +60,13 @@ function getRuntimeKind(): 'expo-go' | 'dev-build' | 'standalone' {
 /**
  * Helper: Send debug ping to server
  */
+async function serverFetch(path: string, init: RequestInit) {
+  return fetch(`${getBaseUrl()}${path}`, init);
+}
+
 async function ping(source: string, payload: any = {}) {
   try {
-    await fetch(`${process.env.EXPO_PUBLIC_BASE_URL}/push-tokens/ping`, {
+    await serverFetch('/push-tokens/ping', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ source, ...payload, ts: new Date().toISOString() }),
@@ -212,7 +217,7 @@ export async function sendPushTokenToServer(pushToken: string, userId: string, g
       return;
     }
 
-    const response = await fetch(`${process.env.EXPO_PUBLIC_BASE_URL}/push-tokens`, {
+    const response = await serverFetch('/push-tokens', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

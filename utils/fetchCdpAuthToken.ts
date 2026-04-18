@@ -1,7 +1,7 @@
-import { BASE_URL } from '@/constants/BASE_URL';
+import { getBaseUrl } from '@/constants/BASE_URL';
 
 export async function fetchCdpAuthToken(privyAccessToken: string): Promise<string | undefined> {
-  const response = await fetch(`${BASE_URL}/auth/cdp-token`, {
+  const response = await fetch(`${getBaseUrl()}/auth/cdp-token`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${privyAccessToken}`,

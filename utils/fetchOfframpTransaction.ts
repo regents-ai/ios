@@ -1,4 +1,4 @@
-import { BASE_URL } from "../constants/BASE_URL";
+import { getBaseUrl } from "../constants/BASE_URL";
 import { authenticatedFetch } from "./authenticatedFetch";
 
 interface MonetaryAmount {
@@ -32,7 +32,7 @@ export async function fetchOfframpTransaction(
 
   console.log('📤 [OFFRAMP TX] Fetching transaction for', partnerUserRef);
 
-  const res = await authenticatedFetch(`${BASE_URL}/server/api`, {
+  const res = await authenticatedFetch(`${getBaseUrl()}/server/api`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ url, method: 'GET' }),

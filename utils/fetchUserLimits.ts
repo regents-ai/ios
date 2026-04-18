@@ -1,4 +1,4 @@
-import { BASE_URL } from "../constants/BASE_URL";
+import { getBaseUrl } from "../constants/BASE_URL";
 
 export interface UserLimit {
   limitType: "weekly_spending" | "lifetime_transactions";
@@ -31,7 +31,7 @@ export async function fetchUserLimits(
       hasToken: !!accessToken
     });
 
-    const response = await fetch(`${BASE_URL}/server/api`, {
+    const response = await fetch(`${getBaseUrl()}/server/api`, {
       method: "POST", // Calling local proxy with POST
       headers: {
         "Content-Type": "application/json",

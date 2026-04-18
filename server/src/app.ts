@@ -4,7 +4,25 @@ import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { z } from 'zod';
 
 import { generateJwt } from '@coinbase/cdp-sdk/auth';
+import {
+  createWithdrawalForUser,
+  getAgentForUser,
+  getPaperclipForUser,
+  getWithdrawalForUser,
+  listAgentsForUser,
+  seedReviewAgents,
+} from './agents.js';
+import { createCdpCustomAuthToken, getCdpJwks } from './identity.js';
 import { resolveClientIp } from './ip.js';
+import {
+  createTerminalSession,
+  getTerminalEvents,
+  getTerminalSession,
+  listTerminalSessions,
+  postTerminalMessage,
+  resolveTerminalApproval,
+  seedReviewTerminalSessions,
+} from './terminal.js';
 import { validateAccessToken } from './validateToken.js';
 import { verifyLegacySignature, verifyWebhookSignature } from './verifyWebhookSignature.js';
 
@@ -54,6 +72,9 @@ if (process.env.APNS_KEY_ID && process.env.APNS_TEAM_ID && process.env.APNS_KEY)
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
+
+seedReviewAgents();
+seedReviewTerminalSessions();
 
 // On Vercel, trust proxy to read x-forwarded-for
 app.set('trust proxy', true);
@@ -129,16 +150,312 @@ app.get("/health", (_req, res) => {
   res.json({ ok: true, message: 'Server is running' });
 });
 
+app.get('/.well-known/jwks.json', (_req, res) => {
+  try {
+    res.json(getCdpJwks());
+  } catch (error) {
+    res.status(500).json({
+      error: 'ConfigurationError',
+      message: error instanceof Error ? error.message : 'JWKS is not configured.',
+    });
+  }
+});
+
 // 🔒 GLOBAL AUTHENTICATION MIDDLEWARE
-// All routes except /health and /webhooks require valid CDP access token
+// All routes except public health and verification routes require a valid app access token
 app.use((req, res, next) => {
   // Skip authentication for health check, webhooks, and debug endpoints
-  if (req.path === '/health' || req.path.startsWith('/webhooks') || req.path === '/push-tokens/ping') {
+  if (
+    req.path === '/health' ||
+    req.path === '/.well-known/jwks.json' ||
+    req.path.startsWith('/webhooks') ||
+    req.path === '/push-tokens/ping'
+  ) {
     return next();
   }
 
   // Apply authentication to all other routes (including /push-tokens)
   return validateAccessToken(req, res, next);
+});
+
+app.get('/auth/me', (req, res) => {
+  res.json({
+    userId: req.userId,
+    testAccount: req.userData?.testAccount === true,
+  });
+});
+
+app.post('/auth/cdp-token', async (req, res) => {
+  try {
+    if (!req.userId) {
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'Sign in before opening your wallet.',
+      });
+    }
+
+    const token = await createCdpCustomAuthToken(req.userId);
+    return res.json({ token });
+  } catch (error) {
+    console.error('❌ [AUTH] Unable to create Coinbase custom sign-in token:', error);
+    return res.status(500).json({
+      error: 'ConfigurationError',
+      message: error instanceof Error ? error.message : 'Unable to open the wallet right now.',
+    });
+  }
+});
+
+app.get('/mobile/agents', (req, res) => {
+  const userId = req.userId || 'seeded-user';
+  res.json({
+    agents: listAgentsForUser(userId),
+  });
+});
+
+app.get('/mobile/agents/:id', (req, res) => {
+  const paramsSchema = z.object({
+    id: z.string().min(1),
+  });
+  const parsed = paramsSchema.safeParse(req.params);
+  if (!parsed.success) {
+    return res.status(400).json({
+      error: 'BadRequest',
+      message: 'A valid agent ID is required.',
+    });
+  }
+
+  const agent = getAgentForUser(req.userId || 'seeded-user', parsed.data.id);
+  if (!agent) {
+    return res.status(404).json({
+      error: 'NotFound',
+      message: 'That agent could not be found.',
+    });
+  }
+
+  return res.json(agent);
+});
+
+app.get('/mobile/agents/:id/paperclip', (req, res) => {
+  const paramsSchema = z.object({
+    id: z.string().min(1),
+  });
+  const parsed = paramsSchema.safeParse(req.params);
+  if (!parsed.success) {
+    return res.status(400).json({
+      error: 'BadRequest',
+      message: 'A valid agent ID is required.',
+    });
+  }
+
+  const paperclip = getPaperclipForUser(req.userId || 'seeded-user', parsed.data.id);
+  if (!paperclip) {
+    return res.status(404).json({
+      error: 'NotFound',
+      message: 'That Paperclip view could not be found.',
+    });
+  }
+
+  return res.json(paperclip);
+});
+
+app.post('/mobile/agents/:id/withdrawals', (req, res) => {
+  const paramsSchema = z.object({
+    id: z.string().min(1),
+  });
+  const bodySchema = z.object({
+    amount: z.string().min(1),
+    currency: z.string().min(1),
+    destinationWalletAddress: z.string().min(1),
+  });
+  const idempotencyKey = req.header('Idempotency-Key')?.trim();
+
+  const parsedParams = paramsSchema.safeParse(req.params);
+  if (!parsedParams.success) {
+    return res.status(400).json({
+      error: 'BadRequest',
+      message: 'A valid agent ID is required.',
+    });
+  }
+
+  const parsedBody = bodySchema.safeParse(req.body);
+  if (!parsedBody.success) {
+    return res.status(400).json({
+      error: 'BadRequest',
+      message: 'Amount, currency, and destination wallet address are required.',
+    });
+  }
+
+  if (!idempotencyKey) {
+    return res.status(400).json({
+      error: 'BadRequest',
+      message: 'An idempotency key is required for withdrawal requests.',
+    });
+  }
+
+  const withdrawal = createWithdrawalForUser(req.userId || 'seeded-user', parsedParams.data.id, parsedBody.data, idempotencyKey);
+  if (!withdrawal) {
+    return res.status(404).json({
+      error: 'NotFound',
+      message: 'That agent could not be found.',
+    });
+  }
+
+  return res.status(201).json({ withdrawal });
+});
+
+app.get('/mobile/agents/:id/withdrawals/:withdrawalId', (req, res) => {
+  const paramsSchema = z.object({
+    id: z.string().min(1),
+    withdrawalId: z.string().min(1),
+  });
+  const parsed = paramsSchema.safeParse(req.params);
+  if (!parsed.success) {
+    return res.status(400).json({
+      error: 'BadRequest',
+      message: 'A valid agent ID and withdrawal ID are required.',
+    });
+  }
+
+  const withdrawal = getWithdrawalForUser(req.userId || 'seeded-user', parsed.data.id, parsed.data.withdrawalId);
+  if (!withdrawal) {
+    return res.status(404).json({
+      error: 'NotFound',
+      message: 'That withdrawal request could not be found.',
+    });
+  }
+
+  return res.json({ withdrawal });
+});
+
+app.get('/terminal/sessions', (req, res) => {
+  res.json({
+    sessions: listTerminalSessions(req.userId || 'seeded-user'),
+  });
+});
+
+app.post('/terminal/sessions', (req, res) => {
+  const bodySchema = z.object({
+    agentId: z.string().min(1),
+    agentName: z.string().min(1),
+  });
+  const parsedBody = bodySchema.safeParse(req.body);
+  if (!parsedBody.success) {
+    return res.status(400).json({
+      error: 'BadRequest',
+      message: 'An agent ID and agent name are required.',
+    });
+  }
+
+  const session = createTerminalSession(req.userId || 'seeded-user', parsedBody.data);
+  return res.status(201).json({ session });
+});
+
+app.get('/terminal/sessions/:id', (req, res) => {
+  const paramsSchema = z.object({
+    id: z.string().min(1),
+  });
+  const parsed = paramsSchema.safeParse(req.params);
+  if (!parsed.success) {
+    return res.status(400).json({
+      error: 'BadRequest',
+      message: 'A valid session ID is required.',
+    });
+  }
+
+  const session = getTerminalSession(req.userId || 'seeded-user', parsed.data.id);
+  if (!session) {
+    return res.status(404).json({
+      error: 'NotFound',
+      message: 'That session could not be found.',
+    });
+  }
+
+  return res.json({ session });
+});
+
+app.get('/terminal/sessions/:id/events', (req, res) => {
+  const paramsSchema = z.object({
+    id: z.string().min(1),
+  });
+  const parsed = paramsSchema.safeParse(req.params);
+  if (!parsed.success) {
+    return res.status(400).json({
+      error: 'BadRequest',
+      message: 'A valid session ID is required.',
+    });
+  }
+
+  const events = getTerminalEvents(req.userId || 'seeded-user', parsed.data.id);
+  if (!events) {
+    return res.status(404).json({
+      error: 'NotFound',
+      message: 'That session could not be found.',
+    });
+  }
+
+  return res.json({ events });
+});
+
+app.post('/terminal/sessions/:id/messages', (req, res) => {
+  const paramsSchema = z.object({
+    id: z.string().min(1),
+  });
+  const bodySchema = z.object({
+    text: z.string().min(1),
+  });
+  const parsedParams = paramsSchema.safeParse(req.params);
+  const parsedBody = bodySchema.safeParse(req.body);
+
+  if (!parsedParams.success || !parsedBody.success) {
+    return res.status(400).json({
+      error: 'BadRequest',
+      message: 'A valid session ID and message are required.',
+    });
+  }
+
+  const session = postTerminalMessage(req.userId || 'seeded-user', parsedParams.data.id, parsedBody.data.text);
+  if (!session) {
+    return res.status(404).json({
+      error: 'NotFound',
+      message: 'That session could not be found.',
+    });
+  }
+
+  return res.status(202).json({ session });
+});
+
+app.post('/terminal/sessions/:id/approvals/:requestId', (req, res) => {
+  const paramsSchema = z.object({
+    id: z.string().min(1),
+    requestId: z.string().min(1),
+  });
+  const bodySchema = z.object({
+    decision: z.enum(['approved', 'denied']),
+  });
+  const parsedParams = paramsSchema.safeParse(req.params);
+  const parsedBody = bodySchema.safeParse(req.body);
+
+  if (!parsedParams.success || !parsedBody.success) {
+    return res.status(400).json({
+      error: 'BadRequest',
+      message: 'A valid session ID, request ID, and decision are required.',
+    });
+  }
+
+  const session = resolveTerminalApproval(
+    req.userId || 'seeded-user',
+    parsedParams.data.id,
+    parsedParams.data.requestId,
+    parsedBody.data.decision
+  );
+  if (!session) {
+    return res.status(404).json({
+      error: 'NotFound',
+      message: 'That approval request could not be found.',
+    });
+  }
+
+  return res.json({ session });
 });
 
 /**

@@ -1,4 +1,4 @@
-import { BASE_URL } from "../constants/BASE_URL";
+import { getBaseUrl } from "../constants/BASE_URL";
 import { authenticatedFetch } from "./authenticatedFetch";
 
 /**
@@ -14,7 +14,7 @@ export async function createGuestCheckoutOrder(payload: any) {
     const method = payload.paymentMethod?.includes('GOOGLE') ? 'Google Pay' : 'Apple Pay';
     console.log(`📤 [API] createGuestCheckoutOrder (${method})`);
 
-    const response = await authenticatedFetch(`${BASE_URL}/server/api`, {
+    const response = await authenticatedFetch(`${getBaseUrl()}/server/api`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
@@ -76,4 +76,3 @@ export async function createGuestCheckoutOrder(payload: any) {
     throw error;
   }
 }
-

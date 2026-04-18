@@ -1,5 +1,5 @@
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
-import { BASE_URL } from '@/constants/BASE_URL';
+import { getBaseUrl } from '@/constants/BASE_URL';
 import { COLORS } from '@/constants/Colors';
 import { TEST_ACCOUNTS } from '@/constants/TestAccounts';
 import { FONTS } from '@/constants/Typography';
@@ -28,7 +28,7 @@ import {
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 
-const { CARD_BG, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, BORDER, WHITE, VIOLET } = COLORS;
+const { CARD_BG, CARD_ALT, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, BORDER, WHITE, VIOLET, DANGER, BLUE_WASH } = COLORS;
 
 type BalanceRecord = {
   network: string;
@@ -115,15 +115,15 @@ export function WalletDetailsSection() {
       const allBalances: BalanceRecord[] = [];
 
       if (primaryAddress) {
-        const baseData = await fetchAuthorizedJson(`${BASE_URL}/balances/evm?address=${primaryAddress}&network=base`);
+        const baseData = await fetchAuthorizedJson(`${getBaseUrl()}/balances/evm?address=${primaryAddress}&network=base`);
         allBalances.push(...(baseData.balances || []).map((balance: BalanceRecord) => ({ ...balance, network: 'Base' })));
 
-        const ethereumData = await fetchAuthorizedJson(`${BASE_URL}/balances/evm?address=${primaryAddress}&network=ethereum`);
+        const ethereumData = await fetchAuthorizedJson(`${getBaseUrl()}/balances/evm?address=${primaryAddress}&network=ethereum`);
         allBalances.push(...(ethereumData.balances || []).map((balance: BalanceRecord) => ({ ...balance, network: 'Ethereum' })));
       }
 
       if (solanaAddress) {
-        const solanaData = await fetchAuthorizedJson(`${BASE_URL}/balances/solana?address=${solanaAddress}`);
+        const solanaData = await fetchAuthorizedJson(`${getBaseUrl()}/balances/solana?address=${solanaAddress}`);
         allBalances.push(...(solanaData.balances || []).map((balance: BalanceRecord) => ({ ...balance, network: 'Solana' })));
       }
 
@@ -146,15 +146,15 @@ export function WalletDetailsSection() {
       const allBalances: BalanceRecord[] = [];
 
       if (primaryAddress) {
-        const baseSepoliaData = await fetchAuthorizedJson(`${BASE_URL}/balances/evm?address=${primaryAddress}&network=base-sepolia`);
+        const baseSepoliaData = await fetchAuthorizedJson(`${getBaseUrl()}/balances/evm?address=${primaryAddress}&network=base-sepolia`);
         allBalances.push(...(baseSepoliaData.balances || []).map((balance: BalanceRecord) => ({ ...balance, network: 'Base Sepolia' })));
 
-        const ethereumSepoliaData = await fetchAuthorizedJson(`${BASE_URL}/balances/evm?address=${primaryAddress}&network=ethereum-sepolia`);
+        const ethereumSepoliaData = await fetchAuthorizedJson(`${getBaseUrl()}/balances/evm?address=${primaryAddress}&network=ethereum-sepolia`);
         allBalances.push(...(ethereumSepoliaData.balances || []).map((balance: BalanceRecord) => ({ ...balance, network: 'Ethereum Sepolia' })));
       }
 
       if (solanaAddress) {
-        const solanaDevnetData = await fetchAuthorizedJson(`${BASE_URL}/balances/solana?address=${solanaAddress}&network=solana-devnet`);
+        const solanaDevnetData = await fetchAuthorizedJson(`${getBaseUrl()}/balances/solana?address=${solanaAddress}&network=solana-devnet`);
         allBalances.push(...(solanaDevnetData.balances || []).map((balance: BalanceRecord) => ({ ...balance, network: 'Solana Devnet' })));
       }
 
@@ -462,11 +462,16 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: CARD_BG,
-    borderRadius: 16,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: BORDER,
-    padding: 16,
+    padding: 18,
     gap: 16,
+    shadowColor: BLUE,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.06,
+    shadowRadius: 16,
+    elevation: 2,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -475,7 +480,7 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   cardTitle: {
-    color: TEXT_PRIMARY,
+    color: BLUE,
     fontSize: 18,
     fontFamily: FONTS.heading,
   },
@@ -491,12 +496,15 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: BORDER,
+    backgroundColor: CARD_ALT,
     alignItems: 'center',
     justifyContent: 'center',
   },
   addressBlock: {
     gap: 8,
+    backgroundColor: CARD_ALT,
+    borderRadius: 16,
+    padding: 14,
   },
   addressLabel: {
     color: TEXT_SECONDARY,
@@ -516,7 +524,7 @@ const styles = StyleSheet.create({
     backgroundColor: BLUE,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderRadius: 12,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -528,9 +536,10 @@ const styles = StyleSheet.create({
   secondaryButton: {
     borderWidth: 1,
     borderColor: BORDER,
+    backgroundColor: CARD_ALT,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    borderRadius: 12,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'flex-start',
@@ -538,9 +547,10 @@ const styles = StyleSheet.create({
   secondaryWideButton: {
     borderWidth: 1,
     borderColor: BORDER,
+    backgroundColor: CARD_ALT,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderRadius: 12,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     flex: 1,
@@ -564,7 +574,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   errorText: {
-    color: '#FF6B6B',
+    color: DANGER,
     fontSize: 13,
     lineHeight: 18,
     fontFamily: FONTS.body,
@@ -588,6 +598,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: BORDER,
+    backgroundColor: BLUE_WASH,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -642,7 +653,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   cashOutChip: {
-    backgroundColor: '#1a472a',
+    backgroundColor: VIOLET,
   },
   actionChipText: {
     color: WHITE,

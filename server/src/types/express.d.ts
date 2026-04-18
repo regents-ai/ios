@@ -4,6 +4,8 @@ declare namespace Express {
     userId?: string;
     userData?: {
       id: string;
+      sessionId?: string;
+      testAccount?: boolean;
       [key: string]: any;
     };
   }
