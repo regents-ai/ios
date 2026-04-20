@@ -23,6 +23,17 @@ import {
   resolveTerminalApproval,
   seedReviewTerminalSessions,
 } from './terminal.js';
+import {
+  buildPushTokenDebugResponse,
+  canAccessPushTokenDebug,
+} from './pushTokens.js';
+import {
+  requireWebhookSecret,
+  summarizeWebhookLog,
+  summarizeProxyRequestLog,
+  summarizeProxyResponseLog,
+  validateProxyTarget,
+} from './security.js';
 import { validateAccessToken } from './validateToken.js';
 import { verifyLegacySignature, verifyWebhookSignature } from './verifyWebhookSignature.js';
 
@@ -485,7 +496,6 @@ app.post("/server/api", async (req, res) => {
       url: z.string(), // Must be a valid URL
       method: z.enum(['GET', 'POST']).optional(),
       body: z.any().optional(), // Any JSON body
-      headers: z.record(z.string(), z.string()).optional() // Optional additional headers
     });
 
     const parsed = requestSchema.safeParse(req.body);
@@ -493,33 +503,22 @@ app.post("/server/api", async (req, res) => {
       return res.status(400).json({ error: parsed.error.flatten() });
     }
 
-    const { url: targetUrl, method: method, body: targetBody, headers: additionalHeaders } = parsed.data;
-
-    console.log('📤 [SERVER] Outgoing request:', {
-      url: targetUrl,
-      method: method || 'POST',
-      body: targetBody
-    });
-    if (targetUrl.includes('/onramp/orders')) {
-      console.log('📌 [SERVER] Onramp order request — isQuote:', targetBody?.isQuote);
-    }
-
-
-    // Generate JWT for Coinbase API calls (if needed)
-    const urlObj = new URL(targetUrl);
+    const { url: targetUrl, method: method, body: targetBody } = parsed.data;
     let authToken = null;
+    const isTestFlight = req.userData?.testAccount === true;
+    const validatedTargetUrl = validateProxyTarget({
+      targetUrl,
+      currentUserId: req.userId,
+      isTestAccount: isTestFlight,
+    });
 
-    const isOnrampRequest = targetUrl.includes('/onramp/');
+    console.log('📤 [SERVER] Outgoing request:', summarizeProxyRequestLog(targetUrl, method, targetBody));
+
+    const isOnrampRequest = validatedTargetUrl.pathname.includes('/onramp/');
 
     // Add clientIp to onramp requests
     let finalBody = isOnrampRequest ? { ...targetBody, clientIp } : targetBody;
-    let finalUrl = targetUrl;
-
-    // Log if this is a test account (for debugging)
-    const isTestFlight = (req as any).userData?.testAccount === true;
-    if (isTestFlight) {
-      console.log('🧪 [SERVER] TestFlight account detected');
-    }
+    let finalUrl = validatedTargetUrl.toString();
     
     // Auto-generate JWT for Coinbase API calls only
     // Use finalUrl for JWT generation, but DON'T include query params in JWT signature
@@ -540,10 +539,13 @@ app.post("/server/api", async (req, res) => {
     const headers = {
       ...(method === 'POST' && { "Content-Type": "application/json" }),
       ...(authToken && { "Authorization": `Bearer ${authToken}` }),
-      ...(additionalHeaders || {}) // Merge client-provided headers
     };
 
-    console.log('📌 [SERVER] Fetching final URL:', finalUrl);
+    console.log('📌 [SERVER] Fetching final URL:', {
+      host: finalUrlObj.host,
+      path: finalUrlObj.pathname,
+      method: method || 'POST',
+    });
     // Forward request with authentication
     const response = await fetch(finalUrl, {
       method: method || 'POST',
@@ -561,20 +563,15 @@ app.post("/server/api", async (req, res) => {
         console.log('📥 [SERVER] Response received:', {
           status: response.status,
           statusText: response.statusText,
-          data: data
+          summary: summarizeProxyResponseLog(data),
         });
-        if (isOnrampRequest) {
-          console.log('🔑 [SERVER] Onramp response keys:', Object.keys(data));
-          console.log('🔗 [SERVER] paymentLink:', JSON.stringify(data.paymentLink ?? 'NOT IN RESPONSE'));
-          console.log('📋 [SERVER] Full onramp response:', JSON.stringify(data));
-        }
       } else {
         // Non-JSON response (likely error), get as text
         const textResponse = await response.text();
         console.log('📥 [SERVER] Non-JSON response:', {
           status: response.status,
           statusText: response.statusText,
-          text: textResponse
+          textLength: textResponse.length,
         });
 
         // Return text error as JSON
@@ -1029,6 +1026,9 @@ app.post('/push-tokens', async (req, res) => {
 app.get('/push-tokens/debug/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
+    if (!canAccessPushTokenDebug(userId, req.userId)) {
+      return res.status(403).json({ error: 'Forbidden: Cannot inspect another user\'s push token status' });
+    }
 
     let tokenData: any = null;
     if (useDatabase && database) {
@@ -1038,18 +1038,7 @@ app.get('/push-tokens/debug/:userId', async (req, res) => {
       tokenData = pushTokenStore.get(userId) || null;
     }
 
-    res.json({
-      userId,
-      hasToken: !!tokenData,
-      tokenData: tokenData ? {
-        platform: tokenData.platform,
-        tokenType: tokenData.tokenType,
-        tokenLength: tokenData.token?.length,
-        updatedAt: new Date(tokenData.updatedAt).toISOString()
-      } : null,
-      storage: useDatabase ? 'database' : 'in-memory',
-      allUserIds: useDatabase ? 'N/A (external database)' : Array.from(pushTokenStore.keys())
-    });
+    res.json(buildPushTokenDebugResponse(userId, tokenData));
   } catch (error) {
     res.status(500).json({ error: 'Failed to check token' });
   }
@@ -1077,12 +1066,11 @@ app.post('/webhooks/onramp', webhookRateLimiter, async (req, res) => {
 
     const eventType = webhookData.eventType || webhookData.event;
     console.log('🔔 [WEBHOOK] Received:', eventType);
-    console.log('📦 [WEBHOOK] Full body:', JSON.stringify(webhookData, null, 2));
+    console.log('📦 [WEBHOOK] Summary:', summarizeWebhookLog(webhookData));
 
     // Verify webhook signature (security check)
-    const webhookSecret = process.env.WEBHOOK_SECRET;
-
-    if (webhookSecret) {
+    try {
+      const webhookSecret = requireWebhookSecret(process.env.WEBHOOK_SECRET);
       // Try X-Hook0-Signature (new format)
       const hook0Signature = req.headers['x-hook0-signature'] as string;
 
@@ -1111,8 +1099,9 @@ app.post('/webhooks/onramp', webhookRateLimiter, async (req, res) => {
           return res.status(401).json({ error: 'Missing signature headers' });
         }
       }
-    } else {
-      console.warn('⚠️ [WEBHOOK] WEBHOOK_SECRET not set - skipping verification (INSECURE!)');
+    } catch (error) {
+      console.error('❌ [WEBHOOK] Webhook verification is not configured:', error);
+      return res.status(500).json({ error: 'Webhook verification is not configured' });
     }
 
     // Extract transaction ID (different field names)
@@ -1152,8 +1141,7 @@ app.post('/webhooks/onramp', webhookRateLimiter, async (req, res) => {
           amount,
           currency,
           network,
-          address: webhookData.destinationAddress || webhookData.walletAddress,
-          partnerUserRef
+          hasPartnerUserRef: !!partnerUserRef
         });
 
         // Send push notification via Expo Push API (user-specific)

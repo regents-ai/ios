@@ -1,10 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
 
+import { isTrustedTestflightBypassToken } from './security.js';
 import { verifyPrivyAccessToken } from './identity.js';
-
-const TESTFLIGHT_EMAIL = 'reviewer@regents-mobile.app';
-const TESTFLIGHT_PHONE = '+12345678901';
-const TESTFLIGHT_USER_ID = '286ef934-f3b8-4e94-b61f-1f1a088ac95e';
 
 const tokenCache = new Map<string, { userId: string; sessionId: string; expiresAt: number }>();
 const CACHE_TTL = 5 * 60 * 1000;
@@ -17,12 +14,8 @@ export async function validateAccessToken(
   try {
     const authHeader = req.headers.authorization;
     const token = authHeader?.replace('Bearer ', '');
-    const isTestFlightToken = token?.includes('testflight');
-    const isTestFlightEmail = req.body?.email === TESTFLIGHT_EMAIL;
-    const isTestFlightPhone = req.body?.phoneNumber === TESTFLIGHT_PHONE;
-    const isTestFlightUserId = req.body?.url?.includes(TESTFLIGHT_USER_ID);
 
-    if (isTestFlightToken || isTestFlightEmail || isTestFlightPhone || isTestFlightUserId) {
+    if (isTrustedTestflightBypassToken(token)) {
       req.userId = 'testflight-reviewer';
       req.userData = {
         id: 'testflight-reviewer',
