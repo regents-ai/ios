@@ -5,7 +5,7 @@ import { AgentSummary } from '@/types/agents';
 import { fetchAgents } from '@/utils/fetchAgents';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -16,7 +16,23 @@ import {
   View,
 } from 'react-native';
 
-const { DARK_BG, CARD_BG, CARD_ALT, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, BORDER, WHITE, SUCCESS, DANGER } = COLORS;
+const {
+  DARK_BG,
+  CARD_BG,
+  CARD_ALT,
+  TEXT_PRIMARY,
+  TEXT_SECONDARY,
+  BLUE,
+  BORDER,
+  WHITE,
+  SUCCESS,
+  DANGER,
+  BLUE_WASH,
+} = COLORS;
+
+const AMBER = '#A3703A';
+const AMBER_WASH = '#F2E7DA';
+const GREEN_WASH = '#E6F0EA';
 
 function formatAddress(address: string) {
   return `${address.slice(0, 8)}...${address.slice(-6)}`;
@@ -38,26 +54,85 @@ function formatRelativeTime(dateString: string) {
   return `${Math.round(diffHours / 24)}d ago`;
 }
 
-function statusAccent(status: AgentSummary['status']) {
-  switch (status) {
-    case 'active':
-      return SUCCESS;
-    case 'attention':
-      return '#A3703A';
-    case 'paused':
-      return DANGER;
+function cardPriority(agent: AgentSummary) {
+  if (agent.runtimeStatus === 'offline') return 0;
+  if (agent.status === 'attention') return 1;
+  if (agent.runtimeStatus === 'waiting') return 2;
+  if (agent.status === 'paused') return 3;
+  return 4;
+}
+
+function runtimeTone(runtimeStatus: AgentSummary['runtimeStatus']) {
+  switch (runtimeStatus) {
+    case 'online':
+      return {
+        label: 'Online',
+        accent: SUCCESS,
+        wash: GREEN_WASH,
+      };
+    case 'waiting':
+      return {
+        label: 'Waiting',
+        accent: AMBER,
+        wash: AMBER_WASH,
+      };
+    case 'offline':
+      return {
+        label: 'Offline',
+        accent: DANGER,
+        wash: '#F3E1DD',
+      };
   }
 }
 
-function runtimeCopy(runtimeStatus: AgentSummary['runtimeStatus']) {
-  switch (runtimeStatus) {
-    case 'online':
-      return 'Online';
-    case 'waiting':
-      return 'Waiting';
-    case 'offline':
-      return 'Offline';
+function attentionCopy(agent: AgentSummary) {
+  if (agent.runtimeStatus === 'offline') {
+    return {
+      eyebrow: 'Needs attention now',
+      summary: 'Offline. Open this agent to review what stalled and decide the next step.',
+      nextAction: 'Review status',
+      accent: DANGER,
+      wash: '#F3E1DD',
+    };
   }
+
+  if (agent.status === 'attention') {
+    return {
+      eyebrow: 'Review recommended',
+      summary: agent.treasuryNote || 'Something changed recently. Open this agent to review the treasury and recent requests.',
+      nextAction: 'Check treasury',
+      accent: AMBER,
+      wash: AMBER_WASH,
+    };
+  }
+
+  if (agent.runtimeStatus === 'waiting') {
+    return {
+      eyebrow: 'Waiting on a next step',
+      summary: agent.treasuryNote || 'This agent is waiting on a decision, approval, or follow-up.',
+      nextAction: 'Open terminal',
+      accent: AMBER,
+      wash: AMBER_WASH,
+    };
+  }
+
+  if (agent.status === 'paused') {
+    return {
+      eyebrow: 'Paused',
+      summary: agent.treasuryNote || 'This agent is paused right now. Open it to review the latest context before restarting.',
+      nextAction: 'Review summary',
+      accent: DANGER,
+      wash: '#F3E1DD',
+    };
+  }
+
+  return {
+    eyebrow: 'Steady',
+    summary: agent.treasuryNote || 'Treasury and runtime look steady. Open the agent for terminal access, funding, or Paperclip.',
+    nextAction: 'Open agent',
+    accent: SUCCESS,
+    wash: GREEN_WASH,
+  };
 }
 
 export default function AgentsTab() {
@@ -106,32 +181,56 @@ export default function AgentsTab() {
     }, [loadAgents])
   );
 
+  const sortedAgents = useMemo(
+    () =>
+      [...agents].sort((left, right) => {
+        const priorityDiff = cardPriority(left) - cardPriority(right);
+        if (priorityDiff !== 0) {
+          return priorityDiff;
+        }
+
+        return new Date(right.lastActiveAt).getTime() - new Date(left.lastActiveAt).getTime();
+      }),
+    [agents]
+  );
+
+  const summary = useMemo(() => {
+    const attentionCount = agents.filter((agent) => agent.runtimeStatus === 'offline' || agent.status === 'attention').length;
+    const waitingCount = agents.filter((agent) => agent.runtimeStatus === 'waiting').length;
+    const steadyCount = agents.filter((agent) => agent.runtimeStatus === 'online' && agent.status === 'active').length;
+
+    return { attentionCount, waitingCount, steadyCount };
+  }, [agents]);
+
   const renderItem = ({ item }: { item: AgentSummary }) => {
-    const accent = statusAccent(item.status);
+    const runtime = runtimeTone(item.runtimeStatus);
+    const attention = attentionCopy(item);
 
     return (
       <Pressable
         onPress={() => router.push({ pathname: '/agent/[id]' as any, params: { id: item.id } })}
         style={({ pressed }) => [
           styles.agentCard,
+          { borderColor: attention.accent },
           pressed && styles.cardPressed,
         ]}
       >
         <View style={styles.cardHeader}>
-          <View style={styles.cardTitleBlock}>
-            <View style={[styles.statusDot, { backgroundColor: accent }]} />
-            <Text style={styles.agentName}>{item.name}</Text>
+          <View style={[styles.priorityPill, { backgroundColor: attention.wash }]}>
+            <Text style={[styles.priorityPillText, { color: attention.accent }]}>{attention.eyebrow}</Text>
           </View>
-          <View style={[styles.statusPill, { borderColor: accent }]}>
-            <Text style={[styles.statusPillText, { color: accent }]}>{runtimeCopy(item.runtimeStatus)}</Text>
+          <View style={[styles.runtimePill, { backgroundColor: runtime.wash }]}>
+            <View style={[styles.runtimeDot, { backgroundColor: runtime.accent }]} />
+            <Text style={[styles.runtimePillText, { color: runtime.accent }]}>{runtime.label}</Text>
           </View>
         </View>
 
-        <Text style={styles.agentNote}>{item.treasuryNote || 'Treasury status is available in the agent detail view.'}</Text>
+        <Text style={styles.agentName}>{item.name}</Text>
+        <Text style={styles.agentLead}>{attention.summary}</Text>
 
         <View style={styles.statGrid}>
           <View style={styles.statBlock}>
-            <Text style={styles.statLabel}>Balance</Text>
+            <Text style={styles.statLabel}>Stablecoin balance</Text>
             <Text style={styles.statValue}>{item.stablecoinSymbol} {formatCurrency(item.stablecoinBalance)}</Text>
           </View>
           <View style={styles.statBlock}>
@@ -140,14 +239,19 @@ export default function AgentsTab() {
           </View>
         </View>
 
-        <View style={styles.addressRow}>
+        <View style={styles.walletStrip}>
           <Ionicons name="wallet-outline" size={16} color={TEXT_SECONDARY} />
           <Text style={styles.addressText}>{formatAddress(item.walletAddress)}</Text>
         </View>
 
         <View style={styles.cardFooter}>
-          <Text style={styles.footerHint}>Open agent</Text>
-          <Ionicons name="chevron-forward" size={18} color={BLUE} />
+          <View>
+            <Text style={styles.footerLabel}>Next step</Text>
+            <Text style={styles.footerAction}>{attention.nextAction}</Text>
+          </View>
+          <View style={styles.footerArrow}>
+            <Ionicons name="arrow-forward" size={18} color={BLUE} />
+          </View>
         </View>
       </Pressable>
     );
@@ -159,8 +263,22 @@ export default function AgentsTab() {
         <Text style={styles.eyebrow}>Regents Mobile</Text>
         <Text style={styles.heroTitle}>Agents</Text>
         <Text style={styles.heroIntro}>
-          Track each agent’s treasury, see who needs attention, and move into funding or withdrawal requests from one place.
+          Start with what needs your attention, then move into funding, withdrawal requests, or the live terminal from there.
         </Text>
+        <View style={styles.summaryRow}>
+          <View style={styles.summaryTile}>
+            <Text style={styles.summaryValue}>{summary.attentionCount}</Text>
+            <Text style={styles.summaryLabel}>Need review</Text>
+          </View>
+          <View style={styles.summaryTile}>
+            <Text style={styles.summaryValue}>{summary.waitingCount}</Text>
+            <Text style={styles.summaryLabel}>Waiting</Text>
+          </View>
+          <View style={styles.summaryTile}>
+            <Text style={styles.summaryValue}>{summary.steadyCount}</Text>
+            <Text style={styles.summaryLabel}>Steady</Text>
+          </View>
+        </View>
       </View>
 
       {loading ? (
@@ -170,7 +288,7 @@ export default function AgentsTab() {
         </View>
       ) : (
         <FlatList
-          data={agents}
+          data={sortedAgents}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           contentContainerStyle={styles.listContent}
@@ -179,7 +297,7 @@ export default function AgentsTab() {
             <View style={styles.emptyCard}>
               <Ionicons name="people-outline" size={34} color={BLUE} />
               <Text style={styles.emptyTitle}>No agents yet</Text>
-              <Text style={styles.emptyText}>When your first agent is ready, it will appear here with its wallet and treasury status.</Text>
+              <Text style={styles.emptyText}>When your first agent is ready, it will appear here with its wallet, treasury, and latest status.</Text>
             </View>
           }
         />
@@ -209,7 +327,7 @@ const styles = StyleSheet.create({
     borderColor: BORDER,
     borderRadius: 24,
     padding: 22,
-    gap: 10,
+    gap: 12,
     marginBottom: 16,
   },
   eyebrow: {
@@ -230,6 +348,28 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     fontFamily: FONTS.body,
   },
+  summaryRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  summaryTile: {
+    flex: 1,
+    backgroundColor: WHITE,
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    gap: 4,
+  },
+  summaryValue: {
+    color: BLUE,
+    fontSize: 22,
+    fontFamily: FONTS.heading,
+  },
+  summaryLabel: {
+    color: TEXT_SECONDARY,
+    fontSize: 12,
+    fontFamily: FONTS.body,
+  },
   listContent: {
     paddingBottom: 28,
     gap: 14,
@@ -247,14 +387,14 @@ const styles = StyleSheet.create({
   },
   agentCard: {
     backgroundColor: CARD_ALT,
-    borderRadius: 22,
+    borderRadius: 24,
     borderWidth: 1,
-    borderColor: BORDER,
     padding: 18,
     gap: 14,
   },
   cardPressed: {
-    opacity: 0.92,
+    opacity: 0.96,
+    transform: [{ scale: 0.985 }, { translateY: 1 }],
   },
   cardHeader: {
     flexDirection: 'row',
@@ -262,38 +402,41 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  cardTitleBlock: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    flex: 1,
-  },
-  statusDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  agentName: {
-    color: TEXT_PRIMARY,
-    fontSize: 22,
-    fontFamily: FONTS.heading,
-    flexShrink: 1,
-  },
-  statusPill: {
+  priorityPill: {
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
-    borderWidth: 1,
-    backgroundColor: WHITE,
   },
-  statusPillText: {
+  priorityPillText: {
     fontSize: 12,
     fontFamily: FONTS.body,
   },
-  agentNote: {
-    color: TEXT_SECONDARY,
-    fontSize: 14,
-    lineHeight: 20,
+  runtimePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  runtimeDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 999,
+  },
+  runtimePillText: {
+    fontSize: 12,
+    fontFamily: FONTS.body,
+  },
+  agentName: {
+    color: TEXT_PRIMARY,
+    fontSize: 24,
+    fontFamily: FONTS.heading,
+  },
+  agentLead: {
+    color: TEXT_PRIMARY,
+    fontSize: 15,
+    lineHeight: 22,
     fontFamily: FONTS.body,
   },
   statGrid: {
@@ -317,10 +460,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: FONTS.heading,
   },
-  addressRow: {
+  walletStrip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    paddingHorizontal: 2,
   },
   addressText: {
     color: TEXT_SECONDARY,
@@ -328,15 +472,33 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.body,
   },
   cardFooter: {
+    backgroundColor: BLUE_WASH,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 4,
+    gap: 12,
   },
-  footerHint: {
-    color: BLUE,
-    fontSize: 14,
+  footerLabel: {
+    color: TEXT_SECONDARY,
+    fontSize: 12,
     fontFamily: FONTS.body,
+  },
+  footerAction: {
+    color: BLUE,
+    fontSize: 15,
+    marginTop: 2,
+    fontFamily: FONTS.heading,
+  },
+  footerArrow: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: WHITE,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   emptyCard: {
     backgroundColor: CARD_BG,

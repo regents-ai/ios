@@ -22,9 +22,11 @@ import "@ethersproject/shims";
 import { Buffer } from "buffer";
 import "react-native-get-random-values";
 import "react-native-url-polyfill/auto";
+import { Platform } from "react-native";
 
 // Conditional crypto setup based on build type
 const isExpoGo = process.env.EXPO_PUBLIC_USE_EXPO_CRYPTO === 'true';
+const isWeb = Platform.OS === 'web';
 
 // Setup globals FIRST (needed for both environments)
 if (!("Buffer" in globalThis)) {
@@ -36,7 +38,7 @@ if (!("structuredClone" in globalThis)) {
 }
 
 // Install crypto based on environment
-if (!isExpoGo) {
+if (!isExpoGo && !isWeb) {
   // TestFlight/Production: use react-native-quick-crypto
   try {
     const { install } = require('react-native-quick-crypto');
@@ -47,7 +49,11 @@ if (!isExpoGo) {
   }
 } else {
   // Expo Go: use expo-crypto via Metro alias
-  console.log('Using expo-crypto via Metro alias for Expo Go - export wallet disabled');
+  console.log(
+    isWeb
+      ? 'Using web crypto for web build'
+      : 'Using expo-crypto via Metro alias for Expo Go - export wallet disabled'
+  );
 }
 
 // Now it's safe to import the app

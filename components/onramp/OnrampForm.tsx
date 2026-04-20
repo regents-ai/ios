@@ -87,7 +87,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useCurrentUser } from '@coinbase/cdp-hooks';
 import { useRegentsAuth } from '@/hooks/useRegentsAuth';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Image, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { Animated, Image, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { COLORS } from '../../constants/Colors';
 import { TEST_ACCOUNTS } from '../../constants/TestAccounts';
 import { FONTS } from '../../constants/Typography';
@@ -95,8 +95,9 @@ import { getCountry, getCurrentWalletAddress, getLifetimeTransactionThreshold, g
 import { SwipeToConfirm } from '../ui/SwipeToConfirm';
 import { fetchUserLimits, UserLimit } from '../../utils/fetchUserLimits';
 import { getAccessTokenGlobal } from '../../utils/getAccessTokenGlobal';
+import { getGuestCheckoutBlocker } from '../../utils/onrampEligibility';
 
-const { BLUE, DARK_BG, CARD_BG, CARD_ALT, BORDER, TEXT_PRIMARY, TEXT_SECONDARY, ORANGE, DANGER, BACKDROP } = COLORS;
+const { BLUE, DARK_BG, CARD_BG, CARD_ALT, BORDER, TEXT_PRIMARY, TEXT_SECONDARY, ORANGE, DANGER, BACKDROP, BLUE_WASH, WHITE } = COLORS;
 
 export type OnrampFormData = {
   amount: string;
@@ -170,7 +171,7 @@ export function OnrampForm({
   const isApplePay = paymentMethod === 'GUEST_CHECKOUT_APPLE_PAY';
   const isGooglePay = paymentMethod === 'GUEST_CHECKOUT_GOOGLE_PAY';
   const isGuestCheckout = isApplePay || isGooglePay;
-
+  const isBaseUsdcPath = asset === 'USDC' && network === 'Base';
   // User limits state
   const [userLimits, setUserLimits] = useState<{ weekly: UserLimit; lifetime: UserLimit } | null>(null);
   const [isLoadingLimits, setIsLoadingLimits] = useState(false);
@@ -185,14 +186,22 @@ const countries = useMemo(() => {
   return src?.map((c: any) => c.id).filter(Boolean) ?? [];
 }, [buyConfig, options]);
 
-const usSubs = useMemo(() => {
-  const src = buyConfig?.countries ?? options?.countries;
-  return src?.find((c: any) => c.id === 'US')?.subdivisions ?? [];
-}, [buyConfig, options]);
+  const usSubs = useMemo(() => {
+    const src = buyConfig?.countries ?? options?.countries;
+    return src?.find((c: any) => c.id === 'US')?.subdivisions ?? [];
+  }, [buyConfig, options]);
   const verifiedPhone = getVerifiedPhone();
   const hasFreshVerifiedPhone = !!linkedPhone && verifiedPhone === linkedPhone && isPhoneFresh60d();
-  const needsGuestCheckoutVerification = !localSandboxEnabled && isGuestCheckout && (!linkedEmail || !linkedPhone || !hasFreshVerifiedPhone);
-  const isUnsupportedGuestCheckoutRegion = !localSandboxEnabled && isGuestCheckout && country !== 'US';
+  const guestCheckoutBlocker = getGuestCheckoutBlocker({
+    localSandboxEnabled,
+    isGuestCheckout,
+    country,
+    linkedEmail,
+    linkedPhone,
+    hasFreshVerifiedPhone,
+  });
+  const needsGuestCheckoutVerification = guestCheckoutBlocker === 'verification';
+  const isUnsupportedGuestCheckoutRegion = guestCheckoutBlocker === 'region';
 
   const isEvmNetwork = (() => {
     const n = (network || '').toLowerCase();
@@ -318,7 +327,7 @@ const usSubs = useMemo(() => {
   }, [userLimits, localSandboxEnabled, isGuestCheckout, amountNumber, isAmountValid]);
 
   // Update isFormValid to include user limits validation
-  const isFormValidWithLimits = isFormValid && limitsValidation.isValid;
+  const isFormValidWithLimits = isFormValid && limitsValidation.isValid && !guestCheckoutBlocker;
 
   /**
    * Dynamic filtering: changing asset updates available networks, and vice versa
@@ -403,6 +412,14 @@ const usSubs = useMemo(() => {
     const method = methods.find(m => m.value === value);
     return method?.display || value;
   };
+
+  const applyBaseUsdcPath = useCallback(() => {
+    setAsset('USDC');
+    setNetwork('Base');
+    if (paymentCurrency !== 'USD') {
+      setPaymentCurrency('USD');
+    }
+  }, [paymentCurrency]);
 
   // Auto-clear invalid selections when options change
   useEffect(() => {
@@ -713,6 +730,41 @@ const usSubs = useMemo(() => {
       bounces
       overScrollMode="always"
     >
+      <Pressable
+        style={({ pressed }) => [
+          styles.focusCard,
+          isBaseUsdcPath && styles.focusCardActive,
+          pressed && styles.focusCardPressed,
+        ]}
+        onPress={applyBaseUsdcPath}
+      >
+        <View style={styles.focusCardHeader}>
+          <View style={styles.focusCardCopy}>
+            <Text style={styles.focusCardEyebrow}>Base + USDC</Text>
+            <Text style={styles.focusCardTitle}>Keep the quickest Regents path in view.</Text>
+          </View>
+          <View style={[styles.focusBadge, isBaseUsdcPath && styles.focusBadgeActive]}>
+            <Text style={[styles.focusBadgeText, isBaseUsdcPath && styles.focusBadgeTextActive]}>
+              {isBaseUsdcPath ? 'Ready' : 'Use this path'}
+            </Text>
+          </View>
+        </View>
+        <Text style={styles.focusCardBody}>
+          Buy on Base, move USDC faster, and keep cash-out paths easier to reach.
+        </Text>
+        <View style={styles.focusTagRow}>
+          <View style={styles.focusTag}>
+            <Text style={styles.focusTagText}>Base first</Text>
+          </View>
+          <View style={styles.focusTag}>
+            <Text style={styles.focusTagText}>USDC default</Text>
+          </View>
+          <View style={styles.focusTag}>
+            <Text style={styles.focusTagText}>Fewer steps</Text>
+          </View>
+        </View>
+      </Pressable>
+
       {/* Environment Card (Sandbox / Production) */}
       <View style={styles.card}>
         <View style={styles.paymentRow}>
@@ -796,7 +848,10 @@ const usSubs = useMemo(() => {
         <View style={styles.inputRow}>
           <View style={styles.receiveAmountContainer}>
             {isLoadingQuote ? (
-              <ActivityIndicator size="small" color={BLUE} />
+              <View style={styles.quotePreviewLoading}>
+                <View style={[styles.quotePreviewPulse, styles.quotePreviewPulseWide]} />
+                <View style={[styles.quotePreviewPulse, styles.quotePreviewPulseShort]} />
+              </View>
             ) : (
               <Text style={styles.receiveAmount}>
                 {currentQuote?.purchase_amount?.value || '0'}
@@ -821,6 +876,11 @@ const usSubs = useMemo(() => {
             <Ionicons name="chevron-down" size={16} color={TEXT_SECONDARY} />
         </Pressable>
       </View>
+        <Text style={styles.receiveHint}>
+          {isBaseUsdcPath
+            ? 'This keeps your default buy path on Base with USDC.'
+            : 'Base + USDC is the quickest path for most Regents wallet tasks.'}
+        </Text>
 
         {/* Network Row */}
         <View style={styles.networkRow}>
@@ -873,6 +933,20 @@ const usSubs = useMemo(() => {
       </View> */}
   
       {/* Quote Summary */}
+      {isLoadingQuote && !currentQuote && isAmountValid ? (
+        <View style={styles.quoteCard}>
+          <Text style={styles.quoteLoadingTitle}>Refreshing your estimate…</Text>
+          <View style={styles.quoteLoadingShell}>
+            {[0, 1, 2].map(index => (
+              <View key={index} style={styles.quoteLoadingRow}>
+                <View style={[styles.quotePreviewPulse, index === 2 ? styles.quotePreviewPulseMedium : styles.quotePreviewPulseShort]} />
+                <View style={[styles.quotePreviewPulse, styles.quotePreviewPulseShort]} />
+              </View>
+            ))}
+          </View>
+        </View>
+      ) : null}
+
       {currentQuote && (
         <View style={styles.quoteCard}>
           <View style={styles.quoteRow}>
@@ -1005,7 +1079,7 @@ const usSubs = useMemo(() => {
             Successful purchases will move real money.
           </Text>
           {address ? (
-            <Text style={[styles.notificationText, { marginTop: 8, fontFamily: 'monospace' }]}>
+            <Text style={[styles.notificationText, { marginTop: 8, fontFamily: FONTS.body }]}>
               Buying to: {address}
             </Text>
           ) : !isEvmNetwork && !isSolanaNetwork ? (
@@ -1037,7 +1111,7 @@ const usSubs = useMemo(() => {
       )}
 
       <SwipeToConfirm
-        label="Swipe to buy"
+        label={isBaseUsdcPath ? 'Swipe to buy USDC' : 'Swipe to buy'}
         disabled={!isFormValidWithLimits}
         onConfirm={handleSwipeConfirm}
         isLoading={isLoading}
@@ -1425,9 +1499,94 @@ const usSubs = useMemo(() => {
 const styles = StyleSheet.create({
   content: {
     padding: 16,
-    gap: 12,
+    gap: 14,
     backgroundColor: DARK_BG,
     paddingBottom: 20, // Reduced from 100 to bring region section closer
+  },
+  focusCard: {
+    backgroundColor: BLUE_WASH,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: BORDER,
+    padding: 18,
+    gap: 12,
+    shadowColor: BLUE,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.08,
+    shadowRadius: 18,
+    elevation: 3,
+  },
+  focusCardActive: {
+    backgroundColor: CARD_BG,
+  },
+  focusCardPressed: {
+    transform: [{ scale: 0.985 }],
+    opacity: 0.97,
+  },
+  focusCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  focusCardCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  focusCardEyebrow: {
+    color: BLUE,
+    fontSize: 12,
+    fontFamily: FONTS.heading,
+  },
+  focusCardTitle: {
+    color: TEXT_PRIMARY,
+    fontSize: 24,
+    lineHeight: 28,
+    fontFamily: FONTS.heading,
+  },
+  focusCardBody: {
+    color: TEXT_SECONDARY,
+    fontSize: 13,
+    lineHeight: 19,
+    fontFamily: FONTS.body,
+  },
+  focusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: WHITE,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  focusBadgeActive: {
+    backgroundColor: BLUE,
+    borderColor: BLUE,
+  },
+  focusBadgeText: {
+    color: BLUE,
+    fontSize: 11,
+    fontFamily: FONTS.body,
+  },
+  focusBadgeTextActive: {
+    color: WHITE,
+  },
+  focusTagRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  focusTag: {
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: CARD_ALT,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  focusTagText: {
+    color: TEXT_PRIMARY,
+    fontSize: 11,
+    fontFamily: FONTS.body,
   },
   fieldGroup: {
     gap: 6,
@@ -1485,11 +1644,37 @@ const styles = StyleSheet.create({
     justifyContent: 'center',   
     alignItems: 'flex-start',   
   },
+  quotePreviewLoading: {
+    gap: 6,
+    width: '100%',
+  },
+  quotePreviewPulse: {
+    height: 12,
+    borderRadius: 999,
+    backgroundColor: CARD_ALT,
+  },
+  quotePreviewPulseWide: {
+    width: 112,
+    height: 16,
+  },
+  quotePreviewPulseMedium: {
+    width: 88,
+  },
+  quotePreviewPulseShort: {
+    width: 56,
+  },
   receiveAmount: {
     fontSize: 32,
     color: TEXT_PRIMARY,
     minWidth: 100,          
     fontFamily: FONTS.heading,
+  },
+  receiveHint: {
+    marginTop: 12,
+    fontSize: 12,
+    color: TEXT_SECONDARY,
+    lineHeight: 17,
+    fontFamily: FONTS.body,
   },
   assetSelect: {
     flexDirection: 'row',
@@ -1601,6 +1786,19 @@ const styles = StyleSheet.create({
     borderColor: BORDER,
     gap: 12,
   },
+  quoteLoadingTitle: {
+    fontSize: 13,
+    color: TEXT_SECONDARY,
+    fontFamily: FONTS.body,
+  },
+  quoteLoadingShell: {
+    gap: 10,
+  },
+  quoteLoadingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   quoteRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1648,8 +1846,7 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.body,
   },
   addressMono: {
-    fontFamily: 'monospace',
-    fontWeight: '700',
+    fontFamily: FONTS.body,
   },
   
   italicNote: {

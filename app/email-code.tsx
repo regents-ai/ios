@@ -6,6 +6,7 @@ import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, SafeAreaV
 import { CoinbaseAlert } from '../components/ui/CoinbaseAlerts';
 import { COLORS } from '../constants/Colors';
 import { isTestAccount, TEST_ACCOUNTS } from '../constants/TestAccounts';
+import { getVerificationSuccessAction } from '../utils/authFlowState';
 import { setCurrentSolanaAddress, setCurrentWalletAddress, setTestSession } from '../utils/sharedState';
 
 const { DARK_BG, CARD_BG, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, WHITE } = COLORS;
@@ -76,21 +77,23 @@ export default function EmailCodeScreen() {
         await setTestSession(TEST_ACCOUNTS.wallets.evm, TEST_ACCOUNTS.wallets.solana);
         setCurrentWalletAddress(TEST_ACCOUNTS.wallets.evm);
         setCurrentSolanaAddress(TEST_ACCOUNTS.wallets.solana);
-
-        setAlert({
-          visible: true,
-          title: 'Review access ready',
-          message: 'The review account is ready. You can move through sign-in, buy, send, and cash-out screens without a live payment.',
-          type: 'info'
-        });
-
-        router.dismissAll();
+        const nextAction = getVerificationSuccessAction(mode);
+        if (nextAction === 'go_wallet') {
+          router.replace('/wallet');
+        } else {
+          router.dismissAll();
+        }
         return;
       }
 
       if (mode === 'signin') {
         await loginWithCode({ email, code: otp });
-        router.replace('/wallet');
+        const nextAction = getVerificationSuccessAction(mode);
+        if (nextAction === 'go_wallet') {
+          router.replace('/wallet');
+        } else {
+          router.dismissAll();
+        }
       } else {
         await linkWithCode({ email, code: otp });
 
@@ -100,8 +103,14 @@ export default function EmailCodeScreen() {
           message: 'Your email address has been linked to your account.',
           type: 'success'
         });
-
-        setTimeout(() => router.dismissAll(), 1500);
+        setTimeout(() => {
+          const nextAction = getVerificationSuccessAction(mode);
+          if (nextAction === 'go_wallet') {
+            router.replace('/wallet');
+          } else {
+            router.dismissAll();
+          }
+        }, 1500);
       }
     } catch (e: any) {
       setAlert({

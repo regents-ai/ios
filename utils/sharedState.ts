@@ -86,6 +86,8 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { TEST_ACCOUNTS } from '@/constants/TestAccounts';
+
 const PHONE_KEY = 'verifiedPhone';
 const PHONE_AT_KEY = 'verifiedPhoneAt';
 const PHONE_USER_KEY = 'verifiedPhoneUserId'; // Track which user verified this phone
@@ -271,6 +273,13 @@ export const hydrateTestSession = async () => {
 export const isTestSessionActive = () => testSessionActive;
 export const getTestWalletEvm = () => testWalletEvm;
 export const getTestWalletSol = () => testWalletSol;
+export const isLocalTestSessionEnabled = () => process.env.EXPO_PUBLIC_ENABLE_TEST_SESSION === 'true';
+
+export const activateLocalTestSession = () => {
+  testSessionActive = true;
+  testWalletEvm = TEST_ACCOUNTS.wallets.evm;
+  testWalletSol = TEST_ACCOUNTS.wallets.solana;
+};
 
 
 export const setCurrentPartnerUserRef = (ref: string | null) => {

@@ -94,7 +94,7 @@ import { useCurrentUser, useEvmAddress, useSignOut, useSolanaAddress } from "@co
 import { useRegentsAuth } from "@/hooks/useRegentsAuth";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
-import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import { Animated, Easing, Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import { APIGuestCheckoutWidget, OnrampForm, useOnramp } from "../../components";
 import { CoinbaseAlert } from "../../components/ui/CoinbaseAlerts";
 import { WalletDetailsSection } from "../../components/wallet/WalletDetailsSection";
@@ -105,13 +105,15 @@ import { clearPhoneVerifyWasCanceled, getCountry, getCurrentNetwork, getCurrentW
 import { createGuestCheckoutDebugInfo, openSupportEmail, SUPPORT_EMAIL } from "../../utils/supportEmail";
 
 
-const { BLUE, DARK_BG, CARD_BG, BORDER, TEXT_PRIMARY, TEXT_SECONDARY, WHITE, DANGER } = COLORS;
+const { BLUE, DARK_BG, CARD_BG, CARD_ALT, BORDER, TEXT_PRIMARY, TEXT_SECONDARY, WHITE, DANGER, BLUE_WASH } = COLORS;
 
 export default function Index() {
   const [address, setAddress] = useState("");
   const [amount, setAmount] = useState("");
   const router = useRouter();
   const pendingForm = getPendingForm();
+  const heroOpacity = useState(() => new Animated.Value(0))[0];
+  const heroTranslateY = useState(() => new Animated.Value(14))[0];
 
   // Store current transaction details for alert messages
   const [currentTransaction, setCurrentTransaction] = useState<{
@@ -141,6 +143,23 @@ export default function Index() {
   const effectiveIsSignedIn = testSession || isAuthenticated;
 
   const [trackedNetwork, setTrackedNetwork] = useState(getCurrentNetwork());
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(heroOpacity, {
+        toValue: 1,
+        duration: 280,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(heroTranslateY, {
+        toValue: 0,
+        duration: 320,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [heroOpacity, heroTranslateY]);
 
   // Initialize on mount AND when test session changes
   useEffect(() => {
@@ -699,7 +718,37 @@ export default function Index() {
         <Text style={styles.title}>Wallet</Text>
       </View>
 
-      
+      <Animated.View
+        style={[
+          styles.heroCard,
+          {
+            opacity: heroOpacity,
+            transform: [{ translateY: heroTranslateY }],
+          },
+        ]}
+      >
+        <View style={styles.heroTopRow}>
+          <Text style={styles.heroEyebrow}>Base + USDC</Text>
+          <View style={styles.heroPill}>
+            <Text style={styles.heroPillText}>Primary path</Text>
+          </View>
+        </View>
+        <Text style={styles.heroTitle}>Keep the fastest wallet path up front.</Text>
+        <Text style={styles.heroBody}>
+          Start with Base and USDC, then move money, review activity, and cash out without hunting through the app.
+        </Text>
+        <View style={styles.heroTagRow}>
+          <View style={styles.heroTag}>
+            <Text style={styles.heroTagText}>Buy on Base</Text>
+          </View>
+          <View style={styles.heroTag}>
+            <Text style={styles.heroTagText}>Move USDC</Text>
+          </View>
+          <View style={styles.heroTag}>
+            <Text style={styles.heroTagText}>Keep actions close</Text>
+          </View>
+        </View>
+      </Animated.View>
 
       {/* Error banner for failed options fetch */}
       {optionsError && !isLoadingOptions && (
@@ -887,6 +936,75 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginTop: 16,
     gap: 12,
+  },
+  heroCard: {
+    marginHorizontal: 20,
+    marginTop: 16,
+    padding: 20,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: BORDER,
+    backgroundColor: CARD_BG,
+    shadowColor: BLUE,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.08,
+    shadowRadius: 18,
+    elevation: 3,
+    gap: 12,
+  },
+  heroTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  heroEyebrow: {
+    color: BLUE,
+    fontSize: 13,
+    fontFamily: FONTS.heading,
+  },
+  heroPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: BLUE_WASH,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  heroPillText: {
+    color: BLUE,
+    fontSize: 12,
+    fontFamily: FONTS.body,
+  },
+  heroTitle: {
+    color: TEXT_PRIMARY,
+    fontSize: 26,
+    lineHeight: 30,
+    fontFamily: FONTS.heading,
+  },
+  heroBody: {
+    color: TEXT_SECONDARY,
+    fontSize: 14,
+    lineHeight: 20,
+    fontFamily: FONTS.body,
+  },
+  heroTagRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  heroTag: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: CARD_ALT,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  heroTagText: {
+    color: TEXT_PRIMARY,
+    fontSize: 12,
+    fontFamily: FONTS.body,
   },
   errorTitle: {
     fontSize: 16,

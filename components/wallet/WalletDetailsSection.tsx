@@ -19,7 +19,6 @@ import * as Clipboard from 'expo-clipboard';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Linking,
   Pressable,
   StyleSheet,
@@ -54,6 +53,35 @@ function toNetworkSlug(network: string) {
   return network.toLowerCase().replace(/\s+/g, '-');
 }
 
+function getActualTokenAmount(balance: BalanceRecord) {
+  const rawAmount = parseFloat(balance.amount?.amount || '0');
+  const decimals = parseInt(balance.amount?.decimals || '0', 10);
+  return rawAmount / Math.pow(10, decimals || 1);
+}
+
+function formatTokenAmount(balance: BalanceRecord) {
+  const amount = getActualTokenAmount(balance);
+  if (amount >= 1000) return amount.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  if (amount >= 1) return amount.toLocaleString(undefined, { maximumFractionDigits: 4 });
+  return amount.toLocaleString(undefined, { maximumFractionDigits: 6 });
+}
+
+function formatUsdValue(usdValue?: number) {
+  if (typeof usdValue !== 'number') return 'Price unavailable';
+  if (usdValue >= 1000) {
+    return usdValue.toLocaleString(undefined, {
+      style: 'currency',
+      currency: 'USD',
+      maximumFractionDigits: 0,
+    });
+  }
+  return usdValue.toLocaleString(undefined, {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 2,
+  });
+}
+
 async function fetchAuthorizedJson(url: string) {
   const response = await authenticatedFetch(url);
   if (!response.ok) {
@@ -85,6 +113,7 @@ export function WalletDetailsSection() {
   const [loadingTestnetBalances, setLoadingTestnetBalances] = useState(false);
   const [testnetBalancesError, setTestnetBalancesError] = useState<string | null>(null);
   const [testnetExpanded, setTestnetExpanded] = useState(false);
+  const [recentCopyKey, setRecentCopyKey] = useState<string | null>(null);
 
   const [alertState, setAlertState] = useState<{
     visible: boolean;
@@ -199,13 +228,35 @@ export function WalletDetailsSection() {
     [testnetBalances]
   );
 
+  const featuredBaseUsdc = useMemo(
+    () =>
+      balances.find(
+        balance => balance.network === 'Base' && balance.token?.symbol?.toUpperCase() === 'USDC'
+      ) || null,
+    [balances]
+  );
+
+  const walletUsdTotal = useMemo(
+    () =>
+      balances.reduce((sum, balance) => sum + (typeof balance.usdValue === 'number' ? balance.usdValue : 0), 0),
+    [balances]
+  );
+
+  const hasAnyWalletBalance = balances.length > 0;
+
   const showAlert = (title: string, message: string, type: 'success' | 'error' | 'info' = 'info') => {
     setAlertState({ visible: true, title, message, type });
   };
 
-  const copyAddress = async (address: string, label: string) => {
+  const copyAddress = async (address: string, label: string, key: string) => {
     await Clipboard.setStringAsync(address);
+    setRecentCopyKey(key);
     showAlert('Address copied', `${label} copied to the clipboard.`, 'info');
+    setTimeout(() => setRecentCopyKey(current => (current === key ? null : current)), 1400);
+  };
+
+  const refreshWalletSnapshot = async () => {
+    await Promise.all([fetchBalances(), fetchTestnetBalances()]);
   };
 
   const handleTransfer = (balance: BalanceRecord, network: string) => {
@@ -266,16 +317,31 @@ export function WalletDetailsSection() {
     }
   };
 
+  const handlePrimarySend = () => {
+    if (!featuredBaseUsdc) {
+      showAlert('Base USDC not ready', 'Add USDC on Base first, then you can send it from here.', 'info');
+      return;
+    }
+
+    handleTransfer(featuredBaseUsdc, 'Base');
+  };
+
+  const handlePrimaryCashOut = () => {
+    if (!featuredBaseUsdc) {
+      showAlert('Base USDC not ready', 'Add USDC on Base first, then you can cash it out from here.', 'info');
+      return;
+    }
+
+    void handleCashOut(featuredBaseUsdc, 'Base');
+  };
+
   const renderBalanceRow = (balance: BalanceRecord, network: string, cashOutEnabled: boolean) => {
     const symbol = balance.token?.symbol || 'UNKNOWN';
-    const rawAmount = parseFloat(balance.amount?.amount || '0');
-    const decimals = parseInt(balance.amount?.decimals || '0', 10);
-    const actualAmount = rawAmount / Math.pow(10, decimals || 1);
 
     return (
       <View
         key={`${network}-${balance.token?.contractAddress || balance.token?.mintAddress || symbol}`}
-        style={styles.balanceRow}
+        style={[styles.balanceRow, network === 'Base' && styles.balanceRowFeatured]}
       >
         <View style={{ flex: 1 }}>
           <Text style={styles.balanceSymbol}>{symbol}</Text>
@@ -283,16 +349,21 @@ export function WalletDetailsSection() {
         </View>
 
         <View style={styles.balanceRight}>
-          <Text style={styles.balanceAmount}>{actualAmount.toFixed(6)}</Text>
-          <Text style={styles.balanceUsd}>
-            {typeof balance.usdValue === 'number' ? `$${balance.usdValue.toFixed(2)}` : 'Price unavailable'}
-          </Text>
+          <Text style={styles.balanceAmount}>{formatTokenAmount(balance)}</Text>
+          <Text style={styles.balanceUsd}>{formatUsdValue(balance.usdValue)}</Text>
           <View style={styles.balanceActions}>
-            <Pressable style={styles.actionChip} onPress={() => handleTransfer(balance, network)}>
+            <Pressable style={({ pressed }) => [styles.actionChip, pressed && styles.actionChipPressed]} onPress={() => handleTransfer(balance, network)}>
               <Text style={styles.actionChipText}>Send</Text>
             </Pressable>
             {cashOutEnabled ? (
-              <Pressable style={[styles.actionChip, styles.cashOutChip]} onPress={() => handleCashOut(balance, network)}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.actionChip,
+                  styles.cashOutChip,
+                  pressed && styles.actionChipPressed,
+                ]}
+                onPress={() => handleCashOut(balance, network)}
+              >
                 <Text style={styles.actionChipText}>Cash out</Text>
               </Pressable>
             ) : null}
@@ -302,16 +373,109 @@ export function WalletDetailsSection() {
     );
   };
 
+  const renderLoadingSkeleton = () => (
+    <View style={styles.loadingShell}>
+      {[0, 1, 2].map(index => (
+        <View key={index} style={styles.loadingSkeletonRow}>
+          <View style={styles.loadingSkeletonLeft}>
+            <View style={[styles.skeletonBlock, styles.skeletonTitle]} />
+            <View style={[styles.skeletonBlock, styles.skeletonLine]} />
+          </View>
+          <View style={styles.loadingSkeletonRight}>
+            <View style={[styles.skeletonBlock, styles.skeletonValue]} />
+            <View style={[styles.skeletonBlock, styles.skeletonLineShort]} />
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+
   return (
     <View style={styles.section}>
       <View style={styles.card}>
         <View style={styles.cardHeader}>
           <View>
-            <Text style={styles.cardTitle}>Wallet</Text>
-            <Text style={styles.cardHint}>Receive funds, open history, and manage wallet settings.</Text>
+            <Text style={styles.cardTitle}>Wallet actions</Text>
+            <Text style={styles.cardHint}>Keep your main address, recent activity, and everyday actions in one place.</Text>
           </View>
           <Pressable onPress={() => router.push('/settings')} style={styles.iconButton}>
             <Ionicons name="settings-outline" size={18} color={TEXT_PRIMARY} />
+          </Pressable>
+        </View>
+
+        <View style={styles.featuredCard}>
+          <View style={styles.featuredTopRow}>
+            <View style={styles.featuredCopy}>
+              <Text style={styles.featuredEyebrow}>Base first</Text>
+              <Text style={styles.featuredTitle}>USDC stays front and center.</Text>
+            </View>
+            <View style={styles.featuredBadge}>
+              <Text style={styles.featuredBadgeText}>Primary route</Text>
+            </View>
+          </View>
+          <Text style={styles.featuredBody}>
+            Use Base for the quickest Regents path, then keep Ethereum and Solana nearby when you need them.
+          </Text>
+          <View style={styles.featuredStats}>
+            <View style={styles.featuredStat}>
+              <Text style={styles.featuredStatLabel}>Base USDC</Text>
+              <Text style={styles.featuredStatValue}>
+                {loadingBalances ? 'Updating…' : featuredBaseUsdc ? `${formatTokenAmount(featuredBaseUsdc)} USDC` : 'Add funds'}
+              </Text>
+            </View>
+            <View style={styles.featuredStat}>
+              <Text style={styles.featuredStatLabel}>Wallet total</Text>
+              <Text style={styles.featuredStatValue}>
+                {loadingBalances && !hasAnyWalletBalance ? 'Updating…' : formatUsdValue(walletUsdTotal)}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.quickActionGrid}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.quickActionButton,
+              styles.quickActionPrimary,
+              pressed && styles.quickActionPressed,
+            ]}
+            onPress={handlePrimarySend}
+          >
+            <Ionicons name="paper-plane-outline" size={18} color={WHITE} />
+            <Text style={styles.quickActionPrimaryText}>Send</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [
+              styles.quickActionButton,
+              styles.quickActionSecondary,
+              pressed && styles.quickActionPressed,
+            ]}
+            onPress={handlePrimaryCashOut}
+          >
+            <Ionicons name="cash-outline" size={18} color={TEXT_PRIMARY} />
+            <Text style={styles.quickActionText}>Cash out</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [
+              styles.quickActionButton,
+              styles.quickActionSecondary,
+              pressed && styles.quickActionPressed,
+            ]}
+            onPress={() => router.push('/wallet/history')}
+          >
+            <Ionicons name="time-outline" size={18} color={TEXT_PRIMARY} />
+            <Text style={styles.quickActionText}>Activity</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [
+              styles.quickActionButton,
+              styles.quickActionSecondary,
+              pressed && styles.quickActionPressed,
+            ]}
+            onPress={() => void refreshWalletSnapshot()}
+          >
+            <Ionicons name="refresh-outline" size={18} color={TEXT_PRIMARY} />
+            <Text style={styles.quickActionText}>Refresh</Text>
           </Pressable>
         </View>
 
@@ -319,8 +483,13 @@ export function WalletDetailsSection() {
           <View style={styles.addressBlock}>
             <Text style={styles.addressLabel}>Base and Ethereum address</Text>
             <Text style={styles.addressValue}>{formatAddress(primaryAddress)}</Text>
-            <Pressable style={styles.secondaryButton} onPress={() => copyAddress(primaryAddress, 'Base and Ethereum address')}>
-              <Text style={styles.secondaryButtonText}>Copy address</Text>
+            <Pressable
+              style={({ pressed }) => [styles.secondaryButton, pressed && styles.secondaryButtonPressed]}
+              onPress={() => copyAddress(primaryAddress, 'Base and Ethereum address', 'base')}
+            >
+              <Text style={styles.secondaryButtonText}>
+                {recentCopyKey === 'base' ? 'Copied' : 'Copy address'}
+              </Text>
             </Pressable>
           </View>
         ) : null}
@@ -329,27 +498,23 @@ export function WalletDetailsSection() {
           <View style={styles.addressBlock}>
             <Text style={styles.addressLabel}>Solana address</Text>
             <Text style={styles.addressValue}>{formatAddress(solanaAddress)}</Text>
-            <Pressable style={styles.secondaryButton} onPress={() => copyAddress(solanaAddress, 'Solana address')}>
-              <Text style={styles.secondaryButtonText}>Copy address</Text>
+            <Pressable
+              style={({ pressed }) => [styles.secondaryButton, pressed && styles.secondaryButtonPressed]}
+              onPress={() => copyAddress(solanaAddress, 'Solana address', 'solana')}
+            >
+              <Text style={styles.secondaryButtonText}>
+                {recentCopyKey === 'solana' ? 'Copied' : 'Copy address'}
+              </Text>
             </Pressable>
           </View>
         ) : null}
-
-        <View style={styles.quickLinks}>
-          <Pressable style={styles.primaryButton} onPress={() => router.push('/wallet/history')}>
-            <Text style={styles.primaryButtonText}>History</Text>
-          </Pressable>
-          <Pressable style={styles.secondaryWideButton} onPress={() => router.push('/settings')}>
-            <Text style={styles.secondaryButtonText}>Settings</Text>
-          </Pressable>
-        </View>
       </View>
 
       <View style={styles.card}>
         <Pressable style={styles.cardHeader} onPress={() => setBalancesExpanded(prev => !prev)}>
           <View>
             <Text style={styles.cardTitle}>Mainnet balances</Text>
-            <Text style={styles.cardHint}>Base, Ethereum, and Solana balances with send and cash-out actions.</Text>
+            <Text style={styles.cardHint}>Base stays at the top, with send and cash-out actions close to each balance.</Text>
           </View>
           <Ionicons name={balancesExpanded ? 'chevron-up' : 'chevron-down'} size={18} color={TEXT_SECONDARY} />
         </Pressable>
@@ -357,16 +522,13 @@ export function WalletDetailsSection() {
         {balancesExpanded ? (
           <>
             {loadingBalances ? (
-              <View style={styles.loadingRow}>
-                <ActivityIndicator size="small" color={BLUE} />
-                <Text style={styles.loadingText}>Loading balances...</Text>
-              </View>
+              renderLoadingSkeleton()
             ) : null}
 
             {balancesError ? (
               <View style={styles.feedbackBlock}>
                 <Text style={styles.errorText}>{balancesError}</Text>
-                <Pressable style={styles.primaryButton} onPress={fetchBalances}>
+                <Pressable style={({ pressed }) => [styles.primaryButton, pressed && styles.primaryButtonPressed]} onPress={fetchBalances}>
                   <Text style={styles.primaryButtonText}>Retry</Text>
                 </Pressable>
               </View>
@@ -400,16 +562,13 @@ export function WalletDetailsSection() {
         {testnetExpanded ? (
           <>
             {loadingTestnetBalances ? (
-              <View style={styles.loadingRow}>
-                <ActivityIndicator size="small" color={BLUE} />
-                <Text style={styles.loadingText}>Loading testnet balances...</Text>
-              </View>
+              renderLoadingSkeleton()
             ) : null}
 
             {testnetBalancesError ? (
               <View style={styles.feedbackBlock}>
                 <Text style={styles.errorText}>{testnetBalancesError}</Text>
-                <Pressable style={styles.primaryButton} onPress={fetchTestnetBalances}>
+                <Pressable style={({ pressed }) => [styles.primaryButton, pressed && styles.primaryButtonPressed]} onPress={fetchTestnetBalances}>
                   <Text style={styles.primaryButtonText}>Retry</Text>
                 </Pressable>
               </View>
@@ -492,6 +651,120 @@ const styles = StyleSheet.create({
     maxWidth: 260,
     fontFamily: FONTS.body,
   },
+  featuredCard: {
+    backgroundColor: BLUE_WASH,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: BORDER,
+    padding: 16,
+    gap: 12,
+  },
+  featuredTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  featuredCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  featuredEyebrow: {
+    color: BLUE,
+    fontSize: 12,
+    fontFamily: FONTS.heading,
+  },
+  featuredTitle: {
+    color: TEXT_PRIMARY,
+    fontSize: 22,
+    lineHeight: 26,
+    fontFamily: FONTS.heading,
+  },
+  featuredBody: {
+    color: TEXT_SECONDARY,
+    fontSize: 13,
+    lineHeight: 19,
+    fontFamily: FONTS.body,
+  },
+  featuredBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: WHITE,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  featuredBadgeText: {
+    color: BLUE,
+    fontSize: 11,
+    fontFamily: FONTS.body,
+  },
+  featuredStats: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  featuredStat: {
+    flex: 1,
+    backgroundColor: CARD_BG,
+    borderRadius: 16,
+    padding: 12,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  featuredStatLabel: {
+    color: TEXT_SECONDARY,
+    fontSize: 12,
+    fontFamily: FONTS.body,
+  },
+  featuredStatValue: {
+    color: TEXT_PRIMARY,
+    fontSize: 15,
+    fontFamily: FONTS.heading,
+  },
+  quickActionGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  quickActionButton: {
+    minWidth: '48%',
+    flexGrow: 1,
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  quickActionPrimary: {
+    backgroundColor: BLUE,
+    shadowColor: BLUE,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.14,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  quickActionSecondary: {
+    backgroundColor: CARD_ALT,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  quickActionPressed: {
+    transform: [{ scale: 0.98 }],
+    opacity: 0.92,
+  },
+  quickActionPrimaryText: {
+    color: WHITE,
+    fontSize: 14,
+    fontFamily: FONTS.body,
+  },
+  quickActionText: {
+    color: TEXT_PRIMARY,
+    fontSize: 14,
+    fontFamily: FONTS.body,
+  },
   iconButton: {
     width: 36,
     height: 36,
@@ -505,6 +778,8 @@ const styles = StyleSheet.create({
     backgroundColor: CARD_ALT,
     borderRadius: 16,
     padding: 14,
+    borderWidth: 1,
+    borderColor: BORDER,
   },
   addressLabel: {
     color: TEXT_SECONDARY,
@@ -516,10 +791,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: FONTS.body,
   },
-  quickLinks: {
-    flexDirection: 'row',
-    gap: 12,
-  },
   primaryButton: {
     backgroundColor: BLUE,
     paddingHorizontal: 16,
@@ -527,6 +798,10 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  primaryButtonPressed: {
+    transform: [{ scale: 0.98 }],
+    opacity: 0.92,
   },
   primaryButtonText: {
     color: WHITE,
@@ -544,16 +819,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignSelf: 'flex-start',
   },
-  secondaryWideButton: {
-    borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: CARD_ALT,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
+  secondaryButtonPressed: {
+    transform: [{ scale: 0.98 }],
+    opacity: 0.92,
   },
   secondaryButtonText: {
     color: TEXT_PRIMARY,
@@ -570,6 +838,47 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: FONTS.body,
   },
+  loadingShell: {
+    gap: 10,
+  },
+  loadingSkeletonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    borderTopWidth: 1,
+    borderTopColor: BORDER,
+  },
+  loadingSkeletonLeft: {
+    flex: 1,
+    gap: 8,
+  },
+  loadingSkeletonRight: {
+    width: 112,
+    gap: 8,
+    alignItems: 'flex-end',
+  },
+  skeletonBlock: {
+    backgroundColor: CARD_ALT,
+    borderRadius: 999,
+  },
+  skeletonTitle: {
+    width: '46%',
+    height: 13,
+  },
+  skeletonLine: {
+    width: '34%',
+    height: 10,
+  },
+  skeletonValue: {
+    width: '78%',
+    height: 13,
+  },
+  skeletonLineShort: {
+    width: '48%',
+    height: 10,
+  },
   feedbackBlock: {
     gap: 12,
   },
@@ -581,6 +890,12 @@ const styles = StyleSheet.create({
   },
   networkSection: {
     gap: 10,
+  },
+  balanceRowFeatured: {
+    backgroundColor: BLUE_WASH,
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    borderTopWidth: 0,
   },
   networkHeader: {
     flexDirection: 'row',
@@ -651,6 +966,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
+  },
+  actionChipPressed: {
+    transform: [{ scale: 0.97 }],
+    opacity: 0.9,
   },
   cashOutChip: {
     backgroundColor: VIOLET,

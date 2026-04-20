@@ -2,14 +2,19 @@ import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { COLORS } from '@/constants/Colors';
 import { TEST_ACCOUNTS } from '@/constants/TestAccounts';
 import { FONTS } from '@/constants/Typography';
+import { AgentDetail, AgentSummary, AgentWithdrawal, PaperclipDetail, WalletFundingChoice } from '@/types/agents';
 import { createAgentWithdrawal } from '@/utils/createAgentWithdrawal';
 import { createTerminalSession } from '@/utils/createTerminalSession';
 import { fetchAgent } from '@/utils/fetchAgent';
 import { fetchAgentPaperclip } from '@/utils/fetchAgentPaperclip';
 import { fetchTerminalSessions } from '@/utils/fetchTerminalSessions';
 import { fetchWalletFundingChoices } from '@/utils/fetchWalletFundingChoices';
-import { clearPendingAgentFundings, getPendingAgentFundings, getTestWalletSol, isTestSessionActive } from '@/utils/sharedState';
-import { AgentDetail, AgentSummary, AgentWithdrawal, PaperclipDetail, WalletFundingChoice } from '@/types/agents';
+import {
+  clearPendingAgentFundings,
+  getPendingAgentFundings,
+  getTestWalletSol,
+  isTestSessionActive,
+} from '@/utils/sharedState';
 import { useCurrentUser, useEvmAddress, useSolanaAddress } from '@coinbase/cdp-hooks';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -26,7 +31,12 @@ import {
   View,
 } from 'react-native';
 
-const { DARK_BG, CARD_BG, CARD_ALT, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, BORDER, WHITE, BLUE_WASH } = COLORS;
+const { DARK_BG, CARD_BG, CARD_ALT, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, BORDER, WHITE, BLUE_WASH, SUCCESS, DANGER } = COLORS;
+
+const AMBER = '#A3703A';
+const AMBER_WASH = '#F2E7DA';
+const GREEN_WASH = '#E6F0EA';
+const RED_WASH = '#F3E1DD';
 
 function formatAddress(address: string) {
   return `${address.slice(0, 8)}...${address.slice(-6)}`;
@@ -37,6 +47,15 @@ function formatCurrency(amount: string) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+}
+
+function formatRelativeTime(dateString: string) {
+  const diffMs = Date.now() - new Date(dateString).getTime();
+  const diffMinutes = Math.max(1, Math.round(diffMs / 60000));
+  if (diffMinutes < 60) return `${diffMinutes}m ago`;
+  const diffHours = Math.round(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  return `${Math.round(diffHours / 24)}d ago`;
 }
 
 function runtimeCopy(runtimeStatus: AgentSummary['runtimeStatus']) {
@@ -67,6 +86,41 @@ function withdrawalCopy(status: AgentWithdrawal['status']) {
 
 function networkSlug(network: string) {
   return network.toLowerCase().replace(/\s+/g, '-');
+}
+
+function runtimeTone(runtimeStatus: AgentSummary['runtimeStatus']) {
+  switch (runtimeStatus) {
+    case 'online':
+      return { accent: SUCCESS, wash: GREEN_WASH };
+    case 'waiting':
+      return { accent: AMBER, wash: AMBER_WASH };
+    case 'offline':
+      return { accent: DANGER, wash: RED_WASH };
+  }
+}
+
+function statusTone(status: AgentWithdrawal['status']) {
+  switch (status) {
+    case 'requested':
+    case 'approved':
+    case 'broadcasting':
+      return { accent: AMBER, wash: AMBER_WASH };
+    case 'confirmed':
+      return { accent: SUCCESS, wash: GREEN_WASH };
+    case 'failed':
+      return { accent: DANGER, wash: RED_WASH };
+  }
+}
+
+function rosterReadyCount(paperclip: PaperclipDetail | null) {
+  if (!paperclip) {
+    return 0;
+  }
+
+  return paperclip.roster.filter((member) => {
+    const lower = member.status.toLowerCase();
+    return lower.includes('ready') || lower.includes('online') || lower.includes('track');
+  }).length;
 }
 
 export default function AgentDetailScreen() {
@@ -157,6 +211,20 @@ export default function AgentDetailScreen() {
   const agentHasWallet = !!agent?.walletAddress;
   const canOpenTerminal = !!agent && !agentIsOffline;
   const canRequestWithdrawal = !!agent && !agentIsOffline && hasMobileWalletAddress;
+  const runtime = runtimeTone(agent?.runtimeStatus || 'waiting');
+  const topGoal = paperclip?.goals[0];
+  const nextTask = paperclip?.activeTasks[0];
+  const latestEvent = paperclip?.recentEvents[0];
+  const teamReady = rosterReadyCount(paperclip);
+  const activeWithdrawal = agent?.withdrawals.find((withdrawal) => withdrawal.status !== 'confirmed' && withdrawal.status !== 'failed');
+
+  const openPaperclip = useCallback(() => {
+    if (!agent) {
+      return;
+    }
+
+    router.push({ pathname: '/agent/[id]/paperclip' as any, params: { id: agent.id } });
+  }, [agent, router]);
 
   const startFunding = (choice: WalletFundingChoice) => {
     if (!agent || !agent.walletAddress) {
@@ -182,7 +250,7 @@ export default function AgentDetailScreen() {
     });
   };
 
-  const openTerminal = async () => {
+  const openTerminal = useCallback(async () => {
     if (!agent) {
       return;
     }
@@ -219,7 +287,7 @@ export default function AgentDetailScreen() {
     } finally {
       setOpeningTerminal(false);
     }
-  };
+  }, [agent, router]);
 
   const submitWithdrawal = async () => {
     if (!agent) {
@@ -286,6 +354,90 @@ export default function AgentDetailScreen() {
     }
   };
 
+  let nextAction = {
+    eyebrow: 'Next step',
+    title: 'Review this agent',
+    body: 'Open the latest summary and decide what needs to happen next.',
+    cta: 'Open summary',
+    onPress: () => {},
+    accent: BLUE,
+    wash: BLUE_WASH,
+  };
+
+  if (agent) {
+    if (agent.runtimeStatus === 'offline') {
+      nextAction = {
+        eyebrow: 'Needs attention now',
+        title: 'Bring this agent back online',
+        body: 'Terminal access and withdrawal requests will be available again once the runtime is back.',
+        cta: 'Open summary',
+        onPress: openPaperclip,
+        accent: DANGER,
+        wash: RED_WASH,
+      };
+    } else if (pendingFunding.length > 0) {
+      nextAction = {
+        eyebrow: 'Money in motion',
+        title: 'Watch the incoming transfer',
+        body: 'Refresh after settlement to confirm the new treasury total.',
+        cta: 'Refresh treasury',
+        onPress: loadAgent,
+        accent: BLUE,
+        wash: BLUE_WASH,
+      };
+    } else if (!agentHasWallet) {
+      nextAction = {
+        eyebrow: 'Setup still in progress',
+        title: 'Wait for the wallet to be ready',
+        body: 'Funding will appear here as soon as this agent has a wallet.',
+        cta: 'Open summary',
+        onPress: openPaperclip,
+        accent: AMBER,
+        wash: AMBER_WASH,
+      };
+    } else if (!hasMobileWalletAddress) {
+      nextAction = {
+        eyebrow: 'One step first',
+        title: 'Open your wallet before requesting funds back',
+        body: 'The app needs your wallet address before it can return funds from this agent.',
+        cta: 'Go to wallet',
+        onPress: () => router.push('/wallet'),
+        accent: AMBER,
+        wash: AMBER_WASH,
+      };
+    } else if (activeWithdrawal) {
+      nextAction = {
+        eyebrow: 'Return in progress',
+        title: 'Track funds coming back to your wallet',
+        body: 'The latest request is still moving. Refresh to see when it clears.',
+        cta: 'Refresh status',
+        onPress: loadAgent,
+        accent: AMBER,
+        wash: AMBER_WASH,
+      };
+    } else if (agent.runtimeStatus === 'waiting') {
+      nextAction = {
+        eyebrow: 'Ready for review',
+        title: 'Check what is waiting',
+        body: 'There may be new work, approvals, or follow-ups ready in the terminal.',
+        cta: 'Open terminal',
+        onPress: openTerminal,
+        accent: AMBER,
+        wash: AMBER_WASH,
+      };
+    } else {
+      nextAction = {
+        eyebrow: 'Fastest path',
+        title: 'Open the terminal',
+        body: 'This is the quickest way to see what the agent is doing right now.',
+        cta: 'Open terminal',
+        onPress: openTerminal,
+        accent: SUCCESS,
+        wash: GREEN_WASH,
+      };
+    }
+  }
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -302,7 +454,7 @@ export default function AgentDetailScreen() {
       <SafeAreaView style={styles.container}>
         <View style={styles.centerState}>
           <Text style={styles.emptyTitle}>This agent is unavailable</Text>
-          <Pressable style={styles.primaryButton} onPress={() => router.back()}>
+          <Pressable style={({ pressed }) => [styles.primaryButton, pressed && styles.primaryButtonPressed]} onPress={() => router.back()}>
             <Text style={styles.primaryButtonText}>Back to agents</Text>
           </Pressable>
         </View>
@@ -313,11 +465,11 @@ export default function AgentDetailScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.iconButton}>
+        <Pressable onPress={() => router.back()} style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}>
           <Ionicons name="chevron-back" size={22} color={TEXT_PRIMARY} />
         </Pressable>
         <Text style={styles.headerTitle}>{agent.name}</Text>
-        <Pressable onPress={loadAgent} style={styles.iconButton}>
+        <Pressable onPress={loadAgent} style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}>
           <Ionicons name="refresh" size={18} color={BLUE} />
         </Pressable>
       </View>
@@ -325,44 +477,77 @@ export default function AgentDetailScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.heroCard}>
           <View style={styles.heroTop}>
-            <View>
+            <View style={styles.heroTitleBlock}>
               <Text style={styles.eyebrow}>Agent treasury</Text>
               <Text style={styles.heroTitle}>{agent.name}</Text>
             </View>
-            <View style={styles.statusBadge}>
-              <Text style={styles.statusBadgeText}>{runtimeCopy(agent.runtimeStatus)}</Text>
+            <View style={[styles.statusBadge, { backgroundColor: runtime.wash }]}>
+              <View style={[styles.statusDot, { backgroundColor: runtime.accent }]} />
+              <Text style={[styles.statusBadgeText, { color: runtime.accent }]}>{runtimeCopy(agent.runtimeStatus)}</Text>
             </View>
           </View>
           <Text style={styles.heroIntro}>{agent.runtimeHeadline}</Text>
           <Text style={styles.heroMeta}>{agent.mission}</Text>
-          {agentIsOffline ? (
-            <View style={styles.warningCard}>
-              <Text style={styles.warningTitle}>This agent is offline</Text>
-              <Text style={styles.warningBody}>Terminal access and withdrawal requests will be available again once the agent comes back online.</Text>
-            </View>
-          ) : null}
           <View style={styles.heroActions}>
-            <Pressable style={[styles.primaryButton, (!canOpenTerminal || openingTerminal) && styles.disabledButton]} onPress={openTerminal} disabled={!canOpenTerminal || openingTerminal}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.primaryButton,
+                (!canOpenTerminal || openingTerminal) && styles.disabledButton,
+                pressed && canOpenTerminal && !openingTerminal && styles.primaryButtonPressed,
+              ]}
+              onPress={openTerminal}
+              disabled={!canOpenTerminal || openingTerminal}
+            >
               <Text style={styles.primaryButtonText}>{openingTerminal ? 'Opening…' : 'Open terminal'}</Text>
             </Pressable>
             <Pressable
-              style={[styles.secondaryButton, agentIsOffline && styles.disabledButton]}
-              onPress={() => router.push({ pathname: '/agent/[id]/paperclip' as any, params: { id: agent.id } })}
+              style={({ pressed }) => [styles.secondaryButton, pressed && styles.secondaryButtonPressed]}
+              onPress={openPaperclip}
             >
-              <Text style={styles.secondaryButtonText}>Paperclip</Text>
+              <Text style={styles.secondaryButtonText}>Open Paperclip</Text>
             </Pressable>
+          </View>
+        </View>
+
+        <View style={[styles.priorityCard, { backgroundColor: nextAction.wash }]}>
+          <Text style={[styles.priorityEyebrow, { color: nextAction.accent }]}>{nextAction.eyebrow}</Text>
+          <Text style={styles.priorityTitle}>{nextAction.title}</Text>
+          <Text style={styles.priorityBody}>{nextAction.body}</Text>
+          <Pressable
+            style={({ pressed }) => [
+              styles.priorityButton,
+              { backgroundColor: nextAction.accent },
+              pressed && styles.primaryButtonPressed,
+            ]}
+            onPress={nextAction.onPress}
+          >
+            <Text style={styles.priorityButtonText}>{nextAction.cta}</Text>
+          </Pressable>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Treasury snapshot</Text>
+          <View style={styles.snapshotGrid}>
+            <View style={styles.snapshotTile}>
+              <Text style={styles.snapshotLabel}>Stablecoin balance</Text>
+              <Text style={styles.snapshotValue}>{agent.stablecoinSymbol} {formatCurrency(agent.stablecoinBalance)}</Text>
+            </View>
+            <View style={styles.snapshotTile}>
+              <Text style={styles.snapshotLabel}>Agent wallet</Text>
+              <Text style={styles.snapshotValue}>{formatAddress(agent.walletAddress)}</Text>
+            </View>
           </View>
         </View>
 
         <View style={styles.card}>
           <View style={styles.sectionHeader}>
-            <View>
+            <View style={styles.sectionTitleBlock}>
               <Text style={styles.sectionTitle}>Paperclip</Text>
-              <Text style={styles.sectionHint}>A quick mobile summary of this agent’s current picture.</Text>
+              <Text style={styles.sectionHint}>The quickest read on what matters now, what moves next, and what changed most recently.</Text>
             </View>
             <Pressable
-              style={styles.secondaryButton}
-              onPress={() => router.push({ pathname: '/agent/[id]/paperclip' as any, params: { id: agent.id } })}
+              style={({ pressed }) => [styles.secondaryButton, pressed && styles.secondaryButtonPressed]}
+              onPress={openPaperclip}
             >
               <Text style={styles.secondaryButtonText}>Open</Text>
             </Pressable>
@@ -370,22 +555,30 @@ export default function AgentDetailScreen() {
 
           {paperclip ? (
             <>
-              <View style={styles.paperclipCard}>
+              <View style={styles.paperclipLeadCard}>
                 <Text style={styles.paperclipHeadline}>{paperclip.headline}</Text>
                 <Text style={styles.paperclipSummary}>{paperclip.companySummary}</Text>
               </View>
-              <View style={styles.paperclipStats}>
-                <View style={styles.paperclipStatTile}>
-                  <Text style={styles.paperclipStatLabel}>Goals</Text>
-                  <Text style={styles.paperclipStatValue}>{paperclip.goals.length}</Text>
+              <View style={styles.paperclipGrid}>
+                <View style={styles.paperclipSignalCard}>
+                  <Text style={styles.paperclipSignalLabel}>Top goal</Text>
+                  <Text style={styles.paperclipSignalTitle}>{topGoal?.title || 'No goal listed yet'}</Text>
+                  <Text style={styles.paperclipSignalBody}>{topGoal?.status || 'Waiting for an update'}</Text>
                 </View>
-                <View style={styles.paperclipStatTile}>
-                  <Text style={styles.paperclipStatLabel}>Active tasks</Text>
-                  <Text style={styles.paperclipStatValue}>{paperclip.activeTasks.length}</Text>
+                <View style={styles.paperclipSignalCard}>
+                  <Text style={styles.paperclipSignalLabel}>Next task</Text>
+                  <Text style={styles.paperclipSignalTitle}>{nextTask?.title || 'No active task yet'}</Text>
+                  <Text style={styles.paperclipSignalBody}>{nextTask?.owner ? `Owned by ${nextTask.owner}` : 'Owner not listed'}</Text>
                 </View>
-                <View style={styles.paperclipStatTile}>
-                  <Text style={styles.paperclipStatLabel}>Team</Text>
-                  <Text style={styles.paperclipStatValue}>{paperclip.roster.length}</Text>
+                <View style={styles.paperclipSignalCard}>
+                  <Text style={styles.paperclipSignalLabel}>Latest change</Text>
+                  <Text style={styles.paperclipSignalTitle}>{latestEvent?.title || 'No recent event yet'}</Text>
+                  <Text style={styles.paperclipSignalBody}>{latestEvent ? formatRelativeTime(latestEvent.at) : 'Waiting for the first update'}</Text>
+                </View>
+                <View style={styles.paperclipSignalCard}>
+                  <Text style={styles.paperclipSignalLabel}>Team ready</Text>
+                  <Text style={styles.paperclipSignalTitle}>{teamReady}/{paperclip.roster.length}</Text>
+                  <Text style={styles.paperclipSignalBody}>People ready to move right now</Text>
                 </View>
               </View>
             </>
@@ -397,22 +590,8 @@ export default function AgentDetailScreen() {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Treasury snapshot</Text>
-          <View style={styles.snapshotGrid}>
-            <View style={styles.snapshotTile}>
-              <Text style={styles.snapshotLabel}>Stablecoin balance</Text>
-              <Text style={styles.snapshotValue}>{agent.stablecoinSymbol} {formatCurrency(agent.stablecoinBalance)}</Text>
-            </View>
-            <View style={styles.snapshotTile}>
-              <Text style={styles.snapshotLabel}>Wallet</Text>
-              <Text style={styles.snapshotValue}>{formatAddress(agent.walletAddress)}</Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.card}>
           <View style={styles.sectionHeader}>
-            <View>
+            <View style={styles.sectionTitleBlock}>
               <Text style={styles.sectionTitle}>Fund this agent</Text>
               <Text style={styles.sectionHint}>{fundingSummary}</Text>
             </View>
@@ -445,12 +624,19 @@ export default function AgentDetailScreen() {
                 const normalizedAmount = decimals > 0 ? rawAmount / Math.pow(10, decimals) : rawAmount;
 
                 return (
-                  <Pressable key={`${choice.network}-${choice.token?.symbol}-${choice.token?.contractAddress || choice.token?.mintAddress || 'native'}`} style={styles.choiceRow} onPress={() => startFunding(choice)}>
-                    <View>
+                  <Pressable
+                    key={`${choice.network}-${choice.token?.symbol}-${choice.token?.contractAddress || choice.token?.mintAddress || 'native'}`}
+                    style={({ pressed }) => [styles.choiceRow, pressed && styles.choiceRowPressed]}
+                    onPress={() => startFunding(choice)}
+                  >
+                    <View style={styles.choiceCopy}>
                       <Text style={styles.choiceTitle}>{choice.token?.symbol || 'Token'} on {choice.network}</Text>
-                      <Text style={styles.choiceSubtitle}>{normalizedAmount.toFixed(2)} available</Text>
+                      <Text style={styles.choiceSubtitle}>{normalizedAmount.toFixed(2)} available to send now</Text>
                     </View>
-                    <Ionicons name="arrow-forward" size={18} color={BLUE} />
+                    <View style={styles.choiceAction}>
+                      <Text style={styles.choiceActionText}>Use this balance</Text>
+                      <Ionicons name="arrow-forward" size={18} color={BLUE} />
+                    </View>
                   </Pressable>
                 );
               })}
@@ -460,12 +646,16 @@ export default function AgentDetailScreen() {
 
         <View style={styles.card}>
           <View style={styles.sectionHeader}>
-            <View>
+            <View style={styles.sectionTitleBlock}>
               <Text style={styles.sectionTitle}>Request a withdrawal</Text>
               <Text style={styles.sectionHint}>Ask this agent to return funds to your mobile wallet.</Text>
             </View>
             <Pressable
-              style={[styles.primaryButton, !canRequestWithdrawal && styles.disabledButton]}
+              style={({ pressed }) => [
+                styles.primaryButton,
+                !canRequestWithdrawal && styles.disabledButton,
+                pressed && canRequestWithdrawal && styles.primaryButtonPressed,
+              ]}
               onPress={() => {
                 setWithdrawalIntentKey(`${agent.id}:${Date.now()}`);
                 setWithdrawalModalVisible(true);
@@ -488,16 +678,24 @@ export default function AgentDetailScreen() {
             </View>
           ) : (
             <View style={styles.timeline}>
-              {agent.withdrawals.map((withdrawal) => (
-                <View key={withdrawal.id} style={styles.timelineRow}>
-                  <View style={styles.timelineDot} />
-                  <View style={styles.timelineCard}>
-                    <Text style={styles.timelineTitle}>{withdrawal.amount} {withdrawal.currency}</Text>
-                    <Text style={styles.timelineSubtitle}>{withdrawalCopy(withdrawal.status)} • {new Date(withdrawal.updatedAt).toLocaleString()}</Text>
-                    <Text style={styles.timelineBody}>Returning to {formatAddress(withdrawal.destinationWalletAddress)}</Text>
+              {agent.withdrawals.map((withdrawal) => {
+                const tone = statusTone(withdrawal.status);
+                return (
+                  <View key={withdrawal.id} style={styles.timelineRow}>
+                    <View style={[styles.timelineDot, { backgroundColor: tone.accent }]} />
+                    <View style={styles.timelineCard}>
+                      <View style={styles.timelineHeader}>
+                        <Text style={styles.timelineTitle}>{withdrawal.amount} {withdrawal.currency}</Text>
+                        <View style={[styles.timelinePill, { backgroundColor: tone.wash }]}>
+                          <Text style={[styles.timelinePillText, { color: tone.accent }]}>{withdrawalCopy(withdrawal.status)}</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.timelineSubtitle}>{new Date(withdrawal.updatedAt).toLocaleString()}</Text>
+                      <Text style={styles.timelineBody}>Returning to {formatAddress(withdrawal.destinationWalletAddress)}</Text>
+                    </View>
                   </View>
-                </View>
-              ))}
+                );
+              })}
             </View>
           )}
         </View>
@@ -536,13 +734,20 @@ export default function AgentDetailScreen() {
               placeholderTextColor={TEXT_SECONDARY}
             />
             <View style={styles.modalButtons}>
-              <Pressable style={styles.secondaryButton} onPress={() => {
-                setWithdrawalModalVisible(false);
-                setWithdrawalIntentKey(null);
-              }}>
+              <Pressable
+                style={({ pressed }) => [styles.secondaryButton, pressed && styles.secondaryButtonPressed]}
+                onPress={() => {
+                  setWithdrawalModalVisible(false);
+                  setWithdrawalIntentKey(null);
+                }}
+              >
                 <Text style={styles.secondaryButtonText}>Cancel</Text>
               </Pressable>
-              <Pressable style={styles.primaryButton} onPress={submitWithdrawal} disabled={submittingWithdrawal}>
+              <Pressable
+                style={({ pressed }) => [styles.primaryButton, pressed && !submittingWithdrawal && styles.primaryButtonPressed]}
+                onPress={submitWithdrawal}
+                disabled={submittingWithdrawal}
+              >
                 <Text style={styles.primaryButtonText}>{submittingWithdrawal ? 'Requesting…' : 'Request'}</Text>
               </Pressable>
             </View>
@@ -584,6 +789,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  iconButtonPressed: {
+    transform: [{ scale: 0.96 }],
+    opacity: 0.92,
+  },
   headerTitle: {
     color: TEXT_PRIMARY,
     fontSize: 20,
@@ -609,6 +818,7 @@ const styles = StyleSheet.create({
   emptyTitle: {
     color: TEXT_PRIMARY,
     fontSize: 26,
+    textAlign: 'center',
     fontFamily: FONTS.heading,
   },
   heroCard: {
@@ -617,13 +827,17 @@ const styles = StyleSheet.create({
     borderColor: BORDER,
     borderRadius: 24,
     padding: 22,
-    gap: 12,
+    gap: 14,
   },
   heroTop: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: 12,
+  },
+  heroTitleBlock: {
+    flex: 1,
+    gap: 4,
   },
   eyebrow: {
     color: BLUE,
@@ -651,20 +865,61 @@ const styles = StyleSheet.create({
   },
   heroActions: {
     flexDirection: 'row',
-    justifyContent: 'flex-start',
+    flexWrap: 'wrap',
     gap: 10,
   },
   statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: BLUE_WASH,
-    borderWidth: 1,
-    borderColor: BORDER,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 999,
   },
   statusBadgeText: {
-    color: BLUE,
     fontSize: 12,
+    fontFamily: FONTS.body,
+  },
+  priorityCard: {
+    borderRadius: 22,
+    padding: 18,
+    gap: 8,
+  },
+  priorityEyebrow: {
+    fontSize: 12,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    fontFamily: FONTS.body,
+  },
+  priorityTitle: {
+    color: TEXT_PRIMARY,
+    fontSize: 22,
+    lineHeight: 28,
+    fontFamily: FONTS.heading,
+  },
+  priorityBody: {
+    color: TEXT_PRIMARY,
+    fontSize: 14,
+    lineHeight: 20,
+    fontFamily: FONTS.body,
+  },
+  priorityButton: {
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'flex-start',
+    marginTop: 4,
+  },
+  priorityButtonText: {
+    color: WHITE,
+    fontSize: 14,
     fontFamily: FONTS.body,
   },
   card: {
@@ -678,8 +933,11 @@ const styles = StyleSheet.create({
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 12,
+  },
+  sectionTitleBlock: {
+    flex: 1,
   },
   sectionTitle: {
     color: TEXT_PRIMARY,
@@ -714,41 +972,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: FONTS.heading,
   },
-  choiceList: {
-    gap: 10,
-  },
-  choiceRow: {
-    backgroundColor: WHITE,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  choiceTitle: {
-    color: TEXT_PRIMARY,
-    fontSize: 16,
-    fontFamily: FONTS.heading,
-  },
-  choiceSubtitle: {
-    color: TEXT_SECONDARY,
-    fontSize: 13,
-    marginTop: 4,
-    fontFamily: FONTS.body,
-  },
-  emptyPanel: {
-    backgroundColor: WHITE,
-    borderRadius: 16,
-    padding: 16,
-  },
-  emptyPanelText: {
-    color: TEXT_SECONDARY,
-    fontSize: 14,
-    lineHeight: 20,
-    fontFamily: FONTS.body,
-  },
-  paperclipCard: {
+  paperclipLeadCard: {
     backgroundColor: WHITE,
     borderRadius: 16,
     padding: 16,
@@ -766,12 +990,13 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontFamily: FONTS.body,
   },
-  paperclipStats: {
+  paperclipGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 10,
   },
-  paperclipStatTile: {
-    flex: 1,
+  paperclipSignalCard: {
+    width: '48.5%',
     backgroundColor: BLUE_WASH,
     borderRadius: 16,
     borderWidth: 1,
@@ -779,33 +1004,73 @@ const styles = StyleSheet.create({
     padding: 14,
     gap: 6,
   },
-  paperclipStatLabel: {
+  paperclipSignalLabel: {
     color: TEXT_SECONDARY,
     fontSize: 12,
     fontFamily: FONTS.body,
   },
-  paperclipStatValue: {
+  paperclipSignalTitle: {
     color: BLUE,
-    fontSize: 18,
+    fontSize: 17,
+    lineHeight: 22,
     fontFamily: FONTS.heading,
   },
-  warningCard: {
-    backgroundColor: '#F2E7DA',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: BORDER,
-    padding: 14,
-    gap: 6,
+  paperclipSignalBody: {
+    color: TEXT_PRIMARY,
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: FONTS.body,
   },
-  warningTitle: {
-    color: '#A3703A',
+  choiceList: {
+    gap: 10,
+  },
+  choiceRow: {
+    backgroundColor: WHITE,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+  },
+  choiceRowPressed: {
+    transform: [{ scale: 0.985 }, { translateY: 1 }],
+    opacity: 0.96,
+  },
+  choiceCopy: {
+    flex: 1,
+  },
+  choiceTitle: {
+    color: TEXT_PRIMARY,
     fontSize: 16,
     fontFamily: FONTS.heading,
   },
-  warningBody: {
-    color: TEXT_PRIMARY,
+  choiceSubtitle: {
+    color: TEXT_SECONDARY,
     fontSize: 13,
-    lineHeight: 19,
+    marginTop: 4,
+    fontFamily: FONTS.body,
+  },
+  choiceAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  choiceActionText: {
+    color: BLUE,
+    fontSize: 13,
+    fontFamily: FONTS.body,
+  },
+  emptyPanel: {
+    backgroundColor: WHITE,
+    borderRadius: 16,
+    padding: 16,
+  },
+  emptyPanelText: {
+    color: TEXT_SECONDARY,
+    fontSize: 14,
+    lineHeight: 20,
     fontFamily: FONTS.body,
   },
   pendingCard: {
@@ -835,6 +1100,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  primaryButtonPressed: {
+    transform: [{ scale: 0.98 }],
+    opacity: 0.94,
+  },
   disabledButton: {
     opacity: 0.5,
   },
@@ -852,6 +1121,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: BORDER,
+  },
+  secondaryButtonPressed: {
+    transform: [{ scale: 0.98 }],
+    opacity: 0.94,
   },
   secondaryButtonText: {
     color: TEXT_PRIMARY,
@@ -880,10 +1153,26 @@ const styles = StyleSheet.create({
     padding: 14,
     gap: 4,
   },
+  timelineHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
   timelineTitle: {
+    flex: 1,
     color: TEXT_PRIMARY,
     fontSize: 16,
     fontFamily: FONTS.heading,
+  },
+  timelinePill: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  timelinePillText: {
+    fontSize: 12,
+    fontFamily: FONTS.body,
   },
   timelineSubtitle: {
     color: TEXT_SECONDARY,

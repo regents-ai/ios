@@ -2,6 +2,7 @@
 import { getBaseUrl } from '@/constants/BASE_URL';
 import { authenticatedFetch } from './authenticatedFetch';
 import { createGuestCheckoutOrder } from './createGuestCheckoutOrder';
+import { buildGuestCheckoutQuotePayload } from './guestCheckout';
 import { demoAddressForNetwork } from './randomAddresses';
 import { getCountry, getCurrentWalletAddress, getSandboxMode, getSubdivision } from './sharedState';
 
@@ -30,16 +31,9 @@ export async function fetchBuyQuote(payload: {
 
   if (isGuestCheckout) {
     try {
-      const response = await createGuestCheckoutOrder({
-        ...payload,
-        isQuote: false,
-        paymentMethod: payload.paymentMethod,
-        email: 'testquote@test.com',
-        phoneNumber: '+12345678901',
-        agreementAcceptedAt: new Date().toISOString(),
-        phoneNumberVerifiedAt: new Date().toISOString(),
-        destinationAddress,
-      });
+      const response = await createGuestCheckoutOrder(
+        buildGuestCheckoutQuotePayload(payload, destinationAddress)
+      );
 
       const order = response?.order ?? response;
 

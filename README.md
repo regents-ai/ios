@@ -50,6 +50,8 @@ cp server/.env.example server/.env
 The mobile app needs:
 
 - `EXPO_PUBLIC_CDP_PROJECT_ID`
+- `EXPO_PUBLIC_PRIVY_APP_ID`
+- `EXPO_PUBLIC_PRIVY_CLIENT_ID`
 - `EXPO_PUBLIC_BASE_URL`
 - `EXPO_PUBLIC_USE_EXPO_CRYPTO`
 
@@ -57,6 +59,13 @@ The local backend needs:
 
 - `CDP_API_KEY_ID`
 - `CDP_API_KEY_SECRET`
+- `PRIVY_APP_ID`
+- `PRIVY_VERIFICATION_KEY`
+- `REGENTS_CDP_JWT_ISSUER`
+- `REGENTS_CDP_JWT_AUDIENCE`
+- `REGENTS_CDP_JWT_KID`
+- `REGENTS_CDP_JWT_ALG`
+- `REGENTS_CDP_JWT_PRIVATE_KEY`
 - optional webhook and push settings if those flows are being tested
 
 ## Run Locally
@@ -79,6 +88,20 @@ For a native iOS build instead of Expo Go:
 ```bash
 npx expo run:ios
 ```
+
+## Local Testing Without Sign-In
+
+If you only want to test the app shell and the wallet screens, you can skip sign-in and open the built-in test wallet instead.
+
+Set this in your local `.env`:
+
+```bash
+EXPO_PUBLIC_ENABLE_TEST_SESSION=true
+```
+
+Then restart the app. This opens Regents Mobile with the built-in test wallet and bypasses the sign-in screen.
+
+This is only for local development. Turn it back off when you want to test the real mobile sign-in path.
 
 ## Testing Notes
 

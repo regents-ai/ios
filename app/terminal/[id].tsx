@@ -22,23 +22,37 @@ import {
   View,
 } from 'react-native';
 
-const { DARK_BG, CARD_BG, CARD_ALT, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, BORDER, WHITE, SUCCESS, DANGER, BLUE_WASH } = COLORS;
+const {
+  DARK_BG,
+  CARD_BG,
+  CARD_ALT,
+  TEXT_PRIMARY,
+  TEXT_SECONDARY,
+  BLUE,
+  BORDER,
+  WHITE,
+  SUCCESS,
+  DANGER,
+  BLUE_WASH,
+  ORANGE,
+} = COLORS;
 
 type MessageRow = {
   id: string;
   role: 'user' | 'assistant' | 'system';
   text: string;
   ts: string;
+  label: string;
 };
 
 function statusCopy(status: TerminalSessionDetail['status']) {
   switch (status) {
     case 'idle':
-      return 'Idle';
+      return 'Ready';
     case 'running':
-      return 'Running';
+      return 'Working now';
     case 'waiting':
-      return 'Needs approval';
+      return 'Waiting on you';
     case 'failed':
       return 'Needs attention';
   }
@@ -51,10 +65,32 @@ function statusColor(status: TerminalSessionDetail['status']) {
     case 'running':
       return SUCCESS;
     case 'waiting':
-      return '#A3703A';
+      return ORANGE;
     case 'failed':
       return DANGER;
   }
+}
+
+function statusBackground(status: TerminalSessionDetail['status']) {
+  switch (status) {
+    case 'idle':
+      return WHITE;
+    case 'running':
+      return '#E4F1EA';
+    case 'waiting':
+      return '#F3E7D8';
+    case 'failed':
+      return '#F7E4E1';
+  }
+}
+
+function relativeTime(dateString: string) {
+  const diffMs = Date.now() - new Date(dateString).getTime();
+  const diffMinutes = Math.max(1, Math.round(diffMs / 60000));
+  if (diffMinutes < 60) return `${diffMinutes}m ago`;
+  const diffHours = Math.round(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  return `${Math.round(diffHours / 24)}d ago`;
 }
 
 function eventsToMessages(events: TerminalEvent[]): MessageRow[] {
@@ -67,6 +103,7 @@ function eventsToMessages(events: TerminalEvent[]): MessageRow[] {
         role: 'user',
         text: event.text,
         ts: event.ts,
+        label: 'You',
       });
     }
 
@@ -76,6 +113,7 @@ function eventsToMessages(events: TerminalEvent[]): MessageRow[] {
         role: 'assistant',
         text: event.chunk,
         ts: event.ts,
+        label: 'Agent',
       });
     }
 
@@ -85,6 +123,7 @@ function eventsToMessages(events: TerminalEvent[]): MessageRow[] {
         role: 'system',
         text: event.details,
         ts: event.ts,
+        label: 'Approval needed',
       });
     }
 
@@ -92,8 +131,19 @@ function eventsToMessages(events: TerminalEvent[]): MessageRow[] {
       rows.push({
         id: `${event.ts}-system-result`,
         role: 'system',
-        text: event.result === 'approved' ? 'Approval granted from mobile.' : 'Approval denied from mobile.',
+        text: event.result === 'approved' ? 'You approved this request from mobile.' : 'You denied this request from mobile.',
         ts: event.ts,
+        label: 'Decision sent',
+      });
+    }
+
+    if (event.type === 'session.error' && event.message) {
+      rows.push({
+        id: `${event.ts}-system-error`,
+        role: 'system',
+        text: event.message,
+        ts: event.ts,
+        label: 'Session update',
       });
     }
   }
@@ -110,6 +160,7 @@ export default function TerminalSessionScreen() {
   const [composerText, setComposerText] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [resolvingDecision, setResolvingDecision] = useState<'approved' | 'denied' | null>(null);
   const [alertState, setAlertState] = useState<{
     visible: boolean;
@@ -123,13 +174,18 @@ export default function TerminalSessionScreen() {
     type: 'info',
   });
 
-  const loadSession = useCallback(async () => {
+  const loadSession = useCallback(async (refresh = false) => {
     if (!sessionId) {
       return;
     }
 
     try {
-      setLoading(true);
+      if (refresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+
       const [nextSession, nextEvents] = await Promise.all([
         fetchTerminalSession(sessionId),
         fetchTerminalEvents(sessionId),
@@ -140,12 +196,13 @@ export default function TerminalSessionScreen() {
     } catch (error) {
       setAlertState({
         visible: true,
-        title: 'Unable to load session',
+        title: 'Unable to load this session',
         message: error instanceof Error ? error.message : 'Try again in a moment.',
         type: 'error',
       });
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [sessionId]);
 
@@ -154,7 +211,7 @@ export default function TerminalSessionScreen() {
       loadSession();
 
       const interval = setInterval(() => {
-        loadSession();
+        loadSession(true);
       }, 4000);
 
       return () => clearInterval(interval);
@@ -178,7 +235,7 @@ export default function TerminalSessionScreen() {
     } catch (error) {
       setAlertState({
         visible: true,
-        title: 'Unable to send message',
+        title: 'Unable to send your note',
         message: error instanceof Error ? error.message : 'Try again in a moment.',
         type: 'error',
       });
@@ -201,13 +258,13 @@ export default function TerminalSessionScreen() {
       setAlertState({
         visible: true,
         title: decision === 'approved' ? 'Approval sent' : 'Request denied',
-        message: decision === 'approved' ? 'The session can continue now.' : 'The session is waiting for a new direction.',
+        message: decision === 'approved' ? 'The session can keep going now.' : 'The session is waiting for a different direction.',
         type: 'success',
       });
     } catch (error) {
       setAlertState({
         visible: true,
-        title: 'Unable to resolve request',
+        title: 'Unable to answer that request',
         message: error instanceof Error ? error.message : 'Try again in a moment.',
         type: 'error',
       });
@@ -221,7 +278,7 @@ export default function TerminalSessionScreen() {
       <SafeAreaView style={styles.container}>
         <View style={styles.centerState}>
           <ActivityIndicator size="large" color={BLUE} />
-          <Text style={styles.loadingText}>Loading session…</Text>
+          <Text style={styles.loadingText}>Opening session…</Text>
         </View>
       </SafeAreaView>
     );
@@ -243,32 +300,49 @@ export default function TerminalSessionScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.iconButton}>
+        <Pressable onPress={() => router.back()} style={({ pressed }) => [styles.iconButton, pressed && styles.buttonPressed]}>
           <Ionicons name="chevron-back" size={22} color={TEXT_PRIMARY} />
         </Pressable>
+
         <View style={styles.headerCopy}>
           <Text style={styles.headerTitle}>{session.title}</Text>
           <Text style={styles.headerSubtitle}>{session.agentName}</Text>
         </View>
-        <View style={[styles.statusPill, { borderColor: statusColor(session.status) }]}>
+
+        <View style={[styles.statusPill, { backgroundColor: statusBackground(session.status), borderColor: statusColor(session.status) }]}>
           <Text style={[styles.statusPillText, { color: statusColor(session.status) }]}>{statusCopy(session.status)}</Text>
         </View>
       </View>
 
+      <View style={styles.sessionSummaryCard}>
+        <View style={styles.summaryTopRow}>
+          <Text style={styles.summaryTitle}>Latest activity</Text>
+          <Text style={styles.summaryMeta}>{refreshing ? 'Refreshing…' : relativeTime(session.lastUpdatedAt)}</Text>
+        </View>
+        <Text style={styles.summaryBody}>{session.preview}</Text>
+      </View>
+
       {session.pendingApproval ? (
         <View style={styles.approvalCard}>
-          <Text style={styles.approvalTitle}>{session.pendingApproval.label}</Text>
-          <Text style={styles.approvalBody}>{session.pendingApproval.details}</Text>
+          <View style={styles.approvalHeader}>
+            <View style={styles.approvalIconWrap}>
+              <Ionicons name="key-outline" size={18} color={ORANGE} />
+            </View>
+            <View style={styles.approvalCopy}>
+              <Text style={styles.approvalTitle}>{session.pendingApproval.label}</Text>
+              <Text style={styles.approvalBody}>{session.pendingApproval.details}</Text>
+            </View>
+          </View>
           <View style={styles.approvalActions}>
             <Pressable
-              style={styles.secondaryButton}
+              style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}
               onPress={() => handleApproval('denied')}
               disabled={!!resolvingDecision}
             >
               <Text style={styles.secondaryButtonText}>{resolvingDecision === 'denied' ? 'Denying…' : 'Deny'}</Text>
             </Pressable>
             <Pressable
-              style={styles.primaryButton}
+              style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}
               onPress={() => handleApproval('approved')}
               disabled={!!resolvingDecision}
             >
@@ -278,13 +352,13 @@ export default function TerminalSessionScreen() {
         </View>
       ) : null}
 
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
         <FlatList
           data={messageRows}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.chatContent}
           renderItem={({ item }) => (
-            <View style={[styles.messageRow, item.role === 'user' ? styles.messageRowUser : styles.messageRowSystem]}>
+            <View style={[styles.messageRow, item.role === 'user' ? styles.messageRowUser : styles.messageRowOther]}>
               <View
                 style={[
                   styles.messageBubble,
@@ -295,20 +369,23 @@ export default function TerminalSessionScreen() {
                       : styles.messageBubbleSystem,
                 ]}
               >
-                <Text
-                  style={[
-                    styles.messageText,
-                    item.role === 'user' ? styles.messageTextUser : styles.messageTextOther,
-                  ]}
-                >
+                <Text style={[styles.messageLabel, item.role === 'user' && styles.messageLabelUser]}>{item.label}</Text>
+                <Text style={[styles.messageText, item.role === 'user' ? styles.messageTextUser : styles.messageTextOther]}>
                   {item.text}
                 </Text>
               </View>
             </View>
           )}
+          ListEmptyComponent={
+            <View style={styles.emptyTimelineCard}>
+              <Text style={styles.emptyTimelineTitle}>This session is quiet right now</Text>
+              <Text style={styles.emptyTimelineText}>New updates and requests will appear here.</Text>
+            </View>
+          }
         />
 
         <View style={styles.composerCard}>
+          <Text style={styles.composerTitle}>Send a note</Text>
           <TextInput
             style={styles.input}
             value={composerText}
@@ -317,8 +394,16 @@ export default function TerminalSessionScreen() {
             placeholderTextColor={TEXT_SECONDARY}
             multiline
           />
-          <Pressable style={styles.primaryButton} onPress={handleSend} disabled={sending || !composerText.trim()}>
-            <Text style={styles.primaryButtonText}>{sending ? 'Sending…' : 'Send'}</Text>
+          <Pressable
+            style={({ pressed }) => [
+              styles.primaryButton,
+              (!composerText.trim() || sending) && styles.primaryButtonDisabled,
+              pressed && composerText.trim() && !sending && styles.buttonPressed,
+            ]}
+            onPress={handleSend}
+            disabled={sending || !composerText.trim()}
+          >
+            <Text style={styles.primaryButtonText}>{sending ? 'Sending…' : 'Send note'}</Text>
           </Pressable>
         </View>
       </KeyboardAvoidingView>
@@ -339,62 +424,121 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: DARK_BG,
   },
+  flex: {
+    flex: 1,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 12,
     paddingHorizontal: 20,
     paddingTop: 12,
     paddingBottom: 10,
-    gap: 12,
   },
   iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: CARD_BG,
     borderWidth: 1,
     borderColor: BORDER,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  buttonPressed: {
+    opacity: 0.92,
+    transform: [{ scale: 0.985 }],
+  },
   headerCopy: {
     flex: 1,
+    gap: 2,
   },
   headerTitle: {
     color: TEXT_PRIMARY,
     fontSize: 18,
+    lineHeight: 22,
     fontFamily: FONTS.heading,
   },
   headerSubtitle: {
     color: TEXT_SECONDARY,
     fontSize: 12,
-    marginTop: 2,
+    lineHeight: 18,
     fontFamily: FONTS.body,
   },
   statusPill: {
-    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: WHITE,
+    borderWidth: 1,
   },
   statusPillText: {
     fontSize: 12,
+    fontFamily: FONTS.body,
+  },
+  sessionSummaryCard: {
+    marginHorizontal: 20,
+    marginBottom: 12,
+    backgroundColor: CARD_BG,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 22,
+    padding: 18,
+    gap: 10,
+  },
+  summaryTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  summaryTitle: {
+    color: BLUE,
+    fontSize: 16,
+    fontFamily: FONTS.heading,
+  },
+  summaryMeta: {
+    color: TEXT_SECONDARY,
+    fontSize: 12,
+    fontFamily: FONTS.body,
+  },
+  summaryBody: {
+    color: TEXT_PRIMARY,
+    fontSize: 14,
+    lineHeight: 20,
     fontFamily: FONTS.body,
   },
   approvalCard: {
     marginHorizontal: 20,
     marginBottom: 12,
     backgroundColor: BLUE_WASH,
-    borderRadius: 18,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: BORDER,
     padding: 16,
-    gap: 10,
+    gap: 14,
+  },
+  approvalHeader: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  approvalIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: WHITE,
+    borderWidth: 1,
+    borderColor: BORDER,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  approvalCopy: {
+    flex: 1,
+    gap: 4,
   },
   approvalTitle: {
     color: BLUE,
     fontSize: 18,
+    lineHeight: 22,
     fontFamily: FONTS.heading,
   },
   approvalBody: {
@@ -412,8 +556,8 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 12,
     paddingHorizontal: 24,
+    gap: 12,
   },
   loadingText: {
     color: TEXT_SECONDARY,
@@ -423,6 +567,7 @@ const styles = StyleSheet.create({
   emptyTitle: {
     color: TEXT_PRIMARY,
     fontSize: 24,
+    textAlign: 'center',
     fontFamily: FONTS.heading,
   },
   chatContent: {
@@ -436,14 +581,15 @@ const styles = StyleSheet.create({
   messageRowUser: {
     justifyContent: 'flex-end',
   },
-  messageRowSystem: {
+  messageRowOther: {
     justifyContent: 'flex-start',
   },
   messageBubble: {
-    maxWidth: '86%',
-    borderRadius: 18,
+    maxWidth: '88%',
+    borderRadius: 20,
     paddingHorizontal: 14,
     paddingVertical: 12,
+    gap: 6,
   },
   messageBubbleUser: {
     backgroundColor: BLUE,
@@ -458,6 +604,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BORDER,
   },
+  messageLabel: {
+    color: BLUE,
+    fontSize: 11,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+    fontFamily: FONTS.body,
+  },
+  messageLabelUser: {
+    color: WHITE,
+  },
   messageText: {
     fontSize: 14,
     lineHeight: 20,
@@ -469,6 +625,25 @@ const styles = StyleSheet.create({
   messageTextOther: {
     color: TEXT_PRIMARY,
   },
+  emptyTimelineCard: {
+    backgroundColor: CARD_BG,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 20,
+    padding: 18,
+    gap: 6,
+  },
+  emptyTimelineTitle: {
+    color: TEXT_PRIMARY,
+    fontSize: 16,
+    fontFamily: FONTS.heading,
+  },
+  emptyTimelineText: {
+    color: TEXT_SECONDARY,
+    fontSize: 14,
+    lineHeight: 20,
+    fontFamily: FONTS.body,
+  },
   composerCard: {
     borderTopWidth: 1,
     borderTopColor: BORDER,
@@ -476,12 +651,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 14,
     paddingBottom: 18,
-    gap: 12,
+    gap: 10,
+  },
+  composerTitle: {
+    color: BLUE,
+    fontSize: 15,
+    fontFamily: FONTS.heading,
   },
   input: {
     minHeight: 92,
     backgroundColor: WHITE,
-    borderRadius: 16,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: BORDER,
     paddingHorizontal: 14,
@@ -493,20 +673,23 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     backgroundColor: BLUE,
-    borderRadius: 14,
+    borderRadius: 16,
     paddingHorizontal: 16,
     paddingVertical: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  primaryButtonDisabled: {
+    opacity: 0.55,
+  },
   primaryButtonText: {
     color: WHITE,
     fontSize: 14,
-    fontFamily: FONTS.body,
+    fontFamily: FONTS.heading,
   },
   secondaryButton: {
     backgroundColor: WHITE,
-    borderRadius: 14,
+    borderRadius: 16,
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderWidth: 1,

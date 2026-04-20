@@ -1,7 +1,8 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import React, { useCallback, useRef, useState } from "react";
-import { ActivityIndicator, Animated, PanResponder, StyleSheet, Text, View } from "react-native";
+import { AccessibilityInfo, ActivityIndicator, Animated, Easing, PanResponder, StyleSheet, Text, View } from "react-native";
 import { COLORS } from "../../constants/Colors";
+import { FONTS } from "../../constants/Typography";
 
 const { BLUE, CARD_BG, TEXT_PRIMARY, SILVER } = COLORS;
 
@@ -17,20 +18,49 @@ type SwipeToConfirmProps = {
 
 export function SwipeToConfirm({ label, disabled = false, onConfirm, isLoading = false, onSwipeStart, onSwipeEnd }: SwipeToConfirmProps) {
   const [trackWidth, setTrackWidth] = useState(0);
+  const [reduceMotionEnabled, setReduceMotionEnabled] = useState(false);
   const knobSize = 48;
   const horizontalPadding = 4;
   const maxX = Math.max(0, trackWidth - knobSize - horizontalPadding * 2);
 
   const translateX = useRef(new Animated.Value(0)).current;
+  const knobScale = useRef(new Animated.Value(1)).current;
+  const labelOpacity = useRef(new Animated.Value(1)).current;
   const startXRef = useRef(0);
   const currentXRef = useRef(0);
 
+  React.useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotionEnabled);
+
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotionEnabled);
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
+  const animateKnobScale = useCallback(
+    (toValue: number) => {
+      if (reduceMotionEnabled) {
+        knobScale.setValue(1);
+        return;
+      }
+
+      Animated.spring(knobScale, {
+        toValue,
+        useNativeDriver: true,
+        bounciness: 0,
+        speed: 18,
+      }).start();
+    },
+    [knobScale, reduceMotionEnabled]
+  );
+
   const snapBack = useCallback(() => {
-    // Remove the isLoading check - back to original
     Animated.spring(translateX, { toValue: 0, useNativeDriver: false, bounciness: 6, speed: 12 }).start(() => {
       currentXRef.current = 0;
     });
-  }, [translateX]); // Remove isLoading dependency
+    animateKnobScale(1);
+  }, [animateKnobScale, translateX]);
 
   const complete = useCallback(() => {
     Animated.timing(translateX, { toValue: maxX, duration: 150, useNativeDriver: false }).start(() => {
@@ -38,12 +68,18 @@ export function SwipeToConfirm({ label, disabled = false, onConfirm, isLoading =
       const reset = () => snapBack();
       onConfirm(reset);
     });
-  }, [maxX, onConfirm, snapBack, translateX]);
+    animateKnobScale(1);
+  }, [animateKnobScale, maxX, onConfirm, snapBack, translateX]);
 
-  // Add effect to handle loading state changes
   React.useEffect(() => {
+    Animated.timing(labelOpacity, {
+      toValue: isLoading ? 0.72 : 1,
+      duration: 180,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: true,
+    }).start();
+
     if (isLoading) {
-      // Move to complete position when loading starts
       Animated.timing(translateX, { 
         toValue: maxX, 
         duration: 200, 
@@ -51,8 +87,8 @@ export function SwipeToConfirm({ label, disabled = false, onConfirm, isLoading =
       }).start(() => {
         currentXRef.current = maxX;
       });
+      animateKnobScale(1);
     } else {
-      // Always reset when loading ends (remove the position check)
       setTimeout(() => {
         Animated.spring(translateX, { 
           toValue: 0, 
@@ -64,18 +100,19 @@ export function SwipeToConfirm({ label, disabled = false, onConfirm, isLoading =
         });
       }, 300);
     }
-  }, [isLoading, maxX, translateX]);
+  }, [animateKnobScale, isLoading, labelOpacity, maxX, translateX]);
 
   const pan = React.useMemo(
     () =>
       PanResponder.create({
-        onStartShouldSetPanResponder: () => !disabled && !isLoading, // Disable during loading
+        onStartShouldSetPanResponder: () => !disabled && !isLoading,
         onMoveShouldSetPanResponder: (_e, g) => !disabled && !isLoading && Math.abs(g.dx) > Math.abs(g.dy) && Math.abs(g.dx) > 5,
         onStartShouldSetPanResponderCapture: () => !disabled && !isLoading,
         onMoveShouldSetPanResponderCapture: () => !disabled && !isLoading,
         onPanResponderGrant: (e) => {
-          if (isLoading) return; // Extra safety check
+          if (isLoading) return;
           onSwipeStart?.();
+          animateKnobScale(1.04);
           const localX = e.nativeEvent.locationX - knobSize / 2;
           const clamped = Math.max(0, Math.min(maxX, localX));
           startXRef.current = clamped;
@@ -83,13 +120,13 @@ export function SwipeToConfirm({ label, disabled = false, onConfirm, isLoading =
           translateX.setValue(clamped);
         },
         onPanResponderMove: (_e, g) => {
-          if (isLoading) return; // Extra safety check
+          if (isLoading) return;
           const next = Math.max(0, Math.min(maxX, startXRef.current + g.dx));
           currentXRef.current = next;
           translateX.setValue(next);
         },
         onPanResponderRelease: () => {
-          if (isLoading) return; // Extra safety check
+          if (isLoading) return;
           onSwipeEnd?.();
           const threshold = maxX * 0.8;
           if (currentXRef.current >= threshold) {
@@ -102,11 +139,11 @@ export function SwipeToConfirm({ label, disabled = false, onConfirm, isLoading =
         onPanResponderTerminate: () => {
           if (!isLoading) {
             onSwipeEnd?.();
-            snapBack(); // Only snap back if not loading
+            snapBack();
           }
         },
       }),
-    [disabled, knobSize, maxX, complete, snapBack, translateX, isLoading, onSwipeStart, onSwipeEnd] 
+    [animateKnobScale, disabled, knobSize, maxX, complete, snapBack, translateX, isLoading, onSwipeStart, onSwipeEnd] 
   );
 
   const progressWidth = Animated.add(translateX, new Animated.Value(knobSize));
@@ -116,23 +153,26 @@ export function SwipeToConfirm({ label, disabled = false, onConfirm, isLoading =
       <View
         style={styles.swipeTrack}
         onLayout={(e) => setTrackWidth(e.nativeEvent.layout.width)}
-        {...(!isLoading ? pan.panHandlers : {})} // Only apply pan handlers when not loading
+        {...(!isLoading ? pan.panHandlers : {})}
         accessibilityRole="button"
         accessibilityState={{ disabled: disabled || isLoading }}
         accessibilityLabel={label}
       >
         <Animated.View style={[styles.swipeProgress, { width: progressWidth }]} />
-        
-        {/* Center text - show spinner OR label */}
-        {isLoading ? (
-          <ActivityIndicator size="small" color={TEXT_PRIMARY} />
-        ) : (
-          <Text style={styles.swipeLabel}>{label}</Text>
-        )}
-        
-        {/* Knob - always show chevron */}
-        <Animated.View style={[styles.swipeKnob, { transform: [{ translateX }] }]}>
-          <Ionicons name="chevron-forward" size={22} color="#FFFFFF" />
+
+        <Animated.View style={[styles.swipeCenter, { opacity: labelOpacity }]}>
+          {isLoading ? (
+            <View style={styles.loadingContent}>
+              <ActivityIndicator size="small" color={TEXT_PRIMARY} />
+              <Text style={styles.loadingLabel}>Preparing your purchase…</Text>
+            </View>
+          ) : (
+            <Text style={styles.swipeLabel}>{label}</Text>
+          )}
+        </Animated.View>
+
+        <Animated.View style={[styles.swipeKnob, { transform: [{ translateX }, { scale: knobScale }] }]}>
+          <Ionicons name={isLoading ? "checkmark" : "chevron-forward"} size={22} color="#FFFFFF" />
         </Animated.View>
       </View>
     </View>
@@ -154,6 +194,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     position: 'relative',    
   },
+  swipeCenter: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 56,
+  },
   swipeProgress: {
     position: 'absolute',
     left: 0,
@@ -167,7 +212,17 @@ const styles = StyleSheet.create({
     textAlign: "center",
     color: TEXT_PRIMARY,
     fontSize: 16,
-    fontWeight: "500",      
+    fontFamily: FONTS.body,
+  },
+  loadingContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  loadingLabel: {
+    color: TEXT_PRIMARY,
+    fontSize: 14,
+    fontFamily: FONTS.body,
   },
   swipeKnob: {
     position: "absolute",

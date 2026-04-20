@@ -5,9 +5,11 @@ import { PaperclipDetail } from '@/types/agents';
 import { fetchAgentPaperclip } from '@/utils/fetchAgentPaperclip';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
   ActivityIndicator,
+  Animated,
   Linking,
   Platform,
   Pressable,
@@ -19,19 +21,49 @@ import {
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 
-const { DARK_BG, CARD_BG, CARD_ALT, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, BORDER, WHITE, BLUE_WASH } = COLORS;
+const { DARK_BG, CARD_BG, CARD_ALT, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, BORDER, WHITE, BLUE_WASH, SUCCESS, DANGER } = COLORS;
+
+const AMBER = '#A3703A';
+const AMBER_WASH = '#F2E7DA';
+const GREEN_WASH = '#E6F0EA';
+const RED_WASH = '#F3E1DD';
 
 function statusTone(status: string) {
   const lower = status.toLowerCase();
-  if (lower.includes('attention') || lower.includes('waiting')) {
-    return { backgroundColor: '#F2E7DA', color: '#A3703A' };
+
+  if (lower.includes('attention') || lower.includes('waiting') || lower.includes('blocked')) {
+    return { backgroundColor: AMBER_WASH, color: AMBER };
+  }
+
+  if (lower.includes('offline') || lower.includes('risk') || lower.includes('stalled')) {
+    return { backgroundColor: RED_WASH, color: DANGER };
   }
 
   if (lower.includes('track') || lower.includes('online') || lower.includes('ready')) {
-    return { backgroundColor: '#E6F0EA', color: '#2E6B4E' };
+    return { backgroundColor: GREEN_WASH, color: SUCCESS };
   }
 
   return { backgroundColor: BLUE_WASH, color: BLUE };
+}
+
+function formatRelativeTime(dateString: string) {
+  const diffMs = Date.now() - new Date(dateString).getTime();
+  const diffMinutes = Math.max(1, Math.round(diffMs / 60000));
+  if (diffMinutes < 60) return `${diffMinutes}m ago`;
+  const diffHours = Math.round(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  return `${Math.round(diffHours / 24)}d ago`;
+}
+
+function readyRosterCount(paperclip: PaperclipDetail | null) {
+  if (!paperclip) {
+    return 0;
+  }
+
+  return paperclip.roster.filter((member) => {
+    const lower = member.status.toLowerCase();
+    return lower.includes('ready') || lower.includes('online') || lower.includes('track');
+  }).length;
 }
 
 export default function AgentPaperclipScreen() {
@@ -42,6 +74,8 @@ export default function AgentPaperclipScreen() {
   const [loading, setLoading] = useState(true);
   const [showDashboard, setShowDashboard] = useState(false);
   const [dashboardFailed, setDashboardFailed] = useState(false);
+  const [reduceMotion, setReduceMotion] = useState(false);
+  const dashboardAnim = useRef(new Animated.Value(0)).current;
   const [alertState, setAlertState] = useState<{
     visible: boolean;
     title: string;
@@ -80,6 +114,31 @@ export default function AgentPaperclipScreen() {
     }, [loadPaperclip])
   );
 
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then(setReduceMotion)
+      .catch(() => setReduceMotion(false));
+  }, []);
+
+  useEffect(() => {
+    if (!showDashboard) {
+      dashboardAnim.setValue(0);
+      return;
+    }
+
+    if (reduceMotion) {
+      dashboardAnim.setValue(1);
+      return;
+    }
+
+    dashboardAnim.setValue(0);
+    Animated.timing(dashboardAnim, {
+      toValue: 1,
+      duration: 220,
+      useNativeDriver: true,
+    }).start();
+  }, [dashboardAnim, reduceMotion, showDashboard]);
+
   const openBrowser = async () => {
     if (!paperclip) {
       return;
@@ -97,6 +156,44 @@ export default function AgentPaperclipScreen() {
     }
   };
 
+  const paperclipSummary = useMemo(() => {
+    if (!paperclip) {
+      return null;
+    }
+
+    const topGoal = paperclip.goals[0];
+    const nextTask = paperclip.activeTasks[0];
+    const latestEvent = paperclip.recentEvents[0];
+    const readyCount = readyRosterCount(paperclip);
+    const attentionItem = [...paperclip.goals, ...paperclip.activeTasks].find((item) => {
+      const lower = item.status.toLowerCase();
+      return lower.includes('attention') || lower.includes('waiting') || lower.includes('blocked');
+    });
+
+    return {
+      topGoal,
+      nextTask,
+      latestEvent,
+      readyCount,
+      briefingLabel: attentionItem ? 'Needs eyes now' : 'Steady progress',
+      briefingTone: attentionItem ? { wash: AMBER_WASH, accent: AMBER } : { wash: GREEN_WASH, accent: SUCCESS },
+      focusTitle: attentionItem?.title || nextTask?.title || topGoal?.title || 'No immediate issue listed',
+      focusBody: attentionItem?.note || nextTask?.note || topGoal?.note || 'The latest update will appear here once this agent shares more context.',
+    };
+  }, [paperclip]);
+
+  const dashboardAnimatedStyle = {
+    opacity: dashboardAnim,
+    transform: [
+      {
+        translateY: dashboardAnim.interpolate({
+          inputRange: [0, 1],
+          outputRange: [18, 0],
+        }),
+      },
+    ],
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -108,12 +205,12 @@ export default function AgentPaperclipScreen() {
     );
   }
 
-  if (!paperclip) {
+  if (!paperclip || !paperclipSummary) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.centerState}>
           <Text style={styles.emptyTitle}>This Paperclip view is unavailable</Text>
-          <Pressable style={styles.primaryButton} onPress={() => router.back()}>
+          <Pressable style={({ pressed }) => [styles.primaryButton, pressed && styles.primaryButtonPressed]} onPress={() => router.back()}>
             <Text style={styles.primaryButtonText}>Back to agent</Text>
           </Pressable>
         </View>
@@ -124,32 +221,80 @@ export default function AgentPaperclipScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.iconButton}>
+        <Pressable onPress={() => router.back()} style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}>
           <Ionicons name="chevron-back" size={22} color={TEXT_PRIMARY} />
         </Pressable>
         <Text style={styles.headerTitle}>Paperclip</Text>
-        <Pressable onPress={loadPaperclip} style={styles.iconButton}>
+        <Pressable onPress={loadPaperclip} style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}>
           <Ionicons name="refresh" size={18} color={BLUE} />
         </Pressable>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.heroCard}>
-          <Text style={styles.eyebrow}>Mobile summary</Text>
+          <View style={styles.heroTop}>
+            <Text style={styles.eyebrow}>Mobile briefing</Text>
+            <View style={[styles.heroPill, { backgroundColor: paperclipSummary.briefingTone.wash }]}>
+              <Text style={[styles.heroPillText, { color: paperclipSummary.briefingTone.accent }]}>
+                {paperclipSummary.briefingLabel}
+              </Text>
+            </View>
+          </View>
           <Text style={styles.heroTitle}>{paperclip.headline}</Text>
           <Text style={styles.heroBody}>{paperclip.companySummary}</Text>
+
+          <View style={styles.briefingGrid}>
+            <View style={styles.briefingTile}>
+              <Text style={styles.briefingLabel}>Top goal</Text>
+              <Text style={styles.briefingTitle}>{paperclipSummary.topGoal?.title || 'No goal listed yet'}</Text>
+              <Text style={styles.briefingMeta}>{paperclipSummary.topGoal?.status || 'Waiting for an update'}</Text>
+            </View>
+            <View style={styles.briefingTile}>
+              <Text style={styles.briefingLabel}>Next task</Text>
+              <Text style={styles.briefingTitle}>{paperclipSummary.nextTask?.title || 'No active task yet'}</Text>
+              <Text style={styles.briefingMeta}>
+                {paperclipSummary.nextTask?.owner ? `Owned by ${paperclipSummary.nextTask.owner}` : 'Owner not listed'}
+              </Text>
+            </View>
+            <View style={styles.briefingTile}>
+              <Text style={styles.briefingLabel}>Latest change</Text>
+              <Text style={styles.briefingTitle}>{paperclipSummary.latestEvent?.title || 'No recent event yet'}</Text>
+              <Text style={styles.briefingMeta}>
+                {paperclipSummary.latestEvent ? formatRelativeTime(paperclipSummary.latestEvent.at) : 'Waiting for the first update'}
+              </Text>
+            </View>
+            <View style={styles.briefingTile}>
+              <Text style={styles.briefingLabel}>Team ready</Text>
+              <Text style={styles.briefingTitle}>{paperclipSummary.readyCount}/{paperclip.roster.length}</Text>
+              <Text style={styles.briefingMeta}>People ready to move right now</Text>
+            </View>
+          </View>
+
           <View style={styles.heroActions}>
-            <Pressable style={styles.primaryButton} onPress={() => setShowDashboard((current) => !current)}>
-              <Text style={styles.primaryButtonText}>{showDashboard ? 'Hide full view' : 'Show full view'}</Text>
+            <Pressable
+              style={({ pressed }) => [styles.primaryButton, pressed && styles.primaryButtonPressed]}
+              onPress={() => setShowDashboard((current) => !current)}
+            >
+              <Text style={styles.primaryButtonText}>{showDashboard ? 'Hide larger view' : 'Open larger view'}</Text>
             </Pressable>
-            <Pressable style={styles.secondaryButton} onPress={openBrowser}>
+            <Pressable
+              style={({ pressed }) => [styles.secondaryButton, pressed && styles.secondaryButtonPressed]}
+              onPress={openBrowser}
+            >
               <Text style={styles.secondaryButtonText}>Open in browser</Text>
             </Pressable>
           </View>
         </View>
 
+        <View style={styles.focusCard}>
+          <Text style={styles.focusEyebrow}>Look here next</Text>
+          <Text style={styles.focusTitle}>{paperclipSummary.focusTitle}</Text>
+          <Text style={styles.focusBody}>{paperclipSummary.focusBody}</Text>
+        </View>
+
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Goals</Text>
+          <Text style={styles.sectionTitle}>Goals in motion</Text>
+          <Text style={styles.sectionHint}>The bigger outcomes this agent is trying to move forward right now.</Text>
           <View style={styles.list}>
             {paperclip.goals.map((goal) => {
               const tone = statusTone(goal.status);
@@ -169,7 +314,8 @@ export default function AgentPaperclipScreen() {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Active tasks</Text>
+          <Text style={styles.sectionTitle}>Task board</Text>
+          <Text style={styles.sectionHint}>The most immediate work, who owns it, and where it might need a decision.</Text>
           <View style={styles.list}>
             {paperclip.activeTasks.map((task) => {
               const tone = statusTone(task.status);
@@ -181,7 +327,7 @@ export default function AgentPaperclipScreen() {
                       <Text style={[styles.statusPillText, { color: tone.color }]}>{task.status}</Text>
                     </View>
                   </View>
-                  <Text style={styles.metaText}>{task.owner ? `Owner: ${task.owner}` : 'Owner not listed'}</Text>
+                  <Text style={styles.metaText}>{task.owner ? `Owned by ${task.owner}` : 'Owner not listed'}</Text>
                   {task.note ? <Text style={styles.listBody}>{task.note}</Text> : null}
                 </View>
               );
@@ -190,7 +336,8 @@ export default function AgentPaperclipScreen() {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Recent events</Text>
+          <Text style={styles.sectionTitle}>Latest changes</Text>
+          <Text style={styles.sectionHint}>What changed most recently, in the order you would want to read it on your phone.</Text>
           <View style={styles.list}>
             {paperclip.recentEvents.map((event) => (
               <View key={event.id} style={styles.listCard}>
@@ -204,12 +351,13 @@ export default function AgentPaperclipScreen() {
 
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Team</Text>
+          <Text style={styles.sectionHint}>Who is involved right now and who looks ready to move.</Text>
           <View style={styles.list}>
             {paperclip.roster.map((member) => {
               const tone = statusTone(member.status);
               return (
                 <View key={member.id} style={styles.memberRow}>
-                  <View>
+                  <View style={styles.memberCopy}>
                     <Text style={styles.memberName}>{member.name}</Text>
                     <Text style={styles.memberRole}>{member.role}</Text>
                   </View>
@@ -223,16 +371,16 @@ export default function AgentPaperclipScreen() {
         </View>
 
         {showDashboard ? (
-          <View style={styles.card}>
-            <Text style={styles.sectionTitle}>Full view</Text>
-            <Text style={styles.sectionHint}>Use the larger dashboard when you want the complete picture.</Text>
+          <Animated.View style={[styles.card, dashboardAnimatedStyle]}>
+            <Text style={styles.sectionTitle}>Larger view</Text>
+            <Text style={styles.sectionHint}>Use the larger dashboard when you want the full picture instead of the phone-sized briefing.</Text>
             {Platform.OS === 'web' ? (
               <View style={styles.emptyPanel}>
-                <Text style={styles.emptyPanelText}>Open the full view in a browser from this device.</Text>
+                <Text style={styles.emptyPanelText}>Open the larger view in a browser from this device.</Text>
               </View>
             ) : dashboardFailed ? (
               <View style={styles.emptyPanel}>
-                <Text style={styles.emptyPanelText}>The full view could not load here. Open it in a browser instead.</Text>
+                <Text style={styles.emptyPanelText}>The larger view could not load here. Open it in a browser instead.</Text>
               </View>
             ) : (
               <View style={styles.webViewFrame}>
@@ -243,13 +391,13 @@ export default function AgentPaperclipScreen() {
                   renderLoading={() => (
                     <View style={styles.webViewLoading}>
                       <ActivityIndicator size="small" color={BLUE} />
-                      <Text style={styles.loadingText}>Opening full view…</Text>
+                      <Text style={styles.loadingText}>Opening larger view…</Text>
                     </View>
                   )}
                 />
               </View>
             )}
-          </View>
+          </Animated.View>
         ) : null}
       </ScrollView>
 
@@ -287,6 +435,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  iconButtonPressed: {
+    transform: [{ scale: 0.96 }],
+    opacity: 0.92,
+  },
   headerTitle: {
     color: TEXT_PRIMARY,
     fontSize: 20,
@@ -323,11 +475,26 @@ const styles = StyleSheet.create({
     padding: 22,
     gap: 12,
   },
+  heroTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
   eyebrow: {
     color: BLUE,
     fontSize: 12,
     letterSpacing: 1,
     textTransform: 'uppercase',
+    fontFamily: FONTS.body,
+  },
+  heroPill: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  heroPillText: {
+    fontSize: 12,
     fontFamily: FONTS.body,
   },
   heroTitle: {
@@ -342,10 +509,65 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     fontFamily: FONTS.body,
   },
+  briefingGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  briefingTile: {
+    width: '48.5%',
+    backgroundColor: WHITE,
+    borderRadius: 16,
+    padding: 14,
+    gap: 6,
+  },
+  briefingLabel: {
+    color: TEXT_SECONDARY,
+    fontSize: 12,
+    fontFamily: FONTS.body,
+  },
+  briefingTitle: {
+    color: TEXT_PRIMARY,
+    fontSize: 16,
+    lineHeight: 22,
+    fontFamily: FONTS.heading,
+  },
+  briefingMeta: {
+    color: TEXT_SECONDARY,
+    fontSize: 12,
+    lineHeight: 17,
+    fontFamily: FONTS.body,
+  },
   heroActions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
+    marginTop: 2,
+  },
+  focusCard: {
+    backgroundColor: BLUE_WASH,
+    borderRadius: 22,
+    padding: 18,
+    gap: 8,
+  },
+  focusEyebrow: {
+    color: BLUE,
+    fontSize: 12,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    fontFamily: FONTS.body,
+  },
+  focusTitle: {
+    color: TEXT_PRIMARY,
+    fontSize: 22,
+    lineHeight: 28,
+    fontFamily: FONTS.heading,
+  },
+  focusBody: {
+    color: TEXT_PRIMARY,
+    fontSize: 14,
+    lineHeight: 20,
+    fontFamily: FONTS.body,
   },
   card: {
     backgroundColor: CARD_ALT,
@@ -409,6 +631,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
+  memberCopy: {
+    flex: 1,
+  },
   memberName: {
     color: TEXT_PRIMARY,
     fontSize: 16,
@@ -437,6 +662,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  primaryButtonPressed: {
+    transform: [{ scale: 0.98 }],
+    opacity: 0.94,
+  },
   primaryButtonText: {
     color: WHITE,
     fontSize: 14,
@@ -451,6 +680,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: BORDER,
+  },
+  secondaryButtonPressed: {
+    transform: [{ scale: 0.98 }],
+    opacity: 0.94,
   },
   secondaryButtonText: {
     color: TEXT_PRIMARY,

@@ -1,5 +1,6 @@
 import { getBaseUrl } from "../constants/BASE_URL";
 import { authenticatedFetch } from "./authenticatedFetch";
+import { summarizeGuestCheckoutOrderLog } from "./guestCheckout";
 
 /**
  * Pattern used across all API utilities:
@@ -64,7 +65,7 @@ export async function createGuestCheckoutOrder(payload: any) {
     console.log('✅ [RESPONSE] Request succeeded!');
 
     const responseJson = await response.json();
-    console.log('responseJson', responseJson);
+    console.log('📦 [RESPONSE] Summary:', summarizeGuestCheckoutOrderLog(responseJson));
 
     // Return the hosted URL from Coinbase response
     return {

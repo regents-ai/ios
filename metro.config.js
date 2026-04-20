@@ -32,14 +32,14 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
     };
   }
 
-  if (moduleName === "crypto") {
+  if (moduleName === "crypto" && platform !== 'web') {
     return {
       filePath: require.resolve('react-native-quick-crypto'),
       type: 'sourceFile',
     };
   }
 
-  if (moduleName === "zlib") {
+  if (moduleName === "zlib" && platform !== 'web') {
     return {
       filePath: path.resolve(__dirname, 'node_modules/browserify-zlib/lib/index.js'),
       type: 'sourceFile',

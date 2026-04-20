@@ -17,6 +17,7 @@
 
 import { useAuthenticateWithJWT, useCurrentUser, useIsSignedIn } from '@coinbase/cdp-hooks';
 import { useRegentsAuth } from '@/hooks/useRegentsAuth';
+import { clearWalletInitFailureMessage, setWalletInitFailureMessage } from '@/utils/authStartupState';
 import { initializeAccessTokenGetter } from '@/utils/getAccessTokenGlobal';
 import { isTestSessionActive } from '@/utils/sharedState';
 import { configureNotificationHandling, registerForPushNotifications, sendPushTokenToServer } from '@/utils/pushNotifications';
@@ -36,23 +37,34 @@ export function AuthInitializer({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (Platform.OS === 'web') {
+      clearWalletInitFailureMessage();
       return;
     }
 
     if (isTestSessionActive()) {
+      clearWalletInitFailureMessage();
       return;
     }
 
     if (!isReady || !isAuthenticated || isSignedIn || isAuthenticatingWallet.current) {
+      if (!isAuthenticated || isSignedIn) {
+        clearWalletInitFailureMessage();
+      }
       return;
     }
 
     isAuthenticatingWallet.current = true;
-    authenticateWithJWT().catch((error) => {
-      console.error('❌ [APP] Failed to connect wallet session:', error);
-    }).finally(() => {
-      isAuthenticatingWallet.current = false;
-    });
+    authenticateWithJWT()
+      .then(() => {
+        clearWalletInitFailureMessage();
+      })
+      .catch((error) => {
+        console.error('❌ [APP] Failed to connect wallet session:', error);
+        setWalletInitFailureMessage('We could not finish opening your wallet. Please sign in again.');
+      })
+      .finally(() => {
+        isAuthenticatingWallet.current = false;
+      });
   }, [authenticateWithJWT, isAuthenticated, isReady, isSignedIn]);
 
   useEffect(() => {

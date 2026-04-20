@@ -10,12 +10,15 @@
 
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
+import { getWalletInitFailureMessage } from '@/utils/authStartupState';
+import { resolveAuthGateState } from '@/utils/authFlowState';
 import { useRegentsAuth } from '@/hooks/useRegentsAuth';
 import { isTestSessionActive } from '@/utils/sharedState';
 import { useIsInitialized } from '@coinbase/cdp-hooks';
 import { router, useRootNavigationState, useSegments } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 const { DARK_BG, BLUE, TEXT_PRIMARY, TEXT_SECONDARY, CARD_BG, BORDER } = COLORS;
 
@@ -28,10 +31,23 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const [isReady, setIsReady] = useState(false);
   const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
   const [startupTimeoutReached, setStartupTimeoutReached] = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
+  const privyReady = testSession ? true : isPrivyReady;
 
   const isAuthenticated = testSession || isPrivyAuthenticated;
   const requiresWalletInitialization = !testSession && isPrivyAuthenticated;
   const walletReady = !requiresWalletInitialization || isInitialized;
+  const gateState = resolveAuthGateState({
+    isReady,
+    isPrivyReady: privyReady,
+    walletReady,
+    hasCheckedAuth,
+    isAuthenticated,
+    testSession,
+    hasAuthError: !!authError,
+    startupTimeoutReached,
+    walletInitFailureMessage: getWalletInitFailureMessage(),
+  });
 
   useEffect(() => {
     if (navigationState?.key) {
@@ -40,16 +56,16 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   }, [navigationState?.key]);
 
   useEffect(() => {
-    if (isPrivyReady && walletReady) {
+    if (privyReady && walletReady) {
       const timer = setTimeout(() => {
         setHasCheckedAuth(true);
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [isPrivyReady, walletReady]);
+  }, [privyReady, walletReady]);
 
   useEffect(() => {
-    if (testSession || isAuthenticated || isPrivyReady) {
+    if (testSession || isAuthenticated || privyReady) {
       setStartupTimeoutReached(false);
       return;
     }
@@ -59,14 +75,14 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     }, 4000);
 
     return () => clearTimeout(timer);
-  }, [isAuthenticated, isPrivyReady, testSession]);
+  }, [isAuthenticated, privyReady, retryKey, testSession]);
 
   useEffect(() => {
     if (!isReady) {
       return;
     }
 
-    if (!isPrivyReady || !walletReady) {
+    if (!privyReady || !walletReady) {
       return;
     }
 
@@ -95,22 +111,49 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         }
       }, 0);
     }
-  }, [hasCheckedAuth, isAuthenticated, isPrivyReady, isReady, segments, testSession, walletReady]);
+  }, [hasCheckedAuth, isAuthenticated, isReady, privyReady, segments, testSession, walletReady]);
 
-  if (!isReady || !isPrivyReady || !walletReady || !hasCheckedAuth) {
-    if (!isAuthenticated && !testSession && (authError || startupTimeoutReached)) {
-      return (
-        <View style={styles.loadingContainer}>
-          <View style={styles.issueCard}>
-            <Text style={styles.issueTitle}>Sign-in is unavailable</Text>
-            <Text style={styles.issueText}>
-              This build cannot open the wallet right now. Finish setup, then try again.
-            </Text>
+  if (gateState.mode === 'issue') {
+    return (
+      <View style={styles.loadingContainer}>
+        <View style={styles.issueCard}>
+          <View style={styles.issueBadge}>
+            <Ionicons name="shield-checkmark-outline" size={18} color={BLUE} />
+            <Text style={styles.issueBadgeText}>Wallet access</Text>
+          </View>
+          <Text style={styles.issueTitle}>{gateState.title}</Text>
+          <Text style={styles.issueText}>{gateState.message}</Text>
+          <View style={styles.issueSteps}>
+            <View style={styles.issueStepRow}>
+              <View style={styles.issueStepDot} />
+              <Text style={styles.issueStepText}>Finish sign-in setup for this build.</Text>
+            </View>
+            <View style={styles.issueStepRow}>
+              <View style={styles.issueStepDot} />
+              <Text style={styles.issueStepText}>Reopen the app after those details are ready.</Text>
+            </View>
+          </View>
+          <View style={styles.issueActions}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.primaryButton,
+                pressed && styles.buttonPressed,
+              ]}
+              onPress={() => {
+                setStartupTimeoutReached(false);
+                setHasCheckedAuth(false);
+                setRetryKey(prev => prev + 1);
+              }}
+            >
+              <Text style={styles.primaryButtonText}>Try again</Text>
+            </Pressable>
           </View>
         </View>
-      );
-    }
+      </View>
+    );
+  }
 
+  if (gateState.mode === 'loading') {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={BLUE} />
@@ -151,6 +194,25 @@ const styles = StyleSheet.create({
     shadowRadius: 18,
     elevation: 3,
   },
+  issueBadge: {
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: COLORS.BLUE_WASH,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  issueBadgeText: {
+    color: BLUE,
+    fontSize: 12,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    fontFamily: FONTS.body,
+  },
   issueTitle: {
     color: TEXT_PRIMARY,
     fontSize: 24,
@@ -163,5 +225,56 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     textAlign: 'center',
     fontFamily: FONTS.body,
+  },
+  issueSteps: {
+    backgroundColor: COLORS.BLUE_WASH,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 18,
+    padding: 14,
+    gap: 10,
+  },
+  issueStepRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  issueStepDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: BLUE,
+    marginTop: 7,
+  },
+  issueStepText: {
+    flex: 1,
+    color: TEXT_PRIMARY,
+    fontSize: 14,
+    lineHeight: 20,
+    fontFamily: FONTS.body,
+  },
+  issueActions: {
+    marginTop: 4,
+  },
+  primaryButton: {
+    backgroundColor: BLUE,
+    borderRadius: 16,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: BLUE,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.16,
+    shadowRadius: 16,
+    elevation: 3,
+  },
+  primaryButtonText: {
+    color: COLORS.WHITE,
+    fontSize: 16,
+    fontFamily: FONTS.heading,
+  },
+  buttonPressed: {
+    opacity: 0.92,
+    transform: [{ scale: 0.985 }],
   },
 });

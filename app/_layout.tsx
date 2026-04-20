@@ -5,10 +5,11 @@ import { PrivyProvider } from "@privy-io/expo";
 import { AuthGate } from "@/components/AuthGate";
 import { AuthInitializer } from "@/components/AuthInitializer";
 import { COLORS } from "@/constants/Colors";
+import { TEST_ACCOUNTS } from "@/constants/TestAccounts";
 import { FONTS } from "@/constants/Typography";
 import { useRegentsAuth } from "@/hooks/useRegentsAuth";
 import { fetchCdpAuthToken } from "@/utils/fetchCdpAuthToken";
-import { getTestWalletEvm, getTestWalletSol, hydrateSandboxMode, hydrateTestSession, hydrateVerifiedPhone, hydrateLifetimeTransactionThreshold, isTestSessionActive, setCurrentSolanaAddress, setCurrentWalletAddress } from "@/utils/sharedState";
+import { activateLocalTestSession, getTestWalletEvm, getTestWalletSol, hydrateSandboxMode, hydrateTestSession, hydrateVerifiedPhone, hydrateLifetimeTransactionThreshold, isLocalTestSessionEnabled, isTestSessionActive, setCurrentSolanaAddress, setCurrentWalletAddress } from "@/utils/sharedState";
 import { useEffect, useMemo } from "react";
 import 'react-native-get-random-values';
 import 'react-native-url-polyfill/auto';
@@ -16,14 +17,26 @@ import { StyleSheet, Text, View } from "react-native";
 
 const { DARK_BG, TEXT_PRIMARY, TEXT_SECONDARY } = COLORS;
 
-function WalletProviders({ children }: { children: React.ReactNode }) {
+function WalletProviders({
+  children,
+  cdpProjectId,
+  localTestSessionEnabled,
+}: {
+  children: React.ReactNode;
+  cdpProjectId: string;
+  localTestSessionEnabled: boolean;
+}) {
   const { getAccessToken } = useRegentsAuth();
 
   const cdpConfig = useMemo<Config>(() => ({
-    projectId: process.env.EXPO_PUBLIC_CDP_PROJECT_ID!,
+    projectId: cdpProjectId,
     basePath: "https://api.cdp.coinbase.com/platform",
     customAuth: {
       getJwt: async () => {
+        if (localTestSessionEnabled) {
+          return undefined;
+        }
+
         const privyAccessToken = await getAccessToken();
 
         if (!privyAccessToken) {
@@ -39,8 +52,8 @@ function WalletProviders({ children }: { children: React.ReactNode }) {
     solana: {
       createOnLogin: true
     },
-    useMock: false
-  }), [getAccessToken]);
+    useMock: localTestSessionEnabled
+  }), [cdpProjectId, getAccessToken, localTestSessionEnabled]);
 
   return (
     <CDPHooksProvider config={cdpConfig}>
@@ -54,6 +67,20 @@ function WalletProviders({ children }: { children: React.ReactNode }) {
 }
 
 export default function RootLayout() {
+  const localTestSessionEnabled = isLocalTestSessionEnabled();
+  const privyAppId = process.env.EXPO_PUBLIC_PRIVY_APP_ID;
+  const privyClientId = process.env.EXPO_PUBLIC_PRIVY_CLIENT_ID;
+  const cdpProjectId = process.env.EXPO_PUBLIC_CDP_PROJECT_ID;
+  const resolvedPrivyAppId = privyAppId || (localTestSessionEnabled ? 'regents-local-test-app' : undefined);
+  const resolvedPrivyClientId = privyClientId || (localTestSessionEnabled ? 'regents-local-test-client' : undefined);
+  const resolvedCdpProjectId = cdpProjectId || (localTestSessionEnabled ? 'regents-local-test-project' : undefined);
+
+  if (localTestSessionEnabled && !isTestSessionActive()) {
+    activateLocalTestSession();
+    setCurrentWalletAddress(TEST_ACCOUNTS.wallets.evm);
+    setCurrentSolanaAddress(TEST_ACCOUNTS.wallets.solana);
+  }
+
   useEffect(() => {
     // Hydrate sandbox mode preference
     hydrateSandboxMode().catch(() => {});
@@ -66,31 +93,46 @@ export default function RootLayout() {
 
     // Hydrate test session (TestFlight)
     hydrateTestSession().then(() => {
-      if (isTestSessionActive()) {
+      if (localTestSessionEnabled || isTestSessionActive()) {
         setCurrentWalletAddress(getTestWalletEvm());
         setCurrentSolanaAddress(getTestWalletSol());
       }
     }).catch(() => {});
-  }, []);
+  }, [localTestSessionEnabled]);
 
-  const privyAppId = process.env.EXPO_PUBLIC_PRIVY_APP_ID;
-  const privyClientId = process.env.EXPO_PUBLIC_PRIVY_CLIENT_ID;
-  const cdpProjectId = process.env.EXPO_PUBLIC_CDP_PROJECT_ID;
-
-  if (!privyAppId || !privyClientId || !cdpProjectId) {
+  if (!resolvedPrivyAppId || !resolvedPrivyClientId || !resolvedCdpProjectId) {
     return (
       <View style={styles.missingConfigContainer}>
-        <Text style={styles.missingConfigTitle}>This build is not ready yet</Text>
-        <Text style={styles.missingConfigText}>
-          Finish the wallet sign-in setup, then reopen the app.
-        </Text>
+        <View style={styles.missingConfigCard}>
+          <View style={styles.missingConfigBadge}>
+            <Text style={styles.missingConfigBadgeText}>Regents Mobile</Text>
+          </View>
+          <Text style={styles.missingConfigTitle}>Sign-in is not ready yet</Text>
+          <Text style={styles.missingConfigText}>
+            Finish the mobile sign-in details for this build, then reopen the app.
+          </Text>
+          <View style={styles.missingConfigChecklist}>
+            <View style={styles.missingConfigRow}>
+              <View style={styles.missingConfigDot} />
+              <Text style={styles.missingConfigItem}>Add the sign-in details for Regents Mobile.</Text>
+            </View>
+            <View style={styles.missingConfigRow}>
+              <View style={styles.missingConfigDot} />
+              <Text style={styles.missingConfigItem}>Connect wallet access for this build.</Text>
+            </View>
+            <View style={styles.missingConfigRow}>
+              <View style={styles.missingConfigDot} />
+              <Text style={styles.missingConfigItem}>Reopen the app after saving those details.</Text>
+            </View>
+          </View>
+        </View>
       </View>
     );
   }
 
   return (
-    <PrivyProvider appId={privyAppId} clientId={privyClientId}>
-      <WalletProviders>
+    <PrivyProvider appId={resolvedPrivyAppId} clientId={resolvedPrivyClientId}>
+      <WalletProviders cdpProjectId={resolvedCdpProjectId} localTestSessionEnabled={localTestSessionEnabled}>
           <Stack screenOptions={{ headerShown: false }}>
             {/* Auth screens */}
             <Stack.Screen
@@ -167,18 +209,75 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 32,
   },
+  missingConfigCard: {
+    width: '100%',
+    maxWidth: 380,
+    backgroundColor: COLORS.CARD_BG,
+    borderWidth: 1,
+    borderColor: COLORS.BORDER,
+    borderRadius: 28,
+    padding: 24,
+    gap: 14,
+    shadowColor: COLORS.BLUE,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.08,
+    shadowRadius: 20,
+    elevation: 3,
+  },
+  missingConfigBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: COLORS.BLUE_WASH,
+    borderWidth: 1,
+    borderColor: COLORS.BORDER,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  missingConfigBadgeText: {
+    color: COLORS.BLUE,
+    fontSize: 12,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    fontFamily: FONTS.body,
+  },
   missingConfigTitle: {
     color: TEXT_PRIMARY,
     fontSize: 28,
-    marginBottom: 12,
-    textAlign: 'center',
+    lineHeight: 34,
     fontFamily: FONTS.heading,
   },
   missingConfigText: {
     color: TEXT_SECONDARY,
     fontSize: 16,
     lineHeight: 24,
-    textAlign: 'center',
+    fontFamily: FONTS.body,
+  },
+  missingConfigChecklist: {
+    marginTop: 4,
+    backgroundColor: COLORS.BLUE_WASH,
+    borderWidth: 1,
+    borderColor: COLORS.BORDER,
+    borderRadius: 18,
+    padding: 14,
+    gap: 12,
+  },
+  missingConfigRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  missingConfigDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginTop: 7,
+    backgroundColor: COLORS.BLUE,
+  },
+  missingConfigItem: {
+    flex: 1,
+    color: TEXT_PRIMARY,
+    fontSize: 14,
+    lineHeight: 20,
     fontFamily: FONTS.body,
   },
 });

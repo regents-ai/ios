@@ -15,7 +15,7 @@ import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 
-const { DARK_BG, CARD_BG, TEXT_SECONDARY, BLUE, WHITE, BORDER, BLUE_WASH } = COLORS;
+const { DARK_BG, CARD_BG, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, WHITE, BORDER, BLUE_WASH } = COLORS;
 
 export default function LoginScreen() {
   const { isAuthenticated } = useRegentsAuth();
@@ -84,37 +84,51 @@ export default function LoginScreen() {
           </Text>
         </View>
 
+        <View style={styles.guidanceCard}>
+          <Text style={styles.guidanceTitle}>Use the same detail you already use with Regents</Text>
+          <Text style={styles.guidanceText}>
+            Choose email if you want a quieter sign-in flow. Choose phone if you want faster access on this device.
+          </Text>
+        </View>
+
         <View style={styles.authButtonsContainer}>
           <Pressable
             style={({ pressed }) => [
-              styles.authButton,
-              styles.primaryAuthButton,
-              pressed && { opacity: 0.85 }
+              styles.authOptionCard,
+              pressed && styles.authOptionPressed,
             ]}
             onPress={handleEmailLogin}
           >
-            <Ionicons name="mail-outline" size={24} color={WHITE} style={styles.buttonIcon} />
-            <Text style={styles.authButtonText}>Continue with Email</Text>
+            <View style={styles.optionIconWrap}>
+              <Ionicons name="mail-outline" size={22} color={WHITE} />
+            </View>
+            <View style={styles.optionCopy}>
+              <Text style={styles.authOptionTitle}>Continue with Email</Text>
+              <Text style={styles.authOptionText}>Best when you want to match the inbox you already use for Regents.</Text>
+            </View>
+            <Ionicons name="arrow-forward" size={20} color={BLUE} />
           </Pressable>
 
           <Pressable
             style={({ pressed }) => [
-              styles.authButton,
-              styles.secondaryAuthButton,
-              pressed && { opacity: 0.85 }
+              styles.authOptionCard,
+              styles.secondaryAuthOptionCard,
+              pressed && styles.authOptionPressed,
             ]}
             onPress={handlePhoneLogin}
           >
-            <Ionicons name="call-outline" size={24} color={BLUE} style={styles.buttonIcon} />
-            <Text style={styles.secondaryAuthButtonText}>Continue with Phone</Text>
+            <View style={[styles.optionIconWrap, styles.optionIconSecondaryWrap]}>
+              <Ionicons name="call-outline" size={22} color={BLUE} />
+            </View>
+            <View style={styles.optionCopy}>
+              <Text style={styles.authOptionTitle}>Continue with Phone</Text>
+              <Text style={styles.authOptionText}>Best when you want a quick code on the device already in your hand.</Text>
+            </View>
+            <Ionicons name="arrow-forward" size={20} color={BLUE} />
           </Pressable>
         </View>
 
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>
-            Secure sign in for your mobile wallet
-          </Text>
-        </View>
+        <Text style={styles.footerText}>Your wallet opens after sign-in. You can switch methods later in settings.</Text>
       </View>
     </SafeAreaView>
   );
@@ -179,46 +193,83 @@ const styles = StyleSheet.create({
     width: '100%',
     gap: 16,
   },
-  authButton: {
-    flexDirection: 'row',
-    paddingHorizontal: 24,
-    paddingVertical: 18,
-    borderRadius: 16,
-    width: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primaryAuthButton: {
-    backgroundColor: BLUE,
-    shadowColor: BLUE,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.18,
-    shadowRadius: 16,
-    elevation: 4,
-  },
-  secondaryAuthButton: {
+  guidanceCard: {
     backgroundColor: BLUE_WASH,
     borderWidth: 1,
     borderColor: BORDER,
+    borderRadius: 18,
+    padding: 18,
+    gap: 8,
+    marginBottom: 20,
   },
-  buttonIcon: {
-    marginRight: 12,
+  guidanceTitle: {
+    color: TEXT_PRIMARY,
+    fontSize: 16,
+    lineHeight: 22,
+    fontFamily: FONTS.heading,
   },
-  authButtonText: {
-    color: WHITE,
-    fontSize: 18,
+  guidanceText: {
+    color: TEXT_SECONDARY,
+    fontSize: 14,
+    lineHeight: 21,
     fontFamily: FONTS.body,
   },
-  secondaryAuthButtonText: {
-    color: BLUE,
-    fontSize: 18,
-    fontFamily: FONTS.body,
+  authOptionCard: {
+    flexDirection: 'row',
+    paddingHorizontal: 18,
+    paddingVertical: 18,
+    borderRadius: 20,
+    width: '100%',
+    alignItems: 'center',
+    gap: 14,
+    backgroundColor: CARD_BG,
+    borderWidth: 1,
+    borderColor: BORDER,
+    shadowColor: BLUE,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 3,
   },
-  footer: {
-    marginTop: 18,
-    paddingHorizontal: 6,
+  secondaryAuthOptionCard: {
+    backgroundColor: BLUE_WASH,
+  },
+  authOptionPressed: {
+    opacity: 0.92,
+    transform: [{ scale: 0.985 }],
+  },
+  optionIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: BLUE,
+  },
+  optionIconSecondaryWrap: {
+    backgroundColor: WHITE,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  optionCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  authOptionTitle: {
+    color: TEXT_PRIMARY,
+    fontSize: 18,
+    lineHeight: 22,
+    fontFamily: FONTS.heading,
+  },
+  authOptionText: {
+    color: TEXT_SECONDARY,
+    fontSize: 13,
+    lineHeight: 19,
+    fontFamily: FONTS.body,
   },
   footerText: {
+    marginTop: 18,
+    paddingHorizontal: 6,
     fontSize: 12,
     color: TEXT_SECONDARY,
     lineHeight: 18,
