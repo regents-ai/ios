@@ -10,6 +10,8 @@ export type AuthGateStateInput = {
   walletInitFailureMessage: string | null;
 };
 
+const PUBLIC_ROUTES = new Set(['email-verify', 'email-code', 'phone-verify', 'phone-code']);
+
 export function resolveAuthGateState(input: AuthGateStateInput) {
   const isSettled = input.isReady && input.isPrivyReady && input.walletReady && input.hasCheckedAuth;
 
@@ -38,4 +40,8 @@ export function resolveAuthGateState(input: AuthGateStateInput) {
 
 export function getVerificationSuccessAction(mode: 'signin' | 'link' | 'reverify') {
   return mode === 'signin' ? 'go_wallet' : 'dismiss';
+}
+
+export function isAuthManagedRoute(segment?: string) {
+  return segment === 'auth' || PUBLIC_ROUTES.has(segment || '');
 }

@@ -23,7 +23,7 @@
  */
 
 import { getAccessTokenGlobal } from './getAccessTokenGlobal';
-import { isTestSessionActive } from './sharedState';
+import { isTestSessionActive } from './state/reviewSessionState';
 
 export async function authenticatedFetch(
   input: RequestInfo | URL,

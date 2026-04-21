@@ -17,7 +17,8 @@
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { COLORS } from '@/constants/Colors';
 import { fetchOfframpTransaction, OfframpTransaction } from '@/utils/fetchOfframpTransaction';
-import { getPendingOfframpBalance, isTestSessionActive } from '@/utils/sharedState';
+import { getPendingOfframpBalance } from '@/utils/state/flowRuntimeState';
+import { isTestSessionActive } from '@/utils/state/reviewSessionState';
 import {
   useCurrentUser,
   useSendSolanaTransaction,

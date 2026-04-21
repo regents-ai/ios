@@ -10,13 +10,16 @@
 
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
-import { getWalletInitFailureMessage } from '@/utils/authStartupState';
-import { resolveAuthGateState } from '@/utils/authFlowState';
+import { clearWalletInitFailureMessage, getWalletInitFailureMessage } from '@/utils/authStartupState';
+import { isAuthManagedRoute, resolveAuthGateState } from '@/utils/authFlowState';
 import { useRegentsAuth } from '@/hooks/useRegentsAuth';
-import { isTestSessionActive } from '@/utils/sharedState';
-import { useIsInitialized } from '@coinbase/cdp-hooks';
+import { isTestSessionActive } from '@/utils/state/reviewSessionState';
+import { setCountry, setSubdivision } from '@/utils/state/locationState';
+import { setSandboxMode } from '@/utils/state/sandboxState';
+import { setCurrentSolanaAddress, setCurrentWalletAddress, setManualWalletAddress } from '@/utils/state/walletRuntimeState';
+import { useIsInitialized, useSignOut } from '@coinbase/cdp-hooks';
 import { router, useRootNavigationState, useSegments } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -24,7 +27,8 @@ const { DARK_BG, BLUE, TEXT_PRIMARY, TEXT_SECONDARY, CARD_BG, BORDER } = COLORS;
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const { isInitialized } = useIsInitialized();
-  const { error: authError, isAuthenticated: isPrivyAuthenticated, isReady: isPrivyReady } = useRegentsAuth();
+  const { error: authError, isAuthenticated: isPrivyAuthenticated, isReady: isPrivyReady, signOut: signOutIdentity } = useRegentsAuth();
+  const { signOut: signOutWallet } = useSignOut();
   const segments = useSegments();
   const navigationState = useRootNavigationState();
   const testSession = isTestSessionActive();
@@ -48,6 +52,27 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     startupTimeoutReached,
     walletInitFailureMessage: getWalletInitFailureMessage(),
   });
+
+  const handleWalletRecovery = useCallback(async () => {
+    try {
+      clearWalletInitFailureMessage();
+      await signOutIdentity();
+      await signOutWallet();
+    } catch (error) {
+      console.error('Sign out failed:', error);
+    } finally {
+      setCurrentWalletAddress(null);
+      setCurrentSolanaAddress(null);
+      setManualWalletAddress(null);
+      setCountry('US');
+      setSubdivision('CA');
+      setSandboxMode(true);
+      setStartupTimeoutReached(false);
+      setHasCheckedAuth(false);
+      setRetryKey(prev => prev + 1);
+      router.replace('/auth/login');
+    }
+  }, [signOutIdentity, signOutWallet]);
 
   useEffect(() => {
     if (navigationState?.key) {
@@ -90,11 +115,10 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const inAuthGroup = segments[0] === 'auth';
-    const publicRoutes = ['email-verify', 'email-code', 'phone-verify', 'phone-code'];
-    const isPublicRoute = publicRoutes.includes(segments[0]);
+    const currentSegment = segments[0];
+    const inManagedAuthRoute = isAuthManagedRoute(currentSegment);
 
-    if (!isAuthenticated && !inAuthGroup && !isPublicRoute) {
+    if (!isAuthenticated && !inManagedAuthRoute) {
       setTimeout(() => {
         try {
           router.replace('/auth/login');
@@ -102,7 +126,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
           console.error('Navigation error:', e);
         }
       }, 0);
-    } else if (isAuthenticated && inAuthGroup) {
+    } else if (isAuthenticated && currentSegment === 'auth') {
       setTimeout(() => {
         try {
           router.replace('/wallet');
@@ -140,12 +164,19 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
                 pressed && styles.buttonPressed,
               ]}
               onPress={() => {
+                if (gateState.title === 'Wallet unavailable') {
+                  void handleWalletRecovery();
+                  return;
+                }
+
                 setStartupTimeoutReached(false);
                 setHasCheckedAuth(false);
                 setRetryKey(prev => prev + 1);
               }}
             >
-              <Text style={styles.primaryButtonText}>Try again</Text>
+              <Text style={styles.primaryButtonText}>
+                {gateState.title === 'Wallet unavailable' ? 'Sign in again' : 'Try again'}
+              </Text>
             </Pressable>
           </View>
         </View>

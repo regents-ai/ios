@@ -5,12 +5,11 @@ import { PrivyProvider } from "@privy-io/expo";
 import { AuthGate } from "@/components/AuthGate";
 import { AuthInitializer } from "@/components/AuthInitializer";
 import { COLORS } from "@/constants/Colors";
-import { TEST_ACCOUNTS } from "@/constants/TestAccounts";
 import { FONTS } from "@/constants/Typography";
+import { useAppBootstrap } from "@/hooks/useAppBootstrap";
 import { useRegentsAuth } from "@/hooks/useRegentsAuth";
 import { fetchCdpAuthToken } from "@/utils/fetchCdpAuthToken";
-import { activateLocalTestSession, getTestWalletEvm, getTestWalletSol, hydrateSandboxMode, hydrateTestSession, hydrateVerifiedPhone, hydrateLifetimeTransactionThreshold, isLocalTestSessionEnabled, isTestSessionActive, setCurrentSolanaAddress, setCurrentWalletAddress } from "@/utils/sharedState";
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import 'react-native-get-random-values';
 import 'react-native-url-polyfill/auto';
 import { StyleSheet, Text, View } from "react-native";
@@ -67,38 +66,13 @@ function WalletProviders({
 }
 
 export default function RootLayout() {
-  const localTestSessionEnabled = isLocalTestSessionEnabled();
+  const { localTestSessionEnabled } = useAppBootstrap();
   const privyAppId = process.env.EXPO_PUBLIC_PRIVY_APP_ID;
   const privyClientId = process.env.EXPO_PUBLIC_PRIVY_CLIENT_ID;
   const cdpProjectId = process.env.EXPO_PUBLIC_CDP_PROJECT_ID;
   const resolvedPrivyAppId = privyAppId || (localTestSessionEnabled ? 'regents-local-test-app' : undefined);
   const resolvedPrivyClientId = privyClientId || (localTestSessionEnabled ? 'regents-local-test-client' : undefined);
   const resolvedCdpProjectId = cdpProjectId || (localTestSessionEnabled ? 'regents-local-test-project' : undefined);
-
-  if (localTestSessionEnabled && !isTestSessionActive()) {
-    activateLocalTestSession();
-    setCurrentWalletAddress(TEST_ACCOUNTS.wallets.evm);
-    setCurrentSolanaAddress(TEST_ACCOUNTS.wallets.solana);
-  }
-
-  useEffect(() => {
-    // Hydrate sandbox mode preference
-    hydrateSandboxMode().catch(() => {});
-
-    // Hydrate phone verification
-    hydrateVerifiedPhone().catch(() => {});
-
-    // Hydrate lifetime transaction threshold
-    hydrateLifetimeTransactionThreshold().catch(() => {});
-
-    // Hydrate test session (TestFlight)
-    hydrateTestSession().then(() => {
-      if (localTestSessionEnabled || isTestSessionActive()) {
-        setCurrentWalletAddress(getTestWalletEvm());
-        setCurrentSolanaAddress(getTestWalletSol());
-      }
-    }).catch(() => {});
-  }, [localTestSessionEnabled]);
 
   if (!resolvedPrivyAppId || !resolvedPrivyClientId || !resolvedCdpProjectId) {
     return (

@@ -9,7 +9,7 @@
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
 import { useRegentsAuth } from '@/hooks/useRegentsAuth';
-import { isTestSessionActive } from '@/utils/sharedState';
+import { isTestSessionActive } from '@/utils/state/reviewSessionState';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';

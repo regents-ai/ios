@@ -16,7 +16,8 @@
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
-import { isTestSessionActive, recordPendingAgentFunding } from '@/utils/sharedState';
+import { recordPendingAgentFunding } from '@/utils/state/flowRuntimeState';
+import { isTestSessionActive } from '@/utils/state/reviewSessionState';
 import { useCurrentUser, useSendSolanaTransaction, useSendUserOperation, useSolanaAddress } from '@coinbase/cdp-hooks';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { PublicKey, SystemProgram, Transaction } from '@solana/web3.js';

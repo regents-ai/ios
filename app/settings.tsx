@@ -4,27 +4,35 @@ import { FONTS } from '@/constants/Typography';
 import { TEST_ACCOUNTS } from '@/constants/TestAccounts';
 import { useRegentsAuth } from '@/hooks/useRegentsAuth';
 import {
+  setCountry,
+  setSubdivision,
+} from '@/utils/state/locationState';
+import {
+  clearTestSession,
+  getTestWalletSol,
+  isTestSessionActive,
+} from '@/utils/state/reviewSessionState';
+import {
+  clearManualAddress,
+  getManualWalletAddress,
+  setCurrentSolanaAddress,
+  setCurrentWalletAddress,
+  setManualWalletAddress,
+} from '@/utils/state/walletRuntimeState';
+import {
   daysUntilExpiry,
   formatPhoneDisplay,
   getLifetimeTransactionThreshold,
-  getManualWalletAddress,
-  getSandboxMode,
-  getTestWalletSol,
   getVerifiedPhone,
   getVerifiedPhoneUserId,
   isPhoneFresh60d,
-  isTestSessionActive,
-  setCountry,
-  setCurrentSolanaAddress,
-  setCurrentWalletAddress,
   setLifetimeTransactionThreshold,
-  setManualWalletAddress,
-  setSandboxMode,
-  setSubdivision,
   setVerifiedPhone,
-  clearManualAddress,
-  clearTestSession,
-} from '@/utils/sharedState';
+} from '@/utils/state/verificationState';
+import {
+  getSandboxMode,
+  setSandboxMode,
+} from '@/utils/state/sandboxState';
 import {
   useCurrentUser,
   useEvmAddress,

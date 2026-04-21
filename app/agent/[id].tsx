@@ -12,9 +12,8 @@ import { fetchWalletFundingChoices } from '@/utils/fetchWalletFundingChoices';
 import {
   clearPendingAgentFundings,
   getPendingAgentFundings,
-  getTestWalletSol,
-  isTestSessionActive,
-} from '@/utils/sharedState';
+} from '@/utils/state/flowRuntimeState';
+import { getTestWalletSol, isTestSessionActive } from '@/utils/state/reviewSessionState';
 import { useCurrentUser, useEvmAddress, useSolanaAddress } from '@coinbase/cdp-hooks';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';

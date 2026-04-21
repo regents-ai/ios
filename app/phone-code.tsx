@@ -7,7 +7,9 @@ import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, SafeAreaV
 import { CoinbaseAlert } from '../components/ui/CoinbaseAlerts';
 import { COLORS } from '../constants/Colors';
 import { TEST_ACCOUNTS } from '../constants/TestAccounts';
-import { setCurrentSolanaAddress, setCurrentWalletAddress, setTestSession, setVerifiedPhone } from '../utils/sharedState';
+import { setTestSession } from '../utils/state/reviewSessionState';
+import { setVerifiedPhone } from '../utils/state/verificationState';
+import { setCurrentSolanaAddress, setCurrentWalletAddress } from '../utils/state/walletRuntimeState';
 
 const { DARK_BG, CARD_BG, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, WHITE } = COLORS;
 const RESEND_SECONDS = 30;

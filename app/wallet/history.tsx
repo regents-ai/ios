@@ -1,4 +1,4 @@
-import { isTestSessionActive } from "@/utils/sharedState";
+import { isTestSessionActive } from "@/utils/state/reviewSessionState";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { router } from "expo-router";

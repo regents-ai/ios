@@ -32,7 +32,9 @@
 import * as Application from 'expo-application';
 import * as Localization from 'expo-localization';
 import { Linking, Platform } from 'react-native';
-import { getCurrentPartnerUserRef, getCountry, getSandboxMode } from './sharedState';
+import { getCurrentPartnerUserRef } from './state/flowRuntimeState';
+import { getCountry } from './state/locationState';
+import { getSandboxMode } from './state/sandboxState';
 
 // Support email - not exposed in UI, only used internally for mailto
 const SUPPORT_EMAIL = 'onrampsupport@coinbase.com';

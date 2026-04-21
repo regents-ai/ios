@@ -19,10 +19,22 @@ import { useAuthenticateWithJWT, useCurrentUser, useIsSignedIn } from '@coinbase
 import { useRegentsAuth } from '@/hooks/useRegentsAuth';
 import { clearWalletInitFailureMessage, setWalletInitFailureMessage } from '@/utils/authStartupState';
 import { initializeAccessTokenGetter } from '@/utils/getAccessTokenGlobal';
-import { isTestSessionActive } from '@/utils/sharedState';
+import { isTestSessionActive } from '@/utils/state/reviewSessionState';
 import { configureNotificationHandling, registerForPushNotifications, sendPushTokenToServer } from '@/utils/pushNotifications';
 import { useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
+
+async function registerUserPushToken(
+  partnerUserRef: string,
+  getAccessToken: () => Promise<string | null>
+) {
+  const result = await registerForPushNotifications();
+  if (!result) {
+    return;
+  }
+
+  await sendPushTokenToServer(result.token, partnerUserRef, getAccessToken, result.type);
+}
 
 export function AuthInitializer({ children }: { children: React.ReactNode }) {
   const { authenticateWithJWT } = useAuthenticateWithJWT();
@@ -83,13 +95,7 @@ export function AuthInitializer({ children }: { children: React.ReactNode }) {
     }
 
     if (regentsUserId && currentUser?.userId) {
-      const partnerUserRef = regentsUserId;
-
-      registerForPushNotifications().then(async (result) => {
-        if (result) {
-          await sendPushTokenToServer(result.token, partnerUserRef, getAccessToken, result.type);
-        }
-      }).catch((error) => {
+      registerUserPushToken(regentsUserId, getAccessToken).catch((error) => {
         console.error('❌ [APP] Failed to register push notifications:', error);
       });
     }
