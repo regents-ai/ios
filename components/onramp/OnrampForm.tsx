@@ -1,195 +1,138 @@
-/**
- * ============================================================================
- * ONRAMP FORM - MAIN USER INTERFACE FOR CRYPTO PURCHASES
- * ============================================================================
- *
- * This is the central form where users configure their crypto purchase.
- * It handles complex relationships between assets, networks, payment methods.
- *
- * DYNAMIC FILTERING (Many-to-Many Relationships):
- *
- * Assets and Networks have a many-to-many relationship:
- * - USDC available on: Base, Ethereum, Polygon, Solana, etc.
- * - Base supports: USDC, ETH
- *
- * Form behavior:
- * 1. Select "Base" network → filters assets to only those available on Base
- * 2. Select "USDC" asset → filters networks to only those supporting USDC
- * 3. Auto-clears invalid selections when options change
- *
- * Implementation:
- * - getAvailableNetworks(asset) → returns networks for selected asset
- * - getAvailableAssets(network) → returns assets for selected network
- * - useEffect hooks auto-reset to first valid option if current becomes invalid
- *
- * NETWORK CHANGE HANDLING:
- *
- * When user changes network, address must update (network-aware routing):
- * 1. User selects "Solana" network
- * 2. Form detects network change (useEffect with prevNetworkRef)
- * 3. Calls getCurrentWalletAddress() from sharedState
- * 4. Gets Solana-specific address
- * 5. Calls onAddressChange() to update parent (index.tsx)
- * 6. Parent updates both address and connectedAddress states
- *
- * Using ref (prevNetworkRef) prevents infinite loops:
- * - Without ref: network change → address update → re-render → network change → loop
- * - With ref: only triggers when network actually changes, ignores address changes
- *
- * VALIDATION LOGIC:
- *
- * Three validation layers:
- * 1. Amount: Must be positive number, within payment method limits
- * 2. Address: Format validation based on network type
- *    - EVM: 0x + 40 hex characters
- *    - Solana: 32-44 base58 characters (no 0, O, I, l)
- *    - Sandbox: Any non-empty string (testing flexibility)
- * 3. Network Support: EVM/SOL only in production, any in sandbox
- *
- * NOTIFICATION CARDS (Context-Aware Messaging):
- *
- * Shows different cards based on state:
- * 1. Network Not Supported (prod, non-EVM/SOL): Orange warning
- * 2. Smart Account Required (prod, EVM, no smart account): Red error
- * 3. Wallet Required (prod, no address): Red error
- * 4. Address Required (sandbox, no address): Red error
- * 5. Sandbox Mode (sandbox, has address): Blue info
- * 6. Production Mode (prod, signed in): Red warning
- *
- * Card priority (first match wins):
- * - Unsupported network (highest priority - blocks all)
- * - Smart Account missing for EVM networks
- * - Invalid address for current network
- * - Sandbox/Production status info
- *
- * PAYMENT METHOD RESTRICTIONS:
- *
- * Apple Pay (GUEST_CHECKOUT_APPLE_PAY):
- * - USD only (auto-forces USD when selected)
- * - US residents only (filtered by country)
- * - $0-$500 limit
- *
- * Coinbase Widget (COINBASE_WIDGET):
- * - Multi-currency (based on buy options API)
- * - Multiple payment methods (Card, ACH, etc.)
- * - Limit depends on payment method selected in widget
- *
- * displayCurrencies memo:
- * - Apple Pay: Always ['USD']
- * - Widget: Uses paymentCurrencies from API (USD, EUR, GBP, etc.)
- *
- * @see hooks/useOnramp.ts for API orchestration
- * @see utils/sharedState.ts for getCurrentWalletAddress() logic
- * @see components/ui/SwipeToConfirm.tsx for submission gesture
- */
-
-import { Ionicons } from '@expo/vector-icons';
 import { useCurrentUser } from '@coinbase/cdp-hooks';
-import { useRegentsAuth } from '@/hooks/useRegentsAuth';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Image, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
-import { COLORS } from '../../constants/Colors';
-import { TEST_ACCOUNTS } from '../../constants/TestAccounts';
-import { FONTS } from '../../constants/Typography';
-import { getCountry, getCurrentWalletAddress, getLifetimeTransactionThreshold, getPendingForm, getSandboxMode, getSubdivision, getVerifiedPhone, isPhoneFresh60d, isTestSessionActive, setCountry, setCurrentNetwork, setSandboxMode, setSubdivision } from '../../utils/sharedState';
-import { SwipeToConfirm } from '../ui/SwipeToConfirm';
-import { fetchUserLimits, UserLimit } from '../../utils/fetchUserLimits';
-import { getAccessTokenGlobal } from '../../utils/getAccessTokenGlobal';
-import { getGuestCheckoutBlocker } from '../../utils/onrampEligibility';
+import { Linking, Platform, ScrollView, StyleSheet } from 'react-native';
 
-const { BLUE, DARK_BG, CARD_BG, CARD_ALT, BORDER, TEXT_PRIMARY, TEXT_SECONDARY, ORANGE, DANGER, BACKDROP, BLUE_WASH, WHITE } = COLORS;
+import { COLORS } from '@/constants/Colors';
+import { TEST_ACCOUNTS } from '@/constants/TestAccounts';
+import { useRegentsAuth } from '@/hooks/useRegentsAuth';
+import { fetchUserLimits, UserLimit } from '@/utils/fetchUserLimits';
+import { getAccessTokenGlobal } from '@/utils/getAccessTokenGlobal';
+import { getGuestCheckoutBlocker } from '@/utils/onrampEligibility';
+import { getPendingForm } from '@/utils/state/flowRuntimeState';
+import { getCountry, getSubdivision, setCountry, setSubdivision } from '@/utils/state/locationState';
+import { isTestSessionActive } from '@/utils/state/reviewSessionState';
+import { getSandboxMode, setSandboxMode } from '@/utils/state/sandboxState';
+import {
+  getLifetimeTransactionThreshold,
+  getVerifiedPhone,
+  isPhoneFresh60d,
+} from '@/utils/state/verificationState';
+import { getCurrentWalletAddress, setCurrentNetwork } from '@/utils/state/walletRuntimeState';
 
-export type OnrampFormData = {
-  amount: string;
-  asset: string;
-  network: string;
-  address: string;
-  sandbox: boolean;
-  paymentMethod: string;
-  paymentCurrency: string;
-  phoneNumber?: string;
-  agreementAcceptedAt?: string;
-};
+import {
+  AmountQuoteSection,
+  AssetNetworkSection,
+  ConfirmationSection,
+  EligibilityNoticeSection,
+  EnvironmentSection,
+  FocusPathSection,
+  LocationSection,
+  PaymentMethodSection,
+} from './onramp-form-sections';
+import type { OnrampFormData } from './onramp-form-types';
+import { PickerSheet } from './picker-sheet';
+
+const { DARK_BG } = COLORS;
 
 type OnrampFormProps = {
   address: string;
-  onAddressChange: (address: string) => void;
-  onSubmit: (data: OnrampFormData) => void;
-  isLoading: boolean;
-  options: any;
-  isLoadingOptions: boolean;
-  getAvailableNetworks: (selectedAsset?: string) => any[];
-  getAvailableAssets: (selectedNetwork?: string) => any[];
-  currentQuote: any;
-  isLoadingQuote: boolean;
-  fetchQuote: (formData: any) => void;
-  paymentCurrencies: string[];
   amount: string;
-  onAmountChange: (amount: string) => void;
-  sandboxMode?: boolean; // Add sandbox prop
   buyConfig?: any;
+  currentQuote: any;
+  fetchQuote: (formData: any) => void;
   footerContent?: React.ReactNode;
+  getAvailableAssets: (selectedNetwork?: string) => any[];
+  getAvailableNetworks: (selectedAsset?: string) => any[];
+  isLoading: boolean;
+  isLoadingOptions: boolean;
+  isLoadingQuote: boolean;
+  onAddressChange: (address: string) => void;
+  onAmountChange: (amount: string) => void;
+  onNetworkChange?: (network: string) => void;
+  onRegionChange?: (country: string, subdivision: string) => void;
+  onSubmit: (data: OnrampFormData) => void;
+  options: any;
+  paymentCurrencies: string[];
 };
 
-/**
- * Main form component with dynamic asset/network selection
- * Assets and networks are filtered based on each other (many-to-many relationship)
- */
+type SheetKey = 'asset' | 'country' | 'currency' | 'network' | 'payment' | 'subdivision' | null;
+
 export function OnrampForm({
   address,
-  onAddressChange,
-  onSubmit,
-  isLoading,
-  options,
-  isLoadingOptions,
-  getAvailableNetworks,
-  getAvailableAssets,
-  currentQuote,
-  isLoadingQuote,
-  fetchQuote,
-  paymentCurrencies,
   amount,
-  onAmountChange,
-  sandboxMode,
   buyConfig,
-  footerContent
+  currentQuote,
+  fetchQuote,
+  footerContent,
+  getAvailableAssets,
+  getAvailableNetworks,
+  isLoading,
+  isLoadingOptions,
+  isLoadingQuote,
+  onAddressChange,
+  onAmountChange,
+  onNetworkChange,
+  onRegionChange,
+  onSubmit,
+  options,
+  paymentCurrencies,
 }: OnrampFormProps) {
   const { isAuthenticated, linkedEmail, linkedPhone, regentsUserId } = useRegentsAuth();
   const { currentUser } = useCurrentUser();
+  const prevNetworkRef = useRef('Base');
 
-  const [asset, setAsset] = useState("USDC");
-  const [network, setNetwork] = useState("Base");
-  const [paymentMethod, setPaymentMethod] = useState("GUEST_CHECKOUT_APPLE_PAY");
-  const [assetPickerVisible, setAssetPickerVisible] = useState(false);
-  const [networkPickerVisible, setNetworkPickerVisible] = useState(false);
-  const [paymentPickerVisible, setPaymentPickerVisible] = useState(false);
-  const [paymentCurrency, setPaymentCurrency] = useState("USD");
-  const [paymentCurrencyPickerVisible, setPaymentCurrencyPickerVisible] = useState(false);
+  const [asset, setAsset] = useState('USDC');
+  const [network, setNetwork] = useState('Base');
+  const [paymentMethod, setPaymentMethod] = useState('GUEST_CHECKOUT_APPLE_PAY');
+  const [paymentCurrency, setPaymentCurrency] = useState('USD');
+  const [localSandboxEnabled, setLocalSandboxEnabled] = useState(getSandboxMode());
+  const [country, setCountryLocal] = useState(getCountry());
+  const [subdivision, setSubdivisionLocal] = useState(getSubdivision());
+  const [activeSheet, setActiveSheet] = useState<SheetKey>(null);
   const [isSwipeActive, setIsSwipeActive] = useState(false);
-  const backdropOpacity = useRef(new Animated.Value(0)).current;
-  const sheetTranslate = useRef(new Animated.Value(300)).current;
+  const [userLimits, setUserLimits] = useState<{ weekly: UserLimit; lifetime: UserLimit } | null>(null);
+  const [isLoadingLimits, setIsLoadingLimits] = useState(false);
+
   const isApplePay = paymentMethod === 'GUEST_CHECKOUT_APPLE_PAY';
   const isGooglePay = paymentMethod === 'GUEST_CHECKOUT_GOOGLE_PAY';
   const isGuestCheckout = isApplePay || isGooglePay;
   const isBaseUsdcPath = asset === 'USDC' && network === 'Base';
-  // User limits state
-  const [userLimits, setUserLimits] = useState<{ weekly: UserLimit; lifetime: UserLimit } | null>(null);
-  const [isLoadingLimits, setIsLoadingLimits] = useState(false);
-  const [localSandboxEnabled, setLocalSandboxEnabled] = useState(getSandboxMode());
-  const [countryPickerVisible, setCountryPickerVisible] = useState(false);
-const [subPickerVisible, setSubPickerVisible] = useState(false);
-const [country, setCountryLocal] = useState(getCountry());
-const [subdivision, setSubdivisionLocal] = useState(getSubdivision());
 
-const countries = useMemo(() => {
-  const src = buyConfig?.countries ?? options?.countries;
-  return src?.map((c: any) => c.id).filter(Boolean) ?? [];
-}, [buyConfig, options]);
+  const countries = useMemo(() => {
+    const source = buyConfig?.countries ?? options?.countries;
+    return source?.map((entry: any) => entry.id).filter(Boolean) ?? [];
+  }, [buyConfig, options]);
 
   const usSubs = useMemo(() => {
-    const src = buyConfig?.countries ?? options?.countries;
-    return src?.find((c: any) => c.id === 'US')?.subdivisions ?? [];
+    const source = buyConfig?.countries ?? options?.countries;
+    return source?.find((entry: any) => entry.id === 'US')?.subdivisions ?? [];
   }, [buyConfig, options]);
+
+  const availableNetworks = useMemo(() => getAvailableNetworks(asset), [asset, getAvailableNetworks]);
+  const availableAssets = useMemo(() => getAvailableAssets(network), [getAvailableAssets, network]);
+
+  const displayCurrencies = useMemo(() => {
+    const list = Array.isArray(paymentCurrencies) && paymentCurrencies.length ? paymentCurrencies : ['USD'];
+    return isGuestCheckout ? ['USD'] : list;
+  }, [isGuestCheckout, paymentCurrencies]);
+
+  const methods = useMemo(() => {
+    const items = [{ display: 'More payment options', value: 'COINBASE_WIDGET' }];
+    if (country === 'US' && paymentCurrency === 'USD') {
+      if (Platform.OS === 'android') {
+        items.push({ display: 'Google Pay', value: 'GUEST_CHECKOUT_GOOGLE_PAY' });
+      } else if (Platform.OS === 'ios') {
+        items.push({ display: 'Apple Pay', value: 'GUEST_CHECKOUT_APPLE_PAY' });
+      }
+    }
+    return items;
+  }, [country, paymentCurrency]);
+
+  const amountNumber = useMemo(() => {
+    const parsed = Number.parseFloat(amount.replace(/,/g, ''));
+    return Number.isFinite(parsed) ? parsed : NaN;
+  }, [amount]);
+
   const verifiedPhone = getVerifiedPhone();
   const hasFreshVerifiedPhone = !!linkedPhone && verifiedPhone === linkedPhone && isPhoneFresh60d();
   const guestCheckoutBlocker = getGuestCheckoutBlocker({
@@ -203,164 +146,164 @@ const countries = useMemo(() => {
   const needsGuestCheckoutVerification = guestCheckoutBlocker === 'verification';
   const isUnsupportedGuestCheckoutRegion = guestCheckoutBlocker === 'region';
 
-  const isEvmNetwork = (() => {
-    const n = (network || '').toLowerCase();
-    const evmList = [
-      'ethereum','base','polygon','arbitrum','optimism','avalanche','avax','bsc',
-      'fantom','linea','zksync','scroll'
-    ];
-    return evmList.some((k) => n.includes(k));
-  })();
-
-  const isSolanaNetwork = (() => {
-    const n = (network || '').toLowerCase();
-    const solanaList = ['solana', 'sol'];
-    return solanaList.some((k) => n.includes(k));
-  })();
-
-  const displayCurrencies = React.useMemo(() => {
-    const list = Array.isArray(paymentCurrencies) && paymentCurrencies.length ? paymentCurrencies : ['USD'];
-    return isGuestCheckout ? ['USD'] : list;
-  }, [isGuestCheckout, paymentCurrencies]);
-
-  useEffect(() => {
-    if (isGuestCheckout && paymentCurrency !== 'USD')
-      setPaymentCurrency('USD');
-  }, [isGuestCheckout, paymentCurrency]);
-
-  // Track network changes in shared state
-  useEffect(() => {
-    setCurrentNetwork(network);
+  const isEvmNetwork = useMemo(() => {
+    const normalized = network.toLowerCase();
+    return [
+      'ethereum',
+      'base',
+      'polygon',
+      'arbitrum',
+      'optimism',
+      'avalanche',
+      'avax',
+      'bsc',
+      'fantom',
+      'linea',
+      'zksync',
+      'scroll',
+    ].some(key => normalized.includes(key));
   }, [network]);
 
-  // Separate effect to update address when network changes (to avoid recursion)
-  const prevNetworkRef = useRef(network);
-  useEffect(() => {
-    // Only run when network actually changes (not on initial mount or address changes)
-    if (prevNetworkRef.current === network) return;
-    prevNetworkRef.current = network;
+  const isSolanaNetwork = useMemo(() => {
+    const normalized = network.toLowerCase();
+    return ['solana', 'sol'].some(key => normalized.includes(key));
+  }, [network]);
 
-    if (!localSandboxEnabled && (isEvmNetwork || isSolanaNetwork)) {
-      // Only update address for supported networks (EVM/Solana) in production mode
-      // For unsupported networks (Noble, etc.), don't auto-update
-      const newAddress = getCurrentWalletAddress();
-      if (newAddress && newAddress !== address) {
-        onAddressChange(newAddress);
-      }
-    }
-  }, [network, address, onAddressChange, isEvmNetwork, isSolanaNetwork, localSandboxEnabled]);
-  
-
-  const amountNumber = useMemo(() => {
-    const cleaned = amount.replace(/,/g, "");
-    const parsed = Number.parseFloat(cleaned);
-    return Number.isFinite(parsed) ? parsed : NaN;
-  }, [amount]);
+  const smartAccount = useMemo(() => {
+    return isTestSessionActive()
+      ? TEST_ACCOUNTS.wallets.evm
+      : (currentUser?.evmSmartAccounts?.[0] as string | undefined);
+  }, [currentUser]);
 
   const isAmountValid = Number.isFinite(amountNumber) && amountNumber > 0;
   const isEvmAddressValid = /^0x[0-9a-fA-F]{40}$/.test(address);
-  const isSolanaAddressValid = (() => {
-    // Basic Solana address validation: 32-44 characters, base58 encoded
-    if (!address || address.length < 32 || address.length > 44) return false;
-    // Check if it looks like base58 (no 0, O, I, l characters)
-    return /^[1-9A-HJ-NP-Za-km-z]+$/.test(address);
-  })();
-
-  // Use local state as single source of truth for sandbox mode
-  const isSandbox = localSandboxEnabled;
-
-  // Check if Smart Account is available for EVM networks (production only)
-  // TestFlight reviewers use hardcoded address as their "smart account"
-  const isTestFlight = isTestSessionActive();
-  const smartAccount = isTestFlight
-    ? TEST_ACCOUNTS.wallets.evm  // TestFlight: Use hardcoded address
-    : (currentUser?.evmSmartAccounts?.[0] as string | undefined); // Real users: Use CDP Smart Account
-  const needsSmartAccount = !isSandbox && isEvmNetwork;
+  const isSolanaAddressValid =
+    !!address &&
+    address.length >= 32 &&
+    address.length <= 44 &&
+    /^[1-9A-HJ-NP-Za-km-z]+$/.test(address);
+  const needsSmartAccount = !localSandboxEnabled && isEvmNetwork;
   const hasSmartAccount = !!smartAccount;
-
-  const hasValidAddress = isSandbox
-    ? !!address && address.trim().length > 0  // In sandbox, just need any non-empty address
-    : (isEvmNetwork ? isEvmAddressValid :
-       isSolanaNetwork ? isSolanaAddressValid : false); // In production, need valid address for supported networks
-
-  // For production EVM networks, must have Smart Account
+  const hasValidAddress = localSandboxEnabled
+    ? !!address.trim()
+    : isEvmNetwork
+      ? isEvmAddressValid
+      : isSolanaNetwork
+        ? isSolanaAddressValid
+        : false;
   const isFormValid = isAmountValid && !!network && !!asset && hasValidAddress && (!needsSmartAccount || hasSmartAccount);
 
-  // User limits validation (Apple Pay + production mode)
+  const currencyLimits = useMemo(() => {
+    if (!options?.payment_currencies) {
+      return null;
+    }
+
+    const currency = options.payment_currencies.find((entry: any) => entry.id === paymentCurrency);
+    if (!currency?.limits) {
+      return null;
+    }
+
+    if (isGuestCheckout) {
+      return {
+        min: 2,
+        max: 1000,
+        currency: paymentCurrency,
+        display: `$2 - $1000 ${paymentCurrency}`,
+        quotePaymentMethod: paymentMethod,
+      };
+    }
+
+    const allLimits = currency.limits || [];
+    if (!allLimits.length) {
+      return null;
+    }
+
+    let bestMethod = 'CARD';
+    if (Number.isFinite(amountNumber) && amountNumber > 0) {
+      const cardLimit = allLimits.find((entry: any) => entry.id === 'CARD');
+      if (!(cardLimit && amountNumber >= Number(cardLimit.min) && amountNumber <= Number(cardLimit.max))) {
+        const validMethods = allLimits.filter((entry: any) => {
+          const min = Number(entry.min);
+          const max = Number(entry.max);
+          return amountNumber >= min && amountNumber <= max && Number(entry.max) > Number(cardLimit?.max || 0);
+        });
+
+        if (validMethods.length > 0) {
+          bestMethod = validMethods.reduce((best: any, current: any) =>
+            Number(current.max) > Number(best.max) ? current : best
+          ).id;
+        }
+      }
+    }
+
+    return {
+      min: Math.min(...allLimits.map((entry: any) => Number(entry.min))),
+      max: Math.max(...allLimits.map((entry: any) => Number(entry.max))),
+      currency: paymentCurrency,
+      display: allLimits
+        .map((entry: any) => `${entry.id.replace('_', ' ').toLowerCase()}: ${Number(entry.min).toLocaleString()}-${Number(entry.max).toLocaleString()} ${paymentCurrency}`)
+        .join(' • '),
+      quotePaymentMethod: bestMethod,
+    };
+  }, [amountNumber, isGuestCheckout, options, paymentCurrency, paymentMethod]);
+
   const limitsValidation = useMemo(() => {
     if (!userLimits || localSandboxEnabled || !isGuestCheckout) {
-      return { isValid: true, error: null, warning: null };
+      return { isValid: true, error: null as string | null, warning: null as string | null };
     }
 
     const weeklyRemaining = parseFloat(userLimits.weekly.remaining);
     const lifetimeRemaining = parseInt(userLimits.lifetime.remaining, 10);
     const threshold = getLifetimeTransactionThreshold();
 
-    // Check lifetime = 0 (hard block)
     if (lifetimeRemaining === 0) {
       return {
         isValid: false,
         error: 'You have reached your lifetime transaction limit for Apple Pay. Please contact support.',
-        warning: null
+        warning: null,
       };
     }
 
-    // Check weekly limit exceeded (hard block)
     if (isAmountValid && amountNumber > weeklyRemaining) {
       return {
         isValid: false,
         error: `Amount exceeds your weekly limit. You have $${weeklyRemaining} ${userLimits.weekly.currency} remaining this week.`,
-        warning: null
+        warning: null,
       };
     }
 
-    // Check lifetime warning (soft warning, allow proceed)
     if (lifetimeRemaining < threshold) {
       return {
         isValid: true,
         error: null,
-        warning: `⚠️ You have ${lifetimeRemaining} transaction${lifetimeRemaining === 1 ? '' : 's'} remaining before reaching your limit.`
+        warning: `⚠️ You have ${lifetimeRemaining} transaction${lifetimeRemaining === 1 ? '' : 's'} remaining before reaching your limit.`,
       };
     }
 
     return { isValid: true, error: null, warning: null };
-  }, [userLimits, localSandboxEnabled, isGuestCheckout, amountNumber, isAmountValid]);
+  }, [amountNumber, isAmountValid, isGuestCheckout, localSandboxEnabled, userLimits]);
 
-  // Update isFormValid to include user limits validation
   const isFormValidWithLimits = isFormValid && limitsValidation.isValid && !guestCheckoutBlocker;
 
-  /**
-   * Dynamic filtering: changing asset updates available networks, and vice versa
-   * 
-   * Data Flow:
-   * 1. fetchBuyOptions() → loads all combinations
-   * 2. getAvailableAssets(network) → filters by network
-   * 3. getAvailableNetworks(asset) → filters by asset
-   * 4. useEffect hooks → auto-clear invalid selections
-   */
-
-  const availableNetworks = useMemo(() => {
-    if (!getAvailableNetworks) return ["ethereum", "base"]; // Fallback (shouldn't happen)
-    return getAvailableNetworks(asset);
-  }, [asset, getAvailableNetworks]);
-
-  const availableAssets = useMemo(() => {
-    if (!getAvailableAssets) return ["USDC", "ETH"]; // Fallback (shouldn't happen)
-    return getAvailableAssets(network);
-  }, [network, getAvailableAssets]);
-
-  const methods = useMemo(() => {
-    const arr = [{ display: 'More payment options', value: 'COINBASE_WIDGET' }];
-    if (country === 'US' && paymentCurrency === 'USD') {
-      if (Platform.OS === 'android') {
-        arr.push({ display: 'Google Pay', value: 'GUEST_CHECKOUT_GOOGLE_PAY' });
-      } else if (Platform.OS === 'ios') {
-        arr.push({ display: 'Apple Pay', value: 'GUEST_CHECKOUT_APPLE_PAY' });
-      }
+  const amountError = useMemo(() => {
+    if (!currencyLimits || !amount || !Number.isFinite(amountNumber)) {
+      return null;
     }
-    return arr;
-  }, [country, paymentCurrency]);
-  
+    if (amountNumber < currencyLimits.min) {
+      return `Minimum amount is ${currencyLimits.min.toLocaleString()} ${currencyLimits.currency}`;
+    }
+    if (amountNumber > currencyLimits.max) {
+      return `Maximum amount is ${currencyLimits.max.toLocaleString()} ${currencyLimits.currency}`;
+    }
+    return null;
+  }, [amount, amountNumber, currencyLimits]);
+
+  useEffect(() => {
+    if (isGuestCheckout && paymentCurrency !== 'USD') {
+      setPaymentCurrency('USD');
+    }
+  }, [isGuestCheckout, paymentCurrency]);
+
   useEffect(() => {
     if (!displayCurrencies.includes(paymentCurrency)) {
       setPaymentCurrency(displayCurrencies[0] || 'USD');
@@ -368,50 +311,145 @@ const countries = useMemo(() => {
   }, [displayCurrencies, paymentCurrency]);
 
   useEffect(() => {
-    if (!paymentCurrencies?.length) return;
-    if (!paymentCurrencies.includes(paymentCurrency)) {
-      setPaymentCurrency(paymentCurrencies[0] || 'USD');
-    }
-  }, [paymentCurrencies, paymentCurrency]);
-
-  useEffect(() => {
-    if (!methods.some(m => m.value === paymentMethod)) {
+    if (!methods.some(method => method.value === paymentMethod)) {
       setPaymentMethod(methods[0]?.value || 'COINBASE_WIDGET');
     }
   }, [methods, paymentMethod]);
 
-  // Initialize sandbox mode from shared state on mount only
-  // After that, local state is the single source of truth
   useEffect(() => {
-    const sharedSandboxMode = getSandboxMode();
-    console.log('🔄 [SANDBOX INIT] Initializing from shared state:', sharedSandboxMode);
-    setLocalSandboxEnabled(sharedSandboxMode);
-  }, []); // Only run once on mount
+    setCurrentNetwork(network);
+    onNetworkChange?.(network);
+  }, [network, onNetworkChange]);
 
-  // Reset sandbox mode to true (safe default) when user signs in/out
-  // EXCEPT when there's a pending form - restore user's choice from pending form
   useEffect(() => {
-    if (regentsUserId) {
-      const pending = getPendingForm();
-      if (pending && typeof pending.sandbox === 'boolean') {
-        // User is returning from phone re-verification with a saved form
-        // Restore their sandbox choice from the pending form
-        console.log('👤 [SANDBOX RESTORE] Restoring from pending form, sandbox =', pending.sandbox);
-        setLocalSandboxEnabled(pending.sandbox);
-        setSandboxMode(pending.sandbox);
-      } else {
-        // Fresh login - reset to safe default (sandbox mode)
-        console.log('👤 [SANDBOX RESET] Fresh login, resetting to safe default (true)');
-        setLocalSandboxEnabled(true);
-        setSandboxMode(true);
+    if (prevNetworkRef.current === network) {
+      return;
+    }
+
+    prevNetworkRef.current = network;
+    if (!localSandboxEnabled && (isEvmNetwork || isSolanaNetwork)) {
+      const nextAddress = getCurrentWalletAddress();
+      if (nextAddress && nextAddress !== address) {
+        onAddressChange(nextAddress);
       }
     }
+  }, [address, isEvmNetwork, isSolanaNetwork, localSandboxEnabled, network, onAddressChange]);
+
+  useEffect(() => {
+    if (!localSandboxEnabled && !isEvmNetwork && !isSolanaNetwork && address) {
+      onAddressChange('');
+    }
+  }, [address, isEvmNetwork, isSolanaNetwork, localSandboxEnabled, onAddressChange]);
+
+  useEffect(() => {
+    if (asset && availableNetworks.length > 0) {
+      const exists = availableNetworks.some((entry: any) => entry.display_name === network || entry.name === network);
+      if (!exists) {
+        const nextNetwork = availableNetworks[0];
+        setNetwork(nextNetwork?.display_name || nextNetwork?.name || '');
+      }
+    }
+  }, [asset, availableNetworks, network]);
+
+  useEffect(() => {
+    if (network && availableAssets.length > 0) {
+      const exists = availableAssets.some((entry: any) => entry.name === asset || entry.symbol === asset);
+      if (!exists) {
+        const nextAsset = availableAssets[0];
+        setAsset(nextAsset?.name || nextAsset?.symbol || '');
+      }
+    }
+  }, [asset, availableAssets, network]);
+
+  useEffect(() => {
+    if (!regentsUserId) {
+      return;
+    }
+
+    const pending = getPendingForm();
+    if (pending && typeof pending.sandbox === 'boolean') {
+      setLocalSandboxEnabled(pending.sandbox);
+      setSandboxMode(pending.sandbox);
+      return;
+    }
+
+    setLocalSandboxEnabled(true);
+    setSandboxMode(true);
   }, [regentsUserId]);
 
-  const getPaymentMethodDisplay = (value: string) => {
-    const method = methods.find(m => m.value === value);
-    return method?.display || value;
-  };
+  const fetchUserLimitsData = useCallback(async () => {
+    const freshPhone = getVerifiedPhone();
+    const isFresh = isPhoneFresh60d();
+
+    if (!isGuestCheckout || localSandboxEnabled || !freshPhone || !isFresh) {
+      setUserLimits(null);
+      return;
+    }
+
+    setIsLoadingLimits(true);
+    try {
+      const accessToken = await getAccessTokenGlobal();
+      if (!accessToken) {
+        setUserLimits(null);
+        return;
+      }
+
+      const response = await fetchUserLimits(freshPhone, accessToken);
+      const weeklyLimit = response.limits.find(entry => entry.limitType === 'weekly_spending');
+      const lifetimeLimit = response.limits.find(entry => entry.limitType === 'lifetime_transactions');
+      setUserLimits(weeklyLimit && lifetimeLimit ? { weekly: weeklyLimit, lifetime: lifetimeLimit } : null);
+    } catch (error) {
+      console.error('❌ Error fetching user limits:', error);
+      setUserLimits(null);
+    } finally {
+      setIsLoadingLimits(false);
+    }
+  }, [isGuestCheckout, localSandboxEnabled]);
+
+  useEffect(() => {
+    void fetchUserLimitsData();
+  }, [fetchUserLimitsData]);
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (!amount || !asset || !network) {
+        return;
+      }
+
+      const quoteMethod = currencyLimits?.quotePaymentMethod || 'CARD';
+      fetchQuote({
+        amount,
+        asset,
+        network,
+        paymentCurrency,
+        paymentMethod: paymentMethod === 'COINBASE_WIDGET' ? quoteMethod : paymentMethod,
+      });
+      void fetchUserLimitsData();
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [amount, asset, currencyLimits?.quotePaymentMethod, fetchQuote, fetchUserLimitsData, network, paymentCurrency, paymentMethod]);
+
+  const handleSwipeConfirm = useCallback(
+    (reset: () => void) => {
+      if (!isFormValidWithLimits) {
+        reset();
+        return;
+      }
+
+      onSubmit({
+        amount,
+        asset,
+        network,
+        address,
+        paymentMethod,
+        paymentCurrency,
+        sandbox: localSandboxEnabled,
+        agreementAcceptedAt: new Date().toISOString(),
+      });
+    },
+    [address, amount, asset, isFormValidWithLimits, localSandboxEnabled, network, onSubmit, paymentCurrency, paymentMethod]
+  );
 
   const applyBaseUsdcPath = useCallback(() => {
     setAsset('USDC');
@@ -421,305 +459,136 @@ const countries = useMemo(() => {
     }
   }, [paymentCurrency]);
 
-  // Auto-clear invalid selections when options change
-  useEffect(() => {
-    // If current network is no longer valid for selected asset, reset to first available
-    if (asset && availableNetworks.length > 0) {
-      const networkExists = availableNetworks.some((net: any) => 
-        net.display_name === network || net.name === network
-      );
-      if (!networkExists) {
-        const firstNetwork: any = availableNetworks[0];
-        setNetwork(firstNetwork?.display_name || firstNetwork?.name || "");
-      }
-    }
-  }, [asset, availableNetworks, network]);
+  const notices = useMemo(() => {
+    const nextNotices: { title: string; message: string; tone?: 'warning' | 'error' | 'info' }[] = [];
 
-  useEffect(() => {
-    // If current asset isn't available for selected network, clear it
-    if (network && availableAssets.length > 0) {
-      const assetExists = availableAssets.some((assetObj: any) => 
-        assetObj.name === asset || assetObj.symbol === asset
-      );
-      if (!assetExists) {
-        const firstAsset: any = availableAssets[0];
-        setAsset(firstAsset?.name || firstAsset?.symbol || "");
-      }
-    }
-  }, [network, availableAssets, asset]);
-
-  useEffect(() => {
-    if (assetPickerVisible) {
-      Animated.parallel([
-        Animated.timing(backdropOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
-        Animated.spring(sheetTranslate, { toValue: 0, useNativeDriver: true, damping: 20, stiffness: 90 }),
-      ]).start();
-    } else {
-      Animated.parallel([
-        Animated.timing(backdropOpacity, { toValue: 0, duration: 150, useNativeDriver: true }),
-        Animated.timing(sheetTranslate, { toValue: 300, duration: 150, useNativeDriver: true }),
-      ]).start();
-    }
-  }, [assetPickerVisible, backdropOpacity, sheetTranslate]);
-
-  useEffect(() => {
-    if (networkPickerVisible) {
-      Animated.parallel([
-        Animated.timing(backdropOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
-        Animated.spring(sheetTranslate, { toValue: 0, useNativeDriver: true, damping: 20, stiffness: 90 }),
-      ]).start();
-    } else {
-      Animated.parallel([
-        Animated.timing(backdropOpacity, { toValue: 0, duration: 150, useNativeDriver: true }),
-        Animated.timing(sheetTranslate, { toValue: 300, duration: 150, useNativeDriver: true }),
-      ]).start();
-    }
-  }, [backdropOpacity, networkPickerVisible, sheetTranslate]);
-
-  useEffect(() => {
-    if (paymentPickerVisible) {
-      Animated.parallel([
-        Animated.timing(backdropOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
-        Animated.spring(sheetTranslate, { toValue: 0, useNativeDriver: true, damping: 20, stiffness: 90 }),
-      ]).start();
-    } else {
-      Animated.parallel([
-        Animated.timing(backdropOpacity, { toValue: 0, duration: 150, useNativeDriver: true }),
-        Animated.timing(sheetTranslate, { toValue: 300, duration: 150, useNativeDriver: true }),
-      ]).start();
-    }
-  }, [backdropOpacity, paymentPickerVisible, sheetTranslate]);
-
-  useEffect(() => {
-    if (paymentCurrencyPickerVisible) {
-      Animated.parallel([
-        Animated.timing(backdropOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
-        Animated.spring(sheetTranslate, { toValue: 0, useNativeDriver: true, damping: 20, stiffness: 90 }),
-      ]).start();
-    } else {
-      Animated.parallel([
-        Animated.timing(backdropOpacity, { toValue: 0, duration: 150, useNativeDriver: true }),
-        Animated.timing(sheetTranslate, { toValue: 300, duration: 150, useNativeDriver: true }),
-      ]).start();
-    }
-  }, [backdropOpacity, paymentCurrencyPickerVisible, sheetTranslate]);
-
-  // Animate country picker modal
-  useEffect(() => {
-    if (countryPickerVisible) {
-      Animated.parallel([
-        Animated.timing(backdropOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
-        Animated.spring(sheetTranslate, { toValue: 0, useNativeDriver: true, damping: 20, stiffness: 90 }),
-      ]).start();
-    } else {
-      Animated.parallel([
-        Animated.timing(backdropOpacity, { toValue: 0, duration: 150, useNativeDriver: true }),
-        Animated.timing(sheetTranslate, { toValue: 300, duration: 150, useNativeDriver: true }),
-      ]).start();
-    }
-  }, [backdropOpacity, countryPickerVisible, sheetTranslate]);
-
-  // Animate subdivision picker modal
-  useEffect(() => {
-    if (subPickerVisible) {
-      Animated.parallel([
-        Animated.timing(backdropOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
-        Animated.spring(sheetTranslate, { toValue: 0, useNativeDriver: true, damping: 20, stiffness: 90 }),
-      ]).start();
-    } else {
-      Animated.parallel([
-        Animated.timing(backdropOpacity, { toValue: 0, duration: 150, useNativeDriver: true }),
-        Animated.timing(sheetTranslate, { toValue: 300, duration: 150, useNativeDriver: true }),
-      ]).start();
-    }
-  }, [backdropOpacity, sheetTranslate, subPickerVisible]);
-
-  // If user switches to a non‑supported network, clear the address (only in production mode)
-  // In sandbox mode, allow any address for any network
-  useEffect(() => {
-    if (!localSandboxEnabled && !isEvmNetwork && !isSolanaNetwork && address) {
-      onAddressChange('');
-    }
-  }, [isEvmNetwork, isSolanaNetwork, address, onAddressChange, localSandboxEnabled]);
-
-  const getCurrencyLimits = useCallback(() => {
-    if (!options?.payment_currencies) return null;
-    
-    const currency = options.payment_currencies.find((c: any) => c.id === paymentCurrency);
-    if (!currency?.limits) return null;
-    
-    if (paymentMethod === 'GUEST_CHECKOUT_APPLE_PAY' || paymentMethod === 'GUEST_CHECKOUT_GOOGLE_PAY') {
-      return {
-        min: 2,
-        max: 1000,
-        currency: paymentCurrency,
-        display: `$2 - $1000 ${paymentCurrency}`,
-        quotePaymentMethod: paymentMethod
-      };
-    } else if (paymentMethod === 'COINBASE_WIDGET') {
-      const allLimits = currency.limits || [];
-      if (!allLimits.length) return null;
-      
-      // Find the best payment method for current amount
-      let bestMethod = 'CARD'; // default fallback
-      if (Number.isFinite(amountNumber) && amountNumber > 0) {
-        // First check if CARD can handle this amount
-        const cardLimit = allLimits.find((l: any) => l.id === 'CARD');
-        if (cardLimit && amountNumber >= Number(cardLimit.min) && amountNumber <= Number(cardLimit.max)) {
-          bestMethod = 'CARD'; // Use CARD if it can handle the amount
-        } else {
-          // CARD can't handle it, find alternative with higher limit
-          const validMethods = allLimits.filter((l: any) => {
-            const min = Number(l.min);
-            const max = Number(l.max);
-            return amountNumber >= min && amountNumber <= max && Number(l.max) > Number(cardLimit?.max || 0);
-          });
-          
-          if (validMethods.length > 0) {
-            // Use the method with highest limit among valid alternatives
-            bestMethod = validMethods.reduce((best: any, current: any) => 
-              Number(current.max) > Number(best.max) ? current : best
-            ).id;
-          }
-        }
-      }
-      
-      const limitTexts = allLimits.map((l: any) => {
-        const method = l.id.replace('_', ' ').toLowerCase();
-        const min = Number(l.min).toLocaleString();
-        const max = Number(l.max).toLocaleString();
-        return `${method}: ${min}-${max} ${paymentCurrency}`;
+    if (isUnsupportedGuestCheckoutRegion) {
+      nextNotices.push({
+        title: 'Region not supported',
+        message:
+          'Apple Pay checkout from this app is only available in the United States right now. Use the hosted checkout instead, or switch to test mode to keep exploring.',
+        tone: 'warning',
       });
-      
-      return {
-        min: Math.min(...allLimits.map((l: any) => Number(l.min))),
-        max: Math.max(...allLimits.map((l: any) => Number(l.max))),
-        currency: paymentCurrency,
-        display: limitTexts.join(' • '),
-        quotePaymentMethod: bestMethod
-      };
-    }
-    
-    return null;
-  }, [options, paymentCurrency, paymentMethod, amountNumber]);
-
-  const limits = getCurrencyLimits();
-
-  // Fetch user limits (Apple Pay only, production mode, verified phone)
-  const fetchUserLimitsData = useCallback(async () => {
-    const verifiedPhone = getVerifiedPhone();
-    const isPhoneFresh = isPhoneFresh60d();
-
-    if (!isGuestCheckout || localSandboxEnabled || !verifiedPhone || !isPhoneFresh) {
-      setUserLimits(null);
-      return;
     }
 
-    setIsLoadingLimits(true);
+    if (needsGuestCheckoutVerification) {
+      nextNotices.push({
+        title: 'Verification needed',
+        message: linkedEmail
+          ? linkedPhone
+            ? 'Verify your phone again before using Apple Pay from this app.'
+            : 'Link a phone number before using Apple Pay from this app.'
+          : 'Link an email and phone number before using Apple Pay from this app.',
+        tone: 'error',
+      });
+    }
 
-    try {
-      const accessToken = await getAccessTokenGlobal();
-      if (!accessToken) {
-        console.warn('⚠️  No access token available for user limits');
-        setUserLimits(null);
-        setIsLoadingLimits(false);
-        return;
-      }
+    if (!localSandboxEnabled && !isEvmNetwork && !isSolanaNetwork) {
+      nextNotices.push({
+        title: 'Choose a supported network',
+        message:
+          'This wallet can buy on Base, Ethereum, and Solana right now. Choose one of those networks, or switch to test mode to keep exploring.',
+        tone: 'warning',
+      });
+    } else if (needsSmartAccount && !hasSmartAccount) {
+      nextNotices.push({
+        title: 'Wallet setup needed',
+        message: 'This network is almost ready. Finish setting up your wallet, then come back to buy.',
+        tone: 'error',
+      });
+    } else if (!localSandboxEnabled && !hasValidAddress) {
+      nextNotices.push({
+        title: 'Wallet needed',
+        message: `Connect a valid ${isEvmNetwork ? 'Base or Ethereum' : isSolanaNetwork ? 'Solana' : 'wallet'} address to continue.`,
+        tone: 'error',
+      });
+    } else if (localSandboxEnabled && !address) {
+      nextNotices.push({
+        title: 'Add a test wallet',
+        message: 'Add a wallet address in Settings to keep testing this flow.',
+        tone: 'error',
+      });
+    } else if (localSandboxEnabled) {
+      nextNotices.push({
+        title: 'Test mode',
+        message: `Buying to: ${address}\n\nYou can change this address any time from Settings.`,
+        tone: 'info',
+      });
+    } else if (isAuthenticated) {
+      nextNotices.push({
+        title: 'Live mode',
+        message: address
+          ? `Successful purchases will move real money.\n\nBuying to: ${address}`
+          : 'Successful purchases will move real money.',
+        tone: 'error',
+      });
+    }
 
-      const response = await fetchUserLimits(verifiedPhone, accessToken);
+    if (limitsValidation.error) {
+      nextNotices.push({ title: 'Limit reached', message: limitsValidation.error, tone: 'error' });
+    } else if (limitsValidation.warning) {
+      nextNotices.push({ title: 'Running low', message: limitsValidation.warning, tone: 'warning' });
+    }
 
-      // Parse limits into structured format
-      const weeklyLimit = response.limits.find(l => l.limitType === 'weekly_spending');
-      const lifetimeLimit = response.limits.find(l => l.limitType === 'lifetime_transactions');
+    return nextNotices;
+  }, [
+    address,
+    hasSmartAccount,
+    hasValidAddress,
+    isAuthenticated,
+    isEvmNetwork,
+    isSolanaNetwork,
+    isUnsupportedGuestCheckoutRegion,
+    limitsValidation.error,
+    limitsValidation.warning,
+    linkedEmail,
+    linkedPhone,
+    localSandboxEnabled,
+    needsGuestCheckoutVerification,
+    needsSmartAccount,
+  ]);
 
-      if (weeklyLimit && lifetimeLimit) {
-        setUserLimits({
-          weekly: weeklyLimit,
-          lifetime: lifetimeLimit
-        });
-        console.log('✅ User limits fetched:', { weeklyLimit, lifetimeLimit });
+  const assetIconUrl = availableAssets.find((entry: any) => entry.name === asset || entry.symbol === asset)?.icon_url || null;
+  const networkIconUrl =
+    availableNetworks.find((entry: any) => entry.display_name === network || entry.name === network)?.icon_url || null;
+  const paymentMethodLabel = methods.find(method => method.value === paymentMethod)?.display || paymentMethod;
+
+  const openGuestCheckoutTerms = useCallback(() => Linking.openURL('https://www.coinbase.com/legal/guest-checkout/us'), []);
+  const openUserAgreement = useCallback(
+    () => Linking.openURL('https://www.coinbase.com/legal/user_agreement/united_states'),
+    []
+  );
+  const openPrivacyPolicy = useCallback(() => Linking.openURL('https://www.coinbase.com/legal/privacy'), []);
+
+  const handleCountrySelect = useCallback(
+    (nextCountry: string) => {
+      setCountry(nextCountry);
+      setCountryLocal(nextCountry);
+
+      let nextSubdivision = '';
+      if (nextCountry === 'US') {
+        nextSubdivision = getSubdivision() || 'CA';
+        setSubdivision(nextSubdivision);
+        setSubdivisionLocal(nextSubdivision);
       } else {
-        console.warn('⚠️  Incomplete limits response:', response.limits);
-        setUserLimits(null);
+        setSubdivision('');
+        setSubdivisionLocal('');
       }
-    } catch (error) {
-      console.error('❌ Error fetching user limits:', error);
-      setUserLimits(null);
-    } finally {
-      setIsLoadingLimits(false);
-    }
-  }, [isGuestCheckout, localSandboxEnabled]);
 
-  // Fetch user limits on mount (Apple Pay + production + verified phone)
-  useEffect(() => {
-    fetchUserLimitsData();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+      onRegionChange?.(nextCountry, nextSubdivision);
+    },
+    [onRegionChange]
+  );
 
-  // Debounced quote fetching and user limits fetching
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      if (amount && asset && network) {
-        const limits = getCurrencyLimits();
-        const quoteMethod = limits?.quotePaymentMethod || 'CARD';
+  const handleSubdivisionSelect = useCallback(
+    (nextSubdivision: string) => {
+      setSubdivision(nextSubdivision);
+      setSubdivisionLocal(nextSubdivision);
+      onRegionChange?.(country, nextSubdivision);
+    },
+    [country, onRegionChange]
+  );
 
-        // Fetch quote
-        fetchQuote?.({
-          amount,
-          asset,
-          network,
-          paymentCurrency,
-          paymentMethod: paymentMethod === 'COINBASE_WIDGET' ? quoteMethod : paymentMethod
-        });
-
-        // Fetch user limits (Apple Pay + production + verified phone)
-        fetchUserLimitsData();
-      } else {
-        console.log('Missing required fields for quote');
-      }
-    }, 500);
-
-    return () => clearTimeout(timeoutId);
-  }, [amount, asset, network, paymentCurrency, fetchQuote, paymentMethod, getCurrencyLimits, fetchUserLimitsData]);
-
-  const amountError = useMemo(() => {
-    if (!limits || !amount || !Number.isFinite(amountNumber)) return null;
-    
-    if (amountNumber < limits.min) {
-      return `Minimum amount is ${limits.min.toLocaleString()} ${limits.currency}`;
-    }
-    
-    if (amountNumber > limits.max) {
-      return `Maximum amount is ${limits.max.toLocaleString()} ${limits.currency}`;
-    }
-    
-    return null;
-  }, [limits, amount, amountNumber]);
-
-  /**
-   * Form submission: directly calls API
-   * Validation: amount > 0, valid 0x address, asset/network selected
-   */
-  const handleSwipeConfirm = useCallback((reset: () => void) => {
-    if (!isFormValidWithLimits) {
-      console.log('Form is invalid or no quote, resetting slider');
-      reset();
-      return;
-    }
-
-    // localSandboxEnabled is the single source of truth
-    console.log('🔍 [FORM SUBMIT] Submitting with sandbox =', localSandboxEnabled);
-
-    onSubmit({
-      amount: amount,
-      asset,
-      network,
-      address,
-      paymentMethod,
-      paymentCurrency,
-      sandbox: localSandboxEnabled,
-      agreementAcceptedAt: new Date().toISOString(),
-    });
-  }, [isFormValidWithLimits, asset, network, address, localSandboxEnabled, paymentMethod, paymentCurrency, onSubmit, amount]);
   return (
     <ScrollView
       contentContainerStyle={styles.content}
@@ -730,768 +599,113 @@ const countries = useMemo(() => {
       bounces
       overScrollMode="always"
     >
-      <Pressable
-        style={({ pressed }) => [
-          styles.focusCard,
-          isBaseUsdcPath && styles.focusCardActive,
-          pressed && styles.focusCardPressed,
-        ]}
-        onPress={applyBaseUsdcPath}
-      >
-        <View style={styles.focusCardHeader}>
-          <View style={styles.focusCardCopy}>
-            <Text style={styles.focusCardEyebrow}>Base + USDC</Text>
-            <Text style={styles.focusCardTitle}>Keep the quickest Regents path in view.</Text>
-          </View>
-          <View style={[styles.focusBadge, isBaseUsdcPath && styles.focusBadgeActive]}>
-            <Text style={[styles.focusBadgeText, isBaseUsdcPath && styles.focusBadgeTextActive]}>
-              {isBaseUsdcPath ? 'Ready' : 'Use this path'}
-            </Text>
-          </View>
-        </View>
-        <Text style={styles.focusCardBody}>
-          Buy on Base, move USDC faster, and keep cash-out paths easier to reach.
-        </Text>
-        <View style={styles.focusTagRow}>
-          <View style={styles.focusTag}>
-            <Text style={styles.focusTagText}>Base first</Text>
-          </View>
-          <View style={styles.focusTag}>
-            <Text style={styles.focusTagText}>USDC default</Text>
-          </View>
-          <View style={styles.focusTag}>
-            <Text style={styles.focusTagText}>Fewer steps</Text>
-          </View>
-        </View>
-      </Pressable>
-
-      {/* Environment Card (Sandbox / Production) */}
-      <View style={styles.card}>
-        <View style={styles.paymentRow}>
-          <Text style={styles.paymentLabel}>
-            {localSandboxEnabled ? 'Sandbox Environment' : 'Production Environment'}
-          </Text>
-          <Switch
-            value={localSandboxEnabled}
-            onValueChange={(value) => {
-              console.log('🔄 [SANDBOX TOGGLE] User toggled sandbox to:', value);
-              setLocalSandboxEnabled(value); // Single source of truth
-              setSandboxMode(value); // Sync to shared state for other components
-            }}
-            trackColor={{ true: BLUE, false: BORDER }}
-            thumbColor={Platform.OS === 'android' ? (localSandboxEnabled ? '#ffffff' : '#f4f3f4') : undefined}
-          />
-        </View>
-        <Text style={styles.helper}>
-          {localSandboxEnabled ? 'Test without real transactions' : 'Real transactions will be executed'}
-        </Text>
-
-        {localSandboxEnabled && isGuestCheckout && (
-          <Text style={[styles.helper, { marginTop: 4 }]}>
-            Test checkout will finish without moving real money.
-          </Text>
-        )}
-      </View>
-
-      {/* Buy Card */}
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Buy</Text>
-        <View style={styles.inputRow}>
-        <TextInput
-          value={amount}
-            onChangeText={onAmountChange}
-            placeholder="0"
-            placeholderTextColor={TEXT_SECONDARY}
-            keyboardType="decimal-pad"
-            style={styles.amountInput}
-          />
-          <Pressable 
-            style={styles.currencyTag}
-            onPress={() => setPaymentCurrencyPickerVisible(true)} // Make it clickable
-          >
-            <Text style={styles.currencyText}>{paymentCurrency}</Text>
-            <Ionicons name="chevron-down" size={16} color={TEXT_SECONDARY} />
-          </Pressable>
-        </View>
-          {/* Show error or limits */}
-          {amountError ? (
-            <Text style={styles.errorText}>{amountError}</Text>
-          ) : (
-            <View>
-              {limits && (
-                <Text style={styles.limitsText}>
-                  {isApplePay ? 'Apple Pay limit: ' : isGooglePay ? 'Google Pay limit: ' : 'Current limit: '}{limits.display}
-                </Text>
-              )}
-              {userLimits && !localSandboxEnabled && (
-                <Text style={styles.limitsText}>
-                  Remaining limit: ${userLimits.weekly.remaining}/{userLimits.weekly.limit} {userLimits.weekly.currency} this week • {userLimits.lifetime.remaining}/{userLimits.lifetime.limit} purchases left
-                </Text>
-              )}
-              {isLoadingLimits && !localSandboxEnabled && (
-                <Text style={[styles.limitsText, { fontStyle: 'italic', color: TEXT_SECONDARY }]}>
-                  Loading your limits...
-                </Text>
-              )}
-              {limits && (
-                <Text style={[styles.limitsText, { marginTop: 4, fontStyle: 'italic' }]}>
-                  Test purchases are capped at $5 per transaction.
-                </Text>
-              )}
-            </View>
-          )}
-      </View>
-
-      {/* Receive Card */}
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Receive</Text>
-        <View style={styles.inputRow}>
-          <View style={styles.receiveAmountContainer}>
-            {isLoadingQuote ? (
-              <View style={styles.quotePreviewLoading}>
-                <View style={[styles.quotePreviewPulse, styles.quotePreviewPulseWide]} />
-                <View style={[styles.quotePreviewPulse, styles.quotePreviewPulseShort]} />
-              </View>
-            ) : (
-              <Text style={styles.receiveAmount}>
-                {currentQuote?.purchase_amount?.value || '0'}
-              </Text>
-            )}
-      </View>
-          <Pressable style={styles.assetSelect} onPress={() => setAssetPickerVisible(true)}>
-            <View style={styles.selectContent}>
-              {(() => {
-                const selectedAssetObj = availableAssets.find((assetObj: any) => 
-                  assetObj.name === asset || assetObj.symbol === asset
-                );
-                return selectedAssetObj?.icon_url && (
-                  <Image 
-                    source={{ uri: selectedAssetObj.icon_url }} 
-                    style={styles.assetIcon}
-                  />
-                );
-              })()}
-              <Text style={styles.assetText}>{asset}</Text>
-            </View>
-            <Ionicons name="chevron-down" size={16} color={TEXT_SECONDARY} />
-        </Pressable>
-      </View>
-        <Text style={styles.receiveHint}>
-          {isBaseUsdcPath
-            ? 'This keeps your default buy path on Base with USDC.'
-            : 'Base + USDC is the quickest path for most Regents wallet tasks.'}
-        </Text>
-
-        {/* Network Row */}
-        <View style={styles.networkRow}>
-          <Text style={styles.networkLabel}>Network</Text>
-          <Pressable style={styles.networkSelect} onPress={() => setNetworkPickerVisible(true)}>
-            <View style={styles.selectContent}>
-              {(() => {
-                const selectedNetworkObj = availableNetworks.find((net: any) => 
-                  net.display_name === network || net.name === network
-                );
-                return selectedNetworkObj?.icon_url && (
-                  <Image 
-                    source={{ uri: selectedNetworkObj.icon_url }} 
-                    style={styles.networkIcon}
-                  />
-                );
-              })()}
-               <View style={styles.selectTextContainer}>
-                 <Text style={styles.networkText}>{network}</Text>
-               </View>
-               </View>
-             <Ionicons name="chevron-down" size={16} color={TEXT_SECONDARY} style={styles.selectChevron} />
-          </Pressable>
-        </View>
-      </View>
-
-      {/* Payment Method Card */}
-      <View style={styles.card}>
-        <View style={styles.paymentRow}>
-          <Text style={styles.paymentLabel}>Pay with</Text>
-          <Pressable style={styles.paymentSelect} onPress={() => setPaymentPickerVisible(true)}>
-            <View style={styles.selectContent}>
-              <Text style={styles.paymentText}>{getPaymentMethodDisplay(paymentMethod)}</Text>
-            </View>
-            <Ionicons name="chevron-down" size={16} color={TEXT_SECONDARY} />
-        </Pressable>
-        </View>
-      </View>
-
-  
-      {/* Sandbox Toggle
-      <View style={styles.switchRow}>
-        <Text style={styles.label}>Sandbox Environment</Text>
-        <Switch
-          value={sandbox}
-          onValueChange={setSandbox}
-          trackColor={{ true: BLUE, false: BORDER }}
-          thumbColor={Platform.OS === "android" ? (sandbox ? "#ffffff" : "#f4f3f4") : undefined}
-        />
-      </View> */}
-  
-      {/* Quote Summary */}
-      {isLoadingQuote && !currentQuote && isAmountValid ? (
-        <View style={styles.quoteCard}>
-          <Text style={styles.quoteLoadingTitle}>Refreshing your estimate…</Text>
-          <View style={styles.quoteLoadingShell}>
-            {[0, 1, 2].map(index => (
-              <View key={index} style={styles.quoteLoadingRow}>
-                <View style={[styles.quotePreviewPulse, index === 2 ? styles.quotePreviewPulseMedium : styles.quotePreviewPulseShort]} />
-                <View style={[styles.quotePreviewPulse, styles.quotePreviewPulseShort]} />
-              </View>
-            ))}
-          </View>
-        </View>
-      ) : null}
-
-      {currentQuote && (
-        <View style={styles.quoteCard}>
-          <View style={styles.quoteRow}>
-            <Text style={styles.quoteLabel}>Purchase amount</Text>
-            <Text style={styles.quoteValue}>
-              ${currentQuote.payment_subtotal?.value || currentQuote.paymentSubtotal?.value || '0'}
-            </Text>
-      </View>
-          <View style={styles.quoteRow}>
-            <Text style={styles.quoteLabel}>Coinbase fee</Text>
-            <Text style={styles.quoteValue}>
-              ${currentQuote.coinbase_fee?.value || currentQuote.coinbaseFee?.value || '0'}
-            </Text>
-          </View>
-          <View style={styles.quoteRow}>
-            <Text style={styles.quoteLabel}>Network fee</Text>
-            <Text style={styles.quoteValue}>
-              ${currentQuote.network_fee?.value || currentQuote.networkFee?.value || '0'}
-            </Text>
-          </View>
-          <View style={[styles.quoteRow, styles.quoteTotalRow]}>
-            <Text style={styles.quoteTotalLabel}>Total</Text>
-            <Text style={styles.quoteTotalValue}>
-              ${currentQuote.payment_total?.value || currentQuote.paymentTotal?.value || '0'}
-            </Text>
-          </View>
-        </View>
-      )}
-
-        {/* Quote Disclaimer */}
-        {currentQuote && paymentMethod === 'COINBASE_WIDGET' && limits?.quotePaymentMethod && (
-        <View style={styles.disclaimerCard}>
-          <Text style={styles.disclaimerText}>
-            This estimate is based on {limits.quotePaymentMethod}. Final pricing may change if you pick a different payment method during checkout.
-          </Text>
-        </View>
-      )}
-
-      {isUnsupportedGuestCheckoutRegion ? (
-        <View style={[styles.notificationCard, { borderLeftWidth: 4, borderLeftColor: ORANGE, backgroundColor: ORANGE + '08' }]}>
-          <View style={styles.notificationHeader}>
-            <Ionicons name="warning" size={20} color={ORANGE} />
-            <Text style={[styles.notificationTitle, { color: ORANGE }]}>Region not supported</Text>
-          </View>
-          <Text style={styles.notificationText}>
-            Apple Pay checkout from this app is only available in the United States right now. Use the hosted checkout instead, or switch to test mode to keep exploring.
-          </Text>
-        </View>
-      ) : null}
-
-      {needsGuestCheckoutVerification ? (
-        <View style={[styles.notificationCard, styles.errorCard]}>
-          <View style={styles.notificationHeader}>
-            <Ionicons name="alert-circle" size={20} color="#FF6B6B" />
-            <Text style={[styles.notificationTitle, { color: '#FF6B6B' }]}>Verification needed</Text>
-          </View>
-          <Text style={styles.notificationText}>
-            {linkedEmail
-              ? linkedPhone
-                ? 'Verify your phone again before using Apple Pay from this app.'
-                : 'Link a phone number before using Apple Pay from this app.'
-              : 'Link an email and phone number before using Apple Pay from this app.'}
-          </Text>
-        </View>
-      ) : null}
-
-      {/* Wallet Notification */}
-      {!localSandboxEnabled && !isEvmNetwork && !isSolanaNetwork ? (
-        <View style={styles.notificationCard}>
-          <View style={styles.notificationHeader}>
-            <Ionicons name="information-circle" size={20} color="#FF8C00" />
-            <Text style={styles.notificationTitle}>Choose a supported network</Text>
-          </View>
-          <Text style={styles.notificationText}>
-            This wallet can buy on Base, Ethereum, and Solana right now. Choose one of those networks, or switch to test mode to keep exploring.
-          </Text>
-        </View>
-      ) : needsSmartAccount && !hasSmartAccount ? (
-        <View style={[styles.notificationCard, styles.errorCard]}>
-          <View style={styles.notificationHeader}>
-            <Ionicons name="alert-circle" size={20} color="#FF6B6B" />
-            <Text style={[styles.notificationTitle, { color: '#FF6B6B' }]}>Wallet setup needed</Text>
-          </View>
-          <Text style={styles.notificationText}>
-            This network is almost ready. Finish setting up your wallet, then come back to buy.
-          </Text>
-        </View>
-      ) : !localSandboxEnabled && !hasValidAddress ? (
-        <View style={[styles.notificationCard, styles.errorCard]}>
-          <View style={styles.notificationHeader}>
-            <Ionicons name="alert-circle" size={20} color="#FF6B6B" />
-            <Text style={[styles.notificationTitle, { color: '#FF6B6B' }]}>Wallet needed</Text>
-          </View>
-          <Text style={styles.notificationText}>
-            Connect a valid {isEvmNetwork ? 'Base or Ethereum' : isSolanaNetwork ? 'Solana' : 'wallet'} address to continue.
-          </Text>
-        </View>
-      ) : localSandboxEnabled && !address ? (
-        <View style={[styles.notificationCard, styles.errorCard]}>
-          <View style={styles.notificationHeader}>
-            <Ionicons name="alert-circle" size={20} color="#FF6B6B" />
-            <Text style={[styles.notificationTitle, { color: '#FF6B6B' }]}>Add a test wallet</Text>
-          </View>
-          <Text style={styles.notificationText}>
-            Add a wallet address in Settings to keep testing this flow.
-          </Text>
-        </View>
-      ) : localSandboxEnabled ? (
-        <View style={[styles.notificationCard, styles.sandboxCard]}>
-          <View style={styles.notificationHeader}>
-            <Ionicons name="flask" size={20} color={BLUE} />
-            <Text style={[styles.notificationTitle, { color: BLUE }]}>Test mode</Text>
-          </View>
-          <Text style={styles.notificationText}>
-            Buying to:{' '}
-            <Text style={styles.addressMono}>{address}</Text>
-          </Text>
-
-          <Text style={[styles.notificationText, styles.italicNote]}>
-            You can change this address any time from <Text style={styles.badgeProd}>Settings</Text>.
-          </Text>
-        </View>
-      ) : isAuthenticated ? (
-        <View style={[styles.notificationCard, styles.productionCard]}>
-          <View style={styles.notificationHeader}>
-            <Ionicons name="warning" size={20} color="#FF6B6B" />
-            <Text style={[styles.notificationTitle, { color: '#FF6B6B' }]}>Live mode</Text>
-          </View>
-          <Text style={[styles.notificationText, { fontWeight: '600' }]}>
-            Successful purchases will move real money.
-          </Text>
-          {address ? (
-            <Text style={[styles.notificationText, { marginTop: 8, fontFamily: FONTS.body }]}>
-              Buying to: {address}
-            </Text>
-          ) : !isEvmNetwork && !isSolanaNetwork ? (
-            <Text style={[styles.notificationText, { marginTop: 8, fontStyle: 'italic', color: TEXT_SECONDARY }]}>
-              This network is not ready for wallet checkout yet.
-            </Text>
-          ) : null}
-        </View>
-      ) : null}
-
-      {/* User Limits Error/Warning Display */}
-      {limitsValidation.error && (
-        <View style={[styles.notificationCard, styles.errorCard]}>
-          <View style={styles.notificationHeader}>
-            <Ionicons name="close-circle" size={20} color="#FF6B6B" />
-            <Text style={[styles.notificationTitle, { color: '#FF6B6B' }]}>Limit reached</Text>
-          </View>
-          <Text style={styles.notificationText}>{limitsValidation.error}</Text>
-        </View>
-      )}
-      {limitsValidation.warning && !limitsValidation.error && (
-        <View style={[styles.notificationCard, { borderLeftWidth: 4, borderLeftColor: ORANGE, backgroundColor: ORANGE + '08' }]}>
-          <View style={styles.notificationHeader}>
-            <Ionicons name="warning" size={20} color={ORANGE} />
-            <Text style={[styles.notificationTitle, { color: ORANGE }]}>Running low</Text>
-          </View>
-          <Text style={styles.notificationText}>{limitsValidation.warning}</Text>
-        </View>
-      )}
-
-      <SwipeToConfirm
-        label={isBaseUsdcPath ? 'Swipe to buy USDC' : 'Swipe to buy'}
+      <FocusPathSection isBaseUsdcPath={isBaseUsdcPath} onPress={applyBaseUsdcPath} />
+      <EnvironmentSection
+        isGuestCheckout={isGuestCheckout}
+        localSandboxEnabled={localSandboxEnabled}
+        onToggleSandbox={value => {
+          setLocalSandboxEnabled(value);
+          setSandboxMode(value);
+        }}
+      />
+      <AmountQuoteSection
+        amount={amount}
+        amountError={amountError}
+        currentQuote={currentQuote}
+        isApplePay={isApplePay}
+        isGooglePay={isGooglePay}
+        isLoadingLimits={isLoadingLimits}
+        isLoadingQuote={isLoadingQuote}
+        isValidAmount={isAmountValid}
+        limits={currencyLimits}
+        localSandboxEnabled={localSandboxEnabled}
+        onAmountChange={onAmountChange}
+        onOpenPaymentCurrencyPicker={() => setActiveSheet('currency')}
+        paymentCurrency={paymentCurrency}
+        quoteDisclaimer={
+          currentQuote && paymentMethod === 'COINBASE_WIDGET' && currencyLimits?.quotePaymentMethod
+            ? `This estimate is based on ${currencyLimits.quotePaymentMethod}. Final pricing may change if you pick a different payment method during checkout.`
+            : null
+        }
+        userLimits={userLimits}
+      />
+      <AssetNetworkSection
+        asset={asset}
+        assetIconUrl={assetIconUrl}
+        isBaseUsdcPath={isBaseUsdcPath}
+        network={network}
+        networkIconUrl={networkIconUrl}
+        onOpenAssetPicker={() => setActiveSheet('asset')}
+        onOpenNetworkPicker={() => setActiveSheet('network')}
+      />
+      <PaymentMethodSection paymentMethodLabel={paymentMethodLabel} onOpenPaymentPicker={() => setActiveSheet('payment')} />
+      <EligibilityNoticeSection notices={notices} />
+      <ConfirmationSection
         disabled={!isFormValidWithLimits}
-        onConfirm={handleSwipeConfirm}
+        footerContent={footerContent}
+        isBaseUsdcPath={isBaseUsdcPath}
         isLoading={isLoading}
-        onSwipeStart={() => setIsSwipeActive(true)}
+        onOpenGuestCheckoutTerms={openGuestCheckoutTerms}
+        onOpenPrivacyPolicy={openPrivacyPolicy}
+        onOpenUserAgreement={openUserAgreement}
+        onSwipeConfirm={handleSwipeConfirm}
         onSwipeEnd={() => setIsSwipeActive(false)}
+        onSwipeStart={() => setIsSwipeActive(true)}
+      />
+      <LocationSection
+        country={country}
+        subdivision={subdivision}
+        onOpenCountryPicker={() => setActiveSheet('country')}
+        onOpenSubdivisionPicker={() => setActiveSheet('subdivision')}
       />
 
-      {/* Terms Agreement */}
-      <View style={styles.termsContainer}>
-        <Text style={styles.termsText}>
-          By proceeding, I agree to Coinbase&apos;s{' '}
-          <Text style={styles.termsLink} onPress={() => Linking.openURL('https://www.coinbase.com/legal/guest-checkout/us')}>Guest Checkout Terms</Text>,{' '}
-          <Text style={styles.termsLink} onPress={() => Linking.openURL('https://www.coinbase.com/legal/user_agreement/united_states')}>User Agreement</Text>, and{' '}
-          <Text style={styles.termsLink} onPress={() => Linking.openURL('https://www.coinbase.com/legal/privacy')}>Privacy Policy</Text>
-        </Text>
-      </View>
-
-      {/* Region (Country / Subdivision) */}
-      <View style={[styles.card, styles.regionCard]}>
-        <Text style={styles.cardTitle}>Location</Text>
-
-        <View style={styles.paymentRow}>
-          <Text style={styles.regionLabel}>Country</Text>
-          <Pressable style={styles.regionSelect} onPress={() => setCountryPickerVisible(true)}>
-            <View style={styles.selectContent}>
-              <Text style={styles.regionSelectText}>{country}</Text>
-            </View>
-            <Ionicons name="chevron-down" size={16} color={TEXT_SECONDARY} />
-          </Pressable>
-        </View>
-
-        {country === 'US' && (
-          <View style={[styles.paymentRow, { marginTop: 8 }]}>
-            <Text style={styles.regionLabel}>Subdivision</Text>
-            <Pressable style={styles.regionSelect} onPress={() => setSubPickerVisible(true)}>
-              <View style={styles.selectContent}>
-                <Text style={styles.regionSelectText}>{subdivision || 'Select'}</Text>
-              </View>
-              <Ionicons name="chevron-down" size={16} color={TEXT_SECONDARY} />
-            </Pressable>
-          </View>
-        )}
-      </View>
-  
-      {/* All existing modals */}
-      {/* Payment Currency picker modal */}
-      <Modal 
-        visible={paymentCurrencyPickerVisible} 
-        transparent 
-        animationType="none"
-        presentationStyle="overFullScreen"
-        onRequestClose={() => setPaymentCurrencyPickerVisible(false)}
-      >
-        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-          {/* Backdrop - click to dismiss */}
-          <Animated.View
-            style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.5)', opacity: backdropOpacity }]}
-          >
-            <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setPaymentCurrencyPickerVisible(false)} />
-          </Animated.View>
-
-          {/* Sheet with handle */}
-          <Animated.View style={[styles.modalSheet, { transform: [{ translateY: sheetTranslate }] }]}>
-            {/* Handle bar */}
-            <View style={styles.modalHandle} />
-            
-            <ScrollView 
-              style={styles.modalScrollView}
-              showsVerticalScrollIndicator={true}
-              keyboardShouldPersistTaps="handled"
-            >
-            {displayCurrencies.map((currency, index) => {
-              const isSelected = currency === paymentCurrency;
-              return (
-                <Pressable
-                  key={`currency-${index}-${currency}`}
-                  onPress={() => {
-                    setPaymentCurrency(currency);
-                    setPaymentCurrencyPickerVisible(false);
-                  }}
-                  style={[styles.modalItem, isSelected && styles.modalItemSelected]}
-                >
-                    <View style={styles.modalItemContent}>
-                      <View style={styles.modalItemLeft}>
-                        <Text style={[styles.modalItemText, isSelected && styles.modalItemTextSelected]}>
-                          {currency}
-                        </Text>
-                      </View>
-                      <View style={styles.modalItemRight}>
-                        {isSelected && (
-                          <Ionicons name="checkmark" size={20} color={BLUE} />
-                        )}
-                      </View>
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </Animated.View>
-        </View>
-      </Modal>
-      {/* Asset picker modal */}
-      <Modal
-        visible={assetPickerVisible}
-        transparent
-        animationType="none"
-        presentationStyle="overFullScreen"
-        onRequestClose={() => setAssetPickerVisible(false)}
-      >
-        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-          {/* Backdrop - click to dismiss */}
-          <Animated.View
-            style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.5)', opacity: backdropOpacity }]}
-          >
-            <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setAssetPickerVisible(false)} />
-          </Animated.View>
-
-          {/* Sheet with handle */}
-          <Animated.View style={[styles.modalSheet, { transform: [{ translateY: sheetTranslate }] }]}>
-            {/* Handle bar */}
-            <View style={styles.modalHandle} />
-            
-            <ScrollView 
-              style={styles.modalScrollView}
-              showsVerticalScrollIndicator={true}
-              keyboardShouldPersistTaps="handled"
-            >
-              {availableAssets.map((assetOption: any, index: number) => {
-                const displayName = assetOption.name || assetOption.symbol || 'Unknown Asset';
-                const iconUrl = assetOption.icon_url;
-                const isSelected = displayName === asset;
-                
-                return (
-              <Pressable
-                    key={`asset-${index}-${displayName}`}
-                onPress={() => {
-                      setAsset(displayName);
-                  setAssetPickerVisible(false);
-                }}
-                    style={[styles.modalItem, isSelected && styles.modalItemSelected]}
-                  >
-                    <View style={styles.modalItemContent}>
-                      <View style={styles.modalItemLeft}>
-                        {iconUrl && (
-                          <Image 
-                            source={{ uri: iconUrl }} 
-                            style={styles.modalItemIcon}
-                          />
-                        )}
-                        <Text style={[styles.modalItemText, isSelected && styles.modalItemTextSelected]}>
-                          {displayName}
-                        </Text>
-          </View>
-                      {isSelected && (
-                        <Ionicons name="checkmark" size={20} color={BLUE} />
-                      )}
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </Animated.View>
-        </View>
-      </Modal>
-
-      {/* Network picker modal */}
-      <Modal
-        visible={networkPickerVisible}
-        transparent
-        animationType="none"
-        presentationStyle="overFullScreen"
-        onRequestClose={() => setNetworkPickerVisible(false)}
-      >
-        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-          <Animated.View
-            style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.5)', opacity: backdropOpacity }]}
-          >
-            <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setNetworkPickerVisible(false)} />
-          </Animated.View>
-
-          <Animated.View style={[styles.modalSheet, { transform: [{ translateY: sheetTranslate }] }]}>
-            <View style={styles.modalHandle} />
-            
-            <ScrollView 
-              style={styles.modalScrollView}
-              showsVerticalScrollIndicator={true}
-              keyboardShouldPersistTaps="handled"
-            >
-              {isLoadingOptions ? (
-                <View style={styles.modalItem}>
-                  <Text style={styles.modalItemText}>Loading networks...</Text>
-                </View>
-              ) : (
-                availableNetworks.map((networkOption: any, index: number) => {
-                  const displayName = networkOption.display_name || networkOption.name || 'Unknown Network';
-                  const iconUrl = networkOption.icon_url;
-                  const isSelected = displayName === network;
-                  
-                  return (
-              <Pressable
-                      key={`network-${index}-${displayName}`}
-                onPress={() => {
-                        setNetwork(displayName);
-                  setNetworkPickerVisible(false);
-                }}
-                      style={[styles.modalItem, isSelected && styles.modalItemSelected]}
-                    >
-                      <View style={styles.modalItemContent}>
-                        <View style={styles.modalItemLeft}>
-                          {iconUrl && (
-                            <Image 
-                              source={{ uri: iconUrl }} 
-                              style={styles.modalItemIcon}
-                            />
-                          )}
-                          <Text style={[styles.modalItemText, isSelected && styles.modalItemTextSelected]}>
-                            {displayName}
-                          </Text>
-          </View>
-                        {isSelected && (
-                          <Ionicons name="checkmark" size={20} color={BLUE} />
-                        )}
-                      </View>
-                    </Pressable>
-                  );
-                })
-              )}
-            </ScrollView>
-          </Animated.View>
-        </View>
-      </Modal>
-
-      {/* Payment method picker modal */}
-      <Modal
-        visible={paymentPickerVisible}
-        transparent
-        animationType="none"
-        presentationStyle="overFullScreen"
-        onRequestClose={() => setPaymentPickerVisible(false)}
-      >
-        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-          <Animated.View
-            style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.5)', opacity: backdropOpacity }]}
-          >
-            <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setPaymentPickerVisible(false)} />
-          </Animated.View>
-
-          <Animated.View style={[styles.modalSheet, { transform: [{ translateY: sheetTranslate }] }]}>
-            <View style={styles.modalHandle} />
-            
-            <ScrollView 
-              style={styles.modalScrollView}
-              showsVerticalScrollIndicator={true}
-              keyboardShouldPersistTaps="handled"
-            >
-              {methods.map((method, index) => {
-                const isSelected = method.value === paymentMethod;
-                
-                return (
-              <Pressable
-                    key={`payment-${index}-${method.value}`}
-                onPress={() => {
-                      setPaymentMethod(method.value);
-                  setPaymentPickerVisible(false);
-                }}
-                    style={[styles.modalItem, isSelected && styles.modalItemSelected]}
-                  >
-                    <View style={styles.modalItemContent}>
-                      <View style={styles.modalItemLeft}>
-                        <Text style={[styles.modalItemText, isSelected && styles.modalItemTextSelected]}>
-                          {method.display}
-                        </Text>
-                      </View>
-                      {isSelected && (
-                        <Ionicons name="checkmark" size={20} color={BLUE} />
-                      )}
-                    </View>
-              </Pressable>
-                );
-              })}
-            </ScrollView>
-          </Animated.View>
-        </View>
-      </Modal>
-
-      {/* Country picker modal */}
-      <Modal
-        visible={countryPickerVisible}
-        transparent
-        animationType="none"
-        presentationStyle="overFullScreen"
-        onRequestClose={() => setCountryPickerVisible(false)}
-      >
-        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-          <Animated.View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.5)', opacity: backdropOpacity }]}>
-            <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setCountryPickerVisible(false)} />
-          </Animated.View>
-
-          <Animated.View style={[styles.modalSheet, { transform: [{ translateY: sheetTranslate }] }]}>
-            <View style={styles.modalHandle} />
-            <ScrollView style={styles.modalScrollView} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator>
-              {countries.map((c: string, index: number) => {
-                const isSelected = c === country;
-                return (
-                  <Pressable
-                    key={`country-${index}-${c}`}
-                    onPress={() => {
-                      setCountry(c);
-                      setCountryLocal(c);
-                      if (c === 'US') {
-                        const curr = getSubdivision();
-                        if (!curr) {
-                          setSubdivision('CA');
-                          setSubdivisionLocal('CA');
-                        }
-                      } else {
-                        setSubdivision('');
-                        setSubdivisionLocal('');
-                      }
-                      setCountryPickerVisible(false);
-                    }}
-                    style={[styles.modalItem, isSelected && styles.modalItemSelected]}
-                  >
-                    <View style={styles.modalItemContent}>
-                      <View style={styles.modalItemLeft}>
-                        <Text style={[styles.modalItemText, isSelected && styles.modalItemTextSelected]}>{c}</Text>
-                      </View>
-                      {isSelected && <Ionicons name="checkmark" size={20} color={BLUE} />}
-                    </View>
-            </Pressable>
-                );
-              })}
-            </ScrollView>
-          </Animated.View>
-          </View>
-      </Modal>
-
-      {/* Subdivision picker modal */}
-      <Modal
-        visible={subPickerVisible}
-        transparent
-        animationType="none"
-        presentationStyle="overFullScreen"
-        onRequestClose={() => setSubPickerVisible(false)}
-      >
-        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-          <Animated.View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.5)', opacity: backdropOpacity }]}>
-            <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setSubPickerVisible(false)} />
-          </Animated.View>
-
-          <Animated.View style={[styles.modalSheet, { transform: [{ translateY: sheetTranslate }] }]}>
-            <View style={styles.modalHandle} />
-            <ScrollView style={styles.modalScrollView} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator>
-              {usSubs.map((s: string, index: number) => {
-                const isSelected = s === subdivision;
-                return (
-                  <Pressable
-                    key={`sub-${index}-${s}`}
-                    onPress={() => {
-                      setSubdivision(s);
-                      setSubdivisionLocal(s);
-                      setSubPickerVisible(false);
-                    }}
-                    style={[styles.modalItem, isSelected && styles.modalItemSelected]}
-                  >
-                    <View style={styles.modalItemContent}>
-                      <View style={styles.modalItemLeft}>
-                        <Text style={[styles.modalItemText, isSelected && styles.modalItemTextSelected]}>{s}</Text>
-                      </View>
-                      {isSelected && <Ionicons name="checkmark" size={20} color={BLUE} />}
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </Animated.View>
-        </View>
-      </Modal>
-
-      {footerContent}
+      <PickerSheet
+        visible={activeSheet === 'currency'}
+        onClose={() => setActiveSheet(null)}
+        items={displayCurrencies.map(currency => ({ key: currency, label: currency, selected: currency === paymentCurrency }))}
+        onSelect={setPaymentCurrency}
+      />
+      <PickerSheet
+        visible={activeSheet === 'asset'}
+        onClose={() => setActiveSheet(null)}
+        items={availableAssets.map((entry: any, index: number) => ({
+          key: entry.name || entry.symbol || `asset-${index}`,
+          label: entry.name || entry.symbol || 'Unknown Asset',
+          iconUrl: entry.icon_url,
+          selected: (entry.name || entry.symbol) === asset,
+        }))}
+        onSelect={(item) => setAsset(item)}
+      />
+      <PickerSheet
+        visible={activeSheet === 'network'}
+        onClose={() => setActiveSheet(null)}
+        items={availableNetworks.map((entry: any, index: number) => ({
+          key: entry.display_name || entry.name || `network-${index}`,
+          label: entry.display_name || entry.name || 'Unknown Network',
+          iconUrl: entry.icon_url,
+          selected: (entry.display_name || entry.name) === network,
+        }))}
+        onSelect={(item) => setNetwork(item)}
+        loadingLabel={isLoadingOptions ? 'Loading networks...' : undefined}
+      />
+      <PickerSheet
+        visible={activeSheet === 'payment'}
+        onClose={() => setActiveSheet(null)}
+        items={methods.map(method => ({ key: method.value, label: method.display, selected: method.value === paymentMethod }))}
+        onSelect={(item) => setPaymentMethod(item)}
+      />
+      <PickerSheet
+        visible={activeSheet === 'country'}
+        onClose={() => setActiveSheet(null)}
+        items={countries.map(entry => ({ key: entry, label: entry, selected: entry === country }))}
+        onSelect={handleCountrySelect}
+      />
+      <PickerSheet
+        visible={activeSheet === 'subdivision'}
+        onClose={() => setActiveSheet(null)}
+        items={usSubs.map(entry => ({ key: entry, label: entry, selected: entry === subdivision }))}
+        onSelect={handleSubdivisionSelect}
+      />
     </ScrollView>
   );
 }
@@ -1501,636 +715,6 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 14,
     backgroundColor: DARK_BG,
-    paddingBottom: 20, // Reduced from 100 to bring region section closer
-  },
-  focusCard: {
-    backgroundColor: BLUE_WASH,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: BORDER,
-    padding: 18,
-    gap: 12,
-    shadowColor: BLUE,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.08,
-    shadowRadius: 18,
-    elevation: 3,
-  },
-  focusCardActive: {
-    backgroundColor: CARD_BG,
-  },
-  focusCardPressed: {
-    transform: [{ scale: 0.985 }],
-    opacity: 0.97,
-  },
-  focusCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: 12,
-  },
-  focusCardCopy: {
-    flex: 1,
-    gap: 4,
-  },
-  focusCardEyebrow: {
-    color: BLUE,
-    fontSize: 12,
-    fontFamily: FONTS.heading,
-  },
-  focusCardTitle: {
-    color: TEXT_PRIMARY,
-    fontSize: 24,
-    lineHeight: 28,
-    fontFamily: FONTS.heading,
-  },
-  focusCardBody: {
-    color: TEXT_SECONDARY,
-    fontSize: 13,
-    lineHeight: 19,
-    fontFamily: FONTS.body,
-  },
-  focusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: WHITE,
-    borderWidth: 1,
-    borderColor: BORDER,
-  },
-  focusBadgeActive: {
-    backgroundColor: BLUE,
-    borderColor: BLUE,
-  },
-  focusBadgeText: {
-    color: BLUE,
-    fontSize: 11,
-    fontFamily: FONTS.body,
-  },
-  focusBadgeTextActive: {
-    color: WHITE,
-  },
-  focusTagRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  focusTag: {
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 999,
-    backgroundColor: CARD_ALT,
-    borderWidth: 1,
-    borderColor: BORDER,
-  },
-  focusTagText: {
-    color: TEXT_PRIMARY,
-    fontSize: 11,
-    fontFamily: FONTS.body,
-  },
-  fieldGroup: {
-    gap: 6,
-  },
-  label: {
-    fontSize: 14,
-    color: TEXT_SECONDARY,
-    fontFamily: FONTS.body,
-  },
-  // Input row styles
-  inputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  currencySymbol: {
-    fontSize: 32,
-    fontWeight: '300',
-    color: TEXT_SECONDARY,
-  },
-  amountInput: {
-    flex: 1,
-    fontSize: 32,
-    color: TEXT_PRIMARY,
-    padding: 0,
-    fontFamily: FONTS.heading,
-  },
-  currencyTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: CARD_ALT,
-    paddingHorizontal: 12,      
-    paddingVertical: 8,        
-    borderRadius: 16,
-    gap: 8,                    
-    minWidth: 80,              
-    maxWidth: 120,             
-  },
-  currencyText: {
-    fontSize: 14,
-    color: TEXT_PRIMARY,
-    fontFamily: FONTS.body,
-  },
-  limitsText: {
-    fontSize: 12,
-    color: TEXT_SECONDARY,
-    marginTop: 8,
-    fontFamily: FONTS.body,
-  },
-  // Receive styles
-  receiveAmountContainer: {
-    flex: 1,
-    minWidth: 100,              
-    height: 40,                 
-    justifyContent: 'center',   
-    alignItems: 'flex-start',   
-  },
-  quotePreviewLoading: {
-    gap: 6,
-    width: '100%',
-  },
-  quotePreviewPulse: {
-    height: 12,
-    borderRadius: 999,
-    backgroundColor: CARD_ALT,
-  },
-  quotePreviewPulseWide: {
-    width: 112,
-    height: 16,
-  },
-  quotePreviewPulseMedium: {
-    width: 88,
-  },
-  quotePreviewPulseShort: {
-    width: 56,
-  },
-  receiveAmount: {
-    fontSize: 32,
-    color: TEXT_PRIMARY,
-    minWidth: 100,          
-    fontFamily: FONTS.heading,
-  },
-  receiveHint: {
-    marginTop: 12,
-    fontSize: 12,
-    color: TEXT_SECONDARY,
-    lineHeight: 17,
-    fontFamily: FONTS.body,
-  },
-  assetSelect: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: CARD_ALT,
-    paddingHorizontal: 12,    
-    paddingVertical: 8,        
-    borderRadius: 16,
-    gap: 8,                    
-    maxWidth: 140,             
-  },
-  assetIcon: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    marginRight: 4,            
-  },
-  assetText: {
-    fontSize: 14,              
-    color: TEXT_PRIMARY,
-    fontFamily: FONTS.body,
-  },
-  // Network row
-  networkRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: BORDER,
-  },
-  networkLabel: {
-    fontSize: 16,
-    color: TEXT_PRIMARY,
-    fontFamily: FONTS.body,
-  },
-  networkSelect: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: CARD_ALT,
-    paddingHorizontal: 12,     
-    paddingVertical: 8,        
-    borderRadius: 16,
-    gap: 8,                    
-    maxWidth: 180,
-    position: 'relative',
-    paddingRight: 28, // space for absolute chevron
-  },
-  networkIcon: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    marginRight: 4,           
-  },
-  networkText: {
-    fontSize: 14,             
-    color: TEXT_PRIMARY,
-    flex: 1,
-    flexShrink: 1,
-    lineHeight: 20,
-    fontFamily: FONTS.body,
-  },
-  // Payment styles
-  paymentRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 4,
-  },
-  paymentLabel: {
-    fontSize: 16,
-    color: TEXT_PRIMARY,
-    fontFamily: FONTS.body,
-  },
-  paymentSelect: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: CARD_ALT,
-    paddingHorizontal: 12,     
-    paddingVertical: 8,        
-    borderRadius: 16,
-    gap: 8,                    
-    maxWidth: 180,           
-  },
-  paymentText: {
-    fontSize: 14,            
-    color: TEXT_PRIMARY,
-    fontFamily: FONTS.body,
-  },
-  applePayIcon: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: 'transparent',  
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
-  },
-  applePayText: {
-    fontSize: 14,
-  },
-  // Quote summary
-  quoteCard: {
-    backgroundColor: CARD_BG,
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: BORDER,
-    gap: 12,
-  },
-  quoteLoadingTitle: {
-    fontSize: 13,
-    color: TEXT_SECONDARY,
-    fontFamily: FONTS.body,
-  },
-  quoteLoadingShell: {
-    gap: 10,
-  },
-  quoteLoadingRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  quoteRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  quoteLabel: {
-    fontSize: 14,
-    color: TEXT_SECONDARY,
-    fontFamily: FONTS.body,
-  },
-  quoteValue: {
-    fontSize: 14,
-    color: TEXT_PRIMARY,
-    fontFamily: FONTS.body,
-  },
-  quoteTotalRow: {
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: BORDER,
-  },
-  quoteTotalLabel: {
-    fontSize: 16,
-    color: TEXT_PRIMARY,
-    fontFamily: FONTS.heading,
-  },
-  quoteTotalValue: {
-    fontSize: 16,
-    color: TEXT_PRIMARY,
-    fontFamily: FONTS.heading,
-  },
-  quoteLoader: {
-    marginRight: 8,
-  },
-  disclaimerCard: {
-    backgroundColor: BLUE + '10', // Very light blue background
-    borderRadius: 8,
-    padding: 12,
-    borderLeftWidth: 3,
-    borderLeftColor: BLUE,
-  },
-  disclaimerText: {
-    fontSize: 12,
-    color: TEXT_SECONDARY,
-    lineHeight: 16,
-    fontFamily: FONTS.body,
-  },
-  addressMono: {
-    fontFamily: FONTS.body,
-  },
-  
-  italicNote: {
-    marginTop: 4,
-    fontStyle: 'italic',
-  },
-  
-  badgeProd: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    overflow: 'hidden',
-    fontWeight: '600',
-    backgroundColor: BLUE + '12',
-    color: BLUE,
-  },
-  input: {
-    backgroundColor: CARD_BG,
-    borderColor: BORDER,
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,       
-    color: TEXT_PRIMARY,
-    fontSize: 16,
-    fontWeight: '400',
-  },
-  inputDisabled: {
-    opacity: 0.8,
-  },
-  helper: {
-    marginTop: 6,
-    fontSize: 12,
-    color: TEXT_SECONDARY,
-    fontFamily: FONTS.body,
-  },
-  select: {
-    backgroundColor: CARD_BG,     
-    borderColor: BORDER,
-    borderWidth: 1,              
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: Platform.select({ ios: 16, android: 14, default: 16 }),
-    
-    // Same focus styling as input
-    shadowColor: BLUE,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-    flexDirection: 'row',      
-    alignItems: 'center',       
-    justifyContent: 'space-between', 
-  },
-  selectText: {
-    color: TEXT_PRIMARY,
-    fontSize: 16,
-    fontWeight: '400',         
-  },
-  switchRow: {
-    marginTop: 6,             
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  errorText: {
-    color: DANGER,
-    fontSize: 12,
-    marginTop: 6,
-  },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: BACKDROP,
-    justifyContent: "flex-end",
-  },
-  modalHandle: {
-    width: 36,
-    height: 4,
-    backgroundColor: BORDER,
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginTop: 8,
-    marginBottom: 16,
-  },
-  modalSheet: {
-    backgroundColor: CARD_BG,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    borderWidth: 1,
-    borderColor: BORDER,
-    maxHeight: '50%',
-    width: '100%',
-    minHeight: 320,
     paddingBottom: 20,
-    paddingTop: 8,
-  },
-  modalItem: {
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: BORDER,
-  },
-  modalItemSelected: {
-    backgroundColor: BLUE + '15', // Light blue background for selected
-  },
-  modalItemText: {
-    fontSize: 18,
-    fontWeight: '500',
-    color: TEXT_PRIMARY,
-    flex: 1,
-  },
-  modalItemTextSelected: {
-    color: BLUE,
-    fontWeight: '600',
-  },
-  modalScrollView: {},
-  modalItemContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between', // Add this
-  },
-  modalItemIcon: {
-    width: 32,
-    height: 32,
-    marginRight: 16,
-    borderRadius: 16,
-  },
-  modalItemLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  modalItemMeta: {
-    fontSize: 16,
-    color: TEXT_SECONDARY,
-    marginLeft: 8,
-  },
-  flagEmoji: {
-    fontSize: 20,
-    lineHeight: 20,
-    marginRight: 12,
-  },
-  selectContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    minWidth: 0,
-    paddingRight: 0,
-  },
-  selectIcon: {
-    width: 24,
-    height: 24,
-    marginRight: 12,
-    borderRadius: 12,
-  },
-  selectTextContainer: {
-    flex: 1,
-    minWidth: 0,
-    paddingRight: 8,
-    justifyContent: 'center',
-  },
-  selectChevron: {
-    position: 'absolute',
-    right: 8,
-    top: 10, // centers visually with 20px icon + 8px vertical padding
-  },
-  card: {
-    backgroundColor: CARD_BG,
-    borderRadius: 20,
-    padding: 16,                
-    borderWidth: 1,
-    borderColor: BORDER,
-    shadowColor: BLUE,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.06,
-    shadowRadius: 16,
-    elevation: 2,
-  },
-  cardTitle: {
-    fontSize: 14,
-    color: BLUE,
-    marginBottom: 12,          
-    fontFamily: FONTS.heading,
-  },
-  termsContainer: {
-    marginTop: 0,
-    marginBottom: 8,
-  },
-  checkboxRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 4,
-    borderWidth: 2,
-    borderColor: BORDER,
-    backgroundColor: 'transparent',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 2, // Align with first line of text
-  },
-  notificationCard: {
-    backgroundColor: CARD_BG,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: BORDER,
-    marginBottom: 12,
-  },
-  errorCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: DANGER,
-    backgroundColor: DANGER + '08',
-  },
-  sandboxCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: BLUE,
-    backgroundColor: BLUE + '08', // Very light blue tint
-  },
-  productionCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: DANGER,
-    backgroundColor: DANGER + '08',
-  },
-  regionCard: {
-    padding: 12,
-  },
-  regionLabel: {
-    fontSize: 14,
-    color: TEXT_SECONDARY,
-    fontFamily: FONTS.body,
-  },
-  regionSelect: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: CARD_ALT,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
-    gap: 8,
-    maxWidth: 160,
-  },
-  regionSelectText: {
-    fontSize: 14,
-    color: TEXT_PRIMARY,
-    fontFamily: FONTS.body,
-  },
-  notificationHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
-  },
-  notificationTitle: {
-    fontSize: 14,
-    color: TEXT_PRIMARY,
-    fontFamily: FONTS.heading,
-  },
-  notificationText: {
-    fontSize: 13,
-    color: TEXT_SECONDARY,
-    lineHeight: 18,
-    fontFamily: FONTS.body,
-  },
-  termsText: {
-    flex: 1,
-    fontSize: 14,
-    color: TEXT_SECONDARY,
-    lineHeight: 20,
-    fontFamily: FONTS.body,
-  },
-  termsLink: {
-    color: BLUE,
-    textDecorationLine: 'underline',
-    fontFamily: FONTS.body,
-  },
-  modalItemRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
   },
 });

@@ -27,4 +27,4 @@ export {
 } from '../utils/supportEmail';
 
 // Types
-export type { OnrampFormData } from './onramp/OnrampForm';
+export type { OnrampFormData } from './onramp/onramp-form-types';

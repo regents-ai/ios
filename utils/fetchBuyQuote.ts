@@ -4,7 +4,9 @@ import { authenticatedFetch } from './authenticatedFetch';
 import { createGuestCheckoutOrder } from './createGuestCheckoutOrder';
 import { buildGuestCheckoutQuotePayload } from './guestCheckout';
 import { demoAddressForNetwork } from './randomAddresses';
-import { getCountry, getCurrentWalletAddress, getSandboxMode, getSubdivision } from './sharedState';
+import { getCountry, getSubdivision } from './state/locationState';
+import { getSandboxMode } from './state/sandboxState';
+import { getCurrentWalletAddress } from './state/walletRuntimeState';
 
 export async function fetchBuyQuote(payload: {
   paymentCurrency: string;

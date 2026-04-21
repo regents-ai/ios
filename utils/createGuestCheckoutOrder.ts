@@ -1,6 +1,5 @@
-import { getBaseUrl } from "../constants/BASE_URL";
-import { authenticatedFetch } from "./authenticatedFetch";
-import { summarizeGuestCheckoutOrderLog } from "./guestCheckout";
+import { summarizeGuestCheckoutOrderLog } from './guestCheckout';
+import { sendOnrampProxyRequest } from './network/onrampProxy';
 
 /**
  * Pattern used across all API utilities:
@@ -11,69 +10,21 @@ import { summarizeGuestCheckoutOrderLog } from "./guestCheckout";
  */
 
 export async function createGuestCheckoutOrder(payload: any) {
-  try {
-    const method = payload.paymentMethod?.includes('GOOGLE') ? 'Google Pay' : 'Apple Pay';
-    console.log(`📤 [API] createGuestCheckoutOrder (${method})`);
+  const method = payload.paymentMethod?.includes('GOOGLE') ? 'Google Pay' : 'Apple Pay';
+  console.log(`📤 [API] createGuestCheckoutOrder (${method})`);
 
-    const response = await authenticatedFetch(`${getBaseUrl()}/server/api`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        url: "https://api.cdp.coinbase.com/platform/v2/onramp/orders",
-        method: "POST",
-        body: payload
-      })
-    });
+  const responseJson = await sendOnrampProxyRequest<any>({
+    context: 'createGuestCheckoutOrder',
+    method: 'POST',
+    url: 'https://api.cdp.coinbase.com/platform/v2/onramp/orders',
+    body: payload,
+  });
 
-    console.log('📥 [RESPONSE] Status:', response.status, response.statusText);
-    console.log('📥 [RESPONSE] Headers:', {
-      'content-type': response.headers.get('content-type'),
-      'x-request-id': response.headers.get('x-request-id')
-    });
+  console.log('📦 [RESPONSE] Summary:', summarizeGuestCheckoutOrderLog(responseJson));
 
-    // Log response
-    const responseClone = response.clone();
-    const responseText = await responseClone.text().catch(() => '<non-text body>');
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => null);
-      const errorType = errorData?.errorType || '';
-      const errorMessage = errorData?.errorMessage || '';
-
-      // Check if this is a quote request with limit error - use console.log instead of console.error
-      const isQuoteRequest = payload.isQuote === true;
-      const isLimitError = errorType === 'guest_transaction_limit' || errorMessage.includes('exceed');
-
-      if (isQuoteRequest && isLimitError) {
-        console.log('⚠️  [QUOTE] Request blocked by user limits (expected behavior)');
-        console.log('⚠️  [QUOTE] Status:', response.status);
-        console.log('⚠️  [QUOTE] Message:', errorMessage);
-      } else {
-        console.error('❌ [RESPONSE] Request failed!');
-        console.error('❌ [RESPONSE] Status:', response.status);
-        console.error('❌ [RESPONSE] Body:', responseText);
-      }
-
-      const fullErrorMessage = errorMessage
-        ? `${errorType}: ${errorMessage}`
-        : errorData?.message || `HTTP error! status: ${response.status}`;
-      throw new Error(fullErrorMessage);
-    }
-
-    console.log('✅ [RESPONSE] Request succeeded!');
-
-    const responseJson = await response.json();
-    console.log('📦 [RESPONSE] Summary:', summarizeGuestCheckoutOrderLog(responseJson));
-
-    // Return the hosted URL from Coinbase response
-    return {
-      ...responseJson,
-      hostedUrl: responseJson.paymentLink?.url, 
-      orderId: responseJson.order?.orderId
-    };
-  } catch (error) {
-    throw error;
-  }
+  return {
+    ...responseJson,
+    hostedUrl: responseJson.paymentLink?.url,
+    orderId: responseJson.order?.orderId,
+  };
 }

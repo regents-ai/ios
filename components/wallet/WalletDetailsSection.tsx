@@ -1,56 +1,16 @@
-import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
-import { getBaseUrl } from '@/constants/BASE_URL';
-import { COLORS } from '@/constants/Colors';
-import { TEST_ACCOUNTS } from '@/constants/TestAccounts';
-import { FONTS } from '@/constants/Typography';
-import { useRegentsAuth } from '@/hooks/useRegentsAuth';
-import { authenticatedFetch } from '@/utils/authenticatedFetch';
-import { createOfframpSession } from '@/utils/createOfframpSession';
-import {
-  getTestWalletSol,
-  isTestSessionActive,
-  setCurrentSolanaAddress,
-  setCurrentWalletAddress,
-  setPendingOfframpBalance,
-} from '@/utils/sharedState';
-import { useCurrentUser, useEvmAddress, useSolanaAddress } from '@coinbase/cdp-hooks';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import * as Clipboard from 'expo-clipboard';
-import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  Linking,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-import * as WebBrowser from 'expo-web-browser';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-const { CARD_BG, CARD_ALT, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, BORDER, WHITE, VIOLET, DANGER, BLUE_WASH } = COLORS;
+import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
+import { COLORS } from '@/constants/Colors';
+import { FONTS } from '@/constants/Typography';
+import { BalanceRecord, useWalletDetailsState } from '@/hooks/wallet/useWalletDetailsState';
 
-type BalanceRecord = {
-  network: string;
-  token?: {
-    symbol?: string;
-    name?: string;
-    contractAddress?: string;
-    mintAddress?: string;
-  };
-  amount?: {
-    amount?: string;
-    decimals?: string;
-  };
-  usdValue?: number;
-};
+const { CARD_BG, CARD_ALT, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, BORDER, WHITE, DANGER, BLUE_WASH } = COLORS;
 
 function formatAddress(address: string) {
   if (address.length <= 14) return address;
   return `${address.slice(0, 8)}...${address.slice(-6)}`;
-}
-
-function toNetworkSlug(network: string) {
-  return network.toLowerCase().replace(/\s+/g, '-');
 }
 
 function getActualTokenAmount(balance: BalanceRecord) {
@@ -82,258 +42,35 @@ function formatUsdValue(usdValue?: number) {
   });
 }
 
-async function fetchAuthorizedJson(url: string) {
-  const response = await authenticatedFetch(url);
-  if (!response.ok) {
-    throw new Error(`Request failed with ${response.status}`);
-  }
-  return response.json();
-}
-
 export function WalletDetailsSection() {
-  const router = useRouter();
-  const testSession = isTestSessionActive();
-  const { regentsUserId } = useRegentsAuth();
-  const { currentUser } = useCurrentUser();
-  const { evmAddress } = useEvmAddress();
-  const { solanaAddress: cdpSolanaAddress } = useSolanaAddress();
-
-  const explicitEOAAddress = testSession ? TEST_ACCOUNTS.wallets.eoaDummy : (currentUser?.evmAccounts?.[0] as string | undefined);
-  const smartAccountAddress = testSession ? TEST_ACCOUNTS.wallets.evm : (currentUser?.evmSmartAccounts?.[0] as string | undefined);
-  const solanaAddress = testSession ? getTestWalletSol() : cdpSolanaAddress;
-  const primaryAddress = smartAccountAddress || explicitEOAAddress || evmAddress || null;
-  const userId = testSession ? TEST_ACCOUNTS.userId : regentsUserId;
-
-  const [balances, setBalances] = useState<BalanceRecord[]>([]);
-  const [loadingBalances, setLoadingBalances] = useState(false);
-  const [balancesError, setBalancesError] = useState<string | null>(null);
-  const [balancesExpanded, setBalancesExpanded] = useState(true);
-
-  const [testnetBalances, setTestnetBalances] = useState<BalanceRecord[]>([]);
-  const [loadingTestnetBalances, setLoadingTestnetBalances] = useState(false);
-  const [testnetBalancesError, setTestnetBalancesError] = useState<string | null>(null);
-  const [testnetExpanded, setTestnetExpanded] = useState(false);
-  const [recentCopyKey, setRecentCopyKey] = useState<string | null>(null);
-
-  const [alertState, setAlertState] = useState<{
-    visible: boolean;
-    title: string;
-    message: string;
-    type: 'success' | 'error' | 'info';
-  }>({
-    visible: false,
-    title: '',
-    message: '',
-    type: 'info',
-  });
-
-  const isExpoGo = process.env.EXPO_PUBLIC_USE_EXPO_CRYPTO === 'true';
-
-  useEffect(() => {
-    setCurrentWalletAddress(primaryAddress ?? null);
-    setCurrentSolanaAddress(solanaAddress ?? null);
-  }, [primaryAddress, solanaAddress]);
-
-  const fetchBalances = useCallback(async () => {
-    if (!primaryAddress && !solanaAddress) return;
-
-    setLoadingBalances(true);
-    setBalancesError(null);
-
-    try {
-      const allBalances: BalanceRecord[] = [];
-
-      if (primaryAddress) {
-        const baseData = await fetchAuthorizedJson(`${getBaseUrl()}/balances/evm?address=${primaryAddress}&network=base`);
-        allBalances.push(...(baseData.balances || []).map((balance: BalanceRecord) => ({ ...balance, network: 'Base' })));
-
-        const ethereumData = await fetchAuthorizedJson(`${getBaseUrl()}/balances/evm?address=${primaryAddress}&network=ethereum`);
-        allBalances.push(...(ethereumData.balances || []).map((balance: BalanceRecord) => ({ ...balance, network: 'Ethereum' })));
-      }
-
-      if (solanaAddress) {
-        const solanaData = await fetchAuthorizedJson(`${getBaseUrl()}/balances/solana?address=${solanaAddress}`);
-        allBalances.push(...(solanaData.balances || []).map((balance: BalanceRecord) => ({ ...balance, network: 'Solana' })));
-      }
-
-      setBalances(allBalances);
-    } catch (error) {
-      console.error('Failed to load wallet balances:', error);
-      setBalancesError('Unable to load your balances right now.');
-    } finally {
-      setLoadingBalances(false);
-    }
-  }, [primaryAddress, solanaAddress]);
-
-  const fetchTestnetBalances = useCallback(async () => {
-    if (!primaryAddress && !solanaAddress) return;
-
-    setLoadingTestnetBalances(true);
-    setTestnetBalancesError(null);
-
-    try {
-      const allBalances: BalanceRecord[] = [];
-
-      if (primaryAddress) {
-        const baseSepoliaData = await fetchAuthorizedJson(`${getBaseUrl()}/balances/evm?address=${primaryAddress}&network=base-sepolia`);
-        allBalances.push(...(baseSepoliaData.balances || []).map((balance: BalanceRecord) => ({ ...balance, network: 'Base Sepolia' })));
-
-        const ethereumSepoliaData = await fetchAuthorizedJson(`${getBaseUrl()}/balances/evm?address=${primaryAddress}&network=ethereum-sepolia`);
-        allBalances.push(...(ethereumSepoliaData.balances || []).map((balance: BalanceRecord) => ({ ...balance, network: 'Ethereum Sepolia' })));
-      }
-
-      if (solanaAddress) {
-        const solanaDevnetData = await fetchAuthorizedJson(`${getBaseUrl()}/balances/solana?address=${solanaAddress}&network=solana-devnet`);
-        allBalances.push(...(solanaDevnetData.balances || []).map((balance: BalanceRecord) => ({ ...balance, network: 'Solana Devnet' })));
-      }
-
-      setTestnetBalances(allBalances);
-    } catch (error) {
-      console.error('Failed to load testnet balances:', error);
-      setTestnetBalancesError('Unable to load testnet balances right now.');
-    } finally {
-      setLoadingTestnetBalances(false);
-    }
-  }, [primaryAddress, solanaAddress]);
-
-  useEffect(() => {
-    if (primaryAddress || solanaAddress) {
-      fetchBalances();
-      fetchTestnetBalances();
-    }
-  }, [primaryAddress, solanaAddress, fetchBalances, fetchTestnetBalances]);
-
-  useFocusEffect(
-    useCallback(() => {
-      if (primaryAddress || solanaAddress) {
-        fetchBalances();
-        fetchTestnetBalances();
-      }
-    }, [primaryAddress, solanaAddress, fetchBalances, fetchTestnetBalances])
-  );
-
-  const groupedMainnetBalances = useMemo(
-    () => ['Base', 'Ethereum', 'Solana'].map(network => ({
-      network,
-      balances: balances.filter(balance => balance.network === network),
-    })),
-    [balances]
-  );
-
-  const groupedTestnetBalances = useMemo(
-    () => ['Base Sepolia', 'Ethereum Sepolia', 'Solana Devnet'].map(network => ({
-      network,
-      balances: testnetBalances.filter(balance => balance.network === network),
-    })),
-    [testnetBalances]
-  );
-
-  const featuredBaseUsdc = useMemo(
-    () =>
-      balances.find(
-        balance => balance.network === 'Base' && balance.token?.symbol?.toUpperCase() === 'USDC'
-      ) || null,
-    [balances]
-  );
-
-  const walletUsdTotal = useMemo(
-    () =>
-      balances.reduce((sum, balance) => sum + (typeof balance.usdValue === 'number' ? balance.usdValue : 0), 0),
-    [balances]
-  );
-
-  const hasAnyWalletBalance = balances.length > 0;
-
-  const showAlert = (title: string, message: string, type: 'success' | 'error' | 'info' = 'info') => {
-    setAlertState({ visible: true, title, message, type });
-  };
-
-  const copyAddress = async (address: string, label: string, key: string) => {
-    await Clipboard.setStringAsync(address);
-    setRecentCopyKey(key);
-    showAlert('Address copied', `${label} copied to the clipboard.`, 'info');
-    setTimeout(() => setRecentCopyKey(current => (current === key ? null : current)), 1400);
-  };
-
-  const refreshWalletSnapshot = async () => {
-    await Promise.all([fetchBalances(), fetchTestnetBalances()]);
-  };
-
-  const handleTransfer = (balance: BalanceRecord, network: string) => {
-    if (isExpoGo) {
-      showAlert('Transfer unavailable', 'Open the installed app to send funds.', 'info');
-      return;
-    }
-
-    router.push({
-      pathname: '/wallet/send',
-      params: {
-        token: JSON.stringify(balance),
-        network: toNetworkSlug(network),
-      },
-    });
-  };
-
-  const handleCashOut = async (balance: BalanceRecord, network: string) => {
-    if (isExpoGo) {
-      showAlert('Cash out unavailable', 'Open the installed app to cash out.', 'info');
-      return;
-    }
-
-    try {
-      if (!userId) {
-        throw new Error('You need to sign in before cashing out.');
-      }
-
-      const symbol = balance.token?.symbol || 'USDC';
-      const isSolanaNetwork = network.toLowerCase() === 'solana';
-      const address = isSolanaNetwork ? solanaAddress : primaryAddress;
-
-      if (!address) {
-        throw new Error('No wallet address was found for this network.');
-      }
-
-      setPendingOfframpBalance(balance);
-
-      const url = await createOfframpSession({
-        address,
-        network,
-        asset: symbol,
-        userId,
-      });
-
-      const result = await WebBrowser.openAuthSessionAsync(url, 'regentsmobile://');
-
-      if (result.type === 'success' && result.url) {
-        const redirected = new URL(result.url);
-        const partnerUserRef = redirected.searchParams.get('partnerUserRef') || userId;
-        router.push({
-          pathname: '/offramp-send',
-          params: { partnerUserRef },
-        });
-      }
-    } catch (error: any) {
-      showAlert('Cash out failed', error.message || 'Unable to start cash out right now.', 'error');
-    }
-  };
-
-  const handlePrimarySend = () => {
-    if (!featuredBaseUsdc) {
-      showAlert('Base USDC not ready', 'Add USDC on Base first, then you can send it from here.', 'info');
-      return;
-    }
-
-    handleTransfer(featuredBaseUsdc, 'Base');
-  };
-
-  const handlePrimaryCashOut = () => {
-    if (!featuredBaseUsdc) {
-      showAlert('Base USDC not ready', 'Add USDC on Base first, then you can cash it out from here.', 'info');
-      return;
-    }
-
-    void handleCashOut(featuredBaseUsdc, 'Base');
-  };
+  const {
+    primaryAddress,
+    solanaAddress,
+    loadingBalances,
+    balancesError,
+    balancesExpanded,
+    setBalancesExpanded,
+    loadingTestnetBalances,
+    testnetBalancesError,
+    testnetExpanded,
+    setTestnetExpanded,
+    recentCopyKey,
+    alertState,
+    setAlertState,
+    groupedMainnetBalances,
+    groupedTestnetBalances,
+    featuredBaseUsdc,
+    walletUsdTotal,
+    hasAnyWalletBalance,
+    copyAddress,
+    refreshWalletSnapshot,
+    handleTransfer,
+    handleCashOut,
+    handlePrimarySend,
+    handlePrimaryCashOut,
+    fetchBalances,
+    fetchTestnetBalances,
+  } = useWalletDetailsState();
 
   const renderBalanceRow = (balance: BalanceRecord, network: string, cashOutEnabled: boolean) => {
     const symbol = balance.token?.symbol || 'UNKNOWN';
@@ -375,7 +112,7 @@ export function WalletDetailsSection() {
 
   const renderLoadingSkeleton = () => (
     <View style={styles.loadingShell}>
-      {[0, 1, 2].map(index => (
+      {[0, 1, 2].map((index) => (
         <View key={index} style={styles.loadingSkeletonRow}>
           <View style={styles.loadingSkeletonLeft}>
             <View style={[styles.skeletonBlock, styles.skeletonTitle]} />
@@ -398,8 +135,8 @@ export function WalletDetailsSection() {
             <Text style={styles.cardTitle}>Wallet actions</Text>
             <Text style={styles.cardHint}>Keep your main address, recent activity, and everyday actions in one place.</Text>
           </View>
-          <Pressable onPress={() => router.push('/settings')} style={styles.iconButton}>
-            <Ionicons name="settings-outline" size={18} color={TEXT_PRIMARY} />
+          <Pressable onPress={refreshWalletSnapshot} style={styles.iconButton}>
+            <Ionicons name="refresh-outline" size={18} color={TEXT_PRIMARY} />
           </Pressable>
         </View>
 
@@ -434,48 +171,18 @@ export function WalletDetailsSection() {
 
         <View style={styles.quickActionGrid}>
           <Pressable
-            style={({ pressed }) => [
-              styles.quickActionButton,
-              styles.quickActionPrimary,
-              pressed && styles.quickActionPressed,
-            ]}
+            style={({ pressed }) => [styles.quickActionButton, styles.quickActionPrimary, pressed && styles.quickActionPressed]}
             onPress={handlePrimarySend}
           >
             <Ionicons name="paper-plane-outline" size={18} color={WHITE} />
             <Text style={styles.quickActionPrimaryText}>Send</Text>
           </Pressable>
           <Pressable
-            style={({ pressed }) => [
-              styles.quickActionButton,
-              styles.quickActionSecondary,
-              pressed && styles.quickActionPressed,
-            ]}
+            style={({ pressed }) => [styles.quickActionButton, styles.quickActionSecondary, pressed && styles.quickActionPressed]}
             onPress={handlePrimaryCashOut}
           >
             <Ionicons name="cash-outline" size={18} color={TEXT_PRIMARY} />
             <Text style={styles.quickActionText}>Cash out</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [
-              styles.quickActionButton,
-              styles.quickActionSecondary,
-              pressed && styles.quickActionPressed,
-            ]}
-            onPress={() => router.push('/wallet/history')}
-          >
-            <Ionicons name="time-outline" size={18} color={TEXT_PRIMARY} />
-            <Text style={styles.quickActionText}>Activity</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [
-              styles.quickActionButton,
-              styles.quickActionSecondary,
-              pressed && styles.quickActionPressed,
-            ]}
-            onPress={() => void refreshWalletSnapshot()}
-          >
-            <Ionicons name="refresh-outline" size={18} color={TEXT_PRIMARY} />
-            <Text style={styles.quickActionText}>Refresh</Text>
           </Pressable>
         </View>
 
@@ -487,9 +194,7 @@ export function WalletDetailsSection() {
               style={({ pressed }) => [styles.secondaryButton, pressed && styles.secondaryButtonPressed]}
               onPress={() => copyAddress(primaryAddress, 'Base and Ethereum address', 'base')}
             >
-              <Text style={styles.secondaryButtonText}>
-                {recentCopyKey === 'base' ? 'Copied' : 'Copy address'}
-              </Text>
+              <Text style={styles.secondaryButtonText}>{recentCopyKey === 'base' ? 'Copied' : 'Copy address'}</Text>
             </Pressable>
           </View>
         ) : null}
@@ -502,16 +207,14 @@ export function WalletDetailsSection() {
               style={({ pressed }) => [styles.secondaryButton, pressed && styles.secondaryButtonPressed]}
               onPress={() => copyAddress(solanaAddress, 'Solana address', 'solana')}
             >
-              <Text style={styles.secondaryButtonText}>
-                {recentCopyKey === 'solana' ? 'Copied' : 'Copy address'}
-              </Text>
+              <Text style={styles.secondaryButtonText}>{recentCopyKey === 'solana' ? 'Copied' : 'Copy address'}</Text>
             </Pressable>
           </View>
         ) : null}
       </View>
 
       <View style={styles.card}>
-        <Pressable style={styles.cardHeader} onPress={() => setBalancesExpanded(prev => !prev)}>
+        <Pressable style={styles.cardHeader} onPress={() => setBalancesExpanded((current) => !current)}>
           <View>
             <Text style={styles.cardTitle}>Mainnet balances</Text>
             <Text style={styles.cardHint}>Base stays at the top, with send and cash-out actions close to each balance.</Text>
@@ -521,37 +224,35 @@ export function WalletDetailsSection() {
 
         {balancesExpanded ? (
           <>
-            {loadingBalances ? (
-              renderLoadingSkeleton()
-            ) : null}
+            {loadingBalances ? renderLoadingSkeleton() : null}
 
             {balancesError ? (
               <View style={styles.feedbackBlock}>
                 <Text style={styles.errorText}>{balancesError}</Text>
-                <Pressable style={({ pressed }) => [styles.primaryButton, pressed && styles.primaryButtonPressed]} onPress={fetchBalances}>
+                <Pressable style={({ pressed }) => [styles.primaryButton, pressed && styles.primaryButtonPressed]} onPress={() => void fetchBalances()}>
                   <Text style={styles.primaryButtonText}>Retry</Text>
                 </Pressable>
               </View>
             ) : null}
 
-            {!loadingBalances && !balancesError ? (
-              groupedMainnetBalances.map(group => (
-                <View key={group.network} style={styles.networkSection}>
-                  <Text style={styles.networkTitle}>{group.network}</Text>
-                  {group.balances.length === 0 ? (
-                    <Text style={styles.emptyText}>No tokens yet.</Text>
-                  ) : (
-                    group.balances.map(balance => renderBalanceRow(balance, group.network, true))
-                  )}
-                </View>
-              ))
-            ) : null}
+            {!loadingBalances && !balancesError
+              ? groupedMainnetBalances.map((group) => (
+                  <View key={group.network} style={styles.networkSection}>
+                    <Text style={styles.networkTitle}>{group.network}</Text>
+                    {group.balances.length === 0 ? (
+                      <Text style={styles.emptyText}>No tokens yet.</Text>
+                    ) : (
+                      group.balances.map((balance) => renderBalanceRow(balance, group.network, true))
+                    )}
+                  </View>
+                ))
+              : null}
           </>
         ) : null}
       </View>
 
       <View style={styles.card}>
-        <Pressable style={styles.cardHeader} onPress={() => setTestnetExpanded(prev => !prev)}>
+        <Pressable style={styles.cardHeader} onPress={() => setTestnetExpanded((current) => !current)}>
           <View>
             <Text style={styles.cardTitle}>Testnet balances</Text>
             <Text style={styles.cardHint}>Base Sepolia, Ethereum Sepolia, and Solana Devnet balances.</Text>
@@ -561,44 +262,29 @@ export function WalletDetailsSection() {
 
         {testnetExpanded ? (
           <>
-            {loadingTestnetBalances ? (
-              renderLoadingSkeleton()
-            ) : null}
+            {loadingTestnetBalances ? renderLoadingSkeleton() : null}
 
             {testnetBalancesError ? (
               <View style={styles.feedbackBlock}>
                 <Text style={styles.errorText}>{testnetBalancesError}</Text>
-                <Pressable style={({ pressed }) => [styles.primaryButton, pressed && styles.primaryButtonPressed]} onPress={fetchTestnetBalances}>
+                <Pressable style={({ pressed }) => [styles.primaryButton, pressed && styles.primaryButtonPressed]} onPress={() => void fetchTestnetBalances()}>
                   <Text style={styles.primaryButtonText}>Retry</Text>
                 </Pressable>
               </View>
             ) : null}
 
-            {!loadingTestnetBalances && !testnetBalancesError ? (
-              groupedTestnetBalances.map(group => (
-                <View key={group.network} style={styles.networkSection}>
-                  <View style={styles.networkHeader}>
+            {!loadingTestnetBalances && !testnetBalancesError
+              ? groupedTestnetBalances.map((group) => (
+                  <View key={group.network} style={styles.networkSection}>
                     <Text style={styles.networkTitle}>{group.network}</Text>
-                    <Pressable
-                      style={styles.faucetButton}
-                      onPress={() => {
-                        const address = group.network.includes('Solana') ? solanaAddress : primaryAddress;
-                        if (!address) return;
-                        const network = toNetworkSlug(group.network);
-                        Linking.openURL(`https://portal.cdp.coinbase.com/products/faucet?address=${address}&network=${network}`);
-                      }}
-                    >
-                      <Ionicons name="water-outline" size={18} color={VIOLET} />
-                    </Pressable>
+                    {group.balances.length === 0 ? (
+                      <Text style={styles.emptyText}>No tokens yet.</Text>
+                    ) : (
+                      group.balances.map((balance) => renderBalanceRow(balance, group.network, false))
+                    )}
                   </View>
-                  {group.balances.length === 0 ? (
-                    <Text style={styles.emptyText}>No testnet tokens yet.</Text>
-                  ) : (
-                    group.balances.map(balance => renderBalanceRow(balance, group.network, false))
-                  )}
-                </View>
-              ))
-            ) : null}
+                ))
+              : null}
           </>
         ) : null}
       </View>
@@ -608,7 +294,7 @@ export function WalletDetailsSection() {
         title={alertState.title}
         message={alertState.message}
         type={alertState.type}
-        onConfirm={() => setAlertState(prev => ({ ...prev, visible: false }))}
+        onConfirm={() => setAlertState({ visible: false, title: '', message: '', type: 'info' })}
       />
     </View>
   );
@@ -616,44 +302,46 @@ export function WalletDetailsSection() {
 
 const styles = StyleSheet.create({
   section: {
-    gap: 16,
-    marginTop: 16,
+    gap: 14,
   },
   card: {
     backgroundColor: CARD_BG,
-    borderRadius: 20,
+    borderRadius: 24,
     borderWidth: 1,
     borderColor: BORDER,
     padding: 18,
     gap: 16,
-    shadowColor: BLUE,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.06,
-    shadowRadius: 16,
-    elevation: 2,
   },
   cardHeader: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    gap: 16,
+    alignItems: 'center',
+    gap: 12,
   },
   cardTitle: {
-    color: BLUE,
-    fontSize: 18,
+    color: TEXT_PRIMARY,
+    fontSize: 20,
     fontFamily: FONTS.heading,
   },
   cardHint: {
     color: TEXT_SECONDARY,
     fontSize: 13,
     lineHeight: 18,
+    fontFamily: FONTS.body,
     marginTop: 4,
     maxWidth: 260,
-    fontFamily: FONTS.body,
+  },
+  iconButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: CARD_ALT,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   featuredCard: {
     backgroundColor: BLUE_WASH,
-    borderRadius: 18,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: BORDER,
     padding: 16,
@@ -662,7 +350,6 @@ const styles = StyleSheet.create({
   featuredTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
     gap: 12,
   },
   featuredCopy: {
@@ -680,13 +367,8 @@ const styles = StyleSheet.create({
     lineHeight: 26,
     fontFamily: FONTS.heading,
   },
-  featuredBody: {
-    color: TEXT_SECONDARY,
-    fontSize: 13,
-    lineHeight: 19,
-    fontFamily: FONTS.body,
-  },
   featuredBadge: {
+    alignSelf: 'flex-start',
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
@@ -699,18 +381,24 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: FONTS.body,
   },
+  featuredBody: {
+    color: TEXT_SECONDARY,
+    fontSize: 13,
+    lineHeight: 19,
+    fontFamily: FONTS.body,
+  },
   featuredStats: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
   },
   featuredStat: {
     flex: 1,
-    backgroundColor: CARD_BG,
-    borderRadius: 16,
-    padding: 12,
-    gap: 4,
+    backgroundColor: WHITE,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: BORDER,
+    padding: 12,
+    gap: 4,
   },
   featuredStatLabel: {
     color: TEXT_SECONDARY,
@@ -724,36 +412,30 @@ const styles = StyleSheet.create({
   },
   quickActionGrid: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 10,
+    flexWrap: 'wrap',
   },
   quickActionButton: {
-    minWidth: '48%',
-    flexGrow: 1,
-    borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
+    minWidth: 132,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 18,
+    borderWidth: 1,
   },
   quickActionPrimary: {
     backgroundColor: BLUE,
-    shadowColor: BLUE,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.14,
-    shadowRadius: 12,
-    elevation: 3,
+    borderColor: BLUE,
   },
   quickActionSecondary: {
     backgroundColor: CARD_ALT,
-    borderWidth: 1,
     borderColor: BORDER,
   },
   quickActionPressed: {
-    transform: [{ scale: 0.98 }],
-    opacity: 0.92,
+    opacity: 0.86,
   },
   quickActionPrimaryText: {
     color: WHITE,
@@ -765,191 +447,80 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: FONTS.body,
   },
-  iconButton: {
-    width: 36,
-    height: 36,
+  addressBlock: {
+    padding: 14,
     borderRadius: 18,
     backgroundColor: CARD_ALT,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  addressBlock: {
-    gap: 8,
-    backgroundColor: CARD_ALT,
-    borderRadius: 16,
-    padding: 14,
     borderWidth: 1,
     borderColor: BORDER,
+    gap: 8,
   },
   addressLabel: {
     color: TEXT_SECONDARY,
-    fontSize: 13,
+    fontSize: 12,
     fontFamily: FONTS.body,
   },
   addressValue: {
     color: TEXT_PRIMARY,
-    fontSize: 16,
-    fontFamily: FONTS.body,
-  },
-  primaryButton: {
-    backgroundColor: BLUE,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primaryButtonPressed: {
-    transform: [{ scale: 0.98 }],
-    opacity: 0.92,
-  },
-  primaryButtonText: {
-    color: WHITE,
-    fontSize: 14,
-    fontFamily: FONTS.body,
+    fontSize: 15,
+    fontFamily: FONTS.heading,
   },
   secondaryButton: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 14,
+    backgroundColor: WHITE,
     borderWidth: 1,
     borderColor: BORDER,
-    backgroundColor: CARD_ALT,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'flex-start',
   },
   secondaryButtonPressed: {
-    transform: [{ scale: 0.98 }],
-    opacity: 0.92,
+    opacity: 0.82,
   },
   secondaryButtonText: {
     color: TEXT_PRIMARY,
-    fontSize: 14,
-    fontFamily: FONTS.body,
-  },
-  loadingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  loadingText: {
-    color: TEXT_SECONDARY,
     fontSize: 13,
-    fontFamily: FONTS.body,
-  },
-  loadingShell: {
-    gap: 10,
-  },
-  loadingSkeletonRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 14,
-    borderTopWidth: 1,
-    borderTopColor: BORDER,
-  },
-  loadingSkeletonLeft: {
-    flex: 1,
-    gap: 8,
-  },
-  loadingSkeletonRight: {
-    width: 112,
-    gap: 8,
-    alignItems: 'flex-end',
-  },
-  skeletonBlock: {
-    backgroundColor: CARD_ALT,
-    borderRadius: 999,
-  },
-  skeletonTitle: {
-    width: '46%',
-    height: 13,
-  },
-  skeletonLine: {
-    width: '34%',
-    height: 10,
-  },
-  skeletonValue: {
-    width: '78%',
-    height: 13,
-  },
-  skeletonLineShort: {
-    width: '48%',
-    height: 10,
-  },
-  feedbackBlock: {
-    gap: 12,
-  },
-  errorText: {
-    color: DANGER,
-    fontSize: 13,
-    lineHeight: 18,
     fontFamily: FONTS.body,
   },
   networkSection: {
     gap: 10,
-  },
-  balanceRowFeatured: {
-    backgroundColor: BLUE_WASH,
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    borderTopWidth: 0,
-  },
-  networkHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
   },
   networkTitle: {
     color: TEXT_PRIMARY,
     fontSize: 15,
     fontFamily: FONTS.heading,
   },
-  faucetButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: BLUE_WASH,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyText: {
-    color: TEXT_SECONDARY,
-    fontSize: 13,
-    lineHeight: 18,
-    paddingVertical: 8,
-    fontFamily: FONTS.body,
-  },
   balanceRow: {
     flexDirection: 'row',
     gap: 12,
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: BORDER,
+    padding: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: BORDER,
+    backgroundColor: CARD_ALT,
+  },
+  balanceRowFeatured: {
+    backgroundColor: BLUE_WASH,
   },
   balanceSymbol: {
     color: TEXT_PRIMARY,
-    fontSize: 14,
-    fontFamily: FONTS.body,
+    fontSize: 16,
+    fontFamily: FONTS.heading,
   },
   balanceName: {
     color: TEXT_SECONDARY,
     fontSize: 12,
-    marginTop: 2,
     fontFamily: FONTS.body,
+    marginTop: 2,
   },
   balanceRight: {
     alignItems: 'flex-end',
-    gap: 6,
+    gap: 4,
   },
   balanceAmount: {
     color: TEXT_PRIMARY,
     fontSize: 14,
-    fontFamily: FONTS.body,
+    fontFamily: FONTS.heading,
   },
   balanceUsd: {
     color: TEXT_SECONDARY,
@@ -959,24 +530,101 @@ const styles = StyleSheet.create({
   balanceActions: {
     flexDirection: 'row',
     gap: 8,
-    marginTop: 2,
+    marginTop: 4,
   },
   actionChip: {
-    backgroundColor: BLUE,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 999,
-  },
-  actionChipPressed: {
-    transform: [{ scale: 0.97 }],
-    opacity: 0.9,
+    borderRadius: 14,
+    backgroundColor: WHITE,
+    borderWidth: 1,
+    borderColor: BORDER,
   },
   cashOutChip: {
-    backgroundColor: VIOLET,
+    backgroundColor: '#F5ECFF',
+    borderColor: '#D6BFFF',
+  },
+  actionChipPressed: {
+    opacity: 0.84,
   },
   actionChipText: {
-    color: WHITE,
+    color: TEXT_PRIMARY,
     fontSize: 12,
+    fontFamily: FONTS.body,
+  },
+  loadingShell: {
+    gap: 10,
+  },
+  loadingSkeletonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    padding: 14,
+    borderRadius: 18,
+    backgroundColor: CARD_ALT,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  loadingSkeletonLeft: {
+    gap: 8,
+    flex: 1,
+  },
+  loadingSkeletonRight: {
+    gap: 8,
+    alignItems: 'flex-end',
+  },
+  skeletonBlock: {
+    borderRadius: 999,
+    backgroundColor: '#D8DEE9',
+  },
+  skeletonTitle: {
+    width: 82,
+    height: 14,
+  },
+  skeletonLine: {
+    width: 120,
+    height: 10,
+  },
+  skeletonValue: {
+    width: 74,
+    height: 14,
+  },
+  skeletonLineShort: {
+    width: 52,
+    height: 10,
+  },
+  feedbackBlock: {
+    gap: 10,
+    padding: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: DANGER,
+    backgroundColor: '#FFF0F0',
+  },
+  errorText: {
+    color: DANGER,
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: FONTS.body,
+  },
+  primaryButton: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 14,
+    backgroundColor: BLUE,
+  },
+  primaryButtonPressed: {
+    opacity: 0.84,
+  },
+  primaryButtonText: {
+    color: WHITE,
+    fontSize: 13,
+    fontFamily: FONTS.body,
+  },
+  emptyText: {
+    color: TEXT_SECONDARY,
+    fontSize: 13,
     fontFamily: FONTS.body,
   },
 });
