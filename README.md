@@ -4,15 +4,16 @@ Regents Mobile is the iOS workstream for combining the existing wallet rails fro
 
 ## Current Scope
 
-This baseline currently preserves:
+This app currently includes:
 
 - buy and cash-out rails
 - wallet creation and sign-in flow
 - transfer and history screens
+- agents, terminal, techtree, and autolaunch tabs
 - push notification support
 - sandbox testing support
 
-This baseline does not yet include the Regents agent terminal, Paperclip mobile views, or the Techtree and Autolaunch tabs.
+It also includes early Regents mobile surfaces for agents, terminal sessions, paperclip, techtree, and autolaunch.
 
 ## Repo Shape
 
@@ -83,10 +84,33 @@ Start the mobile app in a second terminal:
 npx expo start
 ```
 
-For a native iOS build instead of Expo Go:
+Expo Go is useful for quick layout checks, but the normal development path for this app is a custom installed iPhone build because wallet, native crypto, passkeys, and push behavior need an installed app.
+
+For a local installed iPhone build:
 
 ```bash
 npx expo run:ios
+```
+
+For an internal installed build through EAS:
+
+```bash
+npx eas-cli@latest build -p ios --profile development
+```
+
+## App Checks
+
+Run the app-side checks from the repo root:
+
+```bash
+npm run test:app
+npm run check:app
+```
+
+Run the server tests from `server/`:
+
+```bash
+npm test
 ```
 
 ## Local Testing Without Sign-In
@@ -108,10 +132,11 @@ This is only for local development. Turn it back off when you want to test the r
 - The wallet rails still rely on Coinbase-hosted purchase and cash-out surfaces where expected.
 - Push notifications should be checked on a physical iPhone. They do not work on the iOS simulator.
 - Sandbox mode remains available for safer test runs.
+- A full release check should be done on an installed iPhone build, not only in Expo Go or the simulator.
 
 ## Planning
 
-The implementation handoff for the Regents iOS build is in [`IMPLEMENTATION_PLAN.md`](./IMPLEMENTATION_PLAN.md). That document is the source for what Phase 1 and beyond should add next.
+The implementation handoff for the Regents iOS build is in [`IMPLEMENTATION_PLAN.md`](./IMPLEMENTATION_PLAN.md).
 
 ### Cashing Out (Offramp)
 
@@ -134,11 +159,15 @@ https://github.com/user-attachments/assets/445e487d-50f6-443b-8072-e4e178668ac7
 ```
 /app/                 # Expo Router pages
   ├─ (tabs)/          # Bottom tab navigation
-  │   ├─ index.tsx    # Home: Onramp form
-  │   ├─ profile.tsx  # Settings & wallet
-  │   └─ history.tsx  # Transaction history
+  │   ├─ wallet.tsx   # Wallet home and buy flow
+  │   ├─ agents.tsx   # Agent overview
+  │   ├─ terminal.tsx # Terminal overview
+  │   ├─ techtree.tsx # Techtree
+  │   └─ autolaunch.tsx # Autolaunch
   ├─ auth/            # Email/phone verification
-  └─ transfer.tsx     # Token transfer
+  ├─ agent/           # Agent detail and paperclip
+  ├─ terminal/        # Terminal detail
+  └─ wallet/          # Wallet history and send flow
 
 /components/          # React components
   ├─ onramp/          # Onramp-specific UI
@@ -148,7 +177,7 @@ https://github.com/user-attachments/assets/445e487d-50f6-443b-8072-e4e178668ac7
   └─ useOnramp.ts     # Onramp logic & API calls
 
 /utils/               # Helper functions
-  ├─ sharedState.ts   # Global state
+  ├─ state/           # Focused runtime state modules
   ├─ create*.ts       # Onramp v2 API
   └─ fetch*.ts        # Onramp v1 API
 
@@ -208,7 +237,7 @@ On Base network, transfers of USDC, EURC, or BTC are **gasless** (no ETH needed 
 
 ### "Push notifications not working"
 - **iOS Simulator**: Push notifications do not work on iOS Simulator. Use a physical device.
-- Should work automatically in Expo Go on physical devices (uses Expo Push Service)
+- Installed builds should be checked on a physical iPhone before a TestFlight release.
 - For webhooks, verify your backend has a public URL (localhost won't work)
 - Check `.env` has correct `EXPO_PUBLIC_BASE_URL`
 - Verify webhook subscription is created in CDP Portal
@@ -248,6 +277,16 @@ Check Expo logs:
 1. Sign out from Profile tab
 2. Force close app
 3. Relaunch
+
+## Release Loop
+
+Before an internal or TestFlight release:
+
+1. Run `npm run test:app`
+2. Run `npm run check:app`
+3. Run server tests from `server/`
+4. Build an installed iPhone app
+5. Verify sign-in, wallet opening, buy, cash-out return flow, and notifications on a physical iPhone
 
 ## Environment Variables
 

@@ -14,7 +14,6 @@ const config: ExpoConfig = {
 
     ios: {
       bundleIdentifier: 'com.regentslabs.mobile',
-      buildNumber: process.env.IOS_BUILD_NUMBER ?? '1.0.0', // bump each submit
       supportsTablet: false,
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,

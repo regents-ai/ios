@@ -51,7 +51,6 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
 
 config.resolver = {
   ...config.resolver,
-  unstable_enableSymlinks: false,
   unstable_enablePackageExports: true,
 };
 
