@@ -1,13 +1,15 @@
+import { MetricChip } from '@/components/agent-surfaces/MetricChip';
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
 import { AgentSummary } from '@/types/agents';
+import { formatRelativeTime } from '@/utils/agent-surfaces/formatters';
 import { TerminalSessionStatus, TerminalSessionSummary } from '@/types/terminal';
 import { createTerminalSession } from '@/utils/createTerminalSession';
 import { fetchAgents } from '@/utils/fetchAgents';
 import { fetchTerminalSessions } from '@/utils/fetchTerminalSessions';
 import { showLocalNotification } from '@/utils/pushNotifications';
-import { hasSeenTerminalNotice, markTerminalNoticeSeen } from '@/utils/sharedState';
+import { hasSeenTerminalNotice, markTerminalNoticeSeen } from '@/utils/state/flowRuntimeState';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -120,15 +122,6 @@ function statusIcon(status: TerminalSessionStatus): IoniconName {
   }
 }
 
-function relativeTime(dateString: string) {
-  const diffMs = Date.now() - new Date(dateString).getTime();
-  const diffMinutes = Math.max(1, Math.round(diffMs / 60000));
-  if (diffMinutes < 60) return `${diffMinutes}m ago`;
-  const diffHours = Math.round(diffMinutes / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
-  return `${Math.round(diffHours / 24)}d ago`;
-}
-
 function urgencyRank(status: TerminalSessionStatus) {
   switch (status) {
     case 'waiting':
@@ -140,23 +133,6 @@ function urgencyRank(status: TerminalSessionStatus) {
     case 'idle':
       return 3;
   }
-}
-
-function MetricChip({
-  label,
-  value,
-  accent,
-}: {
-  label: string;
-  value: string;
-  accent: string;
-}) {
-  return (
-    <View style={styles.metricChip}>
-      <Text style={[styles.metricValue, { color: accent }]}>{value}</Text>
-      <Text style={styles.metricLabel}>{label}</Text>
-    </View>
-  );
 }
 
 function LiveDot({
@@ -300,7 +276,7 @@ function SessionCard({
 
           <View style={styles.sessionTimeBlock}>
             <Text style={styles.sessionUpdatedLabel}>Updated</Text>
-            <Text style={styles.sessionUpdatedValue}>{relativeTime(item.lastUpdatedAt)}</Text>
+            <Text style={styles.sessionUpdatedValue}>{formatRelativeTime(item.lastUpdatedAt)}</Text>
           </View>
         </View>
 
@@ -689,25 +665,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
     flexWrap: 'wrap',
-  },
-  metricChip: {
-    minWidth: 88,
-    backgroundColor: WHITE,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: BORDER,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 4,
-  },
-  metricValue: {
-    fontSize: 19,
-    fontFamily: FONTS.heading,
-  },
-  metricLabel: {
-    color: TEXT_SECONDARY,
-    fontSize: 12,
-    fontFamily: FONTS.body,
   },
   noticePill: {
     alignSelf: 'flex-start',

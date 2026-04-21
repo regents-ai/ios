@@ -2,6 +2,7 @@ import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
 import { AgentSummary } from '@/types/agents';
+import { formatCurrencyAmount, formatRelativeTime, formatWalletAddress } from '@/utils/agent-surfaces/formatters';
 import { fetchAgents } from '@/utils/fetchAgents';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -33,26 +34,6 @@ const {
 const AMBER = '#A3703A';
 const AMBER_WASH = '#F2E7DA';
 const GREEN_WASH = '#E6F0EA';
-
-function formatAddress(address: string) {
-  return `${address.slice(0, 8)}...${address.slice(-6)}`;
-}
-
-function formatCurrency(amount: string) {
-  return Number(amount).toLocaleString('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
-
-function formatRelativeTime(dateString: string) {
-  const diffMs = Date.now() - new Date(dateString).getTime();
-  const diffMinutes = Math.max(1, Math.round(diffMs / 60000));
-  if (diffMinutes < 60) return `${diffMinutes}m ago`;
-  const diffHours = Math.round(diffMinutes / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
-  return `${Math.round(diffHours / 24)}d ago`;
-}
 
 function cardPriority(agent: AgentSummary) {
   if (agent.runtimeStatus === 'offline') return 0;
@@ -231,7 +212,7 @@ export default function AgentsTab() {
         <View style={styles.statGrid}>
           <View style={styles.statBlock}>
             <Text style={styles.statLabel}>Stablecoin balance</Text>
-            <Text style={styles.statValue}>{item.stablecoinSymbol} {formatCurrency(item.stablecoinBalance)}</Text>
+            <Text style={styles.statValue}>{item.stablecoinSymbol} {formatCurrencyAmount(item.stablecoinBalance)}</Text>
           </View>
           <View style={styles.statBlock}>
             <Text style={styles.statLabel}>Last active</Text>
@@ -241,7 +222,7 @@ export default function AgentsTab() {
 
         <View style={styles.walletStrip}>
           <Ionicons name="wallet-outline" size={16} color={TEXT_SECONDARY} />
-          <Text style={styles.addressText}>{formatAddress(item.walletAddress)}</Text>
+          <Text style={styles.addressText}>{formatWalletAddress(item.walletAddress)}</Text>
         </View>
 
         <View style={styles.cardFooter}>
