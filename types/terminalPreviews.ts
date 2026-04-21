@@ -1,34 +1,34 @@
-export type TerminalSessionStatus = 'idle' | 'running' | 'waiting' | 'failed';
+export type PreviewTerminalSessionStatus = 'idle' | 'running' | 'waiting' | 'failed';
 
-export type PendingApproval = {
+export type PreviewPendingApproval = {
   requestId: string;
   label: string;
   details: string;
 };
 
-export type TerminalSessionSummary = {
+export type PreviewTerminalSessionSummary = {
   id: string;
   title: string;
   agentId: string;
   agentName: string;
-  status: TerminalSessionStatus;
+  status: PreviewTerminalSessionStatus;
   preview: string;
   lastUpdatedAt: string;
-  pendingApproval?: PendingApproval;
+  pendingApproval?: PreviewPendingApproval;
 };
 
-export type TerminalSessionDetail = TerminalSessionSummary & {
+export type PreviewTerminalSessionDetail = PreviewTerminalSessionSummary & {
   composerPlaceholder: string;
 };
 
-export type TerminalEvent = {
+export type PreviewTerminalEvent = {
   type: string;
   sessionId: string;
   ts: string;
   chunk?: string;
   text?: string;
   role?: 'user' | 'assistant' | 'system';
-  status?: TerminalSessionStatus;
+  status?: PreviewTerminalSessionStatus;
   requestId?: string;
   label?: string;
   details?: string;

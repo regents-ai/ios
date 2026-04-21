@@ -1,12 +1,12 @@
 import { getBaseUrl } from '@/constants/BASE_URL';
-import { TerminalSessionDetail } from '@/types/terminal';
+import { PreviewTerminalSessionDetail } from '@/types/terminalPreviews';
 import { authenticatedFetch } from './authenticatedFetch';
 
-export async function createTerminalSession(input: {
+export async function createPreviewTerminalSession(input: {
   agentId: string;
   agentName: string;
-}): Promise<TerminalSessionDetail> {
-  const response = await authenticatedFetch(`${getBaseUrl()}/terminal/sessions`, {
+}): Promise<PreviewTerminalSessionDetail> {
+  const response = await authenticatedFetch(`${getBaseUrl()}/mobile-preview/terminal/sessions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -16,7 +16,7 @@ export async function createTerminalSession(input: {
 
   if (!response.ok) {
     const payload = await response.json().catch(() => null);
-    throw new Error(payload?.message || 'Unable to start a terminal session right now.');
+    throw new Error(payload?.message || 'Unable to open this preview session right now.');
   }
 
   const payload = await response.json();

@@ -1,34 +1,34 @@
-type TerminalSessionStatus = 'idle' | 'running' | 'waiting' | 'failed';
+type PreviewTerminalSessionStatus = 'idle' | 'running' | 'waiting' | 'failed';
 
-type PendingApproval = {
+type PreviewPendingApproval = {
   requestId: string;
   label: string;
   details: string;
 };
 
-export type TerminalSessionSummary = {
+export type PreviewTerminalSessionSummary = {
   id: string;
   title: string;
   agentId: string;
   agentName: string;
-  status: TerminalSessionStatus;
+  status: PreviewTerminalSessionStatus;
   preview: string;
   lastUpdatedAt: string;
-  pendingApproval?: PendingApproval;
+  pendingApproval?: PreviewPendingApproval;
 };
 
-export type TerminalSessionDetail = TerminalSessionSummary & {
+export type PreviewTerminalSessionDetail = PreviewTerminalSessionSummary & {
   composerPlaceholder: string;
 };
 
-export type TerminalEvent = {
+export type PreviewTerminalEvent = {
   type: string;
   sessionId: string;
   ts: string;
   chunk?: string;
   text?: string;
   role?: 'user' | 'assistant' | 'system';
-  status?: TerminalSessionStatus;
+  status?: PreviewTerminalSessionStatus;
   requestId?: string;
   label?: string;
   details?: string;
@@ -36,21 +36,21 @@ export type TerminalEvent = {
   message?: string;
 };
 
-type StoredSession = TerminalSessionDetail & {
+type StoredPreviewSession = PreviewTerminalSessionDetail & {
   ownerUserId: string;
-  events: TerminalEvent[];
+  events: PreviewTerminalEvent[];
 };
 
 const reviewOwner = 'testflight-reviewer';
 const fallbackOwner = 'seeded-user';
-const sessionsByOwner = new Map<string, StoredSession[]>();
+const previewSessionsByOwner = new Map<string, StoredPreviewSession[]>();
 
 function nowIso() {
   return new Date().toISOString();
 }
 
-function cloneSession(session: StoredSession): StoredSession {
-  const clonedSession: StoredSession = {
+function clonePreviewSession(session: StoredPreviewSession): StoredPreviewSession {
+  const clonedSession: StoredPreviewSession = {
     ...session,
     events: session.events.map((event) => ({ ...event })),
   };
@@ -62,7 +62,7 @@ function cloneSession(session: StoredSession): StoredSession {
   return clonedSession;
 }
 
-function seedSessions(ownerUserId: string): StoredSession[] {
+function seedPreviewSessions(ownerUserId: string): StoredPreviewSession[] {
   const waitingSessionId = `${ownerUserId}-atlas-session`;
   const activeSessionId = `${ownerUserId}-meridian-session`;
 
@@ -166,14 +166,14 @@ function seedSessions(ownerUserId: string): StoredSession[] {
 
 function getOwnerSessions(userId: string) {
   const ownerId = userId || fallbackOwner;
-  if (!sessionsByOwner.has(ownerId)) {
-    sessionsByOwner.set(ownerId, seedSessions(ownerId).map(cloneSession));
+  if (!previewSessionsByOwner.has(ownerId)) {
+    previewSessionsByOwner.set(ownerId, seedPreviewSessions(ownerId).map(clonePreviewSession));
   }
 
-  return sessionsByOwner.get(ownerId)!;
+  return previewSessionsByOwner.get(ownerId)!;
 }
 
-function updateSessionSummaryFromEvents(session: StoredSession) {
+function updatePreviewSessionSummaryFromEvents(session: StoredPreviewSession) {
   const latestEvent = session.events.at(-1);
   const latestPreviewEvent = [...session.events]
     .reverse()
@@ -206,8 +206,8 @@ function updateSessionSummaryFromEvents(session: StoredSession) {
   }
 }
 
-function toSessionSummary(session: StoredSession): TerminalSessionSummary {
-  const summary: TerminalSessionSummary = {
+function toPreviewSessionSummary(session: StoredPreviewSession): PreviewTerminalSessionSummary {
+  const summary: PreviewTerminalSessionSummary = {
     id: session.id,
     title: session.title,
     agentId: session.agentId,
@@ -224,9 +224,9 @@ function toSessionSummary(session: StoredSession): TerminalSessionSummary {
   return summary;
 }
 
-function toSessionDetail(session: StoredSession): TerminalSessionDetail {
+function toPreviewSessionDetail(session: StoredPreviewSession): PreviewTerminalSessionDetail {
   return {
-    ...toSessionSummary(session),
+    ...toPreviewSessionSummary(session),
     composerPlaceholder: session.composerPlaceholder,
   };
 }
@@ -235,22 +235,22 @@ function findSession(userId: string, sessionId: string) {
   return getOwnerSessions(userId).find((session) => session.id === sessionId) || null;
 }
 
-export function listTerminalSessions(userId: string) {
+export function listPreviewTerminalSessions(userId: string) {
   return getOwnerSessions(userId)
-    .map((session) => toSessionSummary(session))
+    .map((session) => toPreviewSessionSummary(session))
     .sort((a, b) => b.lastUpdatedAt.localeCompare(a.lastUpdatedAt));
 }
 
-export function getTerminalSession(userId: string, sessionId: string) {
+export function getPreviewTerminalSession(userId: string, sessionId: string) {
   const session = findSession(userId, sessionId);
   if (!session) {
     return null;
   }
 
-  return toSessionDetail(session);
+  return toPreviewSessionDetail(session);
 }
 
-export function getTerminalEvents(userId: string, sessionId: string) {
+export function getPreviewTerminalEvents(userId: string, sessionId: string) {
   const session = findSession(userId, sessionId);
   if (!session) {
     return null;
@@ -259,14 +259,14 @@ export function getTerminalEvents(userId: string, sessionId: string) {
   return session.events;
 }
 
-export function createTerminalSession(userId: string, input: { agentId: string; agentName: string }) {
+export function createPreviewTerminalSession(userId: string, input: { agentId: string; agentName: string }) {
   const sessionId = `${input.agentId}-${Date.now()}`;
   const createdAt = nowIso();
 
-  const session: StoredSession = {
+  const session: StoredPreviewSession = {
     ownerUserId: userId || fallbackOwner,
     id: sessionId,
-    title: `${input.agentName} live session`,
+    title: `${input.agentName} preview session`,
     agentId: input.agentId,
     agentName: input.agentName,
     status: 'running',
@@ -290,10 +290,10 @@ export function createTerminalSession(userId: string, input: { agentId: string; 
   };
 
   getOwnerSessions(userId).unshift(session);
-  return getTerminalSession(userId, sessionId)!;
+  return getPreviewTerminalSession(userId, sessionId)!;
 }
 
-export function postTerminalMessage(userId: string, sessionId: string, text: string) {
+export function postPreviewTerminalMessage(userId: string, sessionId: string, text: string) {
   const session = findSession(userId, sessionId);
   if (!session) {
     return null;
@@ -361,11 +361,11 @@ export function postTerminalMessage(userId: string, sessionId: string, text: str
     });
   }
 
-  updateSessionSummaryFromEvents(session);
-  return getTerminalSession(userId, sessionId)!;
+  updatePreviewSessionSummaryFromEvents(session);
+  return getPreviewTerminalSession(userId, sessionId)!;
 }
 
-export function resolveTerminalApproval(
+export function resolvePreviewTerminalApproval(
   userId: string,
   sessionId: string,
   requestId: string,
@@ -424,12 +424,12 @@ export function resolveTerminalApproval(
     status: session.status,
   });
 
-  updateSessionSummaryFromEvents(session);
-  return getTerminalSession(userId, sessionId)!;
+  updatePreviewSessionSummaryFromEvents(session);
+  return getPreviewTerminalSession(userId, sessionId)!;
 }
 
-export function seedReviewTerminalSessions() {
-  if (!sessionsByOwner.has(reviewOwner)) {
+export function seedReviewPreviewTerminalSessions() {
+  if (!previewSessionsByOwner.has(reviewOwner)) {
     getOwnerSessions(reviewOwner);
   }
 }

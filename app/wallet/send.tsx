@@ -16,7 +16,6 @@
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
-import { recordPendingAgentFunding } from '@/utils/state/flowRuntimeState';
 import { isTestSessionActive } from '@/utils/state/reviewSessionState';
 import { useCurrentUser, useSendSolanaTransaction, useSendUserOperation, useSolanaAddress } from '@coinbase/cdp-hooks';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -47,8 +46,6 @@ export default function TransferScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const recipientLabel = typeof params.recipientLabel === 'string' ? params.recipientLabel : null;
-  const sourceAgentId = typeof params.sourceAgentId === 'string' ? params.sourceAgentId : null;
-  const sourceAgentName = typeof params.sourceAgentName === 'string' ? params.sourceAgentName : recipientLabel;
 
   const [recipientAddress, setRecipientAddress] = useState('');
   const [amount, setAmount] = useState('');
@@ -246,16 +243,6 @@ export default function TransferScreen() {
     setSending(true);
     try {
       if (isTestSessionActive()) {
-        if (sourceAgentId && sourceAgentName) {
-          recordPendingAgentFunding({
-            agentId: sourceAgentId,
-            agentName: sourceAgentName,
-            amount,
-            currency: selectedToken.token.symbol,
-            network,
-            createdAt: new Date().toISOString(),
-          });
-        }
         await new Promise(resolve => setTimeout(resolve, 1500));
         showAlert(
           'Review transfer complete',
@@ -327,16 +314,6 @@ export default function TransferScreen() {
         });
       }
 
-      if (sourceAgentId && sourceAgentName) {
-        recordPendingAgentFunding({
-          agentId: sourceAgentId,
-          agentName: sourceAgentName,
-          amount,
-          currency: selectedToken.token?.symbol || 'Token',
-          network,
-          createdAt: new Date().toISOString(),
-        });
-      }
     } catch (error) {
       console.error('EVM transfer error:', error);
       throw error;
@@ -477,18 +454,6 @@ export default function TransferScreen() {
         transaction: serializedTransaction
       });
 
-      if (sourceAgentId && sourceAgentName) {
-        recordPendingAgentFunding({
-          agentId: sourceAgentId,
-          agentName: sourceAgentName,
-          amount,
-          currency: tokenSymbol,
-          network,
-          createdAt: new Date().toISOString(),
-          transactionId: result.transactionSignature,
-        });
-      }
-
       const explorerUrl = isDevnet
         ? `https://explorer.solana.com/tx/${result.transactionSignature}?cluster=devnet`
         : `https://solscan.io/tx/${result.transactionSignature}`;
@@ -516,10 +481,6 @@ export default function TransferScreen() {
   const handleAlertDismiss = () => {
     setAlertVisible(false);
     if (alertType === 'success') {
-      if (sourceAgentId) {
-        router.replace({ pathname: '/agent/[id]' as any, params: { id: sourceAgentId } });
-        return;
-      }
       router.back();
     }
   };

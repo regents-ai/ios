@@ -1,12 +1,12 @@
-type AgentStatus = 'active' | 'attention' | 'paused';
-type RuntimeStatus = 'online' | 'waiting' | 'offline';
-type WithdrawalStatus = 'requested' | 'approved' | 'broadcasting' | 'confirmed' | 'failed';
+type PreviewAgentStatus = 'active' | 'attention' | 'paused';
+type PreviewRuntimeStatus = 'online' | 'waiting' | 'offline';
+type PreviewWithdrawalStatus = 'requested' | 'approved' | 'broadcasting' | 'confirmed' | 'failed';
 
-export type AgentSummary = {
+export type PreviewAgentSummary = {
   id: string;
   name: string;
-  status: AgentStatus;
-  runtimeStatus: RuntimeStatus;
+  status: PreviewAgentStatus;
+  runtimeStatus: PreviewRuntimeStatus;
   walletAddress: string;
   stablecoinSymbol: string;
   stablecoinBalance: string;
@@ -15,39 +15,39 @@ export type AgentSummary = {
   treasuryNote?: string;
 };
 
-export type AgentActivity = {
+export type PreviewAgentActivity = {
   id: string;
   title: string;
   detail: string;
   at: string;
 };
 
-export type AgentWithdrawal = {
+export type PreviewAgentWithdrawal = {
   id: string;
   agentId: string;
   amount: string;
   currency: string;
   destinationWalletAddress: string;
-  status: WithdrawalStatus;
+  status: PreviewWithdrawalStatus;
   createdAt: string;
   updatedAt: string;
 };
 
-export type AgentDetail = AgentSummary & {
+export type PreviewAgentDetail = PreviewAgentSummary & {
   runtimeHeadline: string;
   mission: string;
-  recentActivity: AgentActivity[];
-  withdrawals: AgentWithdrawal[];
+  recentActivity: PreviewAgentActivity[];
+  withdrawals: PreviewAgentWithdrawal[];
 };
 
-export type PaperclipGoal = {
+export type PreviewPaperclipGoal = {
   id: string;
   title: string;
   status: string;
   note?: string;
 };
 
-export type PaperclipTask = {
+export type PreviewPaperclipTask = {
   id: string;
   title: string;
   status: string;
@@ -55,42 +55,42 @@ export type PaperclipTask = {
   note?: string;
 };
 
-export type PaperclipEvent = {
+export type PreviewPaperclipEvent = {
   id: string;
   title: string;
   detail: string;
   at: string;
 };
 
-export type PaperclipRosterMember = {
+export type PreviewPaperclipRosterMember = {
   id: string;
   name: string;
   role: string;
   status: string;
 };
 
-export type PaperclipDetail = {
+export type PreviewPaperclipDetail = {
   agentId: string;
   headline: string;
   companySummary: string;
   dashboardUrl: string;
-  goals: PaperclipGoal[];
-  activeTasks: PaperclipTask[];
-  recentEvents: PaperclipEvent[];
-  roster: PaperclipRosterMember[];
+  goals: PreviewPaperclipGoal[];
+  activeTasks: PreviewPaperclipTask[];
+  recentEvents: PreviewPaperclipEvent[];
+  roster: PreviewPaperclipRosterMember[];
 };
 
-type AgentRecord = AgentDetail & {
+type PreviewAgentRecord = PreviewAgentDetail & {
   ownerUserId: string;
-  paperclip: PaperclipDetail;
+  paperclip: PreviewPaperclipDetail;
 };
 
-const withdrawalIntents = new Map<string, AgentWithdrawal>();
+const previewWithdrawalIntents = new Map<string, PreviewAgentWithdrawal>();
 
 const reviewOwner = 'testflight-reviewer';
 const sharedOwner = 'seeded-user';
 
-const seededAgents: AgentRecord[] = [
+const seededAgents: PreviewAgentRecord[] = [
   {
     ownerUserId: sharedOwner,
     id: 'atlas-capital',
@@ -283,9 +283,9 @@ const seededAgents: AgentRecord[] = [
   },
 ];
 
-const byOwner = new Map<string, AgentRecord[]>();
+const previewAgentsByOwner = new Map<string, PreviewAgentRecord[]>();
 
-function cloneAgent(agent: AgentRecord): AgentRecord {
+function clonePreviewAgent(agent: PreviewAgentRecord): PreviewAgentRecord {
   return {
     ...agent,
     recentActivity: agent.recentActivity.map((item) => ({ ...item })),
@@ -302,26 +302,26 @@ function cloneAgent(agent: AgentRecord): AgentRecord {
 
 function getOwnerStore(userId: string) {
   const ownerId = userId || sharedOwner;
-  if (!byOwner.has(ownerId)) {
-    const seeded = seededAgents.map((agent) => cloneAgent({ ...agent, ownerUserId: ownerId }));
-    byOwner.set(ownerId, seeded);
+  if (!previewAgentsByOwner.has(ownerId)) {
+    const seeded = seededAgents.map((agent) => clonePreviewAgent({ ...agent, ownerUserId: ownerId }));
+    previewAgentsByOwner.set(ownerId, seeded);
   }
 
-  return byOwner.get(ownerId)!;
+  return previewAgentsByOwner.get(ownerId)!;
 }
 
-function findAgentRecord(userId: string, agentId: string) {
+function findPreviewAgentRecord(userId: string, agentId: string) {
   return getOwnerStore(userId).find((agent) => agent.id === agentId) || null;
 }
 
-function toAgentSummary(agent: AgentRecord): AgentSummary {
+function toPreviewAgentSummary(agent: PreviewAgentRecord): PreviewAgentSummary {
   const { ownerUserId: _ownerUserId, paperclip: _paperclip, recentActivity: _recentActivity, withdrawals: _withdrawals, runtimeHeadline: _runtimeHeadline, mission: _mission, ...summary } = agent;
   return summary;
 }
 
-function toAgentDetail(agent: AgentRecord): AgentDetail {
+function toPreviewAgentDetail(agent: PreviewAgentRecord): PreviewAgentDetail {
   return {
-    ...toAgentSummary(agent),
+    ...toPreviewAgentSummary(agent),
     runtimeHeadline: agent.runtimeHeadline,
     mission: agent.mission,
     recentActivity: agent.recentActivity.map((item) => ({ ...item })),
@@ -329,21 +329,21 @@ function toAgentDetail(agent: AgentRecord): AgentDetail {
   };
 }
 
-export function listAgentsForUser(userId: string) {
-  return getOwnerStore(userId).map((agent) => toAgentSummary(agent));
+export function listPreviewAgentsForUser(userId: string) {
+  return getOwnerStore(userId).map((agent) => toPreviewAgentSummary(agent));
 }
 
-export function getAgentForUser(userId: string, agentId: string) {
-  const agent = findAgentRecord(userId, agentId);
+export function getPreviewAgentForUser(userId: string, agentId: string) {
+  const agent = findPreviewAgentRecord(userId, agentId);
   if (!agent) {
     return null;
   }
 
-  return toAgentDetail(agent);
+  return toPreviewAgentDetail(agent);
 }
 
-export function getPaperclipForUser(userId: string, agentId: string) {
-  const agent = findAgentRecord(userId, agentId);
+export function getPreviewPaperclipForUser(userId: string, agentId: string) {
+  const agent = findPreviewAgentRecord(userId, agentId);
   if (!agent) {
     return null;
   }
@@ -357,25 +357,25 @@ export function getPaperclipForUser(userId: string, agentId: string) {
   };
 }
 
-export function createWithdrawalForUser(
+export function createPreviewWithdrawalForUser(
   userId: string,
   agentId: string,
   input: { amount: string; currency: string; destinationWalletAddress: string },
   idempotencyKey: string
 ) {
   const intentKey = `${userId || sharedOwner}:${agentId}:${idempotencyKey}`;
-  const existingIntent = withdrawalIntents.get(intentKey);
+  const existingIntent = previewWithdrawalIntents.get(intentKey);
   if (existingIntent) {
     return existingIntent;
   }
 
-  const agent = findAgentRecord(userId, agentId);
+  const agent = findPreviewAgentRecord(userId, agentId);
   if (!agent) {
     return null;
   }
 
   const now = new Date().toISOString();
-  const withdrawal: AgentWithdrawal = {
+  const withdrawal: PreviewAgentWithdrawal = {
     id: `${agentId}-withdrawal-${agent.withdrawals.length + 1}`,
     agentId,
     amount: input.amount,
@@ -400,13 +400,13 @@ export function createWithdrawalForUser(
   agent.runtimeStatus = 'waiting';
   agent.runtimeHeadline = 'Waiting on operator approval for the next treasury move.';
   agent.lastActiveAt = now;
-  withdrawalIntents.set(intentKey, withdrawal);
+  previewWithdrawalIntents.set(intentKey, withdrawal);
 
   return withdrawal;
 }
 
-export function getWithdrawalForUser(userId: string, agentId: string, withdrawalId: string) {
-  const agent = findAgentRecord(userId, agentId);
+export function getPreviewWithdrawalForUser(userId: string, agentId: string, withdrawalId: string) {
+  const agent = findPreviewAgentRecord(userId, agentId);
   if (!agent) {
     return null;
   }
@@ -414,8 +414,8 @@ export function getWithdrawalForUser(userId: string, agentId: string, withdrawal
   return agent.withdrawals.find((withdrawal) => withdrawal.id === withdrawalId) || null;
 }
 
-export function seedReviewAgents() {
-  if (!byOwner.has(reviewOwner)) {
+export function seedReviewPreviewAgents() {
+  if (!previewAgentsByOwner.has(reviewOwner)) {
     getOwnerStore(reviewOwner);
   }
 }

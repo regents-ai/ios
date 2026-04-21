@@ -1,14 +1,14 @@
 import { getBaseUrl } from '@/constants/BASE_URL';
-import { TerminalSessionDetail } from '@/types/terminal';
+import { PreviewTerminalSessionDetail } from '@/types/terminalPreviews';
 import { authenticatedFetch } from './authenticatedFetch';
 
-export async function resolveTerminalApproval(
+export async function resolvePreviewTerminalApproval(
   sessionId: string,
   requestId: string,
   decision: 'approved' | 'denied'
-): Promise<TerminalSessionDetail> {
+): Promise<PreviewTerminalSessionDetail> {
   const response = await authenticatedFetch(
-    `${getBaseUrl()}/terminal/sessions/${encodeURIComponent(sessionId)}/approvals/${encodeURIComponent(requestId)}`,
+    `${getBaseUrl()}/mobile-preview/terminal/sessions/${encodeURIComponent(sessionId)}/approvals/${encodeURIComponent(requestId)}`,
     {
       method: 'POST',
       headers: {
@@ -20,7 +20,7 @@ export async function resolveTerminalApproval(
 
   if (!response.ok) {
     const payload = await response.json().catch(() => null);
-    throw new Error(payload?.message || 'Unable to resolve that approval right now.');
+    throw new Error(payload?.message || 'Unable to update this preview step right now.');
   }
 
   const payload = await response.json();

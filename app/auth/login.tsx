@@ -80,7 +80,7 @@ export default function LoginScreen() {
           </View>
           <Text style={styles.title}>Move money with a calmer wallet.</Text>
           <Text style={styles.subtitle}>
-            Buy stablecoins, move funds between cash and crypto, and keep close to your agents from one place.
+            Buy stablecoins, move funds between cash and crypto, and preview the future agent tools from one place.
           </Text>
         </View>
 

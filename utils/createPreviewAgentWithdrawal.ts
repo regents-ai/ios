@@ -1,15 +1,15 @@
 import { getBaseUrl } from '@/constants/BASE_URL';
-import { AgentWithdrawal } from '@/types/agents';
+import { PreviewAgentWithdrawal } from '@/types/agentPreviews';
 import { authenticatedFetch } from './authenticatedFetch';
 
-export async function createAgentWithdrawal(input: {
+export async function createPreviewAgentWithdrawal(input: {
   agentId: string;
   amount: string;
   currency: string;
   destinationWalletAddress: string;
   idempotencyKey: string;
-}): Promise<AgentWithdrawal> {
-  const response = await authenticatedFetch(`${getBaseUrl()}/mobile/agents/${encodeURIComponent(input.agentId)}/withdrawals`, {
+}): Promise<PreviewAgentWithdrawal> {
+  const response = await authenticatedFetch(`${getBaseUrl()}/mobile-preview/agents/${encodeURIComponent(input.agentId)}/withdrawals`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -24,7 +24,7 @@ export async function createAgentWithdrawal(input: {
 
   if (!response.ok) {
     const payload = await response.json().catch(() => null);
-    throw new Error(payload?.message || 'Unable to request that withdrawal right now.');
+    throw new Error(payload?.message || 'Unable to load that preview step right now.');
   }
 
   const payload = await response.json();

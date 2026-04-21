@@ -5,24 +5,24 @@ import { z } from 'zod';
 
 import { generateJwt } from '@coinbase/cdp-sdk/auth';
 import {
-  createWithdrawalForUser,
-  getAgentForUser,
-  getPaperclipForUser,
-  getWithdrawalForUser,
-  listAgentsForUser,
-  seedReviewAgents,
-} from './agents.js';
+  createPreviewWithdrawalForUser,
+  getPreviewAgentForUser,
+  getPreviewPaperclipForUser,
+  getPreviewWithdrawalForUser,
+  listPreviewAgentsForUser,
+  seedReviewPreviewAgents,
+} from './agentPreviews.js';
 import { createCdpCustomAuthToken, getCdpJwks } from './identity.js';
 import { resolveClientIp } from './ip.js';
 import {
-  createTerminalSession,
-  getTerminalEvents,
-  getTerminalSession,
-  listTerminalSessions,
-  postTerminalMessage,
-  resolveTerminalApproval,
-  seedReviewTerminalSessions,
-} from './terminal.js';
+  createPreviewTerminalSession,
+  getPreviewTerminalEvents,
+  getPreviewTerminalSession,
+  listPreviewTerminalSessions,
+  postPreviewTerminalMessage,
+  resolvePreviewTerminalApproval,
+  seedReviewPreviewTerminalSessions,
+} from './terminalPreviews.js';
 import {
   buildPushTokenDebugResponse,
   canAccessPushTokenDebug,
@@ -84,8 +84,8 @@ if (process.env.APNS_KEY_ID && process.env.APNS_TEAM_ID && process.env.APNS_KEY)
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
 
-seedReviewAgents();
-seedReviewTerminalSessions();
+seedReviewPreviewAgents();
+seedReviewPreviewTerminalSessions();
 
 // On Vercel, trust proxy to read x-forwarded-for
 app.set('trust proxy', true);
@@ -216,14 +216,14 @@ app.post('/auth/cdp-token', async (req, res) => {
   }
 });
 
-app.get('/mobile/agents', (req, res) => {
+app.get('/mobile-preview/agents', (req, res) => {
   const userId = req.userId || 'seeded-user';
   res.json({
-    agents: listAgentsForUser(userId),
+    agents: listPreviewAgentsForUser(userId),
   });
 });
 
-app.get('/mobile/agents/:id', (req, res) => {
+app.get('/mobile-preview/agents/:id', (req, res) => {
   const paramsSchema = z.object({
     id: z.string().min(1),
   });
@@ -235,7 +235,7 @@ app.get('/mobile/agents/:id', (req, res) => {
     });
   }
 
-  const agent = getAgentForUser(req.userId || 'seeded-user', parsed.data.id);
+  const agent = getPreviewAgentForUser(req.userId || 'seeded-user', parsed.data.id);
   if (!agent) {
     return res.status(404).json({
       error: 'NotFound',
@@ -246,7 +246,7 @@ app.get('/mobile/agents/:id', (req, res) => {
   return res.json(agent);
 });
 
-app.get('/mobile/agents/:id/paperclip', (req, res) => {
+app.get('/mobile-preview/agents/:id/paperclip', (req, res) => {
   const paramsSchema = z.object({
     id: z.string().min(1),
   });
@@ -258,7 +258,7 @@ app.get('/mobile/agents/:id/paperclip', (req, res) => {
     });
   }
 
-  const paperclip = getPaperclipForUser(req.userId || 'seeded-user', parsed.data.id);
+  const paperclip = getPreviewPaperclipForUser(req.userId || 'seeded-user', parsed.data.id);
   if (!paperclip) {
     return res.status(404).json({
       error: 'NotFound',
@@ -269,7 +269,7 @@ app.get('/mobile/agents/:id/paperclip', (req, res) => {
   return res.json(paperclip);
 });
 
-app.post('/mobile/agents/:id/withdrawals', (req, res) => {
+app.post('/mobile-preview/agents/:id/withdrawals', (req, res) => {
   const paramsSchema = z.object({
     id: z.string().min(1),
   });
@@ -303,7 +303,7 @@ app.post('/mobile/agents/:id/withdrawals', (req, res) => {
     });
   }
 
-  const withdrawal = createWithdrawalForUser(req.userId || 'seeded-user', parsedParams.data.id, parsedBody.data, idempotencyKey);
+  const withdrawal = createPreviewWithdrawalForUser(req.userId || 'seeded-user', parsedParams.data.id, parsedBody.data, idempotencyKey);
   if (!withdrawal) {
     return res.status(404).json({
       error: 'NotFound',
@@ -314,7 +314,7 @@ app.post('/mobile/agents/:id/withdrawals', (req, res) => {
   return res.status(201).json({ withdrawal });
 });
 
-app.get('/mobile/agents/:id/withdrawals/:withdrawalId', (req, res) => {
+app.get('/mobile-preview/agents/:id/withdrawals/:withdrawalId', (req, res) => {
   const paramsSchema = z.object({
     id: z.string().min(1),
     withdrawalId: z.string().min(1),
@@ -327,7 +327,7 @@ app.get('/mobile/agents/:id/withdrawals/:withdrawalId', (req, res) => {
     });
   }
 
-  const withdrawal = getWithdrawalForUser(req.userId || 'seeded-user', parsed.data.id, parsed.data.withdrawalId);
+  const withdrawal = getPreviewWithdrawalForUser(req.userId || 'seeded-user', parsed.data.id, parsed.data.withdrawalId);
   if (!withdrawal) {
     return res.status(404).json({
       error: 'NotFound',
@@ -338,13 +338,13 @@ app.get('/mobile/agents/:id/withdrawals/:withdrawalId', (req, res) => {
   return res.json({ withdrawal });
 });
 
-app.get('/terminal/sessions', (req, res) => {
+app.get('/mobile-preview/terminal/sessions', (req, res) => {
   res.json({
-    sessions: listTerminalSessions(req.userId || 'seeded-user'),
+    sessions: listPreviewTerminalSessions(req.userId || 'seeded-user'),
   });
 });
 
-app.post('/terminal/sessions', (req, res) => {
+app.post('/mobile-preview/terminal/sessions', (req, res) => {
   const bodySchema = z.object({
     agentId: z.string().min(1),
     agentName: z.string().min(1),
@@ -357,11 +357,11 @@ app.post('/terminal/sessions', (req, res) => {
     });
   }
 
-  const session = createTerminalSession(req.userId || 'seeded-user', parsedBody.data);
+  const session = createPreviewTerminalSession(req.userId || 'seeded-user', parsedBody.data);
   return res.status(201).json({ session });
 });
 
-app.get('/terminal/sessions/:id', (req, res) => {
+app.get('/mobile-preview/terminal/sessions/:id', (req, res) => {
   const paramsSchema = z.object({
     id: z.string().min(1),
   });
@@ -373,7 +373,7 @@ app.get('/terminal/sessions/:id', (req, res) => {
     });
   }
 
-  const session = getTerminalSession(req.userId || 'seeded-user', parsed.data.id);
+  const session = getPreviewTerminalSession(req.userId || 'seeded-user', parsed.data.id);
   if (!session) {
     return res.status(404).json({
       error: 'NotFound',
@@ -384,7 +384,7 @@ app.get('/terminal/sessions/:id', (req, res) => {
   return res.json({ session });
 });
 
-app.get('/terminal/sessions/:id/events', (req, res) => {
+app.get('/mobile-preview/terminal/sessions/:id/events', (req, res) => {
   const paramsSchema = z.object({
     id: z.string().min(1),
   });
@@ -396,7 +396,7 @@ app.get('/terminal/sessions/:id/events', (req, res) => {
     });
   }
 
-  const events = getTerminalEvents(req.userId || 'seeded-user', parsed.data.id);
+  const events = getPreviewTerminalEvents(req.userId || 'seeded-user', parsed.data.id);
   if (!events) {
     return res.status(404).json({
       error: 'NotFound',
@@ -407,7 +407,7 @@ app.get('/terminal/sessions/:id/events', (req, res) => {
   return res.json({ events });
 });
 
-app.post('/terminal/sessions/:id/messages', (req, res) => {
+app.post('/mobile-preview/terminal/sessions/:id/messages', (req, res) => {
   const paramsSchema = z.object({
     id: z.string().min(1),
   });
@@ -424,7 +424,7 @@ app.post('/terminal/sessions/:id/messages', (req, res) => {
     });
   }
 
-  const session = postTerminalMessage(req.userId || 'seeded-user', parsedParams.data.id, parsedBody.data.text);
+  const session = postPreviewTerminalMessage(req.userId || 'seeded-user', parsedParams.data.id, parsedBody.data.text);
   if (!session) {
     return res.status(404).json({
       error: 'NotFound',
@@ -435,7 +435,7 @@ app.post('/terminal/sessions/:id/messages', (req, res) => {
   return res.status(202).json({ session });
 });
 
-app.post('/terminal/sessions/:id/approvals/:requestId', (req, res) => {
+app.post('/mobile-preview/terminal/sessions/:id/approvals/:requestId', (req, res) => {
   const paramsSchema = z.object({
     id: z.string().min(1),
     requestId: z.string().min(1),
@@ -453,7 +453,7 @@ app.post('/terminal/sessions/:id/approvals/:requestId', (req, res) => {
     });
   }
 
-  const session = resolveTerminalApproval(
+  const session = resolvePreviewTerminalApproval(
     req.userId || 'seeded-user',
     parsedParams.data.id,
     parsedParams.data.requestId,

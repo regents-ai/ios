@@ -1,28 +1,19 @@
 import { MetricChip } from '@/components/agent-surfaces/MetricChip';
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
+import { PreviewNotice } from '@/components/ui/PreviewNotice';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
-import { AgentSummary } from '@/types/agents';
+import { PreviewTerminalSessionStatus, PreviewTerminalSessionSummary } from '@/types/terminalPreviews';
 import { formatRelativeTime } from '@/utils/agent-surfaces/formatters';
-import { TerminalSessionStatus, TerminalSessionSummary } from '@/types/terminal';
-import { createTerminalSession } from '@/utils/createTerminalSession';
-import { fetchAgents } from '@/utils/fetchAgents';
-import { fetchTerminalSessions } from '@/utils/fetchTerminalSessions';
-import { showLocalNotification } from '@/utils/pushNotifications';
-import { hasSeenTerminalNotice, markTerminalNoticeSeen } from '@/utils/state/flowRuntimeState';
+import { fetchPreviewTerminalSessions } from '@/utils/fetchPreviewTerminalSessions';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
-  AccessibilityInfo,
   ActivityIndicator,
-  Animated,
-  Easing,
   FlatList,
-  Modal,
   Pressable,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -30,60 +21,33 @@ import {
 
 const { DARK_BG, CARD_BG, CARD_ALT, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, BORDER, WHITE, SUCCESS, DANGER, BLUE_WASH, ORANGE } = COLORS;
 
-type IoniconName = ComponentProps<typeof Ionicons>['name'];
-
-function useReduceMotion() {
-  const [reduceMotion, setReduceMotion] = useState(false);
-
-  useEffect(() => {
-    let active = true;
-
-    AccessibilityInfo.isReduceMotionEnabled()
-      .then((enabled) => {
-        if (active) {
-          setReduceMotion(enabled);
-        }
-      })
-      .catch(() => {});
-
-    const subscription = AccessibilityInfo.addEventListener?.('reduceMotionChanged', setReduceMotion);
-
-    return () => {
-      active = false;
-      subscription?.remove?.();
-    };
-  }, []);
-
-  return reduceMotion;
-}
-
-function statusCopy(status: TerminalSessionStatus) {
+function statusCopy(status: PreviewTerminalSessionStatus) {
   switch (status) {
     case 'idle':
       return 'Ready';
     case 'running':
-      return 'Working now';
+      return 'Working';
     case 'waiting':
-      return 'Waiting on you';
+      return 'Review shown';
     case 'failed':
-      return 'Needs attention';
+      return 'Needs review';
   }
 }
 
-function statusEyebrow(status: TerminalSessionStatus) {
+function statusEyebrow(status: PreviewTerminalSessionStatus) {
   switch (status) {
     case 'idle':
-      return 'Quiet session';
+      return 'Quiet example';
     case 'running':
-      return 'Live now';
+      return 'Active example';
     case 'waiting':
-      return 'Needs your answer';
+      return 'Review example';
     case 'failed':
-      return 'Review soon';
+      return 'Issue example';
   }
 }
 
-function statusColor(status: TerminalSessionStatus) {
+function statusColor(status: PreviewTerminalSessionStatus) {
   switch (status) {
     case 'idle':
       return TEXT_SECONDARY;
@@ -96,7 +60,7 @@ function statusColor(status: TerminalSessionStatus) {
   }
 }
 
-function statusBackground(status: TerminalSessionStatus) {
+function statusBackground(status: PreviewTerminalSessionStatus) {
   switch (status) {
     case 'idle':
       return WHITE;
@@ -109,20 +73,7 @@ function statusBackground(status: TerminalSessionStatus) {
   }
 }
 
-function statusIcon(status: TerminalSessionStatus): IoniconName {
-  switch (status) {
-    case 'idle':
-      return 'pause-circle-outline';
-    case 'running':
-      return 'sparkles-outline';
-    case 'waiting':
-      return 'alert-circle-outline';
-    case 'failed':
-      return 'warning-outline';
-  }
-}
-
-function urgencyRank(status: TerminalSessionStatus) {
+function urgencyRank(status: PreviewTerminalSessionStatus) {
   switch (status) {
     case 'waiting':
       return 0;
@@ -135,246 +86,74 @@ function urgencyRank(status: TerminalSessionStatus) {
   }
 }
 
-function LiveDot({
-  color,
-  animate,
-}: {
-  color: string;
-  animate: boolean;
-}) {
-  const pulse = useRef(new Animated.Value(1)).current;
-
-  useEffect(() => {
-    if (!animate) {
-      pulse.setValue(1);
-      return;
-    }
-
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, {
-          toValue: 0.45,
-          duration: 850,
-          easing: Easing.out(Easing.quad),
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulse, {
-          toValue: 1,
-          duration: 850,
-          easing: Easing.out(Easing.quad),
-          useNativeDriver: true,
-        }),
-      ])
-    );
-
-    loop.start();
-    return () => loop.stop();
-  }, [animate, pulse]);
-
-  return (
-    <Animated.View
-      style={[
-        styles.liveDot,
-        {
-          backgroundColor: color,
-          opacity: pulse,
-          transform: [{ scale: pulse }],
-        },
-      ]}
-    />
-  );
-}
-
 function SessionCard({
   item,
-  index,
-  reduceMotion,
   onPress,
 }: {
-  item: TerminalSessionSummary;
-  index: number;
-  reduceMotion: boolean;
+  item: PreviewTerminalSessionSummary;
   onPress: () => void;
 }) {
-  const pressScale = useRef(new Animated.Value(1)).current;
-  const enterOpacity = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
-  const enterY = useRef(new Animated.Value(reduceMotion ? 0 : 18)).current;
   const accent = statusColor(item.status);
 
-  useEffect(() => {
-    if (reduceMotion) {
-      enterOpacity.setValue(1);
-      enterY.setValue(0);
-      return;
-    }
-
-    Animated.parallel([
-      Animated.timing(enterOpacity, {
-        toValue: 1,
-        duration: 280,
-        delay: index * 45,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.timing(enterY, {
-        toValue: 0,
-        duration: 320,
-        delay: index * 45,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [enterOpacity, enterY, index, reduceMotion]);
-
-  const handlePressIn = () => {
-    if (reduceMotion) {
-      return;
-    }
-
-    Animated.spring(pressScale, {
-      toValue: 0.985,
-      useNativeDriver: true,
-      speed: 28,
-      bounciness: 0,
-    }).start();
-  };
-
-  const handlePressOut = () => {
-    if (reduceMotion) {
-      return;
-    }
-
-    Animated.spring(pressScale, {
-      toValue: 1,
-      useNativeDriver: true,
-      speed: 20,
-      bounciness: 0,
-    }).start();
-  };
-
   return (
-    <Animated.View
-      style={{
-        opacity: enterOpacity,
-        transform: [{ translateY: enterY }, { scale: pressScale }],
-      }}
-    >
-      <Pressable
-        onPress={onPress}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
-        style={styles.sessionCard}
-      >
-        <View style={[styles.sessionAccent, { backgroundColor: accent }]} />
+    <Pressable style={({ pressed }) => [styles.sessionCard, pressed && styles.cardPressed]} onPress={onPress}>
+      <View style={[styles.sessionAccent, { backgroundColor: accent }]} />
 
-        <View style={styles.sessionTopRow}>
-          <View style={styles.sessionTitleBlock}>
-            <Text style={styles.sessionEyebrow}>{statusEyebrow(item.status)}</Text>
-            <Text style={styles.sessionTitle}>{item.title}</Text>
-            <Text style={styles.sessionAgent}>{item.agentName}</Text>
-          </View>
-
-          <View style={styles.sessionTimeBlock}>
-            <Text style={styles.sessionUpdatedLabel}>Updated</Text>
-            <Text style={styles.sessionUpdatedValue}>{formatRelativeTime(item.lastUpdatedAt)}</Text>
-          </View>
+      <View style={styles.sessionTopRow}>
+        <View style={styles.sessionTitleBlock}>
+          <Text style={styles.sessionEyebrow}>{statusEyebrow(item.status)}</Text>
+          <Text style={styles.sessionTitle}>{item.title}</Text>
+          <Text style={styles.sessionAgent}>{item.agentName}</Text>
         </View>
 
-        <View style={styles.sessionStatusRow}>
-          <View style={[styles.statusCluster, { backgroundColor: statusBackground(item.status), borderColor: accent }]}>
-            <LiveDot color={accent} animate={!reduceMotion && item.status !== 'idle'} />
-            <Ionicons name={statusIcon(item.status)} size={15} color={accent} />
-            <Text style={[styles.statusClusterText, { color: accent }]}>{statusCopy(item.status)}</Text>
-          </View>
-          {item.pendingApproval ? (
-            <View style={styles.inlineApprovalPill}>
-              <Ionicons name="key-outline" size={14} color={BLUE} />
-              <Text style={styles.inlineApprovalPillText}>Approval waiting</Text>
-            </View>
-          ) : null}
+        <View style={styles.sessionTimeBlock}>
+          <Text style={styles.sessionUpdatedLabel}>Updated</Text>
+          <Text style={styles.sessionUpdatedValue}>{formatRelativeTime(item.lastUpdatedAt)}</Text>
         </View>
+      </View>
 
-        <View style={styles.previewBlock}>
-          <Text style={styles.previewLabel}>Latest update</Text>
-          <Text style={styles.sessionPreview}>{item.preview}</Text>
+      <View style={styles.sessionStatusRow}>
+        <View style={[styles.statusCluster, { backgroundColor: statusBackground(item.status), borderColor: accent }]}>
+          <Text style={[styles.statusClusterText, { color: accent }]}>{statusCopy(item.status)}</Text>
         </View>
-
         {item.pendingApproval ? (
-          <View style={styles.approvalBanner}>
-            <View style={styles.approvalBannerIcon}>
-              <Ionicons name="alert-circle-outline" size={16} color={ORANGE} />
-            </View>
-            <View style={styles.approvalBannerCopy}>
-              <Text style={styles.approvalBannerTitle}>{item.pendingApproval.label}</Text>
-              <Text style={styles.approvalText}>{item.pendingApproval.details}</Text>
-            </View>
+          <View style={styles.inlineApprovalPill}>
+            <Ionicons name="eye-outline" size={14} color={BLUE} />
+            <Text style={styles.inlineApprovalPillText}>Preview step</Text>
           </View>
         ) : null}
+      </View>
 
-        <View style={styles.sessionFooter}>
-          <Text style={styles.openLabel}>Open session</Text>
-          <Ionicons name="chevron-forward" size={18} color={BLUE} />
+      <View style={styles.previewBlock}>
+        <Text style={styles.previewLabel}>Sample update</Text>
+        <Text style={styles.sessionPreview}>{item.preview}</Text>
+      </View>
+
+      {item.pendingApproval ? (
+        <View style={styles.approvalBanner}>
+          <View style={styles.approvalBannerIcon}>
+            <Ionicons name="alert-circle-outline" size={16} color={ORANGE} />
+          </View>
+          <View style={styles.approvalBannerCopy}>
+            <Text style={styles.approvalBannerTitle}>{item.pendingApproval.label}</Text>
+            <Text style={styles.approvalText}>{item.pendingApproval.details}</Text>
+          </View>
         </View>
-      </Pressable>
-    </Animated.View>
-  );
-}
+      ) : null}
 
-function StartButton({
-  onPress,
-  reduceMotion,
-}: {
-  onPress: () => void;
-  reduceMotion: boolean;
-}) {
-  const scale = useRef(new Animated.Value(1)).current;
-
-  const handlePressIn = () => {
-    if (reduceMotion) {
-      return;
-    }
-
-    Animated.spring(scale, {
-      toValue: 0.97,
-      useNativeDriver: true,
-      speed: 24,
-      bounciness: 0,
-    }).start();
-  };
-
-  const handlePressOut = () => {
-    if (reduceMotion) {
-      return;
-    }
-
-    Animated.spring(scale, {
-      toValue: 1,
-      useNativeDriver: true,
-      speed: 18,
-      bounciness: 0,
-    }).start();
-  };
-
-  return (
-    <Animated.View style={{ transform: [{ scale }] }}>
-      <Pressable style={styles.primaryButton} onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
-        <Ionicons name="add-circle-outline" size={16} color={WHITE} />
-        <Text style={styles.primaryButtonText}>Start session</Text>
-      </Pressable>
-    </Animated.View>
+      <View style={styles.sessionFooter}>
+        <Text style={styles.openLabel}>Open preview</Text>
+        <Ionicons name="chevron-forward" size={18} color={BLUE} />
+      </View>
+    </Pressable>
   );
 }
 
 export default function TerminalTab() {
   const router = useRouter();
-  const reduceMotion = useReduceMotion();
-  const [sessions, setSessions] = useState<TerminalSessionSummary[]>([]);
-  const [agents, setAgents] = useState<AgentSummary[]>([]);
+  const [sessions, setSessions] = useState<PreviewTerminalSessionSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [showStartModal, setShowStartModal] = useState(false);
-  const [creatingSessionId, setCreatingSessionId] = useState<string | null>(null);
-  const hasPrimedNotifications = useRef(false);
   const [alertState, setAlertState] = useState<{
     visible: boolean;
     title: string;
@@ -387,52 +166,6 @@ export default function TerminalTab() {
     type: 'info',
   });
 
-  const primeTerminalNoticeState = useCallback((items: TerminalSessionSummary[]) => {
-    items.forEach((session) => {
-      if (session.status === 'waiting' && session.pendingApproval) {
-        markTerminalNoticeSeen(`waiting:${session.id}:${session.pendingApproval.requestId}`);
-      }
-
-      if (session.status === 'idle') {
-        markTerminalNoticeSeen(`idle:${session.id}:${session.lastUpdatedAt}`);
-      }
-    });
-  }, []);
-
-  const notifyAboutSessionChanges = useCallback(async (items: TerminalSessionSummary[]) => {
-    if (!hasPrimedNotifications.current) {
-      primeTerminalNoticeState(items);
-      hasPrimedNotifications.current = true;
-      return;
-    }
-
-    for (const session of items) {
-      if (session.status === 'waiting' && session.pendingApproval) {
-        const noticeKey = `waiting:${session.id}:${session.pendingApproval.requestId}`;
-        if (!hasSeenTerminalNotice(noticeKey)) {
-          markTerminalNoticeSeen(noticeKey);
-          await showLocalNotification(
-            'Approval needed',
-            `${session.agentName} is waiting for your answer in Terminal.`,
-            { sessionId: session.id, kind: 'approval-needed' }
-          );
-        }
-      }
-
-      if (session.status === 'idle') {
-        const noticeKey = `idle:${session.id}:${session.lastUpdatedAt}`;
-        if (!hasSeenTerminalNotice(noticeKey)) {
-          markTerminalNoticeSeen(noticeKey);
-          await showLocalNotification(
-            'New terminal update',
-            `${session.agentName} shared a fresh update in Terminal.`,
-            { sessionId: session.id, kind: 'session-update' }
-          );
-        }
-      }
-    }
-  }, [primeTerminalNoticeState]);
-
   const loadTerminal = useCallback(async (refresh = false) => {
     try {
       if (refresh) {
@@ -441,18 +174,12 @@ export default function TerminalTab() {
         setLoading(true);
       }
 
-      const [nextSessions, nextAgents] = await Promise.all([
-        fetchTerminalSessions(),
-        fetchAgents(),
-      ]);
-
-      await notifyAboutSessionChanges(nextSessions);
+      const nextSessions = await fetchPreviewTerminalSessions();
       setSessions(nextSessions);
-      setAgents(nextAgents);
     } catch (error) {
       setAlertState({
         visible: true,
-        title: 'Unable to load terminal sessions',
+        title: 'Unable to load preview sessions',
         message: error instanceof Error ? error.message : 'Try again in a moment.',
         type: 'error',
       });
@@ -460,7 +187,7 @@ export default function TerminalTab() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [notifyAboutSessionChanges]);
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -496,48 +223,27 @@ export default function TerminalTab() {
     [sessions]
   );
 
-  const startSession = async (agent: AgentSummary) => {
-    try {
-      setCreatingSessionId(agent.id);
-      const session = await createTerminalSession({
-        agentId: agent.id,
-        agentName: agent.name,
-      });
-      setShowStartModal(false);
-      await loadTerminal(true);
-      router.push({ pathname: '/terminal/[id]' as any, params: { id: session.id } });
-    } catch (error) {
-      setAlertState({
-        visible: true,
-        title: 'Unable to start session',
-        message: error instanceof Error ? error.message : 'Try again in a moment.',
-        type: 'error',
-      });
-    } finally {
-      setCreatingSessionId(null);
-    }
-  };
-
   return (
     <View style={styles.container}>
       <View style={styles.heroCard}>
         <Text style={styles.eyebrow}>Regents Mobile</Text>
         <Text style={styles.heroTitle}>Terminal</Text>
         <Text style={styles.heroIntro}>
-          Watch live work, jump into a session, and answer requests before an agent gets stuck.
+          These sample sessions show how updates, review prompts, and conversation history may look in a later build.
         </Text>
+        <PreviewNotice body="These are built-in sample sessions. They do not send notes, approve actions, or control a live Regent session in this build." />
 
         <View style={styles.metricRow}>
-          <MetricChip label="Waiting" value={`${sessionsNeedingApproval}`} accent={ORANGE} />
-          <MetricChip label="Live" value={`${sessionsRunning}`} accent={SUCCESS} />
-          <MetricChip label="Review" value={`${sessionsNeedingAttention}`} accent={DANGER} />
+          <MetricChip label="Review" value={`${sessionsNeedingApproval}`} accent={ORANGE} />
+          <MetricChip label="Working" value={`${sessionsRunning}`} accent={SUCCESS} />
+          <MetricChip label="Issues" value={`${sessionsNeedingAttention}`} accent={DANGER} />
         </View>
 
         {sessionsNeedingApproval > 0 ? (
           <View style={styles.noticePill}>
-            <Ionicons name="notifications-outline" size={16} color={BLUE} />
+            <Ionicons name="eye-outline" size={16} color={BLUE} />
             <Text style={styles.noticeText}>
-              {sessionsNeedingApproval} session{sessionsNeedingApproval === 1 ? '' : 's'} are waiting on you
+              {sessionsNeedingApproval} sample session{sessionsNeedingApproval === 1 ? '' : 's'} include a review example
             </Text>
           </View>
         ) : null}
@@ -545,26 +251,37 @@ export default function TerminalTab() {
 
       <View style={styles.toolbar}>
         <View style={styles.toolbarCopy}>
-          <Text style={styles.toolbarTitle}>Recent sessions</Text>
-          <Text style={styles.toolbarSubtitle}>The list stays sorted so the most urgent work stays at the top.</Text>
+          <Text style={styles.toolbarTitle}>Sample sessions</Text>
+          <Text style={styles.toolbarSubtitle}>The list stays sorted so the most useful preview examples stay near the top.</Text>
         </View>
-        <StartButton onPress={() => setShowStartModal(true)} reduceMotion={reduceMotion} />
+        <Pressable
+          style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}
+          onPress={() =>
+            setAlertState({
+              visible: true,
+              title: 'Preview only',
+              message: 'This screen shows sample sessions only. Starting a real session comes later.',
+              type: 'info',
+            })
+          }
+        >
+          <Ionicons name="eye-outline" size={16} color={WHITE} />
+          <Text style={styles.primaryButtonText}>Preview only</Text>
+        </Pressable>
       </View>
 
       {loading ? (
         <View style={styles.centerState}>
           <ActivityIndicator size="large" color={BLUE} />
-          <Text style={styles.loadingText}>Loading sessions…</Text>
+          <Text style={styles.loadingText}>Loading sample sessions…</Text>
         </View>
       ) : (
         <FlatList
           data={orderedSessions}
           keyExtractor={(item) => item.id}
-          renderItem={({ item, index }) => (
+          renderItem={({ item }) => (
             <SessionCard
               item={item}
-              index={index}
-              reduceMotion={reduceMotion}
               onPress={() => router.push({ pathname: '/terminal/[id]' as any, params: { id: item.id } })}
             />
           )}
@@ -573,48 +290,12 @@ export default function TerminalTab() {
           ListEmptyComponent={
             <View style={styles.emptyCard}>
               <Ionicons name="terminal-outline" size={34} color={BLUE} />
-              <Text style={styles.emptyTitle}>No sessions yet</Text>
-              <Text style={styles.emptyText}>Start a session when you want to check in with an agent from your phone.</Text>
+              <Text style={styles.emptyTitle}>No sample sessions yet</Text>
+              <Text style={styles.emptyText}>Sample sessions will appear here when this preview data is available.</Text>
             </View>
           }
         />
       )}
-
-      <Modal visible={showStartModal} transparent animationType="fade" onRequestClose={() => setShowStartModal(false)}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Start a session</Text>
-            <Text style={styles.modalBody}>Choose the agent you want to reach right now.</Text>
-            <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
-              <View style={styles.agentChoiceList}>
-                {agents.map((agent) => (
-                  <Pressable
-                    key={agent.id}
-                    style={({ pressed }) => [styles.agentChoice, pressed && styles.agentChoicePressed]}
-                    onPress={() => startSession(agent)}
-                    disabled={creatingSessionId === agent.id}
-                  >
-                    <View style={styles.agentChoiceCopy}>
-                      <Text style={styles.agentChoiceTitle}>{agent.name}</Text>
-                      <Text style={styles.agentChoiceSubtitle}>
-                        {agent.treasuryNote || 'Open a live session and keep things moving from your phone.'}
-                      </Text>
-                    </View>
-                    {creatingSessionId === agent.id ? (
-                      <ActivityIndicator size="small" color={BLUE} />
-                    ) : (
-                      <Ionicons name="arrow-forward" size={18} color={BLUE} />
-                    )}
-                  </Pressable>
-                ))}
-              </View>
-            </ScrollView>
-            <Pressable style={styles.secondaryButton} onPress={() => setShowStartModal(false)}>
-              <Text style={styles.secondaryButtonText}>Close</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
 
       <CoinbaseAlert
         visible={alertState.visible}
@@ -719,20 +400,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: FONTS.body,
   },
-  secondaryButton: {
-    backgroundColor: WHITE,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: BORDER,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  secondaryButtonText: {
-    color: TEXT_PRIMARY,
-    fontSize: 14,
-    fontFamily: FONTS.body,
+  buttonPressed: {
+    opacity: 0.92,
+    transform: [{ scale: 0.985 }],
   },
   centerState: {
     flex: 1,
@@ -759,33 +429,34 @@ const styles = StyleSheet.create({
     gap: 14,
     overflow: 'hidden',
   },
+  cardPressed: {
+    opacity: 0.96,
+    transform: [{ scale: 0.985 }],
+  },
   sessionAccent: {
     position: 'absolute',
     left: 0,
     top: 0,
     bottom: 0,
-    width: 6,
+    width: 4,
   },
   sessionTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 12,
-    paddingLeft: 6,
+    gap: 14,
   },
   sessionTitleBlock: {
     flex: 1,
-    gap: 4,
+    gap: 3,
   },
   sessionEyebrow: {
-    color: TEXT_SECONDARY,
-    fontSize: 11,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
+    color: BLUE,
+    fontSize: 12,
     fontFamily: FONTS.body,
   },
   sessionTitle: {
     color: TEXT_PRIMARY,
-    fontSize: 23,
+    fontSize: 22,
     fontFamily: FONTS.heading,
   },
   sessionAgent: {
@@ -795,44 +466,33 @@ const styles = StyleSheet.create({
   },
   sessionTimeBlock: {
     alignItems: 'flex-end',
-    gap: 2,
+    gap: 3,
   },
   sessionUpdatedLabel: {
     color: TEXT_SECONDARY,
     fontSize: 11,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
     fontFamily: FONTS.body,
+    textTransform: 'uppercase',
   },
   sessionUpdatedValue: {
     color: TEXT_PRIMARY,
-    fontSize: 13,
+    fontSize: 12,
     fontFamily: FONTS.body,
   },
   sessionStatusRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-    paddingLeft: 6,
     flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 10,
   },
   statusCluster: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
     borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
-  liveDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
   statusClusterText: {
-    fontSize: 13,
+    fontSize: 12,
     fontFamily: FONTS.body,
   },
   inlineApprovalPill: {
@@ -841,10 +501,8 @@ const styles = StyleSheet.create({
     gap: 6,
     backgroundColor: BLUE_WASH,
     borderRadius: 999,
-    borderWidth: 1,
-    borderColor: BORDER,
     paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingVertical: 6,
   },
   inlineApprovalPillText: {
     color: BLUE,
@@ -852,15 +510,13 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.body,
   },
   previewBlock: {
-    gap: 8,
-    paddingLeft: 6,
+    gap: 6,
   },
   previewLabel: {
     color: TEXT_SECONDARY,
-    fontSize: 11,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
+    fontSize: 12,
     fontFamily: FONTS.body,
+    textTransform: 'uppercase',
   },
   sessionPreview: {
     color: TEXT_PRIMARY,
@@ -870,22 +526,15 @@ const styles = StyleSheet.create({
   },
   approvalBanner: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
     gap: 10,
-    backgroundColor: '#F7EDDE',
-    borderRadius: 18,
+    backgroundColor: '#FFF7EA',
     borderWidth: 1,
     borderColor: BORDER,
-    padding: 14,
-    marginLeft: 6,
+    borderRadius: 18,
+    padding: 12,
   },
   approvalBannerIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: WHITE,
+    marginTop: 1,
   },
   approvalBannerCopy: {
     flex: 1,
@@ -897,16 +546,15 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.heading,
   },
   approvalText: {
-    color: TEXT_PRIMARY,
+    color: TEXT_SECONDARY,
     fontSize: 13,
     lineHeight: 18,
     fontFamily: FONTS.body,
   },
   sessionFooter: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingLeft: 6,
+    justifyContent: 'space-between',
   },
   openLabel: {
     color: BLUE,
@@ -915,83 +563,23 @@ const styles = StyleSheet.create({
   },
   emptyCard: {
     backgroundColor: CARD_BG,
-    borderRadius: 24,
     borderWidth: 1,
     borderColor: BORDER,
-    padding: 28,
+    borderRadius: 24,
+    padding: 24,
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
   },
   emptyTitle: {
     color: TEXT_PRIMARY,
-    fontSize: 24,
+    fontSize: 22,
     fontFamily: FONTS.heading,
   },
   emptyText: {
     color: TEXT_SECONDARY,
-    fontSize: 14,
-    lineHeight: 20,
     textAlign: 'center',
-    fontFamily: FONTS.body,
-  },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(49, 85, 105, 0.24)',
-    justifyContent: 'center',
-    paddingHorizontal: 20,
-  },
-  modalCard: {
-    backgroundColor: CARD_BG,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: BORDER,
-    padding: 20,
-    gap: 14,
-  },
-  modalTitle: {
-    color: TEXT_PRIMARY,
-    fontSize: 24,
-    fontFamily: FONTS.heading,
-  },
-  modalBody: {
-    color: TEXT_SECONDARY,
     fontSize: 14,
     lineHeight: 20,
-    fontFamily: FONTS.body,
-  },
-  modalScroll: {
-    maxHeight: 320,
-  },
-  agentChoiceList: {
-    gap: 10,
-  },
-  agentChoice: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    backgroundColor: WHITE,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: BORDER,
-    padding: 14,
-  },
-  agentChoicePressed: {
-    opacity: 0.9,
-  },
-  agentChoiceCopy: {
-    flex: 1,
-    gap: 4,
-  },
-  agentChoiceTitle: {
-    color: TEXT_PRIMARY,
-    fontSize: 16,
-    fontFamily: FONTS.heading,
-  },
-  agentChoiceSubtitle: {
-    color: TEXT_SECONDARY,
-    fontSize: 13,
-    lineHeight: 18,
     fontFamily: FONTS.body,
   },
 });

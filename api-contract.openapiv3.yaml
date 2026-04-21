@@ -1,17 +1,21 @@
 openapi: 3.0.3
 info:
-  title: Regents Mobile API
+  title: Regents Mobile Phase 0 API
   version: 0.1.0
-  description: Mobile contract for Regents wallet and agent surfaces.
+  description: |
+    Source-of-truth contract for the current Regents Mobile Phase 0 backend surface.
+
+    Real connected flows in this phase are wallet sign-in, buy, cash-out, and wallet send.
+    The agent, Paperclip, and terminal routes below are preview-only sample data used by the mobile app.
 paths:
-  /mobile/agents:
+  /mobile-preview/agents:
     get:
-      summary: List the signed-in user's agents
+      summary: List preview agent cards
       security:
         - bearerAuth: []
       responses:
         '200':
-          description: Agent list
+          description: Preview agent list
           content:
             application/json:
               schema:
@@ -21,10 +25,10 @@ paths:
                   agents:
                     type: array
                     items:
-                      $ref: '#/components/schemas/AgentSummary'
-  /mobile/agents/{id}:
+                      $ref: '#/components/schemas/PreviewAgentSummary'
+  /mobile-preview/agents/{id}:
     get:
-      summary: Fetch one agent
+      summary: Fetch one preview agent card
       security:
         - bearerAuth: []
       parameters:
@@ -35,20 +39,20 @@ paths:
             type: string
       responses:
         '200':
-          description: Agent detail
+          description: Preview agent detail
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AgentDetail'
+                $ref: '#/components/schemas/PreviewAgentDetail'
         '404':
-          description: Agent not found
+          description: Preview agent not found
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
-  /mobile/agents/{id}/paperclip:
+  /mobile-preview/agents/{id}/paperclip:
     get:
-      summary: Fetch the mobile Paperclip summary for one agent
+      summary: Fetch one preview Paperclip summary
       security:
         - bearerAuth: []
       parameters:
@@ -59,20 +63,20 @@ paths:
             type: string
       responses:
         '200':
-          description: Paperclip mobile summary
+          description: Preview Paperclip summary
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaperclipDetail'
+                $ref: '#/components/schemas/PreviewPaperclipDetail'
         '404':
-          description: Paperclip summary not found
+          description: Preview Paperclip summary not found
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
-  /mobile/agents/{id}/withdrawals:
+  /mobile-preview/agents/{id}/withdrawals:
     post:
-      summary: Create a withdrawal request from an agent back to the mobile wallet
+      summary: Create one preview return-to-wallet step
       security:
         - bearerAuth: []
       parameters:
@@ -86,16 +90,16 @@ paths:
           required: true
           schema:
             type: string
-          description: Reuse the same value if the same withdrawal request is retried.
+          description: Reuse the same value if the same preview step is reloaded.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreateWithdrawalRequest'
+              $ref: '#/components/schemas/CreatePreviewWithdrawalRequest'
       responses:
         '201':
-          description: Withdrawal request created
+          description: Preview return step created
           content:
             application/json:
               schema:
@@ -103,16 +107,16 @@ paths:
                 required: [withdrawal]
                 properties:
                   withdrawal:
-                    $ref: '#/components/schemas/AgentWithdrawal'
+                    $ref: '#/components/schemas/PreviewAgentWithdrawal'
         '404':
-          description: Agent not found
+          description: Preview agent not found
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
-  /mobile/agents/{id}/withdrawals/{withdrawal_id}:
+  /mobile-preview/agents/{id}/withdrawals/{withdrawal_id}:
     get:
-      summary: Fetch one withdrawal request
+      summary: Fetch one preview return-to-wallet step
       security:
         - bearerAuth: []
       parameters:
@@ -128,7 +132,7 @@ paths:
             type: string
       responses:
         '200':
-          description: Withdrawal request detail
+          description: Preview return step detail
           content:
             application/json:
               schema:
@@ -136,9 +140,188 @@ paths:
                 required: [withdrawal]
                 properties:
                   withdrawal:
-                    $ref: '#/components/schemas/AgentWithdrawal'
+                    $ref: '#/components/schemas/PreviewAgentWithdrawal'
         '404':
-          description: Withdrawal request not found
+          description: Preview return step not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /mobile-preview/terminal/sessions:
+    get:
+      summary: List preview terminal sessions
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Preview session list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sessions]
+                properties:
+                  sessions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PreviewTerminalSessionSummary'
+    post:
+      summary: Create one preview terminal session
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePreviewTerminalSessionRequest'
+      responses:
+        '201':
+          description: Preview session created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [session]
+                properties:
+                  session:
+                    $ref: '#/components/schemas/PreviewTerminalSessionDetail'
+  /mobile-preview/terminal/sessions/{id}:
+    get:
+      summary: Fetch one preview terminal session
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Preview session detail
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [session]
+                properties:
+                  session:
+                    $ref: '#/components/schemas/PreviewTerminalSessionDetail'
+        '404':
+          description: Preview session not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /mobile-preview/terminal/sessions/{id}/events:
+    get:
+      summary: Fetch preview terminal session events
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Preview session events
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [events]
+                properties:
+                  events:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PreviewTerminalEvent'
+        '404':
+          description: Preview session not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /mobile-preview/terminal/sessions/{id}/messages:
+    post:
+      summary: Add one sample note inside a preview terminal session
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text:
+                  type: string
+      responses:
+        '202':
+          description: Preview session updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [session]
+                properties:
+                  session:
+                    $ref: '#/components/schemas/PreviewTerminalSessionDetail'
+        '404':
+          description: Preview session not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /mobile-preview/terminal/sessions/{id}/approvals/{request_id}:
+    post:
+      summary: Resolve one sample review step inside a preview terminal session
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: request_id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision:
+                  type: string
+                  enum: [approved, denied]
+      responses:
+        '200':
+          description: Preview review step updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [session]
+                properties:
+                  session:
+                    $ref: '#/components/schemas/PreviewTerminalSessionDetail'
+        '404':
+          description: Preview session or review step not found
           content:
             application/json:
               schema:
@@ -150,13 +333,13 @@ components:
       scheme: bearer
       bearerFormat: JWT
   schemas:
-    AgentStatus:
+    PreviewAgentStatus:
       type: string
       enum: [active, attention, paused]
-    RuntimeStatus:
+    PreviewRuntimeStatus:
       type: string
       enum: [online, waiting, offline]
-    AgentSummary:
+    PreviewAgentSummary:
       type: object
       required:
         - id
@@ -174,9 +357,9 @@ components:
         name:
           type: string
         status:
-          $ref: '#/components/schemas/AgentStatus'
+          $ref: '#/components/schemas/PreviewAgentStatus'
         runtimeStatus:
-          $ref: '#/components/schemas/RuntimeStatus'
+          $ref: '#/components/schemas/PreviewRuntimeStatus'
         walletAddress:
           type: string
         stablecoinSymbol:
@@ -190,7 +373,7 @@ components:
           format: date-time
         treasuryNote:
           type: string
-    AgentActivity:
+    PreviewAgentActivity:
       type: object
       required: [id, title, detail, at]
       properties:
@@ -203,7 +386,7 @@ components:
         at:
           type: string
           format: date-time
-    AgentWithdrawal:
+    PreviewAgentWithdrawal:
       type: object
       required:
         - id
@@ -234,9 +417,9 @@ components:
         updatedAt:
           type: string
           format: date-time
-    AgentDetail:
+    PreviewAgentDetail:
       allOf:
-        - $ref: '#/components/schemas/AgentSummary'
+        - $ref: '#/components/schemas/PreviewAgentSummary'
         - type: object
           required:
             - runtimeHeadline
@@ -251,12 +434,12 @@ components:
             recentActivity:
               type: array
               items:
-                $ref: '#/components/schemas/AgentActivity'
+                $ref: '#/components/schemas/PreviewAgentActivity'
             withdrawals:
               type: array
               items:
-                $ref: '#/components/schemas/AgentWithdrawal'
-    PaperclipGoal:
+                $ref: '#/components/schemas/PreviewAgentWithdrawal'
+    PreviewPaperclipGoal:
       type: object
       required: [id, title, status]
       properties:
@@ -268,7 +451,7 @@ components:
           type: string
         note:
           type: string
-    PaperclipTask:
+    PreviewPaperclipTask:
       type: object
       required: [id, title, status]
       properties:
@@ -282,7 +465,7 @@ components:
           type: string
         note:
           type: string
-    PaperclipEvent:
+    PreviewPaperclipEvent:
       type: object
       required: [id, title, detail, at]
       properties:
@@ -295,7 +478,7 @@ components:
         at:
           type: string
           format: date-time
-    PaperclipRosterMember:
+    PreviewPaperclipRosterMember:
       type: object
       required: [id, name, role, status]
       properties:
@@ -307,7 +490,7 @@ components:
           type: string
         status:
           type: string
-    PaperclipDetail:
+    PreviewPaperclipDetail:
       type: object
       required:
         - agentId
@@ -327,24 +510,23 @@ components:
           type: string
         dashboardUrl:
           type: string
-          format: uri
         goals:
           type: array
           items:
-            $ref: '#/components/schemas/PaperclipGoal'
+            $ref: '#/components/schemas/PreviewPaperclipGoal'
         activeTasks:
           type: array
           items:
-            $ref: '#/components/schemas/PaperclipTask'
+            $ref: '#/components/schemas/PreviewPaperclipTask'
         recentEvents:
           type: array
           items:
-            $ref: '#/components/schemas/PaperclipEvent'
+            $ref: '#/components/schemas/PreviewPaperclipEvent'
         roster:
           type: array
           items:
-            $ref: '#/components/schemas/PaperclipRosterMember'
-    CreateWithdrawalRequest:
+            $ref: '#/components/schemas/PreviewPaperclipRosterMember'
+    CreatePreviewWithdrawalRequest:
       type: object
       required: [amount, currency, destinationWalletAddress]
       properties:
@@ -353,6 +535,94 @@ components:
         currency:
           type: string
         destinationWalletAddress:
+          type: string
+    PreviewTerminalSessionStatus:
+      type: string
+      enum: [idle, running, waiting, failed]
+    PreviewPendingApproval:
+      type: object
+      required: [requestId, label, details]
+      properties:
+        requestId:
+          type: string
+        label:
+          type: string
+        details:
+          type: string
+    PreviewTerminalSessionSummary:
+      type: object
+      required:
+        - id
+        - title
+        - agentId
+        - agentName
+        - status
+        - preview
+        - lastUpdatedAt
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        agentId:
+          type: string
+        agentName:
+          type: string
+        status:
+          $ref: '#/components/schemas/PreviewTerminalSessionStatus'
+        preview:
+          type: string
+        lastUpdatedAt:
+          type: string
+          format: date-time
+        pendingApproval:
+          $ref: '#/components/schemas/PreviewPendingApproval'
+    PreviewTerminalSessionDetail:
+      allOf:
+        - $ref: '#/components/schemas/PreviewTerminalSessionSummary'
+        - type: object
+          required: [composerPlaceholder]
+          properties:
+            composerPlaceholder:
+              type: string
+    CreatePreviewTerminalSessionRequest:
+      type: object
+      required: [agentId, agentName]
+      properties:
+        agentId:
+          type: string
+        agentName:
+          type: string
+    PreviewTerminalEvent:
+      type: object
+      required: [type, sessionId, ts]
+      properties:
+        type:
+          type: string
+        sessionId:
+          type: string
+        ts:
+          type: string
+          format: date-time
+        chunk:
+          type: string
+        text:
+          type: string
+        role:
+          type: string
+          enum: [user, assistant, system]
+        status:
+          type: string
+        requestId:
+          type: string
+        label:
+          type: string
+        details:
+          type: string
+        result:
+          type: string
+          enum: [approved, denied, timed_out]
+        message:
           type: string
     ErrorEnvelope:
       type: object

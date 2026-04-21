@@ -1,9 +1,10 @@
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
+import { PreviewNotice } from '@/components/ui/PreviewNotice';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
-import { AgentSummary } from '@/types/agents';
+import { PreviewAgentSummary } from '@/types/agentPreviews';
 import { formatCurrencyAmount, formatRelativeTime, formatWalletAddress } from '@/utils/agent-surfaces/formatters';
-import { fetchAgents } from '@/utils/fetchAgents';
+import { fetchPreviewAgents } from '@/utils/fetchPreviewAgents';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
@@ -35,7 +36,7 @@ const AMBER = '#A3703A';
 const AMBER_WASH = '#F2E7DA';
 const GREEN_WASH = '#E6F0EA';
 
-function cardPriority(agent: AgentSummary) {
+function cardPriority(agent: PreviewAgentSummary) {
   if (agent.runtimeStatus === 'offline') return 0;
   if (agent.status === 'attention') return 1;
   if (agent.runtimeStatus === 'waiting') return 2;
@@ -43,7 +44,7 @@ function cardPriority(agent: AgentSummary) {
   return 4;
 }
 
-function runtimeTone(runtimeStatus: AgentSummary['runtimeStatus']) {
+function runtimeTone(runtimeStatus: PreviewAgentSummary['runtimeStatus']) {
   switch (runtimeStatus) {
     case 'online':
       return {
@@ -66,12 +67,12 @@ function runtimeTone(runtimeStatus: AgentSummary['runtimeStatus']) {
   }
 }
 
-function attentionCopy(agent: AgentSummary) {
+function attentionCopy(agent: PreviewAgentSummary) {
   if (agent.runtimeStatus === 'offline') {
     return {
       eyebrow: 'Needs attention now',
-      summary: 'Offline. Open this agent to review what stalled and decide the next step.',
-      nextAction: 'Review status',
+      summary: 'Sample review card for an agent that needs attention.',
+      nextAction: 'Open preview',
       accent: DANGER,
       wash: '#F3E1DD',
     };
@@ -80,8 +81,8 @@ function attentionCopy(agent: AgentSummary) {
   if (agent.status === 'attention') {
     return {
       eyebrow: 'Review recommended',
-      summary: agent.treasuryNote || 'Something changed recently. Open this agent to review the treasury and recent requests.',
-      nextAction: 'Check treasury',
+      summary: agent.treasuryNote || 'Sample update showing how a review card can rise to the top.',
+      nextAction: 'Open preview',
       accent: AMBER,
       wash: AMBER_WASH,
     };
@@ -89,9 +90,9 @@ function attentionCopy(agent: AgentSummary) {
 
   if (agent.runtimeStatus === 'waiting') {
     return {
-      eyebrow: 'Waiting on a next step',
-      summary: agent.treasuryNote || 'This agent is waiting on a decision, approval, or follow-up.',
-      nextAction: 'Open terminal',
+      eyebrow: 'Next step shown here',
+      summary: agent.treasuryNote || 'Sample update showing how a paused handoff or review step could appear later.',
+      nextAction: 'Open preview',
       accent: AMBER,
       wash: AMBER_WASH,
     };
@@ -100,8 +101,8 @@ function attentionCopy(agent: AgentSummary) {
   if (agent.status === 'paused') {
     return {
       eyebrow: 'Paused',
-      summary: agent.treasuryNote || 'This agent is paused right now. Open it to review the latest context before restarting.',
-      nextAction: 'Review summary',
+      summary: agent.treasuryNote || 'Sample paused state showing how a summary card could look later.',
+      nextAction: 'Open preview',
       accent: DANGER,
       wash: '#F3E1DD',
     };
@@ -109,8 +110,8 @@ function attentionCopy(agent: AgentSummary) {
 
   return {
     eyebrow: 'Steady',
-    summary: agent.treasuryNote || 'Treasury and runtime look steady. Open the agent for terminal access, funding, or Paperclip.',
-    nextAction: 'Open agent',
+    summary: agent.treasuryNote || 'Sample steady-state card showing the shape of the future mobile agent view.',
+    nextAction: 'Open preview',
     accent: SUCCESS,
     wash: GREEN_WASH,
   };
@@ -118,7 +119,7 @@ function attentionCopy(agent: AgentSummary) {
 
 export default function AgentsTab() {
   const router = useRouter();
-  const [agents, setAgents] = useState<AgentSummary[]>([]);
+  const [agents, setAgents] = useState<PreviewAgentSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [alertState, setAlertState] = useState<{
@@ -141,12 +142,12 @@ export default function AgentsTab() {
         setLoading(true);
       }
 
-      const nextAgents = await fetchAgents();
+      const nextAgents = await fetchPreviewAgents();
       setAgents(nextAgents);
     } catch (error) {
       setAlertState({
         visible: true,
-        title: 'Unable to load agents',
+        title: 'Unable to load preview cards',
         message: error instanceof Error ? error.message : 'Try again in a moment.',
         type: 'error',
       });
@@ -244,8 +245,9 @@ export default function AgentsTab() {
         <Text style={styles.eyebrow}>Regents Mobile</Text>
         <Text style={styles.heroTitle}>Agents</Text>
         <Text style={styles.heroIntro}>
-          Start with what needs your attention, then move into funding, withdrawal requests, or the live terminal from there.
+          These sample cards show how agent updates, balances, and reviews may look in a later build.
         </Text>
+        <PreviewNotice body="These are built-in sample agents. They do not reflect a live Regent account yet, and the money controls on the next screen stay in preview mode." />
         <View style={styles.summaryRow}>
           <View style={styles.summaryTile}>
             <Text style={styles.summaryValue}>{summary.attentionCount}</Text>
@@ -265,7 +267,7 @@ export default function AgentsTab() {
       {loading ? (
         <View style={styles.centerState}>
           <ActivityIndicator size="large" color={BLUE} />
-          <Text style={styles.loadingText}>Loading your agents…</Text>
+          <Text style={styles.loadingText}>Loading sample agent cards…</Text>
         </View>
       ) : (
         <FlatList
@@ -277,8 +279,8 @@ export default function AgentsTab() {
           ListEmptyComponent={
             <View style={styles.emptyCard}>
               <Ionicons name="people-outline" size={34} color={BLUE} />
-              <Text style={styles.emptyTitle}>No agents yet</Text>
-              <Text style={styles.emptyText}>When your first agent is ready, it will appear here with its wallet, treasury, and latest status.</Text>
+              <Text style={styles.emptyTitle}>No sample cards yet</Text>
+              <Text style={styles.emptyText}>Sample agent cards will appear here when this preview data is available.</Text>
             </View>
           }
         />
