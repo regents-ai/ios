@@ -1,6 +1,5 @@
 import { MetricChip } from '@/components/agent-surfaces/MetricChip';
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
-import { PreviewNotice } from '@/components/ui/PreviewNotice';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
 import { PreviewTerminalSessionStatus, PreviewTerminalSessionSummary } from '@/types/terminalPreviews';
@@ -19,7 +18,20 @@ import {
   View,
 } from 'react-native';
 
-const { DARK_BG, CARD_BG, CARD_ALT, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, BORDER, WHITE, SUCCESS, DANGER, BLUE_WASH, ORANGE } = COLORS;
+const {
+  DARK_BG,
+  CARD_BG,
+  CARD_ALT,
+  TEXT_PRIMARY,
+  TEXT_SECONDARY,
+  BLUE,
+  BORDER,
+  WHITE,
+  SUCCESS,
+  DANGER,
+  BLUE_WASH,
+  ORANGE,
+} = COLORS;
 
 function statusCopy(status: PreviewTerminalSessionStatus) {
   switch (status) {
@@ -28,22 +40,22 @@ function statusCopy(status: PreviewTerminalSessionStatus) {
     case 'running':
       return 'Working';
     case 'waiting':
-      return 'Review shown';
-    case 'failed':
       return 'Needs review';
+    case 'failed':
+      return 'Attention';
   }
 }
 
 function statusEyebrow(status: PreviewTerminalSessionStatus) {
   switch (status) {
     case 'idle':
-      return 'Quiet example';
+      return 'Ready to reopen';
     case 'running':
-      return 'Active example';
+      return 'Hermes is moving';
     case 'waiting':
-      return 'Review example';
+      return 'Waiting on you';
     case 'failed':
-      return 'Issue example';
+      return 'Needs a closer look';
   }
 }
 
@@ -119,13 +131,13 @@ function SessionCard({
         {item.pendingApproval ? (
           <View style={styles.inlineApprovalPill}>
             <Ionicons name="eye-outline" size={14} color={BLUE} />
-            <Text style={styles.inlineApprovalPillText}>Preview step</Text>
+            <Text style={styles.inlineApprovalPillText}>Review open</Text>
           </View>
         ) : null}
       </View>
 
       <View style={styles.previewBlock}>
-        <Text style={styles.previewLabel}>Sample update</Text>
+        <Text style={styles.previewLabel}>Latest note</Text>
         <Text style={styles.sessionPreview}>{item.preview}</Text>
       </View>
 
@@ -142,7 +154,7 @@ function SessionCard({
       ) : null}
 
       <View style={styles.sessionFooter}>
-        <Text style={styles.openLabel}>Open preview</Text>
+        <Text style={styles.openLabel}>Open Talk</Text>
         <Ionicons name="chevron-forward" size={18} color={BLUE} />
       </View>
     </Pressable>
@@ -179,7 +191,7 @@ export default function TerminalTab() {
     } catch (error) {
       setAlertState({
         visible: true,
-        title: 'Unable to load preview sessions',
+        title: 'Talk is unavailable right now',
         message: error instanceof Error ? error.message : 'Try again in a moment.',
         type: 'error',
       });
@@ -226,24 +238,23 @@ export default function TerminalTab() {
   return (
     <View style={styles.container}>
       <View style={styles.heroCard}>
-        <Text style={styles.eyebrow}>Regents Mobile</Text>
-        <Text style={styles.heroTitle}>Terminal</Text>
+        <Text style={styles.eyebrow}>Regents</Text>
+        <Text style={styles.heroTitle}>Talk with Hermes</Text>
         <Text style={styles.heroIntro}>
-          These sample sessions show how updates, review prompts, and conversation history may look in a later build.
+          Keep operator threads, open reviews, and the latest movement in one calmer place.
         </Text>
-        <PreviewNotice body="These are built-in sample sessions. They do not send notes, approve actions, or control a live Regent session in this build." />
 
         <View style={styles.metricRow}>
           <MetricChip label="Review" value={`${sessionsNeedingApproval}`} accent={ORANGE} />
           <MetricChip label="Working" value={`${sessionsRunning}`} accent={SUCCESS} />
-          <MetricChip label="Issues" value={`${sessionsNeedingAttention}`} accent={DANGER} />
+          <MetricChip label="Attention" value={`${sessionsNeedingAttention}`} accent={DANGER} />
         </View>
 
         {sessionsNeedingApproval > 0 ? (
           <View style={styles.noticePill}>
             <Ionicons name="eye-outline" size={16} color={BLUE} />
             <Text style={styles.noticeText}>
-              {sessionsNeedingApproval} sample session{sessionsNeedingApproval === 1 ? '' : 's'} include a review example
+              {sessionsNeedingApproval} talk{sessionsNeedingApproval === 1 ? '' : 's'} need a decision
             </Text>
           </View>
         ) : null}
@@ -251,29 +262,22 @@ export default function TerminalTab() {
 
       <View style={styles.toolbar}>
         <View style={styles.toolbarCopy}>
-          <Text style={styles.toolbarTitle}>Sample sessions</Text>
-          <Text style={styles.toolbarSubtitle}>The list stays sorted so the most useful preview examples stay near the top.</Text>
+          <Text style={styles.toolbarTitle}>Recent talks</Text>
+          <Text style={styles.toolbarSubtitle}>The queue stays ordered so the conversations that need you most rise first.</Text>
         </View>
         <Pressable
           style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}
-          onPress={() =>
-            setAlertState({
-              visible: true,
-              title: 'Preview only',
-              message: 'This screen shows sample sessions only. Starting a real session comes later.',
-              type: 'info',
-            })
-          }
+          onPress={() => loadTerminal(true)}
         >
-          <Ionicons name="eye-outline" size={16} color={WHITE} />
-          <Text style={styles.primaryButtonText}>Preview only</Text>
+          <Ionicons name="refresh" size={16} color={WHITE} />
+          <Text style={styles.primaryButtonText}>{refreshing ? 'Refreshing' : 'Refresh'}</Text>
         </Pressable>
       </View>
 
       {loading ? (
         <View style={styles.centerState}>
           <ActivityIndicator size="large" color={BLUE} />
-          <Text style={styles.loadingText}>Loading sample sessions…</Text>
+          <Text style={styles.loadingText}>Loading talks…</Text>
         </View>
       ) : (
         <FlatList
@@ -285,13 +289,14 @@ export default function TerminalTab() {
               onPress={() => router.push({ pathname: '/terminal/[id]' as any, params: { id: item.id } })}
             />
           )}
+          contentInsetAdjustmentBehavior="automatic"
           contentContainerStyle={styles.listContent}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadTerminal(true)} tintColor={BLUE} />}
           ListEmptyComponent={
             <View style={styles.emptyCard}>
-              <Ionicons name="terminal-outline" size={34} color={BLUE} />
-              <Text style={styles.emptyTitle}>No sample sessions yet</Text>
-              <Text style={styles.emptyText}>Sample sessions will appear here when this preview data is available.</Text>
+              <Ionicons name="chatbox-ellipses-outline" size={34} color={BLUE} />
+              <Text style={styles.emptyTitle}>No talks yet</Text>
+              <Text style={styles.emptyText}>When Hermes has something to show, it will appear here.</Text>
             </View>
           }
         />
@@ -321,7 +326,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BORDER,
     padding: 22,
-    gap: 14,
+    gap: 16,
     marginBottom: 16,
   },
   eyebrow: {
@@ -443,6 +448,7 @@ const styles = StyleSheet.create({
   sessionTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
     gap: 14,
   },
   sessionTitleBlock: {
@@ -467,6 +473,12 @@ const styles = StyleSheet.create({
   sessionTimeBlock: {
     alignItems: 'flex-end',
     gap: 3,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 16,
+    backgroundColor: WHITE,
+    borderWidth: 1,
+    borderColor: BORDER,
   },
   sessionUpdatedLabel: {
     color: TEXT_SECONDARY,
@@ -511,6 +523,11 @@ const styles = StyleSheet.create({
   },
   previewBlock: {
     gap: 6,
+    padding: 12,
+    borderRadius: 18,
+    backgroundColor: WHITE,
+    borderWidth: 1,
+    borderColor: BORDER,
   },
   previewLabel: {
     color: TEXT_SECONDARY,
@@ -526,23 +543,26 @@ const styles = StyleSheet.create({
   },
   approvalBanner: {
     flexDirection: 'row',
-    gap: 10,
-    backgroundColor: '#FFF7EA',
-    borderWidth: 1,
-    borderColor: BORDER,
+    gap: 12,
+    backgroundColor: BLUE_WASH,
     borderRadius: 18,
-    padding: 12,
+    padding: 14,
   },
   approvalBannerIcon: {
-    marginTop: 1,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: WHITE,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   approvalBannerCopy: {
     flex: 1,
-    gap: 4,
+    gap: 3,
   },
   approvalBannerTitle: {
     color: TEXT_PRIMARY,
-    fontSize: 14,
+    fontSize: 15,
     fontFamily: FONTS.heading,
   },
   approvalText: {
@@ -553,20 +573,23 @@ const styles = StyleSheet.create({
   },
   sessionFooter: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: BORDER,
   },
   openLabel: {
     color: BLUE,
-    fontSize: 13,
+    fontSize: 14,
     fontFamily: FONTS.body,
   },
   emptyCard: {
     backgroundColor: CARD_BG,
+    borderRadius: 24,
     borderWidth: 1,
     borderColor: BORDER,
-    borderRadius: 24,
-    padding: 24,
+    padding: 28,
     alignItems: 'center',
     gap: 10,
   },
@@ -577,9 +600,9 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     color: TEXT_SECONDARY,
-    textAlign: 'center',
     fontSize: 14,
     lineHeight: 20,
+    textAlign: 'center',
     fontFamily: FONTS.body,
   },
 });

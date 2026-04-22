@@ -19,7 +19,7 @@ type SwipeToConfirmProps = {
 export function SwipeToConfirm({ label, disabled = false, onConfirm, isLoading = false, onSwipeStart, onSwipeEnd }: SwipeToConfirmProps) {
   const [trackWidth, setTrackWidth] = useState(0);
   const [reduceMotionEnabled, setReduceMotionEnabled] = useState(false);
-  const knobSize = 48;
+  const knobSize = 52;
   const horizontalPadding = 4;
   const maxX = Math.max(0, trackWidth - knobSize - horizontalPadding * 2);
 
@@ -56,7 +56,7 @@ export function SwipeToConfirm({ label, disabled = false, onConfirm, isLoading =
   );
 
   const snapBack = useCallback(() => {
-    Animated.spring(translateX, { toValue: 0, useNativeDriver: false, bounciness: 6, speed: 12 }).start(() => {
+    Animated.spring(translateX, { toValue: 0, useNativeDriver: false, bounciness: 0, speed: 16 }).start(() => {
       currentXRef.current = 0;
     });
     animateKnobScale(1);
@@ -89,16 +89,14 @@ export function SwipeToConfirm({ label, disabled = false, onConfirm, isLoading =
       });
       animateKnobScale(1);
     } else {
-      setTimeout(() => {
-        Animated.spring(translateX, { 
-          toValue: 0, 
-          useNativeDriver: false, 
-          bounciness: 6, 
-          speed: 12 
-        }).start(() => {
-          currentXRef.current = 0;
-        });
-      }, 300);
+      Animated.spring(translateX, {
+        toValue: 0,
+        useNativeDriver: false,
+        bounciness: 0,
+        speed: 16,
+      }).start(() => {
+        currentXRef.current = 0;
+      });
     }
   }, [animateKnobScale, isLoading, labelOpacity, maxX, translateX]);
 
@@ -106,13 +104,13 @@ export function SwipeToConfirm({ label, disabled = false, onConfirm, isLoading =
     () =>
       PanResponder.create({
         onStartShouldSetPanResponder: () => !disabled && !isLoading,
-        onMoveShouldSetPanResponder: (_e, g) => !disabled && !isLoading && Math.abs(g.dx) > Math.abs(g.dy) && Math.abs(g.dx) > 5,
+        onMoveShouldSetPanResponder: (_e, g) => !disabled && !isLoading && Math.abs(g.dx) > Math.abs(g.dy) && Math.abs(g.dx) > 4,
         onStartShouldSetPanResponderCapture: () => !disabled && !isLoading,
         onMoveShouldSetPanResponderCapture: () => !disabled && !isLoading,
         onPanResponderGrant: (e) => {
           if (isLoading) return;
           onSwipeStart?.();
-          animateKnobScale(1.04);
+          animateKnobScale(1.03);
           const localX = e.nativeEvent.locationX - knobSize / 2;
           const clamped = Math.max(0, Math.min(maxX, localX));
           startXRef.current = clamped;
@@ -185,8 +183,8 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   swipeTrack: {
-    height: 56,
-    borderRadius: 28,
+    height: 60,
+    borderRadius: 30,
     backgroundColor: CARD_BG, 
     borderColor: SILVER,        
     borderWidth: 1,           
@@ -197,7 +195,7 @@ const styles = StyleSheet.create({
   swipeCenter: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 56,
+    paddingHorizontal: 64,
   },
   swipeProgress: {
     position: 'absolute',
@@ -206,7 +204,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: BLUE,
     opacity: 0.15,
-    borderRadius: 28,              
+    borderRadius: 30,              
   },
   swipeLabel: {
     textAlign: "center",
@@ -227,9 +225,9 @@ const styles = StyleSheet.create({
   swipeKnob: {
     position: "absolute",
     left: 4,
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     backgroundColor: BLUE,  
     alignItems: "center",
     justifyContent: "center",

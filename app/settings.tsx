@@ -115,6 +115,8 @@ function SettingsModalSurface({
   );
 }
 
+type SettingsSectionKey = 'account' | 'wallet' | 'testing' | 'help';
+
 export default function SettingsScreen() {
   const testSession = isTestSessionActive();
   const { isInitialized } = useIsInitialized();
@@ -167,6 +169,7 @@ export default function SettingsScreen() {
   const [exportType, setExportType] = useState<'evm' | 'solana'>('evm');
   const [exporting, setExporting] = useState(false);
   const [productionSwitchAlertVisible, setProductionSwitchAlertVisible] = useState(false);
+  const [activeSection, setActiveSection] = useState<SettingsSectionKey>('account');
 
   const isExpoGo = process.env.EXPO_PUBLIC_USE_EXPO_CRYPTO === 'true';
   const signedButNoWallet = effectiveIsSignedIn && !evmWalletAddress && !solanaAddress;
@@ -290,7 +293,7 @@ export default function SettingsScreen() {
       setAlertState({
         visible: true,
         title: 'Export unavailable',
-        message: 'Open the installed app to export a private key.',
+        message: 'Open the installed app to export your wallet key.',
         type: 'info',
       });
       return;
@@ -339,8 +342,8 @@ export default function SettingsScreen() {
         await Clipboard.setStringAsync(result.privateKey);
         setAlertState({
           visible: true,
-          title: 'Private key copied',
-          message: `Your ${isEvmExport ? 'Base and Ethereum' : 'Solana'} wallet key is now in the clipboard. Store it safely and clear the clipboard when finished.`,
+          title: 'Wallet key copied',
+          message: `Your ${isEvmExport ? 'Base and Ethereum' : 'Solana'} wallet key is now in the clipboard. Keep it somewhere safe and clear the clipboard when you are done.`,
           type: 'info',
         });
       }
@@ -371,160 +374,251 @@ export default function SettingsScreen() {
   const hasLinkedEmail = !!linkedEmail || testSession;
   const phoneIsVerified = verifiedPhone === cdpPhone && phoneFresh;
   const phoneIsExpired = verifiedPhone === cdpPhone && !phoneFresh;
+  const sectionOptions: {
+    key: SettingsSectionKey;
+    icon: keyof typeof Ionicons.glyphMap;
+    title: string;
+    detail: string;
+  }[] = [
+    {
+      key: 'account',
+      icon: 'person-outline',
+      title: 'Account',
+      detail: displayEmail,
+    },
+    {
+      key: 'wallet',
+      icon: 'wallet-outline',
+      title: 'Wallet',
+      detail: localSandboxEnabled ? 'Practice mode is on' : 'Ready for everyday use',
+    },
+    {
+      key: 'testing',
+      icon: 'flask-outline',
+      title: 'Practice',
+      detail: localSandboxEnabled ? 'Practice wallet ready' : 'Turn on practice mode',
+    },
+    {
+      key: 'help',
+      icon: 'help-circle-outline',
+      title: 'Help',
+      detail: 'Support and quick answers',
+    },
+  ];
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        <View style={styles.header}>
-          <Pressable onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="chevron-back" size={20} color={TEXT_PRIMARY} />
-          </Pressable>
+      <ScrollView style={styles.container} contentContainerStyle={styles.content} contentInsetAdjustmentBehavior="automatic">
+        <View style={styles.hero}>
+          <View style={styles.header}>
+            <Pressable onPress={() => router.back()} style={styles.backButton}>
+              <Ionicons name="chevron-back" size={20} color={TEXT_PRIMARY} />
+            </Pressable>
+          </View>
+          <Text style={styles.heroEyebrow}>Regents</Text>
           <Text style={styles.title}>Settings</Text>
-          <View style={{ width: 36 }} />
+          <Text style={styles.heroSubtitle}>Account, wallet, and help in one place.</Text>
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Account</Text>
+        <View style={styles.menuCard}>
+          {sectionOptions.map((section, index) => {
+            const selected = section.key === activeSection;
 
-          {signedButNoWallet ? (
-            <View style={styles.infoBlock}>
-              <Text style={styles.valueText}>Wallet creation in progress</Text>
-              <Text style={styles.helperText}>Wait a moment for your wallet to finish setting up, or sign out and try again.</Text>
-              <Pressable style={styles.secondaryButton} onPress={handleSignOut}>
-                <Text style={styles.secondaryButtonText}>Sign out</Text>
-              </Pressable>
-            </View>
-          ) : (
-            <>
-              <View style={styles.infoBlock}>
-                <Text style={styles.labelText}>Email</Text>
-                <Text style={styles.valueText}>{displayEmail}</Text>
-                {!hasLinkedEmail && !testSession ? (
-                  <Pressable style={styles.primaryButton} onPress={() => router.push('/email-verify?mode=link')}>
-                    <Text style={styles.primaryButtonText}>Link email</Text>
-                  </Pressable>
-                ) : null}
-              </View>
-
-              <View style={styles.infoBlock}>
-                <Text style={styles.labelText}>Phone</Text>
-                <Text style={styles.valueText}>{cdpPhone ? formatPhoneDisplay(cdpPhone) : 'No phone linked'}</Text>
-                <Text style={styles.helperText}>
-                  {phoneIsVerified
-                    ? `Verified for checkout. Expires in ${phoneExpiry} day${phoneExpiry === 1 ? '' : 's'}.`
-                    : phoneIsExpired
-                      ? 'Verification expired. Re-verify to use checkout.'
-                      : cdpPhone
-                        ? 'Phone linked. Verify it before using checkout.'
-                        : 'Link a phone number to use checkout.'}
-                </Text>
-                <Pressable style={styles.primaryButton} onPress={openPhoneVerify}>
-                  <Text style={styles.primaryButtonText}>
-                    {!cdpPhone ? 'Link phone' : phoneIsExpired ? 'Re-verify phone' : phoneIsVerified ? 'Verify again' : 'Verify phone'}
-                  </Text>
+            return (
+              <View key={section.key}>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.menuRow,
+                    selected && styles.menuRowActive,
+                    pressed && styles.menuRowPressed,
+                  ]}
+                  onPress={() => setActiveSection(section.key)}
+                >
+                  <View style={[styles.menuIcon, selected && styles.menuIconActive]}>
+                    <Ionicons
+                      name={section.icon}
+                      size={24}
+                      color={selected ? WHITE : TEXT_PRIMARY}
+                    />
+                  </View>
+                  <View style={styles.menuCopy}>
+                    <Text style={styles.menuTitle}>{section.title}</Text>
+                    <Text style={styles.menuDetail}>{section.detail}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color={TEXT_SECONDARY} />
                 </Pressable>
+                {index < sectionOptions.length - 1 ? <View style={styles.menuDivider} /> : null}
               </View>
+            );
+          })}
+        </View>
 
-              <View style={styles.buttonRow}>
+        {activeSection === 'account' ? (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Account</Text>
+
+            {signedButNoWallet ? (
+              <View style={styles.infoBlock}>
+                <Text style={styles.valueText}>Your wallet is still getting ready.</Text>
+                <Text style={styles.helperText}>Give it a moment, or sign out and try again.</Text>
+              </View>
+            ) : (
+              <>
+                <View style={styles.infoBlock}>
+                  <Text style={styles.labelText}>Email</Text>
+                  <Text style={styles.valueText}>{displayEmail}</Text>
+                  {!hasLinkedEmail && !testSession ? (
+                    <Pressable style={styles.primaryButton} onPress={() => router.push('/email-verify?mode=link')}>
+                      <Text style={styles.primaryButtonText}>Add email</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+
+                <View style={styles.infoBlock}>
+                  <Text style={styles.labelText}>Phone</Text>
+                  <Text style={styles.valueText}>{cdpPhone ? formatPhoneDisplay(cdpPhone) : 'Not added yet'}</Text>
+                  <Text style={styles.helperText}>
+                    {phoneIsVerified
+                      ? `Ready for checkout. Expires in ${phoneExpiry} day${phoneExpiry === 1 ? '' : 's'}.`
+                      : phoneIsExpired
+                        ? 'Verification expired. Verify your phone again to keep using checkout.'
+                        : cdpPhone
+                          ? 'Your phone is linked. Verify it before you use checkout.'
+                          : 'Add a phone number before you use checkout.'}
+                  </Text>
+                  <Pressable style={styles.primaryButton} onPress={openPhoneVerify}>
+                    <Text style={styles.primaryButtonText}>
+                      {!cdpPhone ? 'Add phone' : phoneIsExpired ? 'Verify again' : phoneIsVerified ? 'Check again' : 'Verify phone'}
+                    </Text>
+                  </Pressable>
+                </View>
+
                 <Pressable
                   style={[styles.primaryButton, ((!evmWalletAddress && !solanaAddress) || exporting) && styles.disabledButton]}
                   onPress={handleRequestExport}
                   disabled={!evmWalletAddress && !solanaAddress}
                 >
                   <Text style={styles.primaryButtonText}>
-                    {exporting ? 'Exporting...' : isExpoGo ? 'Export unavailable in Expo Go' : 'Export private key'}
+                    {exporting ? 'Getting wallet key...' : isExpoGo ? 'Export unavailable here' : 'Export wallet key'}
                   </Text>
                 </Pressable>
-              </View>
-
-              <View style={styles.buttonRow}>
-                <Pressable style={styles.secondaryButton} onPress={() => router.push('/support')}>
-                  <Text style={styles.secondaryButtonText}>Support</Text>
-                </Pressable>
-                <Pressable style={[styles.secondaryButton, styles.signOutButton]} onPress={handleSignOut}>
-                  <Text style={[styles.secondaryButtonText, { color: WHITE }]}>Sign out</Text>
-                </Pressable>
-              </View>
-            </>
-          )}
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Wallet settings</Text>
-          <View style={styles.rowBetween}>
-            <View style={{ flex: 1, paddingRight: 12 }}>
-              <Text style={styles.labelText}>Sandbox mode</Text>
-              <Text style={styles.helperText}>
-                {localSandboxEnabled ? 'Test without sending real money.' : 'Use live money movement and real checkout.'}
-              </Text>
-            </View>
-            <Switch
-              value={localSandboxEnabled}
-              onValueChange={value => {
-                if (!value && manualAddress) {
-                  setProductionSwitchAlertVisible(true);
-                  return;
-                }
-                setLocalSandboxEnabled(value);
-                setSandboxMode(value);
-              }}
-              trackColor={{ true: BLUE, false: BORDER }}
-            />
-          </View>
-
-          <View style={styles.infoBlock}>
-            <Text style={styles.labelText}>Apple Pay reminder threshold</Text>
-            <Text style={styles.helperText}>Choose when to show the reminder that your remaining Apple Pay transactions are getting low.</Text>
-            <TextInput
-              style={styles.numberInput}
-              value={String(lifetimeTxThreshold)}
-              onChangeText={text => {
-                const parsed = parseInt(text, 10);
-                if (!Number.isNaN(parsed) && parsed >= 0 && parsed <= 99) {
-                  setLifetimeTxThresholdLocal(parsed);
-                } else if (text === '') {
-                  setLifetimeTxThresholdLocal(0);
-                }
-              }}
-              keyboardType="number-pad"
-              maxLength={2}
-              placeholder="5"
-              placeholderTextColor={TEXT_SECONDARY}
-            />
-          </View>
-        </View>
-
-        {localSandboxEnabled ? (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Sandbox testing</Text>
-            <Text style={styles.helperText}>Override the connected wallet address for test runs only.</Text>
-            <View style={styles.manualAddressRow}>
-              <TextInput
-                style={styles.textInput}
-                value={manualAddress}
-                onChangeText={setManualAddress}
-                placeholder="Enter a wallet address"
-                placeholderTextColor={TEXT_SECONDARY}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              <Pressable
-                style={styles.pasteButton}
-                onPress={async () => {
-                  if (manualAddress) {
-                    setManualAddress('');
-                    return;
-                  }
-                  const text = await Clipboard.getStringAsync();
-                  if (text) setManualAddress(text);
-                }}
-              >
-                <Ionicons name={manualAddress ? 'close-circle' : 'clipboard-outline'} size={20} color={manualAddress ? TEXT_SECONDARY : BLUE} />
-              </Pressable>
-            </View>
-            <Text style={styles.helperText}>This address is cleared automatically when you switch back to production mode.</Text>
+              </>
+            )}
           </View>
         ) : null}
+
+        {activeSection === 'wallet' ? (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Wallet</Text>
+
+            <View style={styles.rowBetween}>
+              <View style={styles.rowCopyBlock}>
+                <Text style={styles.labelText}>Practice mode</Text>
+                <Text style={styles.helperText}>
+                  {localSandboxEnabled ? 'Try money movement without using real money.' : 'Use your everyday wallet and real checkout.'}
+                </Text>
+              </View>
+              <Switch
+                value={localSandboxEnabled}
+                onValueChange={value => {
+                  if (!value && manualAddress) {
+                    setProductionSwitchAlertVisible(true);
+                    return;
+                  }
+                  setLocalSandboxEnabled(value);
+                  setSandboxMode(value);
+                }}
+                trackColor={{ true: BLUE, false: BORDER }}
+              />
+            </View>
+
+            <View style={styles.infoBlock}>
+              <Text style={styles.labelText}>Apple Pay reminder</Text>
+              <Text style={styles.helperText}>Choose when to remind someone that their Apple Pay limit is running low.</Text>
+              <TextInput
+                style={styles.numberInput}
+                value={String(lifetimeTxThreshold)}
+                onChangeText={text => {
+                  const parsed = parseInt(text, 10);
+                  if (!Number.isNaN(parsed) && parsed >= 0 && parsed <= 99) {
+                    setLifetimeTxThresholdLocal(parsed);
+                  } else if (text === '') {
+                    setLifetimeTxThresholdLocal(0);
+                  }
+                }}
+                keyboardType="number-pad"
+                maxLength={2}
+                placeholder="5"
+                placeholderTextColor={TEXT_SECONDARY}
+              />
+            </View>
+          </View>
+        ) : null}
+
+        {activeSection === 'testing' ? (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Practice</Text>
+            {localSandboxEnabled ? (
+              <>
+                <Text style={styles.helperText}>Use a different wallet address while you are practicing.</Text>
+                <View style={styles.manualAddressRow}>
+                  <TextInput
+                    style={styles.textInput}
+                    value={manualAddress}
+                    onChangeText={setManualAddress}
+                    placeholder="Enter a wallet address"
+                    placeholderTextColor={TEXT_SECONDARY}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  <Pressable
+                    style={styles.pasteButton}
+                    onPress={async () => {
+                      if (manualAddress) {
+                        setManualAddress('');
+                        return;
+                      }
+                      const text = await Clipboard.getStringAsync();
+                      if (text) setManualAddress(text);
+                    }}
+                  >
+                    <Ionicons name={manualAddress ? 'close-circle' : 'clipboard-outline'} size={20} color={manualAddress ? TEXT_SECONDARY : BLUE} />
+                  </Pressable>
+                </View>
+                <Text style={styles.helperText}>This address clears itself when you leave practice mode.</Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.helperText}>Turn on practice mode in the Wallet section to use a separate practice wallet address.</Text>
+                <Pressable style={styles.secondaryButton} onPress={() => setActiveSection('wallet')}>
+                  <Text style={styles.secondaryButtonText}>Open wallet settings</Text>
+                </Pressable>
+              </>
+            )}
+          </View>
+        ) : null}
+
+        {activeSection === 'help' ? (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Help</Text>
+            <View style={styles.infoBlock}>
+              <Text style={styles.valueText}>Need help with money movement or account steps?</Text>
+              <Text style={styles.helperText}>Support can help with wallet questions, checkout steps, and payment issues.</Text>
+            </View>
+            <View style={styles.buttonRow}>
+              <Pressable style={styles.primaryButton} onPress={() => router.push('/support')}>
+                <Text style={styles.primaryButtonText}>Open support</Text>
+              </Pressable>
+              <Pressable style={styles.secondaryButton} onPress={openPhoneVerify}>
+                <Text style={styles.secondaryButtonText}>Phone help</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
+
+        <Pressable style={styles.signOutCta} onPress={handleSignOut}>
+          <Text style={styles.signOutCtaText}>Sign out</Text>
+        </Pressable>
 
         <CoinbaseAlert
           visible={alertState.visible}
@@ -574,7 +668,7 @@ export default function SettingsScreen() {
         <SettingsModalSurface visible={showExportConfirm} onRequestClose={() => setShowExportConfirm(false)}>
           <StaggerGroup>
             <StaggerItem order={0}>
-              <Text style={styles.modalTitle}>Export private key</Text>
+              <Text style={styles.modalTitle}>Export wallet key</Text>
             </StaggerItem>
             <StaggerItem order={1}>
               <Text style={styles.helperText}>This copies the selected wallet key to the clipboard.</Text>
@@ -595,10 +689,10 @@ export default function SettingsScreen() {
         <SettingsModalSurface visible={showReverifyConfirm} onRequestClose={() => setShowReverifyConfirm(false)}>
           <StaggerGroup>
             <StaggerItem order={0}>
-              <Text style={styles.modalTitle}>Re-verify phone</Text>
+              <Text style={styles.modalTitle}>Verify phone again</Text>
             </StaggerItem>
             <StaggerItem order={1}>
-              <Text style={styles.helperText}>We need to sign you out and send a fresh code to your phone number.</Text>
+              <Text style={styles.helperText}>We will sign you out and send a new code to your phone.</Text>
             </StaggerItem>
             <StaggerItem order={2}>
               <View style={styles.buttonRow}>
@@ -616,10 +710,10 @@ export default function SettingsScreen() {
         <SettingsModalSurface visible={productionSwitchAlertVisible} onRequestClose={() => setProductionSwitchAlertVisible(false)}>
           <StaggerGroup>
             <StaggerItem order={0}>
-              <Text style={styles.modalTitle}>Switch to production?</Text>
+              <Text style={styles.modalTitle}>Leave practice mode?</Text>
             </StaggerItem>
             <StaggerItem order={1}>
-              <Text style={styles.helperText}>Your manual sandbox address will be cleared when you leave sandbox mode.</Text>
+              <Text style={styles.helperText}>Your practice wallet address will be cleared when you leave practice mode.</Text>
             </StaggerItem>
             <StaggerItem order={2}>
               <View style={styles.buttonRow}>
@@ -653,7 +747,8 @@ const styles = StyleSheet.create({
     backgroundColor: DARK_BG,
   },
   content: {
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingTop: 12,
     gap: 20,
     paddingBottom: 40,
   },
@@ -669,31 +764,97 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: FONTS.body,
   },
+  hero: {
+    gap: 8,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
   },
   backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: CARD_ALT,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  title: {
+  heroEyebrow: {
     color: BLUE,
-    fontSize: 22,
+    fontSize: 12,
     fontFamily: FONTS.heading,
+  },
+  title: {
+    color: TEXT_PRIMARY,
+    fontSize: 42,
+    lineHeight: 44,
+    fontFamily: FONTS.heading,
+  },
+  heroSubtitle: {
+    color: TEXT_SECONDARY,
+    fontSize: 16,
+    lineHeight: 22,
+    fontFamily: FONTS.body,
+  },
+  menuCard: {
+    backgroundColor: CARD_BG,
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: BORDER,
+    overflow: 'hidden',
+  },
+  menuRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+  },
+  menuRowActive: {
+    backgroundColor: CARD_ALT,
+  },
+  menuRowPressed: {
+    opacity: 0.84,
+  },
+  menuIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: DARK_BG,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuIconActive: {
+    backgroundColor: BLUE,
+  },
+  menuCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  menuTitle: {
+    color: TEXT_PRIMARY,
+    fontSize: 20,
+    fontFamily: FONTS.heading,
+  },
+  menuDetail: {
+    color: TEXT_SECONDARY,
+    fontSize: 13,
+    lineHeight: 19,
+    fontFamily: FONTS.body,
+  },
+  menuDivider: {
+    height: 1,
+    backgroundColor: BORDER,
+    marginLeft: 78,
   },
   card: {
     backgroundColor: CARD_BG,
-    borderRadius: 20,
+    borderRadius: 28,
     borderWidth: 1,
     borderColor: BORDER,
-    padding: 18,
-    gap: 16,
+    padding: 20,
+    gap: 18,
     shadowColor: BLUE,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.06,
@@ -701,8 +862,8 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   cardTitle: {
-    color: BLUE,
-    fontSize: 18,
+    color: TEXT_PRIMARY,
+    fontSize: 24,
     fontFamily: FONTS.heading,
   },
   infoBlock: {
@@ -715,7 +876,7 @@ const styles = StyleSheet.create({
   },
   valueText: {
     color: TEXT_PRIMARY,
-    fontSize: 16,
+    fontSize: 18,
     fontFamily: FONTS.body,
   },
   helperText: {
@@ -730,21 +891,28 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 12,
   },
+  rowCopyBlock: {
+    flex: 1,
+    paddingRight: 12,
+    gap: 6,
+  },
   buttonRow: {
     flexDirection: 'row',
     gap: 12,
+    flexWrap: 'wrap',
   },
   primaryButton: {
     backgroundColor: BLUE,
-    borderRadius: 14,
+    borderRadius: 18,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
+    minHeight: 56,
   },
   primaryButtonText: {
     color: WHITE,
-    fontSize: 14,
+    fontSize: 15,
     fontFamily: FONTS.body,
   },
   secondaryButton: {
@@ -752,20 +920,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BORDER,
     backgroundColor: CARD_ALT,
-    borderRadius: 14,
+    borderRadius: 18,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
+    minHeight: 56,
   },
   secondaryButtonText: {
     color: TEXT_PRIMARY,
-    fontSize: 14,
+    fontSize: 15,
     fontFamily: FONTS.body,
-  },
-  signOutButton: {
-    backgroundColor: DANGER,
-    borderColor: DANGER,
   },
   disabledButton: {
     opacity: 0.55,
@@ -809,6 +974,21 @@ const styles = StyleSheet.create({
     backgroundColor: CARD_ALT,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  signOutCta: {
+    backgroundColor: CARD_BG,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 22,
+    paddingVertical: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
+  },
+  signOutCtaText: {
+    color: DANGER,
+    fontSize: 18,
+    fontFamily: FONTS.body,
   },
   modalOverlay: {
     flex: 1,

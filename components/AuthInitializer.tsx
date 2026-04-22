@@ -42,18 +42,15 @@ export function AuthInitializer({ children }: { children: React.ReactNode }) {
   const { getAccessToken, isAuthenticated, isReady, regentsUserId } = useRegentsAuth();
   const { currentUser } = useCurrentUser();
   const isAuthenticatingWallet = useRef(false);
+  const isWeb = Platform.OS === 'web';
+  const isTestSession = isTestSessionActive();
 
   useEffect(() => {
     initializeAccessTokenGetter(getAccessToken);
   }, [getAccessToken]);
 
   useEffect(() => {
-    if (Platform.OS === 'web') {
-      clearWalletInitFailureMessage();
-      return;
-    }
-
-    if (isTestSessionActive()) {
+    if (isWeb || isTestSession) {
       clearWalletInitFailureMessage();
       return;
     }
@@ -77,29 +74,31 @@ export function AuthInitializer({ children }: { children: React.ReactNode }) {
       .finally(() => {
         isAuthenticatingWallet.current = false;
       });
-  }, [authenticateWithJWT, isAuthenticated, isReady, isSignedIn]);
+  }, [authenticateWithJWT, isAuthenticated, isReady, isSignedIn, isTestSession, isWeb]);
 
   useEffect(() => {
-    if (Platform.OS === 'web') {
+    if (isWeb) {
       return;
     }
 
     configureNotificationHandling().catch((error) => {
       console.error('❌ [APP] Failed to configure notification handling:', error);
     });
-  }, []);
+  }, [isWeb]);
 
   useEffect(() => {
-    if (Platform.OS === 'web') {
+    if (isWeb) {
       return;
     }
 
-    if (regentsUserId && currentUser?.userId) {
-      registerUserPushToken(regentsUserId, getAccessToken).catch((error) => {
-        console.error('❌ [APP] Failed to register push notifications:', error);
-      });
+    if (!regentsUserId || !currentUser?.userId) {
+      return;
     }
-  }, [currentUser?.userId, getAccessToken, regentsUserId]);
+
+    registerUserPushToken(regentsUserId, getAccessToken).catch((error) => {
+      console.error('❌ [APP] Failed to register push notifications:', error);
+    });
+  }, [currentUser?.userId, getAccessToken, isWeb, regentsUserId]);
 
   return <>{children}</>;
 }

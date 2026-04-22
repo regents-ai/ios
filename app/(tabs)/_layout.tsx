@@ -1,15 +1,17 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Tabs } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View } from 'react-native';
+
 import { COLORS } from '../../constants/Colors';
 import { FONTS } from '../../constants/Typography';
 
 export default function TabLayout() {
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.DARK_BG }} edges={['top']}>
+    <View style={{ flex: 1, backgroundColor: COLORS.DARK_BG }}>
       <Tabs
         screenOptions={{
           headerShown: false,
+          tabBarHideOnKeyboard: true,
           sceneStyle: {
             backgroundColor: COLORS.DARK_BG,
           },
@@ -17,29 +19,29 @@ export default function TabLayout() {
           tabBarInactiveTintColor: COLORS.TEXT_SECONDARY,
           tabBarLabelStyle: {
             fontFamily: FONTS.body,
-            fontSize: 11,
-            marginTop: 2,
+            fontSize: 10,
+            marginTop: 1,
           },
           tabBarItemStyle: {
-            paddingTop: 8,
-            paddingBottom: 2,
+            paddingTop: 7,
+            paddingBottom: 4,
           },
           tabBarStyle: {
-            backgroundColor: COLORS.CARD_ALT,
+            backgroundColor: COLORS.WHITE,
             borderTopColor: COLORS.BORDER,
             borderTopWidth: 1,
-            borderRadius: 24,
-            marginHorizontal: 14,
-            marginBottom: 10,
-            height: 82,
-            paddingBottom: 10,
+            borderRadius: 28,
+            marginHorizontal: 16,
+            marginBottom: 14,
+            height: 78,
+            paddingBottom: 8,
             paddingTop: 8,
             position: 'absolute',
-            shadowColor: COLORS.BLUE,
-            shadowOffset: { width: 0, height: 10 },
+            shadowColor: COLORS.BLACK,
+            shadowOffset: { width: 0, height: 8 },
             shadowOpacity: 0.08,
-            shadowRadius: 20,
-            elevation: 8,
+            shadowRadius: 18,
+            elevation: 6,
           },
         }}
       >
@@ -54,32 +56,33 @@ export default function TabLayout() {
         <Tabs.Screen
           name="agents"
           options={{
-            title: 'Agents',
+            title: 'Regents',
             tabBarIcon: ({ color, size }) => <Ionicons name="people-outline" size={size} color={color} />,
           }}
         />
         <Tabs.Screen
           name="terminal"
           options={{
-            title: 'Terminal',
-            tabBarIcon: ({ color, size }) => <Ionicons name="terminal-outline" size={size} color={color} />,
+            title: 'Talk',
+            tabBarIcon: ({ color, size }) => <Ionicons name="chatbubbles-outline" size={size} color={color} />,
           }}
         />
         <Tabs.Screen
           name="techtree"
           options={{
-            title: 'Techtree',
+            href: null,
+            title: 'Guide',
             tabBarIcon: ({ color, size }) => <Ionicons name="git-branch-outline" size={size} color={color} />,
           }}
         />
         <Tabs.Screen
           name="autolaunch"
           options={{
-            title: 'Autolaunch',
-            tabBarIcon: ({ color, size }) => <Ionicons name="rocket-outline" size={size} color={color} />,
+            title: 'Buy',
+            tabBarIcon: ({ color, size }) => <Ionicons name="swap-horizontal-outline" size={size} color={color} />,
           }}
         />
       </Tabs>
-    </SafeAreaView>
+    </View>
   );
 }

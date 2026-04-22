@@ -40,20 +40,23 @@ type MessageRow = {
   label: string;
 };
 
-function statusCopy(status: PreviewTerminalSessionDetail['status']) {
+type TalkDetail = PreviewTerminalSessionDetail;
+type TalkEvent = PreviewTerminalEvent;
+
+function statusCopy(status: TalkDetail['status']) {
   switch (status) {
     case 'idle':
-      return 'Ready example';
+      return 'Ready';
     case 'running':
-      return 'Working example';
+      return 'Working';
     case 'waiting':
-      return 'Review example';
+      return 'Needs review';
     case 'failed':
-      return 'Issue example';
+      return 'Attention';
   }
 }
 
-function statusColor(status: PreviewTerminalSessionDetail['status']) {
+function statusColor(status: TalkDetail['status']) {
   switch (status) {
     case 'idle':
       return TEXT_SECONDARY;
@@ -66,7 +69,7 @@ function statusColor(status: PreviewTerminalSessionDetail['status']) {
   }
 }
 
-function statusBackground(status: PreviewTerminalSessionDetail['status']) {
+function statusBackground(status: TalkDetail['status']) {
   switch (status) {
     case 'idle':
       return WHITE;
@@ -88,7 +91,7 @@ function relativeTime(dateString: string) {
   return `${Math.round(diffHours / 24)}d ago`;
 }
 
-function eventsToMessages(events: PreviewTerminalEvent[]): MessageRow[] {
+function eventsToMessages(events: TalkEvent[]): MessageRow[] {
   const rows: MessageRow[] = [];
 
   for (const event of events) {
@@ -98,7 +101,7 @@ function eventsToMessages(events: PreviewTerminalEvent[]): MessageRow[] {
         role: 'user',
         text: event.text,
         ts: event.ts,
-        label: 'Sample note',
+        label: 'You',
       });
     }
 
@@ -108,7 +111,7 @@ function eventsToMessages(events: PreviewTerminalEvent[]): MessageRow[] {
         role: 'assistant',
         text: event.chunk,
         ts: event.ts,
-        label: 'Sample reply',
+        label: 'Hermes',
       });
     }
 
@@ -118,7 +121,7 @@ function eventsToMessages(events: PreviewTerminalEvent[]): MessageRow[] {
         role: 'system',
         text: event.details,
         ts: event.ts,
-        label: 'Sample review step',
+        label: 'Approval',
       });
     }
 
@@ -126,9 +129,14 @@ function eventsToMessages(events: PreviewTerminalEvent[]): MessageRow[] {
       rows.push({
         id: `${event.ts}-system-result`,
         role: 'system',
-        text: event.result === 'approved' ? 'This sample shows an approved step.' : 'This sample shows a denied step.',
+        text:
+          event.result === 'approved'
+            ? 'Approved.'
+            : event.result === 'denied'
+              ? 'Declined.'
+              : 'This request expired before a decision was made.',
         ts: event.ts,
-        label: 'Sample result',
+        label: 'Decision',
       });
     }
 
@@ -138,7 +146,7 @@ function eventsToMessages(events: PreviewTerminalEvent[]): MessageRow[] {
         role: 'system',
         text: event.message,
         ts: event.ts,
-        label: 'Sample update',
+        label: 'Update',
       });
     }
   }
@@ -146,12 +154,12 @@ function eventsToMessages(events: PreviewTerminalEvent[]): MessageRow[] {
   return rows;
 }
 
-export default function TerminalSessionScreen() {
+export default function TalkDetailScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string }>();
-  const sessionId = typeof params.id === 'string' ? params.id : '';
-  const [session, setSession] = useState<PreviewTerminalSessionDetail | null>(null);
-  const [events, setEvents] = useState<PreviewTerminalEvent[]>([]);
+  const talkId = typeof params.id === 'string' ? params.id : '';
+  const [talk, setTalk] = useState<TalkDetail | null>(null);
+  const [events, setEvents] = useState<TalkEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [alertState, setAlertState] = useState<{
@@ -166,8 +174,8 @@ export default function TerminalSessionScreen() {
     type: 'info',
   });
 
-  const loadSession = useCallback(async (refresh = false) => {
-    if (!sessionId) {
+  const loadTalk = useCallback(async (refresh = false) => {
+    if (!talkId) {
       return;
     }
 
@@ -178,17 +186,17 @@ export default function TerminalSessionScreen() {
         setLoading(true);
       }
 
-      const [nextSession, nextEvents] = await Promise.all([
-        fetchPreviewTerminalSession(sessionId),
-        fetchPreviewTerminalEvents(sessionId),
+      const [nextTalk, nextEvents] = await Promise.all([
+        fetchPreviewTerminalSession(talkId),
+        fetchPreviewTerminalEvents(talkId),
       ]);
 
-      setSession(nextSession);
+      setTalk(nextTalk);
       setEvents(nextEvents);
     } catch (error) {
       setAlertState({
         visible: true,
-        title: 'Unable to load this preview',
+        title: 'Unable to load this talk',
         message: error instanceof Error ? error.message : 'Try again in a moment.',
         type: 'error',
       });
@@ -196,12 +204,12 @@ export default function TerminalSessionScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [sessionId]);
+  }, [talkId]);
 
   useFocusEffect(
     useCallback(() => {
-      loadSession();
-    }, [loadSession])
+      loadTalk();
+    }, [loadTalk])
   );
 
   const messageRows = useMemo(() => eventsToMessages(events), [events]);
@@ -211,19 +219,19 @@ export default function TerminalSessionScreen() {
       <SafeAreaView style={styles.container}>
         <View style={styles.centerState}>
           <ActivityIndicator size="large" color={BLUE} />
-          <Text style={styles.loadingText}>Opening preview session…</Text>
+          <Text style={styles.loadingText}>Opening talk…</Text>
         </View>
       </SafeAreaView>
     );
   }
 
-  if (!session) {
+  if (!talk) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.centerState}>
-          <Text style={styles.emptyTitle}>This preview is unavailable</Text>
+          <Text style={styles.emptyTitle}>This talk is unavailable</Text>
           <Pressable style={styles.primaryButton} onPress={() => router.back()}>
-            <Text style={styles.primaryButtonText}>Back to terminal</Text>
+            <Text style={styles.primaryButtonText}>Go back</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -238,40 +246,43 @@ export default function TerminalSessionScreen() {
         </Pressable>
 
         <View style={styles.headerCopy}>
-          <Text style={styles.headerTitle}>{session.title}</Text>
-          <Text style={styles.headerSubtitle}>{session.agentName}</Text>
+          <Text style={styles.headerTitle}>{talk.title}</Text>
+          <Text style={styles.headerSubtitle}>{talk.agentName}</Text>
         </View>
 
-        <View style={[styles.statusPill, { backgroundColor: statusBackground(session.status), borderColor: statusColor(session.status) }]}>
-          <Text style={[styles.statusPillText, { color: statusColor(session.status) }]}>{statusCopy(session.status)}</Text>
+        <View style={[styles.statusPill, { backgroundColor: statusBackground(talk.status), borderColor: statusColor(talk.status) }]}>
+          <Text style={[styles.statusPillText, { color: statusColor(talk.status) }]}>{statusCopy(talk.status)}</Text>
         </View>
       </View>
 
       <View style={styles.sessionSummaryCard}>
         <View style={styles.summaryTopRow}>
-          <Text style={styles.summaryTitle}>Sample activity</Text>
-          <Text style={styles.summaryMeta}>{refreshing ? 'Refreshing…' : relativeTime(session.lastUpdatedAt)}</Text>
+          <Text style={styles.summaryTitle}>Latest activity</Text>
+          <Text style={styles.summaryMeta}>{refreshing ? 'Refreshing…' : relativeTime(talk.lastUpdatedAt)}</Text>
         </View>
-        <Text style={styles.summaryBody}>{session.preview}</Text>
+        <Text style={styles.summaryBody}>{talk.preview}</Text>
       </View>
 
       <View style={styles.previewNoticeWrap}>
-        <PreviewNotice body="This is a sample session. Sending notes and approving actions stay off in this build so the screen cannot act like a live Regent terminal." />
+        <PreviewNotice
+          title="Talk on mobile"
+          body="You can read the latest updates here today. Replies and approvals will appear here when they are ready on mobile."
+        />
       </View>
 
-      {session.pendingApproval ? (
+      {talk.pendingApproval ? (
         <View style={styles.approvalCard}>
           <View style={styles.approvalHeader}>
             <View style={styles.approvalIconWrap}>
               <Ionicons name="eye-outline" size={18} color={ORANGE} />
             </View>
             <View style={styles.approvalCopy}>
-              <Text style={styles.approvalTitle}>{session.pendingApproval.label}</Text>
-              <Text style={styles.approvalBody}>{session.pendingApproval.details}</Text>
+              <Text style={styles.approvalTitle}>{talk.pendingApproval.label}</Text>
+              <Text style={styles.approvalBody}>{talk.pendingApproval.details}</Text>
             </View>
           </View>
           <View style={styles.emptyPanel}>
-            <Text style={styles.emptyPanelText}>This preview shows where a review step will appear later. The buttons stay off until the live Regent connection is ready.</Text>
+            <Text style={styles.emptyPanelText}>Approval actions will appear here when they are ready on mobile.</Text>
           </View>
         </View>
       ) : null}
@@ -301,26 +312,29 @@ export default function TerminalSessionScreen() {
         )}
         ListEmptyComponent={
           <View style={styles.emptyTimelineCard}>
-            <Text style={styles.emptyTimelineTitle}>This preview is quiet right now</Text>
-            <Text style={styles.emptyTimelineText}>New sample updates will appear here when available.</Text>
+            <Text style={styles.emptyTimelineTitle}>No activity yet</Text>
+            <Text style={styles.emptyTimelineText}>Updates will appear here when this talk has something new.</Text>
           </View>
         }
         ListFooterComponent={
           <View style={styles.composerCard}>
-            <Text style={styles.composerTitle}>Send a note</Text>
-            <Text style={styles.composerBody}>This area stays read-only for now. When the live Regent session is connected, this is where you will reply from your phone.</Text>
+            <Text style={styles.composerTitle}>Reply</Text>
+            <View style={styles.composerPlaceholderCard}>
+              <Text style={styles.composerPlaceholder}>{talk.composerPlaceholder}</Text>
+            </View>
+            <Text style={styles.composerBody}>Replying from your phone will appear here when it is ready.</Text>
             <Pressable
               style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}
               onPress={() =>
                 setAlertState({
                   visible: true,
-                  title: 'Preview only',
-                  message: 'Sending a note is not live in this build yet.',
+                  title: 'Reply coming soon',
+                  message: 'You will be able to reply from this screen when mobile replies are ready.',
                   type: 'info',
                 })
               }
             >
-              <Text style={styles.primaryButtonText}>Not live yet</Text>
+              <Text style={styles.primaryButtonText}>Reply coming soon</Text>
             </Pressable>
           </View>
         }
@@ -562,6 +576,20 @@ const styles = StyleSheet.create({
     color: TEXT_PRIMARY,
     fontSize: 18,
     fontFamily: FONTS.heading,
+  },
+  composerPlaceholderCard: {
+    backgroundColor: BLUE_WASH,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  composerPlaceholder: {
+    color: TEXT_SECONDARY,
+    fontSize: 14,
+    lineHeight: 20,
+    fontFamily: FONTS.body,
   },
   composerBody: {
     color: TEXT_SECONDARY,

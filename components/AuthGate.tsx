@@ -121,25 +121,22 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
     const currentSegment = segments[0];
     const inManagedAuthRoute = isAuthManagedRoute(currentSegment);
+    const redirectTo = !isAuthenticated && !inManagedAuthRoute ? '/auth/login' : isAuthenticated && currentSegment === 'auth' ? '/agents' : null;
 
-    if (!isAuthenticated && !inManagedAuthRoute) {
-      setTimeout(() => {
-        try {
-          router.replace('/auth/login');
-        } catch (e) {
-          console.error('Navigation error:', e);
-        }
-      }, 0);
-    } else if (isAuthenticated && currentSegment === 'auth') {
-      setTimeout(() => {
-        try {
-          router.replace('/wallet');
-        } catch (e) {
-          console.error('Navigation error:', e);
-        }
-      }, 0);
+    if (!redirectTo) {
+      return;
     }
-  }, [hasCheckedAuth, isAuthenticated, isReady, privyReady, segments, testSession, walletReady]);
+
+    const redirectTimer = setTimeout(() => {
+      try {
+        router.replace(redirectTo);
+      } catch (e) {
+        console.error('Navigation error:', e);
+      }
+    }, 0);
+
+    return () => clearTimeout(redirectTimer);
+  }, [hasCheckedAuth, isAuthenticated, isReady, privyReady, segments, walletReady]);
 
   if (gateState.mode === 'issue') {
     return (
@@ -203,7 +200,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
           style={styles.loadingBlock}
         >
           <ActivityIndicator size="large" color={BLUE} />
-          <Text style={styles.loadingText}>Opening your wallet...</Text>
+          <Text style={styles.loadingText}>Getting Regents ready...</Text>
         </EaseView>
       </View>
     );

@@ -1,5 +1,4 @@
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
-import { PreviewNotice } from '@/components/ui/PreviewNotice';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
 import {
@@ -25,12 +24,13 @@ import {
   View,
 } from 'react-native';
 
-const { DARK_BG, CARD_BG, CARD_ALT, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, BORDER, WHITE, BLUE_WASH, SUCCESS, DANGER } = COLORS;
+const { DARK_BG, CARD_BG, CARD_ALT, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, BORDER, WHITE, SUCCESS, DANGER } = COLORS;
 
 const AMBER = '#A3703A';
 const AMBER_WASH = '#F2E7DA';
 const GREEN_WASH = '#E6F0EA';
 const RED_WASH = '#F3E1DD';
+const BLUE_WASH = '#E7EEF2';
 
 function formatAddress(address: string) {
   return `${address.slice(0, 8)}...${address.slice(-6)}`;
@@ -55,11 +55,11 @@ function formatRelativeTime(dateString: string) {
 function runtimeCopy(runtimeStatus: PreviewAgentSummary['runtimeStatus']) {
   switch (runtimeStatus) {
     case 'online':
-      return 'Online example';
+      return 'Live';
     case 'waiting':
-      return 'Review example';
+      return 'Needs review';
     case 'offline':
-      return 'Offline example';
+      return 'Offline';
   }
 }
 
@@ -77,15 +77,15 @@ function runtimeTone(runtimeStatus: PreviewAgentSummary['runtimeStatus']) {
 function withdrawalCopy(status: PreviewAgentWithdrawal['status']) {
   switch (status) {
     case 'requested':
-      return 'Shown';
+      return 'Queued';
     case 'approved':
-      return 'Approved example';
+      return 'Approved';
     case 'broadcasting':
-      return 'Moving example';
+      return 'Moving';
     case 'confirmed':
-      return 'Completed example';
+      return 'Arrived';
     case 'failed':
-      return 'Stopped example';
+      return 'Stopped';
   }
 }
 
@@ -151,7 +151,7 @@ export default function AgentDetailScreen() {
     } catch (error) {
       setAlertState({
         visible: true,
-        title: 'Unable to load this preview',
+        title: 'This operator is unavailable right now',
         message: error instanceof Error ? error.message : 'Try again in a moment.',
         type: 'error',
       });
@@ -174,7 +174,7 @@ export default function AgentDetailScreen() {
     router.push({ pathname: '/agent/[id]/paperclip' as any, params: { id: agent.id } });
   }, [agent, router]);
 
-  const openPreviewSession = useCallback(async () => {
+  const openTalk = useCallback(async () => {
     if (!agent) {
       return;
     }
@@ -194,7 +194,7 @@ export default function AgentDetailScreen() {
     } catch (error) {
       setAlertState({
         visible: true,
-        title: 'Unable to open the preview',
+        title: 'Talk is unavailable right now',
         message: error instanceof Error ? error.message : 'Try again in a moment.',
         type: 'error',
       });
@@ -207,15 +207,16 @@ export default function AgentDetailScreen() {
   const topGoal = paperclip?.goals[0];
   const nextTask = paperclip?.activeTasks[0];
   const latestEvent = paperclip?.recentEvents[0];
+  const latestReturn = agent?.withdrawals[0];
   const teamReady = rosterReadyCount(paperclip);
 
   const nextAction = useMemo(() => {
     if (!agent) {
       return {
-        eyebrow: 'Preview',
-        title: 'Review this sample card',
-        body: 'This screen shows how a mobile agent summary could look later.',
-        cta: 'Open Paperclip preview',
+        eyebrow: 'Next move',
+        title: 'Open Paperclip first',
+        body: 'Paperclip gives the quickest read on what changed and what needs attention.',
+        cta: 'Open Paperclip',
         onPress: () => {},
         accent: BLUE,
         wash: BLUE_WASH,
@@ -224,10 +225,10 @@ export default function AgentDetailScreen() {
 
     if (agent.runtimeStatus === 'offline') {
       return {
-        eyebrow: 'Preview example',
-        title: 'Offline state shown here',
-        body: 'This sample card shows how a stalled agent could be surfaced on your phone later.',
-        cta: 'Open Paperclip preview',
+        eyebrow: 'Next move',
+        title: 'Read Paperclip before you reopen Talk',
+        body: 'Start with the company brief, then decide whether this operator needs follow-up or a reset.',
+        cta: 'Open Paperclip',
         onPress: openPaperclip,
         accent: DANGER,
         wash: RED_WASH,
@@ -236,33 +237,33 @@ export default function AgentDetailScreen() {
 
     if (agent.runtimeStatus === 'waiting') {
       return {
-        eyebrow: 'Preview example',
-        title: 'Review step shown here',
-        body: 'This sample card shows how a pending review or handoff could appear later.',
-        cta: 'Open preview session',
-        onPress: openPreviewSession,
+        eyebrow: 'Next move',
+        title: 'A decision is waiting in Talk',
+        body: 'Hermes is paused until you clear the open review or respond to the latest request.',
+        cta: 'Open Talk',
+        onPress: openTalk,
         accent: AMBER,
         wash: AMBER_WASH,
       };
     }
 
     return {
-      eyebrow: 'Preview example',
-      title: 'Steady-state summary shown here',
-      body: 'This sample card shows the kind of quick read a future live view could give you.',
-      cta: 'Open preview session',
-      onPress: openPreviewSession,
+      eyebrow: 'Next move',
+      title: 'Talk is the fastest way back in',
+      body: 'Jump into the conversation to see what Hermes finished, what changed, and what comes next.',
+      cta: 'Open Talk',
+      onPress: openTalk,
       accent: SUCCESS,
       wash: GREEN_WASH,
     };
-  }, [agent, openPaperclip, openPreviewSession]);
+  }, [agent, openPaperclip, openTalk]);
 
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.centerState}>
           <ActivityIndicator size="large" color={BLUE} />
-          <Text style={styles.loadingText}>Loading preview details…</Text>
+          <Text style={styles.loadingText}>Loading operator view…</Text>
         </View>
       </SafeAreaView>
     );
@@ -272,9 +273,9 @@ export default function AgentDetailScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.centerState}>
-          <Text style={styles.emptyTitle}>This preview is unavailable</Text>
+          <Text style={styles.emptyTitle}>This operator is unavailable</Text>
           <Pressable style={({ pressed }) => [styles.primaryButton, pressed && styles.primaryButtonPressed]} onPress={() => router.back()}>
-            <Text style={styles.primaryButtonText}>Back to agents</Text>
+            <Text style={styles.primaryButtonText}>Back</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -293,11 +294,11 @@ export default function AgentDetailScreen() {
         </Pressable>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.scrollContent}>
         <View style={styles.heroCard}>
           <View style={styles.heroTop}>
             <View style={styles.heroTitleBlock}>
-              <Text style={styles.eyebrow}>Agent preview</Text>
+              <Text style={styles.eyebrow}>Regents operator</Text>
               <Text style={styles.heroTitle}>{agent.name}</Text>
             </View>
             <View style={[styles.statusBadge, { backgroundColor: runtime.wash }]}>
@@ -307,19 +308,18 @@ export default function AgentDetailScreen() {
           </View>
           <Text style={styles.heroIntro}>{agent.runtimeHeadline}</Text>
           <Text style={styles.heroMeta}>{agent.mission}</Text>
-          <PreviewNotice body="This is a built-in sample agent view. It does not connect to a live Regent account, and the money steps below stay read-only in this build." />
           <View style={styles.heroActions}>
             <Pressable
               style={({ pressed }) => [styles.primaryButton, pressed && styles.primaryButtonPressed]}
-              onPress={openPreviewSession}
+              onPress={openTalk}
             >
-              <Text style={styles.primaryButtonText}>{openingPreview ? 'Opening…' : 'Open preview session'}</Text>
+              <Text style={styles.primaryButtonText}>{openingPreview ? 'Opening…' : 'Open Talk'}</Text>
             </Pressable>
             <Pressable
               style={({ pressed }) => [styles.secondaryButton, pressed && styles.secondaryButtonPressed]}
               onPress={openPaperclip}
             >
-              <Text style={styles.secondaryButtonText}>Open Paperclip preview</Text>
+              <Text style={styles.secondaryButtonText}>Open Paperclip</Text>
             </Pressable>
           </View>
         </View>
@@ -341,15 +341,34 @@ export default function AgentDetailScreen() {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Preview snapshot</Text>
-          <View style={styles.snapshotGrid}>
-            <View style={styles.snapshotTile}>
-              <Text style={styles.snapshotLabel}>Sample balance</Text>
-              <Text style={styles.snapshotValue}>{agent.stablecoinSymbol} {formatCurrency(agent.stablecoinBalance)}</Text>
+          <Text style={styles.sectionTitle}>Operator view</Text>
+          <Text style={styles.sectionHint}>The essentials for this operator without leaving the phone.</Text>
+          <View style={styles.overviewGrid}>
+            <View style={styles.overviewTile}>
+              <Text style={styles.overviewLabel}>Cash on hand</Text>
+              <Text selectable style={styles.overviewValue}>
+                {agent.stablecoinSymbol} {formatCurrency(agent.stablecoinBalance)}
+              </Text>
+              <Text style={styles.overviewMeta}>Ready balance</Text>
             </View>
-            <View style={styles.snapshotTile}>
-              <Text style={styles.snapshotLabel}>Sample wallet</Text>
-              <Text style={styles.snapshotValue}>{formatAddress(agent.walletAddress)}</Text>
+            <View style={styles.overviewTile}>
+              <Text style={styles.overviewLabel}>Wallet</Text>
+              <Text selectable style={styles.overviewValue}>
+                {formatAddress(agent.walletAddress)}
+              </Text>
+              <Text style={styles.overviewMeta}>Operator address</Text>
+            </View>
+            <View style={styles.overviewTile}>
+              <Text style={styles.overviewLabel}>Last active</Text>
+              <Text style={styles.overviewValue}>{formatRelativeTime(agent.lastActiveAt)}</Text>
+              <Text style={styles.overviewMeta}>Most recent movement</Text>
+            </View>
+            <View style={styles.overviewTile}>
+              <Text style={styles.overviewLabel}>Team ready</Text>
+              <Text style={styles.overviewValue}>
+                {paperclip ? `${teamReady}/${paperclip.roster.length}` : '0/0'}
+              </Text>
+              <Text style={styles.overviewMeta}>Ready to move now</Text>
             </View>
           </View>
         </View>
@@ -357,8 +376,8 @@ export default function AgentDetailScreen() {
         <View style={styles.card}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleBlock}>
-              <Text style={styles.sectionTitle}>Paperclip preview</Text>
-              <Text style={styles.sectionHint}>A phone-sized summary of what matters now, what moves next, and what changed most recently.</Text>
+              <Text style={styles.sectionTitle}>Paperclip</Text>
+              <Text style={styles.sectionHint}>The short company brief tied to this operator.</Text>
             </View>
             <Pressable style={({ pressed }) => [styles.secondaryButton, pressed && styles.secondaryButtonPressed]} onPress={openPaperclip}>
               <Text style={styles.secondaryButtonText}>Open</Text>
@@ -373,78 +392,69 @@ export default function AgentDetailScreen() {
               </View>
               <View style={styles.paperclipGrid}>
                 <View style={styles.paperclipSignalCard}>
+                  <Text style={styles.paperclipSignalLabel}>Focus now</Text>
+                  <Text style={styles.paperclipSignalTitle}>{nextTask?.title || topGoal?.title || 'No open focus yet'}</Text>
+                  <Text style={styles.paperclipSignalBody}>{nextTask?.status || topGoal?.status || 'Waiting for the next update'}</Text>
+                </View>
+                <View style={styles.paperclipSignalCard}>
+                  <Text style={styles.paperclipSignalLabel}>Latest shift</Text>
+                  <Text style={styles.paperclipSignalTitle}>{latestEvent?.title || 'No recent change yet'}</Text>
+                  <Text style={styles.paperclipSignalBody}>{latestEvent ? formatRelativeTime(latestEvent.at) : 'Waiting for the next update'}</Text>
+                </View>
+                <View style={styles.paperclipSignalCard}>
                   <Text style={styles.paperclipSignalLabel}>Top goal</Text>
-                  <Text style={styles.paperclipSignalTitle}>{topGoal?.title || 'No goal listed yet'}</Text>
-                  <Text style={styles.paperclipSignalBody}>{topGoal?.status || 'Waiting for an update'}</Text>
-                </View>
-                <View style={styles.paperclipSignalCard}>
-                  <Text style={styles.paperclipSignalLabel}>Next task</Text>
-                  <Text style={styles.paperclipSignalTitle}>{nextTask?.title || 'No active task yet'}</Text>
-                  <Text style={styles.paperclipSignalBody}>{nextTask?.owner ? `Owned by ${nextTask.owner}` : 'Owner not listed'}</Text>
-                </View>
-                <View style={styles.paperclipSignalCard}>
-                  <Text style={styles.paperclipSignalLabel}>Latest change</Text>
-                  <Text style={styles.paperclipSignalTitle}>{latestEvent?.title || 'No recent event yet'}</Text>
-                  <Text style={styles.paperclipSignalBody}>{latestEvent ? formatRelativeTime(latestEvent.at) : 'Waiting for the first update'}</Text>
+                  <Text style={styles.paperclipSignalTitle}>{topGoal?.title || 'No top goal yet'}</Text>
+                  <Text style={styles.paperclipSignalBody}>{topGoal?.status || 'No status yet'}</Text>
                 </View>
                 <View style={styles.paperclipSignalCard}>
                   <Text style={styles.paperclipSignalLabel}>Team ready</Text>
                   <Text style={styles.paperclipSignalTitle}>{teamReady}/{paperclip.roster.length}</Text>
-                  <Text style={styles.paperclipSignalBody}>People ready to move right now</Text>
+                  <Text style={styles.paperclipSignalBody}>People ready to move</Text>
                 </View>
               </View>
             </>
           ) : (
             <View style={styles.emptyPanel}>
-              <Text style={styles.emptyPanelText}>This preview summary is not available right now.</Text>
+              <Text style={styles.emptyPanelText}>Paperclip is empty right now.</Text>
             </View>
           )}
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Funding preview</Text>
-          <Text style={styles.sectionHint}>This sample shows where wallet-to-agent funding details will live later.</Text>
-          <View style={styles.previewPanel}>
-            <Text style={styles.previewPanelTitle}>Money controls stay off in this build</Text>
-            <Text style={styles.previewPanelBody}>
-              You cannot send money from this sample screen. Wallet send remains real on the wallet tab, but sample agents never hand off into that flow.
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Return-to-wallet preview</Text>
-          <Text style={styles.sectionHint}>This sample timeline shows how a future return step may look once live agent money movement is connected.</Text>
-          {agent.withdrawals.length === 0 ? (
-            <View style={styles.emptyPanel}>
-              <Text style={styles.emptyPanelText}>No sample return steps are listed for this preview.</Text>
-            </View>
-          ) : (
+        {agent.withdrawals.length > 0 ? (
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>Recent returns</Text>
+            <Text style={styles.sectionHint}>Where funds were headed most recently.</Text>
             <View style={styles.timeline}>
-              {agent.withdrawals.map((withdrawal) => {
+              {agent.withdrawals.slice(0, 3).map((withdrawal) => {
                 const tone = statusTone(withdrawal.status);
                 return (
                   <View key={withdrawal.id} style={styles.timelineRow}>
                     <View style={[styles.timelineDot, { backgroundColor: tone.accent }]} />
                     <View style={styles.timelineCard}>
                       <View style={styles.timelineHeader}>
-                        <Text style={styles.timelineTitle}>{withdrawal.amount} {withdrawal.currency}</Text>
+                        <Text style={styles.timelineTitle}>
+                          {withdrawal.amount} {withdrawal.currency}
+                        </Text>
                         <View style={[styles.timelinePill, { backgroundColor: tone.wash }]}>
                           <Text style={[styles.timelinePillText, { color: tone.accent }]}>{withdrawalCopy(withdrawal.status)}</Text>
                         </View>
                       </View>
                       <Text style={styles.timelineSubtitle}>{new Date(withdrawal.updatedAt).toLocaleString()}</Text>
-                      <Text style={styles.timelineBody}>Sample destination {formatAddress(withdrawal.destinationWalletAddress)}</Text>
+                      <Text selectable style={styles.timelineBody}>
+                        To {formatAddress(withdrawal.destinationWalletAddress)}
+                      </Text>
                     </View>
                   </View>
                 );
               })}
             </View>
-          )}
-        </View>
+            {latestReturn ? <Text style={styles.sectionNote}>Most recent return shown first.</Text> : null}
+          </View>
+        ) : null}
 
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Recent sample activity</Text>
+          <Text style={styles.sectionTitle}>Recent movement</Text>
+          <Text style={styles.sectionHint}>The latest operator updates across Talk, tasks, and money movement.</Text>
           <View style={styles.timeline}>
             {agent.recentActivity.map((activity) => (
               <View key={activity.id} style={styles.timelineRow}>
@@ -619,6 +629,7 @@ const styles = StyleSheet.create({
   },
   secondaryButtonPressed: {
     opacity: 0.95,
+    transform: [{ scale: 0.99 }],
   },
   secondaryButtonText: {
     color: TEXT_PRIMARY,
@@ -686,27 +697,40 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     fontFamily: FONTS.body,
   },
-  snapshotGrid: {
+  sectionNote: {
+    color: TEXT_SECONDARY,
+    fontSize: 12,
+    fontFamily: FONTS.body,
+  },
+  overviewGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
   },
-  snapshotTile: {
-    flex: 1,
+  overviewTile: {
+    width: '48%',
     backgroundColor: CARD_ALT,
     borderRadius: 18,
     padding: 16,
     gap: 6,
   },
-  snapshotLabel: {
+  overviewLabel: {
     color: TEXT_SECONDARY,
     fontSize: 12,
+    textTransform: 'uppercase',
     fontFamily: FONTS.body,
   },
-  snapshotValue: {
+  overviewValue: {
     color: TEXT_PRIMARY,
     fontSize: 16,
     lineHeight: 22,
     fontFamily: FONTS.heading,
+  },
+  overviewMeta: {
+    color: TEXT_SECONDARY,
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: FONTS.body,
   },
   paperclipLeadCard: {
     backgroundColor: CARD_ALT,
@@ -753,25 +777,6 @@ const styles = StyleSheet.create({
     color: TEXT_SECONDARY,
     fontSize: 13,
     lineHeight: 18,
-    fontFamily: FONTS.body,
-  },
-  previewPanel: {
-    backgroundColor: BLUE_WASH,
-    borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 18,
-    padding: 16,
-    gap: 8,
-  },
-  previewPanelTitle: {
-    color: TEXT_PRIMARY,
-    fontSize: 16,
-    fontFamily: FONTS.heading,
-  },
-  previewPanelBody: {
-    color: TEXT_SECONDARY,
-    fontSize: 14,
-    lineHeight: 20,
     fontFamily: FONTS.body,
   },
   emptyPanel: {

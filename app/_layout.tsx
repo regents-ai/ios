@@ -15,6 +15,8 @@ import 'react-native-url-polyfill/auto';
 import { StyleSheet, Text, View } from "react-native";
 
 const { DARK_BG, TEXT_PRIMARY, TEXT_SECONDARY } = COLORS;
+const cardSlideRight = { presentation: 'card', animation: 'slide_from_right' } as const;
+const cardSlideBottom = { presentation: 'card', animation: 'slide_from_bottom' } as const;
 
 function WalletProviders({
   children,
@@ -107,69 +109,25 @@ export default function RootLayout() {
   return (
     <PrivyProvider appId={resolvedPrivyAppId} clientId={resolvedPrivyClientId}>
       <WalletProviders cdpProjectId={resolvedCdpProjectId} localTestSessionEnabled={localTestSessionEnabled}>
-          <Stack screenOptions={{ headerShown: false }}>
-            {/* Auth screens */}
-            <Stack.Screen
-              name="auth/login"
-              options={{
-                headerShown: false,
-                gestureEnabled: false,  // Can't swipe back from login
-                animation: 'fade',
-              }}
-            />
-
-            {/* Phone verification pages - no tabs */}
-            <Stack.Screen
-              name="phone-verify"
-              options={{
-                presentation: 'card',
-                animation: 'slide_from_right',
-              }}
-            />
-            <Stack.Screen
-                name="phone-code"
-                options={{
-                  presentation: 'card',
-                  animation: 'slide_from_right',
-                }}
-            />
-
-            {/* Offramp send — reached via deep link after Coinbase sell flow */}
-            <Stack.Screen
-              name="offramp-send"
-              options={{
-                presentation: 'card',
-                animation: 'slide_from_bottom',
-              }}
-            />
-
-            <Stack.Screen
-              name="agent/[id]"
-              options={{
-                presentation: 'card',
-                animation: 'slide_from_right',
-              }}
-            />
-
-            <Stack.Screen
-              name="agent/[id]/paperclip"
-              options={{
-                presentation: 'card',
-                animation: 'slide_from_right',
-              }}
-            />
-
-            <Stack.Screen
-              name="terminal/[id]"
-              options={{
-                presentation: 'card',
-                animation: 'slide_from_right',
-              }}
-            />
-
-            {/* Main app with tabs */}
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          </Stack>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen
+            name="auth/login"
+            options={{
+              headerShown: false,
+              gestureEnabled: false,
+              animation: 'fade',
+            }}
+          />
+          <Stack.Screen name="email-verify" options={cardSlideRight} />
+          <Stack.Screen name="email-code" options={cardSlideRight} />
+          <Stack.Screen name="phone-verify" options={cardSlideRight} />
+          <Stack.Screen name="phone-code" options={cardSlideRight} />
+          <Stack.Screen name="offramp-send" options={cardSlideBottom} />
+          <Stack.Screen name="agent/[id]" options={cardSlideRight} />
+          <Stack.Screen name="agent/[id]/paperclip" options={cardSlideRight} />
+          <Stack.Screen name="terminal/[id]" options={cardSlideRight} />
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        </Stack>
       </WalletProviders>
     </PrivyProvider>
   );

@@ -1,5 +1,4 @@
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
-import { PreviewNotice } from '@/components/ui/PreviewNotice';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
 import { PreviewAgentSummary } from '@/types/agentPreviews';
@@ -10,9 +9,9 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -35,8 +34,9 @@ const {
 const AMBER = '#A3703A';
 const AMBER_WASH = '#F2E7DA';
 const GREEN_WASH = '#E6F0EA';
+const RED_WASH = '#F3E1DD';
 
-function cardPriority(agent: PreviewAgentSummary) {
+function regentPriority(agent: PreviewAgentSummary) {
   if (agent.runtimeStatus === 'offline') return 0;
   if (agent.status === 'attention') return 1;
   if (agent.runtimeStatus === 'waiting') return 2;
@@ -44,76 +44,39 @@ function cardPriority(agent: PreviewAgentSummary) {
   return 4;
 }
 
-function runtimeTone(runtimeStatus: PreviewAgentSummary['runtimeStatus']) {
-  switch (runtimeStatus) {
-    case 'online':
-      return {
-        label: 'Online',
-        accent: SUCCESS,
-        wash: GREEN_WASH,
-      };
-    case 'waiting':
-      return {
-        label: 'Waiting',
-        accent: AMBER,
-        wash: AMBER_WASH,
-      };
-    case 'offline':
-      return {
-        label: 'Offline',
-        accent: DANGER,
-        wash: '#F3E1DD',
-      };
-  }
-}
-
-function attentionCopy(agent: PreviewAgentSummary) {
+function regentTone(agent: PreviewAgentSummary) {
   if (agent.runtimeStatus === 'offline') {
     return {
-      eyebrow: 'Needs attention now',
-      summary: 'Sample review card for an agent that needs attention.',
-      nextAction: 'Open preview',
+      label: 'Needs you',
       accent: DANGER,
-      wash: '#F3E1DD',
+      wash: RED_WASH,
+      summary: agent.treasuryNote || 'This Regent has gone quiet and needs a closer look.',
     };
   }
 
   if (agent.status === 'attention') {
     return {
-      eyebrow: 'Review recommended',
-      summary: agent.treasuryNote || 'Sample update showing how a review card can rise to the top.',
-      nextAction: 'Open preview',
+      label: 'Review',
       accent: AMBER,
       wash: AMBER_WASH,
+      summary: agent.treasuryNote || 'A decision is waiting before this Regent can keep moving.',
     };
   }
 
   if (agent.runtimeStatus === 'waiting') {
     return {
-      eyebrow: 'Next step shown here',
-      summary: agent.treasuryNote || 'Sample update showing how a paused handoff or review step could appear later.',
-      nextAction: 'Open preview',
+      label: 'Waiting',
       accent: AMBER,
       wash: AMBER_WASH,
-    };
-  }
-
-  if (agent.status === 'paused') {
-    return {
-      eyebrow: 'Paused',
-      summary: agent.treasuryNote || 'Sample paused state showing how a summary card could look later.',
-      nextAction: 'Open preview',
-      accent: DANGER,
-      wash: '#F3E1DD',
+      summary: agent.treasuryNote || 'The next handoff is clear, but it still needs your nudge.',
     };
   }
 
   return {
-    eyebrow: 'Steady',
-    summary: agent.treasuryNote || 'Sample steady-state card showing the shape of the future mobile agent view.',
-    nextAction: 'Open preview',
+    label: 'Steady',
     accent: SUCCESS,
     wash: GREEN_WASH,
+    summary: agent.treasuryNote || 'This Regent is moving without needing much from you right now.',
   };
 }
 
@@ -147,8 +110,8 @@ export default function AgentsTab() {
     } catch (error) {
       setAlertState({
         visible: true,
-        title: 'Unable to load preview cards',
-        message: error instanceof Error ? error.message : 'Try again in a moment.',
+        title: 'Could not load Regents',
+        message: error instanceof Error ? error.message : 'Please try again in a moment.',
         type: 'error',
       });
     } finally {
@@ -166,7 +129,7 @@ export default function AgentsTab() {
   const sortedAgents = useMemo(
     () =>
       [...agents].sort((left, right) => {
-        const priorityDiff = cardPriority(left) - cardPriority(right);
+        const priorityDiff = regentPriority(left) - regentPriority(right);
         if (priorityDiff !== 0) {
           return priorityDiff;
         }
@@ -176,114 +139,186 @@ export default function AgentsTab() {
     [agents]
   );
 
+  const leadRegent = sortedAgents[0] ?? null;
+  const supportingRegents = sortedAgents.slice(1);
+
   const summary = useMemo(() => {
-    const attentionCount = agents.filter((agent) => agent.runtimeStatus === 'offline' || agent.status === 'attention').length;
-    const waitingCount = agents.filter((agent) => agent.runtimeStatus === 'waiting').length;
-    const steadyCount = agents.filter((agent) => agent.runtimeStatus === 'online' && agent.status === 'active').length;
-
-    return { attentionCount, waitingCount, steadyCount };
+    const needsYou = agents.filter((agent) => agent.runtimeStatus === 'offline' || agent.status === 'attention').length;
+    const waiting = agents.filter((agent) => agent.runtimeStatus === 'waiting').length;
+    const steady = agents.filter((agent) => agent.runtimeStatus === 'online' && agent.status === 'active').length;
+    return { needsYou, waiting, steady };
   }, [agents]);
-
-  const renderItem = ({ item }: { item: AgentSummary }) => {
-    const runtime = runtimeTone(item.runtimeStatus);
-    const attention = attentionCopy(item);
-
-    return (
-      <Pressable
-        onPress={() => router.push({ pathname: '/agent/[id]' as any, params: { id: item.id } })}
-        style={({ pressed }) => [
-          styles.agentCard,
-          { borderColor: attention.accent },
-          pressed && styles.cardPressed,
-        ]}
-      >
-        <View style={styles.cardHeader}>
-          <View style={[styles.priorityPill, { backgroundColor: attention.wash }]}>
-            <Text style={[styles.priorityPillText, { color: attention.accent }]}>{attention.eyebrow}</Text>
-          </View>
-          <View style={[styles.runtimePill, { backgroundColor: runtime.wash }]}>
-            <View style={[styles.runtimeDot, { backgroundColor: runtime.accent }]} />
-            <Text style={[styles.runtimePillText, { color: runtime.accent }]}>{runtime.label}</Text>
-          </View>
-        </View>
-
-        <Text style={styles.agentName}>{item.name}</Text>
-        <Text style={styles.agentLead}>{attention.summary}</Text>
-
-        <View style={styles.statGrid}>
-          <View style={styles.statBlock}>
-            <Text style={styles.statLabel}>Stablecoin balance</Text>
-            <Text style={styles.statValue}>{item.stablecoinSymbol} {formatCurrencyAmount(item.stablecoinBalance)}</Text>
-          </View>
-          <View style={styles.statBlock}>
-            <Text style={styles.statLabel}>Last active</Text>
-            <Text style={styles.statValue}>{formatRelativeTime(item.lastActiveAt)}</Text>
-          </View>
-        </View>
-
-        <View style={styles.walletStrip}>
-          <Ionicons name="wallet-outline" size={16} color={TEXT_SECONDARY} />
-          <Text style={styles.addressText}>{formatWalletAddress(item.walletAddress)}</Text>
-        </View>
-
-        <View style={styles.cardFooter}>
-          <View>
-            <Text style={styles.footerLabel}>Next step</Text>
-            <Text style={styles.footerAction}>{attention.nextAction}</Text>
-          </View>
-          <View style={styles.footerArrow}>
-            <Ionicons name="arrow-forward" size={18} color={BLUE} />
-          </View>
-        </View>
-      </Pressable>
-    );
-  };
 
   return (
     <View style={styles.container}>
-      <View style={styles.heroCard}>
-        <Text style={styles.eyebrow}>Regents Mobile</Text>
-        <Text style={styles.heroTitle}>Agents</Text>
-        <Text style={styles.heroIntro}>
-          These sample cards show how agent updates, balances, and reviews may look in a later build.
-        </Text>
-        <PreviewNotice body="These are built-in sample agents. They do not reflect a live Regent account yet, and the money controls on the next screen stay in preview mode." />
-        <View style={styles.summaryRow}>
-          <View style={styles.summaryTile}>
-            <Text style={styles.summaryValue}>{summary.attentionCount}</Text>
-            <Text style={styles.summaryLabel}>Need review</Text>
-          </View>
-          <View style={styles.summaryTile}>
-            <Text style={styles.summaryValue}>{summary.waitingCount}</Text>
-            <Text style={styles.summaryLabel}>Waiting</Text>
-          </View>
-          <View style={styles.summaryTile}>
-            <Text style={styles.summaryValue}>{summary.steadyCount}</Text>
-            <Text style={styles.summaryLabel}>Steady</Text>
-          </View>
-        </View>
-      </View>
-
       {loading ? (
         <View style={styles.centerState}>
           <ActivityIndicator size="large" color={BLUE} />
-          <Text style={styles.loadingText}>Loading sample agent cards…</Text>
+          <Text style={styles.loadingText}>Loading Regents…</Text>
         </View>
       ) : (
-        <FlatList
-          data={sortedAgents}
-          keyExtractor={(item) => item.id}
-          renderItem={renderItem}
-          contentContainerStyle={styles.listContent}
+        <ScrollView
+          contentInsetAdjustmentBehavior="automatic"
+          contentContainerStyle={styles.content}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadAgents(true)} tintColor={BLUE} />}
-          ListEmptyComponent={
-            <View style={styles.emptyCard}>
-              <Ionicons name="people-outline" size={34} color={BLUE} />
-              <Text style={styles.emptyTitle}>No sample cards yet</Text>
-              <Text style={styles.emptyText}>Sample agent cards will appear here when this preview data is available.</Text>
+        >
+          <View style={styles.heroCard}>
+            <Text style={styles.eyebrow}>Regents</Text>
+            <Text style={styles.heroTitle}>Run the work from one place</Text>
+            <Text style={styles.heroBody}>
+              See which Regents are moving, step into the one that needs you next, and keep money and
+              conversations close by.
+            </Text>
+
+            <View style={styles.heroActions}>
+              <Pressable
+                onPress={() => router.push('/wallet')}
+                style={({ pressed }) => [styles.primaryButton, pressed && styles.primaryButtonPressed]}
+              >
+                <Text style={styles.primaryButtonText}>Open Wallet</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => router.push('/terminal')}
+                style={({ pressed }) => [styles.secondaryButton, pressed && styles.secondaryButtonPressed]}
+              >
+                <Text style={styles.secondaryButtonText}>Open Talk</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => router.push('/autolaunch')}
+                style={({ pressed }) => [styles.secondaryButton, pressed && styles.secondaryButtonPressed]}
+              >
+                <Text style={styles.secondaryButtonText}>Open Buy</Text>
+              </Pressable>
             </View>
-          }
-        />
+          </View>
+
+          <View style={styles.summaryRow}>
+            <View style={styles.summaryTile}>
+              <Text style={styles.summaryValue}>{summary.needsYou}</Text>
+              <Text style={styles.summaryLabel}>Need you</Text>
+            </View>
+            <View style={styles.summaryTile}>
+              <Text style={styles.summaryValue}>{summary.waiting}</Text>
+              <Text style={styles.summaryLabel}>Waiting</Text>
+            </View>
+            <View style={styles.summaryTile}>
+              <Text style={styles.summaryValue}>{summary.steady}</Text>
+              <Text style={styles.summaryLabel}>Steady</Text>
+            </View>
+          </View>
+
+          {leadRegent ? (
+            <Pressable
+              onPress={() => router.push({ pathname: '/agent/[id]' as any, params: { id: leadRegent.id } })}
+              style={({ pressed }) => [styles.focusCard, pressed && styles.cardPressed]}
+            >
+              <View style={styles.focusHeader}>
+                <View style={styles.focusCopy}>
+                  <Text style={styles.focusEyebrow}>Start here</Text>
+                  <Text style={styles.focusTitle}>{leadRegent.name}</Text>
+                  <Text style={styles.focusBody}>{regentTone(leadRegent).summary}</Text>
+                </View>
+                <View style={[styles.statusPill, { backgroundColor: regentTone(leadRegent).wash }]}>
+                  <Text style={[styles.statusPillText, { color: regentTone(leadRegent).accent }]}>
+                    {regentTone(leadRegent).label}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.focusMetaRow}>
+                <View style={styles.focusMetaTile}>
+                  <Text style={styles.metaLabel}>Balance</Text>
+                  <Text style={styles.metaValue}>
+                    {leadRegent.stablecoinSymbol} {formatCurrencyAmount(leadRegent.stablecoinBalance)}
+                  </Text>
+                </View>
+                <View style={styles.focusMetaTile}>
+                  <Text style={styles.metaLabel}>Last update</Text>
+                  <Text style={styles.metaValue}>{formatRelativeTime(leadRegent.lastActiveAt)}</Text>
+                </View>
+              </View>
+
+              <View style={styles.focusFooter}>
+                <Text style={styles.footerLink}>Open Regent</Text>
+                <Ionicons name="arrow-forward" size={18} color={BLUE} />
+              </View>
+            </Pressable>
+          ) : (
+            <View style={styles.emptyCard}>
+              <Ionicons name="sparkles-outline" size={28} color={BLUE} />
+              <Text style={styles.emptyTitle}>No Regents yet</Text>
+              <Text style={styles.emptyText}>Your Regents will show up here once they are ready to follow.</Text>
+            </View>
+          )}
+
+          {supportingRegents.length > 0 ? (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>All Regents</Text>
+              <View style={styles.regentList}>
+                {supportingRegents.map((agent) => {
+                  const tone = regentTone(agent);
+
+                  return (
+                    <Pressable
+                      key={agent.id}
+                      onPress={() => router.push({ pathname: '/agent/[id]' as any, params: { id: agent.id } })}
+                      style={({ pressed }) => [styles.regentRow, pressed && styles.cardPressed]}
+                    >
+                      <View style={styles.regentRowTop}>
+                        <View style={styles.regentRowCopy}>
+                          <Text style={styles.regentName}>{agent.name}</Text>
+                          <Text style={styles.regentSummary}>{tone.summary}</Text>
+                        </View>
+                        <View style={[styles.statusPill, { backgroundColor: tone.wash }]}>
+                          <Text style={[styles.statusPillText, { color: tone.accent }]}>{tone.label}</Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.regentRowBottom}>
+                        <Text style={styles.regentMeta}>{formatWalletAddress(agent.walletAddress)}</Text>
+                        <Text style={styles.regentMeta}>
+                          {agent.stablecoinSymbol} {formatCurrencyAmount(agent.stablecoinBalance)}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          ) : null}
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Keep moving</Text>
+            <View style={styles.quickGrid}>
+              <Pressable
+                onPress={() => router.push('/terminal')}
+                style={({ pressed }) => [styles.quickCard, pressed && styles.cardPressed]}
+              >
+                <Ionicons name="chatbubble-ellipses-outline" size={18} color={BLUE} />
+                <Text style={styles.quickTitle}>Talk</Text>
+                <Text style={styles.quickBody}>Check what Hermes changed most recently.</Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => router.push('/wallet')}
+                style={({ pressed }) => [styles.quickCard, pressed && styles.cardPressed]}
+              >
+                <Ionicons name="wallet-outline" size={18} color={BLUE} />
+                <Text style={styles.quickTitle}>Wallet</Text>
+                <Text style={styles.quickBody}>Fund a Regent or move money back when the work is done.</Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => router.push('/autolaunch')}
+                style={({ pressed }) => [styles.quickCard, pressed && styles.cardPressed]}
+              >
+                <Ionicons name="trending-up-outline" size={18} color={BLUE} />
+                <Text style={styles.quickTitle}>Buy</Text>
+                <Text style={styles.quickBody}>Open Autolaunch when a story is ready for outside support.</Text>
+              </Pressable>
+            </View>
+          </View>
+        </ScrollView>
       )}
 
       <CoinbaseAlert
@@ -301,17 +336,31 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: DARK_BG,
+  },
+  content: {
     paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingBottom: 120,
+    gap: 16,
+  },
+  centerState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    paddingHorizontal: 24,
+  },
+  loadingText: {
+    color: TEXT_SECONDARY,
+    fontSize: 15,
+    fontFamily: FONTS.body,
   },
   heroCard: {
     backgroundColor: CARD_BG,
     borderWidth: 1,
     borderColor: BORDER,
-    borderRadius: 24,
+    borderRadius: 28,
     padding: 22,
-    gap: 12,
-    marginBottom: 16,
+    gap: 14,
   },
   eyebrow: {
     color: BLUE,
@@ -322,23 +371,68 @@ const styles = StyleSheet.create({
   },
   heroTitle: {
     color: TEXT_PRIMARY,
-    fontSize: 30,
+    fontSize: 32,
+    lineHeight: 38,
     fontFamily: FONTS.heading,
   },
-  heroIntro: {
+  heroBody: {
     color: TEXT_SECONDARY,
     fontSize: 15,
     lineHeight: 22,
     fontFamily: FONTS.body,
   },
+  heroActions: {
+    flexDirection: 'column',
+    gap: 10,
+    alignItems: 'stretch',
+  },
+  primaryButton: {
+    backgroundColor: BLUE,
+    borderRadius: 16,
+    paddingHorizontal: 18,
+    paddingVertical: 13,
+    alignItems: 'center',
+    alignSelf: 'stretch',
+  },
+  primaryButtonPressed: {
+    opacity: 0.92,
+    transform: [{ scale: 0.985 }],
+  },
+  primaryButtonText: {
+    color: WHITE,
+    fontSize: 14,
+    fontFamily: FONTS.body,
+  },
+  secondaryButton: {
+    backgroundColor: WHITE,
+    borderRadius: 16,
+    paddingHorizontal: 18,
+    paddingVertical: 13,
+    borderWidth: 1,
+    borderColor: BORDER,
+    alignItems: 'center',
+    alignSelf: 'stretch',
+  },
+  secondaryButtonPressed: {
+    opacity: 0.95,
+  },
+  secondaryButtonText: {
+    color: TEXT_PRIMARY,
+    fontSize: 14,
+    fontFamily: FONTS.body,
+  },
   summaryRow: {
     flexDirection: 'row',
     gap: 10,
+    flexWrap: 'wrap',
   },
   summaryTile: {
     flex: 1,
+    minWidth: 96,
     backgroundColor: WHITE,
-    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 18,
     paddingVertical: 14,
     paddingHorizontal: 12,
     gap: 4,
@@ -353,141 +447,166 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: FONTS.body,
   },
-  listContent: {
-    paddingBottom: 28,
+  focusCard: {
+    backgroundColor: CARD_BG,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 24,
+    padding: 20,
     gap: 14,
   },
-  centerState: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+  focusHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     gap: 12,
   },
-  loadingText: {
+  focusCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  focusEyebrow: {
     color: TEXT_SECONDARY,
-    fontSize: 15,
+    fontSize: 12,
+    textTransform: 'uppercase',
     fontFamily: FONTS.body,
   },
-  agentCard: {
+  focusTitle: {
+    color: TEXT_PRIMARY,
+    fontSize: 26,
+    fontFamily: FONTS.heading,
+  },
+  focusBody: {
+    color: TEXT_PRIMARY,
+    fontSize: 14,
+    lineHeight: 20,
+    fontFamily: FONTS.body,
+  },
+  statusPill: {
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  statusPillText: {
+    fontSize: 12,
+    fontFamily: FONTS.body,
+  },
+  focusMetaRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  focusMetaTile: {
+    flex: 1,
+    backgroundColor: WHITE,
+    borderRadius: 18,
+    padding: 14,
+    gap: 5,
+  },
+  metaLabel: {
+    color: TEXT_SECONDARY,
+    fontSize: 12,
+    fontFamily: FONTS.body,
+  },
+  metaValue: {
+    color: TEXT_PRIMARY,
+    fontSize: 16,
+    lineHeight: 22,
+    fontFamily: FONTS.heading,
+  },
+  focusFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: BLUE_WASH,
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  footerLink: {
+    color: BLUE,
+    fontSize: 15,
+    fontFamily: FONTS.heading,
+  },
+  section: {
+    gap: 12,
+  },
+  sectionTitle: {
+    color: TEXT_PRIMARY,
+    fontSize: 22,
+    fontFamily: FONTS.heading,
+  },
+  regentList: {
+    gap: 10,
+  },
+  regentRow: {
     backgroundColor: CARD_ALT,
-    borderRadius: 24,
     borderWidth: 1,
-    padding: 18,
-    gap: 14,
+    borderColor: BORDER,
+    borderRadius: 20,
+    padding: 16,
+    gap: 10,
+  },
+  regentRowTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  regentRowCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  regentName: {
+    color: TEXT_PRIMARY,
+    fontSize: 18,
+    fontFamily: FONTS.heading,
+  },
+  regentSummary: {
+    color: TEXT_SECONDARY,
+    fontSize: 13,
+    lineHeight: 19,
+    fontFamily: FONTS.body,
+  },
+  regentRowBottom: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  regentMeta: {
+    color: TEXT_SECONDARY,
+    fontSize: 12,
+    fontFamily: FONTS.body,
+  },
+  quickGrid: {
+    gap: 10,
+  },
+  quickCard: {
+    backgroundColor: CARD_BG,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 20,
+    padding: 16,
+    gap: 8,
+  },
+  quickTitle: {
+    color: TEXT_PRIMARY,
+    fontSize: 18,
+    fontFamily: FONTS.heading,
+  },
+  quickBody: {
+    color: TEXT_SECONDARY,
+    fontSize: 13,
+    lineHeight: 19,
+    fontFamily: FONTS.body,
   },
   cardPressed: {
     opacity: 0.96,
-    transform: [{ scale: 0.985 }, { translateY: 1 }],
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 12,
-  },
-  priorityPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-  },
-  priorityPillText: {
-    fontSize: 12,
-    fontFamily: FONTS.body,
-  },
-  runtimePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-  },
-  runtimeDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 999,
-  },
-  runtimePillText: {
-    fontSize: 12,
-    fontFamily: FONTS.body,
-  },
-  agentName: {
-    color: TEXT_PRIMARY,
-    fontSize: 24,
-    fontFamily: FONTS.heading,
-  },
-  agentLead: {
-    color: TEXT_PRIMARY,
-    fontSize: 15,
-    lineHeight: 22,
-    fontFamily: FONTS.body,
-  },
-  statGrid: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  statBlock: {
-    flex: 1,
-    backgroundColor: WHITE,
-    borderRadius: 16,
-    padding: 14,
-    gap: 6,
-  },
-  statLabel: {
-    color: TEXT_SECONDARY,
-    fontSize: 12,
-    fontFamily: FONTS.body,
-  },
-  statValue: {
-    color: TEXT_PRIMARY,
-    fontSize: 16,
-    fontFamily: FONTS.heading,
-  },
-  walletStrip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 2,
-  },
-  addressText: {
-    color: TEXT_SECONDARY,
-    fontSize: 13,
-    fontFamily: FONTS.body,
-  },
-  cardFooter: {
-    backgroundColor: BLUE_WASH,
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  footerLabel: {
-    color: TEXT_SECONDARY,
-    fontSize: 12,
-    fontFamily: FONTS.body,
-  },
-  footerAction: {
-    color: BLUE,
-    fontSize: 15,
-    marginTop: 2,
-    fontFamily: FONTS.heading,
-  },
-  footerArrow: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: WHITE,
-    alignItems: 'center',
-    justifyContent: 'center',
+    transform: [{ scale: 0.985 }],
   },
   emptyCard: {
     backgroundColor: CARD_BG,
-    borderRadius: 24,
     borderWidth: 1,
     borderColor: BORDER,
+    borderRadius: 24,
     padding: 28,
     alignItems: 'center',
     gap: 12,

@@ -1,5 +1,4 @@
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
-import { PreviewNotice } from '@/components/ui/PreviewNotice';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
 import { PreviewPaperclipDetail } from '@/types/agentPreviews';
@@ -17,12 +16,13 @@ import {
   View,
 } from 'react-native';
 
-const { DARK_BG, CARD_BG, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, BORDER, WHITE, BLUE_WASH, SUCCESS, DANGER } = COLORS;
+const { DARK_BG, CARD_BG, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, BORDER, WHITE, SUCCESS, DANGER } = COLORS;
 
 const AMBER = '#A3703A';
 const AMBER_WASH = '#F2E7DA';
 const GREEN_WASH = '#E6F0EA';
 const RED_WASH = '#F3E1DD';
+const BLUE_WASH = '#E7EEF2';
 
 function statusTone(status: string) {
   const lower = status.toLowerCase();
@@ -91,7 +91,7 @@ export default function AgentPaperclipScreen() {
     } catch (error) {
       setAlertState({
         visible: true,
-        title: 'Unable to load this preview',
+        title: 'Paperclip is unavailable right now',
         message: error instanceof Error ? error.message : 'Try again in a moment.',
         type: 'error',
       });
@@ -125,10 +125,10 @@ export default function AgentPaperclipScreen() {
       nextTask,
       latestEvent,
       readyCount,
-      briefingLabel: attentionItem ? 'Review example' : 'Steady example',
+      briefingLabel: attentionItem ? 'Needs review' : 'Steady',
       briefingTone: attentionItem ? { wash: AMBER_WASH, accent: AMBER } : { wash: GREEN_WASH, accent: SUCCESS },
       focusTitle: attentionItem?.title || nextTask?.title || topGoal?.title || 'No immediate issue listed',
-      focusBody: attentionItem?.note || nextTask?.note || topGoal?.note || 'The latest preview note will appear here when available.',
+      focusBody: attentionItem?.note || nextTask?.note || topGoal?.note || 'A short company brief will appear here when it is ready.',
     };
   }, [paperclip]);
 
@@ -137,7 +137,7 @@ export default function AgentPaperclipScreen() {
       <SafeAreaView style={styles.container}>
         <View style={styles.centerState}>
           <ActivityIndicator size="large" color={BLUE} />
-          <Text style={styles.loadingText}>Loading Paperclip preview…</Text>
+          <Text style={styles.loadingText}>Loading Paperclip…</Text>
         </View>
       </SafeAreaView>
     );
@@ -147,9 +147,9 @@ export default function AgentPaperclipScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.centerState}>
-          <Text style={styles.emptyTitle}>This preview is unavailable</Text>
+          <Text style={styles.emptyTitle}>Paperclip is unavailable</Text>
           <Pressable style={({ pressed }) => [styles.primaryButton, pressed && styles.primaryButtonPressed]} onPress={() => router.back()}>
-            <Text style={styles.primaryButtonText}>Back to agent</Text>
+            <Text style={styles.primaryButtonText}>Back</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -168,10 +168,10 @@ export default function AgentPaperclipScreen() {
         </Pressable>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.scrollContent}>
         <View style={styles.heroCard}>
           <View style={styles.heroTop}>
-            <Text style={styles.eyebrow}>Paperclip preview</Text>
+            <Text style={styles.eyebrow}>Regents brief</Text>
             <View style={[styles.heroPill, { backgroundColor: paperclipSummary.briefingTone.wash }]}>
               <Text style={[styles.heroPillText, { color: paperclipSummary.briefingTone.accent }]}>
                 {paperclipSummary.briefingLabel}
@@ -180,68 +180,58 @@ export default function AgentPaperclipScreen() {
           </View>
           <Text style={styles.heroTitle}>{paperclip.headline}</Text>
           <Text style={styles.heroBody}>{paperclip.companySummary}</Text>
-          <PreviewNotice body="This is a sample Paperclip view. It shows how a phone-sized company summary may look later, but it does not open a live dashboard in this build." />
 
           <View style={styles.briefingGrid}>
             <View style={styles.briefingTile}>
+              <Text style={styles.briefingLabel}>Focus now</Text>
+              <Text style={styles.briefingTitle}>{paperclipSummary.focusTitle}</Text>
+              <Text style={styles.briefingMeta}>Immediate read</Text>
+            </View>
+            <View style={styles.briefingTile}>
+              <Text style={styles.briefingLabel}>Latest shift</Text>
+              <Text style={styles.briefingTitle}>{paperclipSummary.latestEvent?.title || 'No recent change yet'}</Text>
+              <Text style={styles.briefingMeta}>
+                {paperclipSummary.latestEvent ? formatRelativeTime(paperclipSummary.latestEvent.at) : 'Waiting for the next update'}
+              </Text>
+            </View>
+            <View style={styles.briefingTile}>
               <Text style={styles.briefingLabel}>Top goal</Text>
               <Text style={styles.briefingTitle}>{paperclipSummary.topGoal?.title || 'No goal listed yet'}</Text>
-              <Text style={styles.briefingMeta}>{paperclipSummary.topGoal?.status || 'Waiting for an update'}</Text>
-            </View>
-            <View style={styles.briefingTile}>
-              <Text style={styles.briefingLabel}>Next task</Text>
-              <Text style={styles.briefingTitle}>{paperclipSummary.nextTask?.title || 'No active task yet'}</Text>
-              <Text style={styles.briefingMeta}>
-                {paperclipSummary.nextTask?.owner ? `Owned by ${paperclipSummary.nextTask.owner}` : 'Owner not listed'}
-              </Text>
-            </View>
-            <View style={styles.briefingTile}>
-              <Text style={styles.briefingLabel}>Latest change</Text>
-              <Text style={styles.briefingTitle}>{paperclipSummary.latestEvent?.title || 'No recent event yet'}</Text>
-              <Text style={styles.briefingMeta}>
-                {paperclipSummary.latestEvent ? formatRelativeTime(paperclipSummary.latestEvent.at) : 'Waiting for the first update'}
-              </Text>
+              <Text style={styles.briefingMeta}>{paperclipSummary.topGoal?.status || 'No status yet'}</Text>
             </View>
             <View style={styles.briefingTile}>
               <Text style={styles.briefingLabel}>Team ready</Text>
               <Text style={styles.briefingTitle}>{paperclipSummary.readyCount}/{paperclip.roster.length}</Text>
-              <Text style={styles.briefingMeta}>People ready to move right now</Text>
+              <Text style={styles.briefingMeta}>Ready to move now</Text>
             </View>
           </View>
         </View>
 
         <View style={styles.focusCard}>
-          <Text style={styles.focusEyebrow}>Look here next</Text>
+          <Text style={styles.focusEyebrow}>What to move next</Text>
           <Text style={styles.focusTitle}>{paperclipSummary.focusTitle}</Text>
           <Text style={styles.focusBody}>{paperclipSummary.focusBody}</Text>
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Goals in motion</Text>
-          <Text style={styles.sectionHint}>The larger outcomes this sample company is trying to move forward.</Text>
+          <Text style={styles.sectionTitle}>Current work</Text>
+          <Text style={styles.sectionHint}>The goal and task that should frame the next operator decision.</Text>
           <View style={styles.list}>
-            {paperclip.goals.map((goal) => {
-              const tone = statusTone(goal.status);
-              return (
-                <View key={goal.id} style={styles.listCard}>
-                  <View style={styles.listHeader}>
-                    <Text style={styles.listTitle}>{goal.title}</Text>
-                    <View style={[styles.statusPill, { backgroundColor: tone.backgroundColor }]}>
-                      <Text style={[styles.statusPillText, { color: tone.color }]}>{goal.status}</Text>
-                    </View>
+            {paperclipSummary.topGoal ? (
+              <View style={styles.listCard}>
+                <View style={styles.listHeader}>
+                  <Text style={styles.listTitle}>{paperclipSummary.topGoal.title}</Text>
+                  <View style={[styles.statusPill, { backgroundColor: statusTone(paperclipSummary.topGoal.status).backgroundColor }]}>
+                    <Text style={[styles.statusPillText, { color: statusTone(paperclipSummary.topGoal.status).color }]}>
+                      {paperclipSummary.topGoal.status}
+                    </Text>
                   </View>
-                  {goal.note ? <Text style={styles.listBody}>{goal.note}</Text> : null}
                 </View>
-              );
-            })}
-          </View>
-        </View>
+                {paperclipSummary.topGoal.note ? <Text style={styles.listBody}>{paperclipSummary.topGoal.note}</Text> : null}
+              </View>
+            ) : null}
 
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Task board</Text>
-          <Text style={styles.sectionHint}>The immediate work, who owns it, and where attention could be needed later.</Text>
-          <View style={styles.list}>
-            {paperclip.activeTasks.map((task) => {
+            {paperclip.activeTasks.slice(0, 3).map((task) => {
               const tone = statusTone(task.status);
               return (
                 <View key={task.id} style={styles.listCard}>
@@ -260,10 +250,10 @@ export default function AgentPaperclipScreen() {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Latest changes</Text>
-          <Text style={styles.sectionHint}>What changed most recently in this sample summary.</Text>
+          <Text style={styles.sectionTitle}>Recent movement</Text>
+          <Text style={styles.sectionHint}>The latest changes shaping the company view.</Text>
           <View style={styles.list}>
-            {paperclip.recentEvents.map((event) => (
+            {paperclip.recentEvents.slice(0, 4).map((event) => (
               <View key={event.id} style={styles.listCard}>
                 <Text style={styles.listTitle}>{event.title}</Text>
                 <Text style={styles.metaText}>{new Date(event.at).toLocaleString()}</Text>
@@ -274,8 +264,8 @@ export default function AgentPaperclipScreen() {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Team</Text>
-          <Text style={styles.sectionHint}>Who is involved in this sample company view right now.</Text>
+          <Text style={styles.sectionTitle}>Operators</Text>
+          <Text style={styles.sectionHint}>Who is carrying the work right now.</Text>
           <View style={styles.list}>
             {paperclip.roster.map((member) => {
               const tone = statusTone(member.status);
@@ -291,14 +281,6 @@ export default function AgentPaperclipScreen() {
                 </View>
               );
             })}
-          </View>
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Larger view</Text>
-          <Text style={styles.sectionHint}>The browser-sized dashboard stays off in this preview pass.</Text>
-          <View style={styles.emptyPanel}>
-            <Text style={styles.emptyPanelText}>This screen stays on the phone-sized summary only. Opening a larger dashboard comes later with the live Regent connection.</Text>
           </View>
         </View>
       </ScrollView>
@@ -565,17 +547,6 @@ const styles = StyleSheet.create({
   memberRole: {
     color: TEXT_SECONDARY,
     fontSize: 12,
-    fontFamily: FONTS.body,
-  },
-  emptyPanel: {
-    backgroundColor: WHITE,
-    borderRadius: 16,
-    padding: 14,
-  },
-  emptyPanelText: {
-    color: TEXT_SECONDARY,
-    fontSize: 13,
-    lineHeight: 19,
     fontFamily: FONTS.body,
   },
 });

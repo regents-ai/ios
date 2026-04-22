@@ -48,7 +48,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: DARK_BG,
     padding: 20,
-    gap: 16,
+    gap: 18,
   },
   heroCard: {
     backgroundColor: CARD_BG,
@@ -114,6 +114,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 10,
+    paddingVertical: 2,
   },
   dot: {
     width: 8,
