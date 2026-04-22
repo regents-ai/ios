@@ -24,7 +24,9 @@ import { createTransferInstruction, getAssociatedTokenAddress, createAssociatedT
 import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
+import { EaseView } from 'react-native-ease';
 import {
+  AccessibilityInfo,
   ActivityIndicator,
   KeyboardAvoidingView,
   Linking,
@@ -41,6 +43,21 @@ import {
 import { parseEther, parseUnits } from 'viem';
 
 const { DARK_BG, CARD_BG, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, WHITE, BORDER } = COLORS;
+const SCREEN_OFFSET = 12;
+const CARD_OFFSET = 8;
+const STAGGER_STEP = 50;
+
+function buildTimingTransition(reduceMotion: boolean, delay = 0, duration = 220) {
+  return reduceMotion
+    ? { type: 'none' as const }
+    : { type: 'timing' as const, duration, easing: 'easeOut' as const, delay };
+}
+
+function buildSpringTransition(reduceMotion: boolean, delay = 0) {
+  return reduceMotion
+    ? { type: 'none' as const }
+    : { type: 'spring' as const, damping: 18, stiffness: 190, mass: 1, delay };
+}
 
 export default function TransferScreen() {
   const router = useRouter();
@@ -63,6 +80,8 @@ export default function TransferScreen() {
 
   // Confirmation modal state
   const [showConfirmation, setShowConfirmation] = useState(false);
+  const [isConfirmationPresented, setIsConfirmationPresented] = useState(false);
+  const [reduceMotion, setReduceMotion] = useState(false);
 
   const { sendSolanaTransaction } = useSendSolanaTransaction();
   const { sendUserOperation, status: userOpStatus, data: userOpData, error: userOpError } = useSendUserOperation();
@@ -95,6 +114,30 @@ export default function TransferScreen() {
     contractAddress.toLowerCase() === '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
   );
   const needsGasFee = isNativeToken && !isPaymasterSupported;
+
+  useEffect(() => {
+    if (showConfirmation) {
+      setIsConfirmationPresented(true);
+    }
+  }, [showConfirmation]);
+
+  useEffect(() => {
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then((enabled) => {
+        if (mounted) {
+          setReduceMotion(enabled);
+        }
+      })
+      .catch(() => undefined);
+
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
+
+    return () => {
+      mounted = false;
+      subscription.remove();
+    };
+  }, []);
 
   useEffect(() => {
     if (userOpStatus === 'pending' && userOpData?.userOpHash) {
@@ -488,10 +531,22 @@ export default function TransferScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="chevron-back" size={24} color={TEXT_PRIMARY} />
-        </Pressable>
-        <Text style={styles.headerTitle}>Send funds</Text>
+        <EaseView
+          initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
+          animate={{ opacity: 1, translateY: 0 }}
+          transition={buildTimingTransition(reduceMotion)}
+        >
+          <Pressable onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="chevron-back" size={24} color={TEXT_PRIMARY} />
+          </Pressable>
+        </EaseView>
+        <EaseView
+          initialAnimate={{ opacity: 0, translateY: SCREEN_OFFSET }}
+          animate={{ opacity: 1, translateY: 0 }}
+          transition={buildTimingTransition(reduceMotion, STAGGER_STEP)}
+        >
+          <Text style={styles.headerTitle}>Send funds</Text>
+        </EaseView>
         <View style={{ width: 40 }} />
       </View>
 
@@ -505,7 +560,12 @@ export default function TransferScreen() {
           keyboardShouldPersistTaps="handled"
         >
           {selectedToken?.token?.mintAddress && selectedToken?.token?.symbol?.toUpperCase() !== 'SOL' && (
-            <View style={[styles.card, { backgroundColor: '#E3F2FD', borderColor: '#2196F3' }]}>
+            <EaseView
+              initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
+              animate={{ opacity: 1, translateY: 0 }}
+              transition={buildTimingTransition(reduceMotion, STAGGER_STEP * 2)}
+              style={[styles.card, { backgroundColor: '#E3F2FD', borderColor: '#2196F3' }]}
+            >
               <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
                 <Ionicons name="information-circle" size={20} color="#1976D2" style={{ marginTop: 2 }} />
                 <View style={{ flex: 1 }}>
@@ -519,10 +579,15 @@ export default function TransferScreen() {
                   </Text>
                 </View>
               </View>
-            </View>
+            </EaseView>
           )}
 
-          <View style={styles.card}>
+          <EaseView
+            initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={buildTimingTransition(reduceMotion, STAGGER_STEP * 3)}
+            style={styles.card}
+          >
             <Text style={styles.label}>Network</Text>
             <Text style={styles.networkText}>
               {(() => {
@@ -546,9 +611,14 @@ export default function TransferScreen() {
                 Network fees in {isNativeToken ? selectedToken?.token?.symbol : 'ETH'} will apply to this send.
               </Text>
             )}
-          </View>
+          </EaseView>
 
-          <View style={styles.card}>
+          <EaseView
+            initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={buildTimingTransition(reduceMotion, STAGGER_STEP * 4)}
+            style={styles.card}
+          >
             <Text style={styles.label}>Token</Text>
             {selectedToken ? (
               <>
@@ -573,9 +643,14 @@ export default function TransferScreen() {
             ) : (
               <Text style={styles.helper}>No token selected</Text>
             )}
-          </View>
+          </EaseView>
 
-          <View style={styles.card}>
+          <EaseView
+            initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={buildTimingTransition(reduceMotion, STAGGER_STEP * 5)}
+            style={styles.card}
+          >
             <Text style={styles.label}>Recipient</Text>
             {recipientLabel ? (
               <Text style={styles.helper}>
@@ -620,9 +695,14 @@ export default function TransferScreen() {
                 {addressError}
               </Text>
             )}
-          </View>
+          </EaseView>
 
-          <View style={styles.card}>
+          <EaseView
+            initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={buildTimingTransition(reduceMotion, STAGGER_STEP * 6)}
+            style={styles.card}
+          >
             <Text style={styles.label}>Amount</Text>
             <TextInput
               style={styles.input}
@@ -659,36 +739,68 @@ export default function TransferScreen() {
                 Leave a small amount of {selectedToken?.token?.symbol} behind to cover network fees.
               </Text>
             )}
-          </View>
+          </EaseView>
 
-          <Pressable
-            style={[styles.mainSendButton, (!recipientAddress || !amount) && styles.buttonDisabled]}
-            onPress={handleSend}
-            disabled={!recipientAddress || !amount || sending}
+          <EaseView
+            initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={buildTimingTransition(reduceMotion, STAGGER_STEP * 7)}
+            style={styles.mainButtonWrap}
           >
-            {sending ? (
-              <ActivityIndicator color={WHITE} />
-            ) : (
-              <Text style={styles.mainSendButtonText}>Send</Text>
-            )}
-          </Pressable>
+            <Pressable
+              style={[styles.mainSendButton, (!recipientAddress || !amount) && styles.buttonDisabled]}
+              onPress={handleSend}
+              disabled={!recipientAddress || !amount || sending}
+            >
+              {sending ? (
+                <ActivityIndicator color={WHITE} />
+              ) : (
+                <Text style={styles.mainSendButtonText}>Send</Text>
+              )}
+            </Pressable>
+          </EaseView>
         </ScrollView>
       </KeyboardAvoidingView>
 
       <Modal
-        visible={showConfirmation}
+        visible={isConfirmationPresented}
         transparent
-        animationType="fade"
+        animationType="none"
         onRequestClose={() => setShowConfirmation(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.confirmationCard}>
-            <View style={styles.confirmationHeader}>
+        <EaseView
+          initialAnimate={{ opacity: 0 }}
+          animate={{ opacity: showConfirmation ? 1 : 0 }}
+          transition={buildTimingTransition(reduceMotion, 0, 180)}
+          style={styles.modalOverlay}
+        >
+          <EaseView
+            initialAnimate={{ opacity: 0, translateY: SCREEN_OFFSET, scale: 0.985 }}
+            animate={{ opacity: showConfirmation ? 1 : 0, translateY: showConfirmation ? 0 : SCREEN_OFFSET, scale: showConfirmation ? 1 : 0.985 }}
+            onTransitionEnd={({ finished }) => {
+              if (finished && !showConfirmation) {
+                setIsConfirmationPresented(false);
+              }
+            }}
+            transition={buildSpringTransition(reduceMotion, 30)}
+            style={styles.confirmationCard}
+          >
+            <EaseView
+              initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
+              animate={{ opacity: 1, translateY: 0 }}
+              transition={buildTimingTransition(reduceMotion, STAGGER_STEP)}
+              style={styles.confirmationHeader}
+            >
               <Ionicons name="shield-checkmark" size={48} color={BLUE} />
               <Text style={styles.confirmationTitle}>Review send</Text>
-            </View>
+            </EaseView>
 
-            <View style={styles.confirmationBody}>
+            <EaseView
+              initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
+              animate={{ opacity: 1, translateY: 0 }}
+              transition={buildTimingTransition(reduceMotion, STAGGER_STEP * 2)}
+              style={styles.confirmationBody}
+            >
               <View style={styles.confirmRow}>
                 <Text style={styles.confirmLabel}>From</Text>
                 <Text style={styles.confirmValue} numberOfLines={1}>
@@ -736,9 +848,14 @@ export default function TransferScreen() {
                   })()} USD
                 </Text>
               )}
-            </View>
+            </EaseView>
 
-            <View style={styles.confirmationButtons}>
+            <EaseView
+              initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
+              animate={{ opacity: 1, translateY: 0 }}
+              transition={buildTimingTransition(reduceMotion, STAGGER_STEP * 3)}
+              style={styles.confirmationButtons}
+            >
               <Pressable
                 style={[styles.confirmButton, styles.cancelButton]}
                 onPress={() => setShowConfirmation(false)}
@@ -751,9 +868,9 @@ export default function TransferScreen() {
               >
                 <Text style={styles.sendButtonText}>Send now</Text>
               </Pressable>
-            </View>
-          </View>
-        </View>
+            </EaseView>
+          </EaseView>
+        </EaseView>
       </Modal>
 
       <CoinbaseAlert
@@ -882,6 +999,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: 24,
     minHeight: 52,
+  },
+  mainButtonWrap: {
+    marginTop: 8,
   },
   mainSendButtonText: {
     color: WHITE,

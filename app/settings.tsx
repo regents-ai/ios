@@ -1,4 +1,8 @@
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
+import { StaggerGroup } from '@/components/motion/StaggerGroup';
+import { StaggerItem } from '@/components/motion/StaggerItem';
+import { getEaseTransition } from '@/components/motion/easePresets';
+import { useReducedMotion } from '@/components/motion/useReducedMotion';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
 import { TEST_ACCOUNTS } from '@/constants/TestAccounts';
@@ -46,6 +50,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Clipboard from 'expo-clipboard';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
+import { EaseView } from 'react-native-ease';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -60,7 +65,55 @@ import {
   View,
 } from 'react-native';
 
-const { DARK_BG, CARD_BG, CARD_ALT, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, BORDER, WHITE, DANGER, BACKDROP } = COLORS;
+const { DARK_BG, CARD_BG, CARD_ALT, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, BORDER, WHITE, DANGER } = COLORS;
+
+function SettingsModalSurface({
+  children,
+  onRequestClose,
+  visible,
+}: {
+  children: React.ReactNode;
+  onRequestClose: () => void;
+  visible: boolean;
+}) {
+  const reducedMotionEnabled = useReducedMotion();
+  const [isPresented, setIsPresented] = useState(visible);
+
+  useEffect(() => {
+    if (visible) {
+      setIsPresented(true);
+    }
+  }, [visible]);
+
+  return (
+    <Modal visible={isPresented} transparent animationType="none" onRequestClose={onRequestClose}>
+      <View style={styles.modalOverlay}>
+        <EaseView
+          initialAnimate={{ opacity: 0 }}
+          animate={{ opacity: visible ? 1 : 0 }}
+          style={StyleSheet.absoluteFillObject}
+          transition={getEaseTransition('card', reducedMotionEnabled)}
+        >
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={onRequestClose} />
+        </EaseView>
+
+        <EaseView
+          initialAnimate={{ opacity: 0, translateY: 8, scale: 0.985 }}
+          animate={{ opacity: visible ? 1 : 0, translateY: visible ? 0 : 8, scale: visible ? 1 : 0.985 }}
+          onTransitionEnd={({ finished }) => {
+            if (finished && !visible) {
+              setIsPresented(false);
+            }
+          }}
+          style={styles.modalCard}
+          transition={getEaseTransition('emphasis', reducedMotionEnabled)}
+        >
+          {children}
+        </EaseView>
+      </View>
+    </Modal>
+  );
+}
 
 export default function SettingsScreen() {
   const testSession = isTestSessionActive();
@@ -481,10 +534,12 @@ export default function SettingsScreen() {
           onConfirm={() => setAlertState(prev => ({ ...prev, visible: false }))}
         />
 
-        <Modal visible={showWalletChoice} transparent animationType="fade" onRequestClose={() => setShowWalletChoice(false)}>
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalCard}>
+        <SettingsModalSurface visible={showWalletChoice} onRequestClose={() => setShowWalletChoice(false)}>
+          <StaggerGroup>
+            <StaggerItem order={0}>
               <Text style={styles.modalTitle}>Choose a wallet</Text>
+            </StaggerItem>
+            <StaggerItem order={1}>
               <Pressable
                 style={styles.primaryButton}
                 onPress={() => {
@@ -495,6 +550,8 @@ export default function SettingsScreen() {
               >
                 <Text style={styles.primaryButtonText}>Export Base and Ethereum wallet</Text>
               </Pressable>
+            </StaggerItem>
+            <StaggerItem order={2}>
               <Pressable
                 style={styles.primaryButton}
                 onPress={() => {
@@ -505,18 +562,24 @@ export default function SettingsScreen() {
               >
                 <Text style={styles.primaryButtonText}>Export Solana wallet</Text>
               </Pressable>
+            </StaggerItem>
+            <StaggerItem order={3}>
               <Pressable style={styles.secondaryButton} onPress={() => setShowWalletChoice(false)}>
                 <Text style={styles.secondaryButtonText}>Cancel</Text>
               </Pressable>
-            </View>
-          </View>
-        </Modal>
+            </StaggerItem>
+          </StaggerGroup>
+        </SettingsModalSurface>
 
-        <Modal visible={showExportConfirm} transparent animationType="fade" onRequestClose={() => setShowExportConfirm(false)}>
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalCard}>
+        <SettingsModalSurface visible={showExportConfirm} onRequestClose={() => setShowExportConfirm(false)}>
+          <StaggerGroup>
+            <StaggerItem order={0}>
               <Text style={styles.modalTitle}>Export private key</Text>
+            </StaggerItem>
+            <StaggerItem order={1}>
               <Text style={styles.helperText}>This copies the selected wallet key to the clipboard.</Text>
+            </StaggerItem>
+            <StaggerItem order={2}>
               <View style={styles.buttonRow}>
                 <Pressable style={styles.secondaryButton} onPress={() => setShowExportConfirm(false)}>
                   <Text style={styles.secondaryButtonText}>Cancel</Text>
@@ -525,15 +588,19 @@ export default function SettingsScreen() {
                   <Text style={styles.primaryButtonText}>{exporting ? 'Exporting...' : 'Export'}</Text>
                 </Pressable>
               </View>
-            </View>
-          </View>
-        </Modal>
+            </StaggerItem>
+          </StaggerGroup>
+        </SettingsModalSurface>
 
-        <Modal visible={showReverifyConfirm} transparent animationType="fade" onRequestClose={() => setShowReverifyConfirm(false)}>
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalCard}>
+        <SettingsModalSurface visible={showReverifyConfirm} onRequestClose={() => setShowReverifyConfirm(false)}>
+          <StaggerGroup>
+            <StaggerItem order={0}>
               <Text style={styles.modalTitle}>Re-verify phone</Text>
+            </StaggerItem>
+            <StaggerItem order={1}>
               <Text style={styles.helperText}>We need to sign you out and send a fresh code to your phone number.</Text>
+            </StaggerItem>
+            <StaggerItem order={2}>
               <View style={styles.buttonRow}>
                 <Pressable style={styles.secondaryButton} onPress={() => setShowReverifyConfirm(false)}>
                   <Text style={styles.secondaryButtonText}>Cancel</Text>
@@ -542,15 +609,19 @@ export default function SettingsScreen() {
                   <Text style={styles.primaryButtonText}>Continue</Text>
                 </Pressable>
               </View>
-            </View>
-          </View>
-        </Modal>
+            </StaggerItem>
+          </StaggerGroup>
+        </SettingsModalSurface>
 
-        <Modal visible={productionSwitchAlertVisible} transparent animationType="fade" onRequestClose={() => setProductionSwitchAlertVisible(false)}>
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalCard}>
+        <SettingsModalSurface visible={productionSwitchAlertVisible} onRequestClose={() => setProductionSwitchAlertVisible(false)}>
+          <StaggerGroup>
+            <StaggerItem order={0}>
               <Text style={styles.modalTitle}>Switch to production?</Text>
+            </StaggerItem>
+            <StaggerItem order={1}>
               <Text style={styles.helperText}>Your manual sandbox address will be cleared when you leave sandbox mode.</Text>
+            </StaggerItem>
+            <StaggerItem order={2}>
               <View style={styles.buttonRow}>
                 <Pressable style={styles.secondaryButton} onPress={() => setProductionSwitchAlertVisible(false)}>
                   <Text style={styles.secondaryButtonText}>Cancel</Text>
@@ -568,9 +639,9 @@ export default function SettingsScreen() {
                   <Text style={styles.primaryButtonText}>Confirm</Text>
                 </Pressable>
               </View>
-            </View>
-          </View>
-        </Modal>
+            </StaggerItem>
+          </StaggerGroup>
+        </SettingsModalSurface>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -741,7 +812,7 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: BACKDROP,
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,

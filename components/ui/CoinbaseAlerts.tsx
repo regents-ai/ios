@@ -1,8 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useRef } from 'react';
-import { Animated, Dimensions, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { EaseView } from 'react-native-ease';
 import { COLORS } from '../../constants/Colors';
 import { FONTS } from '../../constants/Typography';
+import { getEaseTransition } from '@/components/motion/easePresets';
+import { useReducedMotion } from '@/components/motion/useReducedMotion';
 
 const { BLUE, CARD_BG, CARD_ALT, BORDER, TEXT_PRIMARY, TEXT_SECONDARY, WHITE, SUCCESS, DANGER, BACKDROP } = COLORS;
 
@@ -31,6 +34,9 @@ export function CoinbaseAlert({
   cancelText = "Cancel",
   hideButton = false
 }: CoinbaseAlertProps) {
+  const reducedMotionEnabled = useReducedMotion();
+  const [isPresented, setIsPresented] = useState(visible);
+
   const getIcon = () => {
     switch (type) {
       case 'success': return { name: 'checkmark-circle' as const, color: SUCCESS };
@@ -40,28 +46,16 @@ export function CoinbaseAlert({
   };
 
   const icon = getIcon();
-  const H = Dimensions.get('window').height;
-  
-  const progress = useRef(new Animated.Value(0)).current; // 0 hidden → 1 shown
-  
-  useEffect(() => {
-    Animated.timing(progress, {
-      toValue: visible ? 1 : 0,
-      duration: visible ? 240 : 180,
-      useNativeDriver: true,
-    }).start();
-  }, [progress, visible]);
-  
-  const backdropOpacity = progress; // fade with same progress
-  const translateY = progress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [H, 0],           // <-- from off-screen to fully visible
-  });
 
+  useEffect(() => {
+    if (visible) {
+      setIsPresented(true);
+    }
+  }, [visible]);
 
   return (
     <Modal
-      visible={visible}
+      visible={isPresented}
       transparent
       animationType="none"
       presentationStyle="overFullScreen"
@@ -69,54 +63,61 @@ export function CoinbaseAlert({
       onRequestClose={onConfirm}
     >
       <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'transparent' }}>
-        <Animated.View
-              style={[StyleSheet.absoluteFillObject, { backgroundColor: BACKDROP, opacity: backdropOpacity }]}
-              pointerEvents="auto"
-            >
-              <Pressable style={StyleSheet.absoluteFillObject} onPress={onConfirm} />
-            </Animated.View>
+        <EaseView
+          initialAnimate={{ opacity: 0 }}
+          animate={{ opacity: visible ? 1 : 0 }}
+          style={[StyleSheet.absoluteFillObject, { backgroundColor: BACKDROP }]}
+          transition={getEaseTransition('card', reducedMotionEnabled)}
+        >
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={onConfirm} />
+        </EaseView>
 
-            <Animated.View
-              style={[styles.alertCard, { width: '100%', transform: [{ translateY }] }]}
-              pointerEvents="auto"
-            >
-              <View style={styles.handle} />
-              <View style={styles.iconContainer}>
-                <Ionicons name={icon.name} size={48} color={icon.color} />
-              </View>
-              <Text style={styles.title}>{title}</Text>
-              <Text style={styles.message}>{message}</Text>
+        <EaseView
+          initialAnimate={{ opacity: 0, translateY: 20 }}
+          animate={{ opacity: visible ? 1 : 0, translateY: visible ? 0 : 20 }}
+          onTransitionEnd={({ finished }) => {
+            if (finished && !visible) {
+              setIsPresented(false);
+            }
+          }}
+          style={[styles.alertCard, { width: '100%' }]}
+          transition={getEaseTransition('sheet', reducedMotionEnabled)}
+        >
+          <View style={styles.handle} />
+          <View style={styles.iconContainer}>
+            <Ionicons name={icon.name} size={48} color={icon.color} />
+          </View>
+          <Text style={styles.title}>{title}</Text>
+          <Text style={styles.message}>{message}</Text>
 
-              {/* Show buttons unless hideButton is true */}
-              {!hideButton && (
-                <>
-                  {/* Show two buttons if onCancel is provided, otherwise single button */}
-                  {onCancel ? (
-                    <View style={styles.buttonRow}>
-                      <Pressable
-                        style={({ pressed }) => [styles.buttonSecondary, pressed && styles.buttonPressed]}
-                        onPress={onCancel}
-                      >
-                        <Text style={styles.buttonTextSecondary}>{cancelText}</Text>
-                      </Pressable>
-                      <Pressable
-                        style={({ pressed }) => [styles.buttonInRow, pressed && styles.buttonPressed]}
-                        onPress={onConfirm}
-                      >
-                        <Text style={styles.buttonText}>{confirmText}</Text>
-                      </Pressable>
-                    </View>
-                  ) : (
-                    <Pressable
-                      style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
-                      onPress={onConfirm}
-                    >
-                      <Text style={styles.buttonText}>{confirmText}</Text>
-                    </Pressable>
-                  )}
-                </>
+          {!hideButton && (
+            <>
+              {onCancel ? (
+                <View style={styles.buttonRow}>
+                  <Pressable
+                    style={({ pressed }) => [styles.buttonSecondary, pressed && styles.buttonPressed]}
+                    onPress={onCancel}
+                  >
+                    <Text style={styles.buttonTextSecondary}>{cancelText}</Text>
+                  </Pressable>
+                  <Pressable
+                    style={({ pressed }) => [styles.buttonInRow, pressed && styles.buttonPressed]}
+                    onPress={onConfirm}
+                  >
+                    <Text style={styles.buttonText}>{confirmText}</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <Pressable
+                  style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+                  onPress={onConfirm}
+                >
+                  <Text style={styles.buttonText}>{confirmText}</Text>
+                </Pressable>
               )}
-            </Animated.View>
+            </>
+          )}
+        </EaseView>
       </View>
     </Modal>
   );

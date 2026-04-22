@@ -1,9 +1,11 @@
 import { useCurrentUser, useEvmAddress, useSignOut, useSolanaAddress } from '@coinbase/cdp-hooks';
 import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Animated, Easing, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { APIGuestCheckoutWidget, OnrampForm, useOnramp } from '@/components';
+import { StaggerGroup } from '@/components/motion/StaggerGroup';
+import { StaggerItem } from '@/components/motion/StaggerItem';
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { WalletHeroCard } from '@/components/wallet/home/wallet-hero-card';
 import { WalletOptionsError } from '@/components/wallet/home/wallet-options-error';
@@ -26,8 +28,6 @@ const { DARK_BG } = COLORS;
 export default function WalletScreen() {
   const [amount, setAmount] = useState('');
   const [regionKey, setRegionKey] = useState(() => `${getCountry()}-${getSubdivision()}`);
-  const heroOpacity = useState(() => new Animated.Value(0))[0];
-  const heroTranslateY = useState(() => new Animated.Value(14))[0];
 
   const testSession = isTestSessionActive();
   const { isAuthenticated, signOut: signOutIdentity } = useRegentsAuth();
@@ -114,23 +114,6 @@ export default function WalletScreen() {
   });
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.timing(heroOpacity, {
-        toValue: 1,
-        duration: 280,
-        easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
-      }),
-      Animated.timing(heroTranslateY, {
-        toValue: 0,
-        duration: 320,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [heroOpacity, heroTranslateY]);
-
-  useEffect(() => {
     if (!effectiveIsSignedIn) {
       return;
     }
@@ -154,32 +137,38 @@ export default function WalletScreen() {
   return (
     <View style={styles.container}>
       <WalletScreenHeader />
-      <WalletHeroCard opacity={heroOpacity} translateY={heroTranslateY} />
+      <StaggerGroup>
+        <WalletHeroCard />
 
-      {optionsError && !isLoadingOptions ? (
-        <WalletOptionsError message={optionsError} onRetry={() => void fetchOptions()} />
-      ) : null}
+        {optionsError && !isLoadingOptions ? (
+          <StaggerItem order={1}>
+            <WalletOptionsError message={optionsError} onRetry={() => void fetchOptions()} />
+          </StaggerItem>
+        ) : null}
 
-      <OnrampForm
-        address={address}
-        amount={amount}
-        buyConfig={buyConfig}
-        currentQuote={currentQuote}
-        fetchQuote={fetchQuote}
-        footerContent={<WalletDetailsSection />}
-        getAvailableAssets={getAvailableAssets}
-        getAvailableNetworks={getAvailableNetworks}
-        isLoading={isProcessingPayment}
-        isLoadingOptions={isLoadingOptions}
-        isLoadingQuote={isLoadingQuote}
-        onAddressChange={setAddress}
-        onAmountChange={setAmount}
-        onNetworkChange={onNetworkChange}
-        onRegionChange={(country, subdivision) => setRegionKey(`${country}-${subdivision || ''}`)}
-        onSubmit={handleSubmit}
-        options={options}
-        paymentCurrencies={paymentCurrencies}
-      />
+        <StaggerItem order={2}>
+          <OnrampForm
+            address={address}
+            amount={amount}
+            buyConfig={buyConfig}
+            currentQuote={currentQuote}
+            fetchQuote={fetchQuote}
+            footerContent={<WalletDetailsSection />}
+            getAvailableAssets={getAvailableAssets}
+            getAvailableNetworks={getAvailableNetworks}
+            isLoading={isProcessingPayment}
+            isLoadingOptions={isLoadingOptions}
+            isLoadingQuote={isLoadingQuote}
+            onAddressChange={setAddress}
+            onAmountChange={setAmount}
+            onNetworkChange={onNetworkChange}
+            onRegionChange={(country, subdivision) => setRegionKey(`${country}-${subdivision || ''}`)}
+            onSubmit={handleSubmit}
+            options={options}
+            paymentCurrencies={paymentCurrencies}
+          />
+        </StaggerItem>
+      </StaggerGroup>
 
       {guestCheckoutVisible && activePaymentMethod ? (
         <APIGuestCheckoutWidget

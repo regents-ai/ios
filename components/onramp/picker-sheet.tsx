@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
+import { EaseView } from 'react-native-ease';
 import {
-  Animated,
   Image,
   Modal,
   Pressable,
@@ -12,6 +12,8 @@ import {
 } from 'react-native';
 
 import { COLORS } from '@/constants/Colors';
+import { getEaseTransition } from '@/components/motion/easePresets';
+import { useReducedMotion } from '@/components/motion/useReducedMotion';
 
 const { BLUE } = COLORS;
 
@@ -32,45 +34,44 @@ type Props = {
 };
 
 export function PickerSheet({ emptyLabel = 'No options available', items, loadingLabel, onClose, onSelect, visible }: Props) {
-  const backdropOpacity = useRef(new Animated.Value(0)).current;
-  const sheetTranslate = useRef(new Animated.Value(300)).current;
+  const reducedMotionEnabled = useReducedMotion();
+  const [isPresented, setIsPresented] = useState(visible);
 
   useEffect(() => {
     if (visible) {
-      Animated.parallel([
-        Animated.timing(backdropOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
-        Animated.spring(sheetTranslate, {
-          toValue: 0,
-          useNativeDriver: true,
-          damping: 20,
-          stiffness: 90,
-        }),
-      ]).start();
-      return;
+      setIsPresented(true);
     }
-
-    Animated.parallel([
-      Animated.timing(backdropOpacity, { toValue: 0, duration: 150, useNativeDriver: true }),
-      Animated.timing(sheetTranslate, { toValue: 300, duration: 150, useNativeDriver: true }),
-    ]).start();
-  }, [backdropOpacity, sheetTranslate, visible]);
+  }, [visible]);
 
   return (
     <Modal
-      visible={visible}
+      visible={isPresented}
       transparent
       animationType="none"
       presentationStyle="overFullScreen"
       onRequestClose={onClose}
     >
       <View style={styles.root}>
-        <Animated.View
-          style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.5)', opacity: backdropOpacity }]}
+        <EaseView
+          initialAnimate={{ opacity: 0 }}
+          animate={{ opacity: visible ? 1 : 0 }}
+          transition={getEaseTransition('card', reducedMotionEnabled)}
+          style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.5)' }]}
         >
           <Pressable style={StyleSheet.absoluteFillObject} onPress={onClose} />
-        </Animated.View>
+        </EaseView>
 
-        <Animated.View style={[styles.sheet, { transform: [{ translateY: sheetTranslate }] }]}>
+        <EaseView
+          initialAnimate={{ opacity: 0, translateY: 20 }}
+          animate={{ opacity: visible ? 1 : 0, translateY: visible ? 0 : 20 }}
+          onTransitionEnd={({ finished }) => {
+            if (finished && !visible) {
+              setIsPresented(false);
+            }
+          }}
+          transition={getEaseTransition('sheet', reducedMotionEnabled)}
+          style={styles.sheet}
+        >
           <View style={styles.handle} />
           <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator style={styles.scrollView}>
             {!items.length && loadingLabel ? (
@@ -102,7 +103,7 @@ export function PickerSheet({ emptyLabel = 'No options available', items, loadin
               </View>
             )}
           </ScrollView>
-        </Animated.View>
+        </EaseView>
       </View>
     </Modal>
   );

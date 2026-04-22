@@ -13,6 +13,8 @@ import { FONTS } from '@/constants/Typography';
 import { clearWalletInitFailureMessage, getWalletInitFailureMessage } from '@/utils/authStartupState';
 import { isAuthManagedRoute, resolveAuthGateState } from '@/utils/authFlowState';
 import { useRegentsAuth } from '@/hooks/useRegentsAuth';
+import { getEaseAnimate, getEaseInitialAnimate, getEaseTransition } from '@/components/motion/easePresets';
+import { useReducedMotion } from '@/components/motion/useReducedMotion';
 import { isTestSessionActive } from '@/utils/state/reviewSessionState';
 import { setCountry, setSubdivision } from '@/utils/state/locationState';
 import { setSandboxMode } from '@/utils/state/sandboxState';
@@ -22,10 +24,12 @@ import { router, useRootNavigationState, useSegments } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { EaseView } from 'react-native-ease';
 
 const { DARK_BG, BLUE, TEXT_PRIMARY, TEXT_SECONDARY, CARD_BG, BORDER } = COLORS;
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
+  const reducedMotionEnabled = useReducedMotion();
   const { isInitialized } = useIsInitialized();
   const { error: authError, isAuthenticated: isPrivyAuthenticated, isReady: isPrivyReady, signOut: signOutIdentity } = useRegentsAuth();
   const { signOut: signOutWallet } = useSignOut();
@@ -140,7 +144,12 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   if (gateState.mode === 'issue') {
     return (
       <View style={styles.loadingContainer}>
-        <View style={styles.issueCard}>
+        <EaseView
+          initialAnimate={getEaseInitialAnimate('card')}
+          animate={getEaseAnimate('card')}
+          transition={getEaseTransition('card', reducedMotionEnabled)}
+          style={styles.issueCard}
+        >
           <View style={styles.issueBadge}>
             <Ionicons name="shield-checkmark-outline" size={18} color={BLUE} />
             <Text style={styles.issueBadgeText}>Wallet access</Text>
@@ -179,7 +188,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
               </Text>
             </Pressable>
           </View>
-        </View>
+        </EaseView>
       </View>
     );
   }
@@ -187,8 +196,15 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   if (gateState.mode === 'loading') {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={BLUE} />
-        <Text style={styles.loadingText}>Opening your wallet...</Text>
+        <EaseView
+          initialAnimate={getEaseInitialAnimate('screen')}
+          animate={getEaseAnimate('screen')}
+          transition={getEaseTransition('screen', reducedMotionEnabled)}
+          style={styles.loadingBlock}
+        >
+          <ActivityIndicator size="large" color={BLUE} />
+          <Text style={styles.loadingText}>Opening your wallet...</Text>
+        </EaseView>
       </View>
     );
   }
@@ -203,6 +219,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 24,
+  },
+  loadingBlock: {
+    alignItems: 'center',
   },
   loadingText: {
     marginTop: 16,

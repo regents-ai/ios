@@ -1,25 +1,22 @@
-import { Animated, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { EaseView } from 'react-native-ease';
 
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
+import { getEaseAnimate, getEaseInitialAnimate, getEaseTransition } from '@/components/motion/easePresets';
+import { useReducedMotion } from '@/components/motion/useReducedMotion';
 
 const { BLUE, BLUE_WASH, BORDER, CARD_BG, TEXT_PRIMARY, TEXT_SECONDARY, WHITE } = COLORS;
 
-type Props = {
-  opacity: Animated.Value;
-  translateY: Animated.Value;
-};
+export function WalletHeroCard() {
+  const reducedMotionEnabled = useReducedMotion();
 
-export function WalletHeroCard({ opacity, translateY }: Props) {
   return (
-    <Animated.View
-      style={[
-        styles.heroCard,
-        {
-          opacity,
-          transform: [{ translateY }],
-        },
-      ]}
+    <EaseView
+      initialAnimate={getEaseInitialAnimate('screen')}
+      animate={getEaseAnimate('screen')}
+      transition={getEaseTransition('screen', reducedMotionEnabled)}
+      style={styles.heroCard}
     >
       <View style={styles.heroTopRow}>
         <Text style={styles.heroEyebrow}>Base + USDC</Text>
@@ -42,7 +39,7 @@ export function WalletHeroCard({ opacity, translateY }: Props) {
           <Text style={styles.heroTagText}>Keep actions close</Text>
         </View>
       </View>
-    </Animated.View>
+    </EaseView>
   );
 }
 

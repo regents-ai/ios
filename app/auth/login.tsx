@@ -13,15 +13,44 @@ import { isTestSessionActive } from '@/utils/state/reviewSessionState';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { EaseView } from 'react-native-ease';
+import { AccessibilityInfo, ActivityIndicator, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 
 const { DARK_BG, CARD_BG, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, WHITE, BORDER, BLUE_WASH } = COLORS;
+const SCREEN_OFFSET = 12;
+const CARD_OFFSET = 8;
+const STAGGER_STEP = 50;
+
+function buildEntryTransition(reduceMotion: boolean, delay = 0, duration = 220) {
+  return reduceMotion
+    ? { type: 'none' as const }
+    : { type: 'timing' as const, duration, easing: 'easeOut' as const, delay };
+}
 
 export default function LoginScreen() {
   const { isAuthenticated } = useRegentsAuth();
   const router = useRouter();
   const testSession = isTestSessionActive();
   const [showTestMessage, setShowTestMessage] = useState(false);
+  const [reduceMotion, setReduceMotion] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then((enabled) => {
+        if (mounted) {
+          setReduceMotion(enabled);
+        }
+      })
+      .catch(() => undefined);
+
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
+
+    return () => {
+      mounted = false;
+      subscription.remove();
+    };
+  }, []);
 
   // TestFlight auto-login
   useEffect(() => {
@@ -60,11 +89,16 @@ export default function LoginScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.content}>
-          <View style={styles.testMessageContainer}>
+          <EaseView
+            initialAnimate={{ opacity: 0, translateY: SCREEN_OFFSET }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={buildEntryTransition(reduceMotion)}
+            style={styles.testMessageContainer}
+          >
             <ActivityIndicator size="large" color={BLUE} style={{ marginBottom: 16 }} />
             <Text style={styles.testTitle}>Review access</Text>
             <Text style={styles.testSubtitle}>A review account was found.{'\n'}Opening the wallet now.</Text>
-          </View>
+          </EaseView>
         </View>
       </SafeAreaView>
     );
@@ -74,61 +108,101 @@ export default function LoginScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
         <View style={styles.heroCard}>
-          <View style={styles.eyebrowRow}>
+          <EaseView
+            initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={buildEntryTransition(reduceMotion, 0)}
+            style={styles.eyebrowRow}
+          >
             <View style={styles.eyebrowDot} />
             <Text style={styles.eyebrow}>Regents Mobile</Text>
-          </View>
-          <Text style={styles.title}>Move money with a calmer wallet.</Text>
-          <Text style={styles.subtitle}>
+          </EaseView>
+          <EaseView
+            initialAnimate={{ opacity: 0, translateY: SCREEN_OFFSET }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={buildEntryTransition(reduceMotion, STAGGER_STEP)}
+          >
+            <Text style={styles.title}>Move money with a calmer wallet.</Text>
+          </EaseView>
+          <EaseView
+            initialAnimate={{ opacity: 0, translateY: SCREEN_OFFSET }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={buildEntryTransition(reduceMotion, STAGGER_STEP * 2)}
+          >
+            <Text style={styles.subtitle}>
             Buy stablecoins, move funds between cash and crypto, and preview the future agent tools from one place.
-          </Text>
+            </Text>
+          </EaseView>
         </View>
 
-        <View style={styles.guidanceCard}>
+        <EaseView
+          initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
+          animate={{ opacity: 1, translateY: 0 }}
+          transition={buildEntryTransition(reduceMotion, STAGGER_STEP * 3)}
+          style={styles.guidanceCard}
+        >
           <Text style={styles.guidanceTitle}>Use the same detail you already use with Regents</Text>
           <Text style={styles.guidanceText}>
             Choose email if you want a quieter sign-in flow. Choose phone if you want faster access on this device.
           </Text>
-        </View>
+        </EaseView>
 
         <View style={styles.authButtonsContainer}>
-          <Pressable
-            style={({ pressed }) => [
-              styles.authOptionCard,
-              pressed && styles.authOptionPressed,
-            ]}
-            onPress={handleEmailLogin}
+          <EaseView
+            initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={buildEntryTransition(reduceMotion, STAGGER_STEP * 4)}
           >
-            <View style={styles.optionIconWrap}>
-              <Ionicons name="mail-outline" size={22} color={WHITE} />
-            </View>
-            <View style={styles.optionCopy}>
-              <Text style={styles.authOptionTitle}>Continue with Email</Text>
-              <Text style={styles.authOptionText}>Best when you want to match the inbox you already use for Regents.</Text>
-            </View>
-            <Ionicons name="arrow-forward" size={20} color={BLUE} />
-          </Pressable>
+            <Pressable
+              style={({ pressed }) => [
+                styles.authOptionCard,
+                pressed && styles.authOptionPressed,
+              ]}
+              onPress={handleEmailLogin}
+            >
+              <View style={styles.optionIconWrap}>
+                <Ionicons name="mail-outline" size={22} color={WHITE} />
+              </View>
+              <View style={styles.optionCopy}>
+                <Text style={styles.authOptionTitle}>Continue with Email</Text>
+                <Text style={styles.authOptionText}>Best when you want to match the inbox you already use for Regents.</Text>
+              </View>
+              <Ionicons name="arrow-forward" size={20} color={BLUE} />
+            </Pressable>
+          </EaseView>
 
-          <Pressable
-            style={({ pressed }) => [
-              styles.authOptionCard,
-              styles.secondaryAuthOptionCard,
-              pressed && styles.authOptionPressed,
-            ]}
-            onPress={handlePhoneLogin}
+          <EaseView
+            initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={buildEntryTransition(reduceMotion, STAGGER_STEP * 5)}
           >
-            <View style={[styles.optionIconWrap, styles.optionIconSecondaryWrap]}>
-              <Ionicons name="call-outline" size={22} color={BLUE} />
-            </View>
-            <View style={styles.optionCopy}>
-              <Text style={styles.authOptionTitle}>Continue with Phone</Text>
-              <Text style={styles.authOptionText}>Best when you want a quick code on the device already in your hand.</Text>
-            </View>
-            <Ionicons name="arrow-forward" size={20} color={BLUE} />
-          </Pressable>
+            <Pressable
+              style={({ pressed }) => [
+                styles.authOptionCard,
+                styles.secondaryAuthOptionCard,
+                pressed && styles.authOptionPressed,
+              ]}
+              onPress={handlePhoneLogin}
+            >
+              <View style={[styles.optionIconWrap, styles.optionIconSecondaryWrap]}>
+                <Ionicons name="call-outline" size={22} color={BLUE} />
+              </View>
+              <View style={styles.optionCopy}>
+                <Text style={styles.authOptionTitle}>Continue with Phone</Text>
+                <Text style={styles.authOptionText}>Best when you want a quick code on the device already in your hand.</Text>
+              </View>
+              <Ionicons name="arrow-forward" size={20} color={BLUE} />
+            </Pressable>
+          </EaseView>
         </View>
 
-        <Text style={styles.footerText}>Your wallet opens after sign-in. You can switch methods later in settings.</Text>
+        <EaseView
+          initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
+          animate={{ opacity: 1, translateY: 0 }}
+          transition={buildEntryTransition(reduceMotion, STAGGER_STEP * 6)}
+        >
+          <Text style={styles.footerText}>Your wallet opens after sign-in. You can switch methods later in settings.</Text>
+        </EaseView>
       </View>
     </SafeAreaView>
   );

@@ -2,7 +2,8 @@ import { useLinkEmail, useLoginWithEmail } from '@privy-io/expo';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { EaseView } from 'react-native-ease';
+import { AccessibilityInfo, ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { CoinbaseAlert } from '../components/ui/CoinbaseAlerts';
 import { COLORS } from '../constants/Colors';
 import { isTestAccount, TEST_ACCOUNTS } from '../constants/TestAccounts';
@@ -12,6 +13,15 @@ import { setCurrentSolanaAddress, setCurrentWalletAddress } from '../utils/state
 
 const { DARK_BG, CARD_BG, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, WHITE } = COLORS;
 const RESEND_SECONDS = 30;
+const SCREEN_OFFSET = 12;
+const CARD_OFFSET = 8;
+const STAGGER_STEP = 50;
+
+function buildEntryTransition(reduceMotion: boolean, delay = 0, duration = 220) {
+  return reduceMotion
+    ? { type: 'none' as const }
+    : { type: 'timing' as const, duration, easing: 'easeOut' as const, delay };
+}
 
 export default function EmailCodeScreen() {
   const router = useRouter();
@@ -23,12 +33,31 @@ export default function EmailCodeScreen() {
   const [verifying, setVerifying] = useState(false);
   const [sending, setSending] = useState(false);
   const [resendSeconds, setResendSeconds] = useState(RESEND_SECONDS);
+  const [reduceMotion, setReduceMotion] = useState(false);
   const [alert, setAlert] = useState<{visible:boolean; title:string; message:string; type:'success'|'error'|'info'}>({
     visible:false, title:'', message:'', type:'info'
   });
 
   const { sendCode: sendLoginCode, loginWithCode } = useLoginWithEmail();
   const { sendCode: sendLinkCode, linkWithCode } = useLinkEmail();
+
+  useEffect(() => {
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then((enabled) => {
+        if (mounted) {
+          setReduceMotion(enabled);
+        }
+      })
+      .catch(() => undefined);
+
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
+
+    return () => {
+      mounted = false;
+      subscription.remove();
+    };
+  }, []);
 
   const canResend = resendSeconds <= 0 && !sending && !verifying;
 
@@ -127,11 +156,16 @@ export default function EmailCodeScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
+      <EaseView
+        initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
+        animate={{ opacity: 1, translateY: 0 }}
+        transition={buildEntryTransition(reduceMotion)}
+        style={styles.header}
+      >
         <Pressable onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="chevron-back" size={24} color={TEXT_PRIMARY} />
         </Pressable>
-      </View>
+      </EaseView>
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -143,16 +177,33 @@ export default function EmailCodeScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.stepContainer}>
-            <Text style={styles.title}>
-              {mode === 'signin' ? 'Check your email' : 'Link your email'}
-            </Text>
-            <Text style={styles.subtitle}>
-              {mode === 'signin'
-                ? `Please enter the verification code we sent to ${email}`
-                : `Please enter the verification code we sent to ${email} to link this email.`}
-            </Text>
+            <EaseView
+              initialAnimate={{ opacity: 0, translateY: SCREEN_OFFSET }}
+              animate={{ opacity: 1, translateY: 0 }}
+              transition={buildEntryTransition(reduceMotion, STAGGER_STEP)}
+            >
+              <Text style={styles.title}>
+                {mode === 'signin' ? 'Check your email' : 'Link your email'}
+              </Text>
+            </EaseView>
+            <EaseView
+              initialAnimate={{ opacity: 0, translateY: SCREEN_OFFSET }}
+              animate={{ opacity: 1, translateY: 0 }}
+              transition={buildEntryTransition(reduceMotion, STAGGER_STEP * 2)}
+            >
+              <Text style={styles.subtitle}>
+                {mode === 'signin'
+                  ? `Please enter the verification code we sent to ${email}`
+                  : `Please enter the verification code we sent to ${email} to link this email.`}
+              </Text>
+            </EaseView>
 
-            <View style={styles.codeInputContainer}>
+            <EaseView
+              initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
+              animate={{ opacity: 1, translateY: 0 }}
+              transition={buildEntryTransition(reduceMotion, STAGGER_STEP * 3)}
+              style={styles.codeInputContainer}
+            >
               <TextInput
                 style={styles.codeInput}
                 value={otp}
@@ -166,21 +217,33 @@ export default function EmailCodeScreen() {
                 selectTextOnFocus={true}
                 autoFocus
               />
-            </View>
+            </EaseView>
 
-            <Pressable
-              style={[styles.continueButton, (verifying || otp.length < 4) && styles.disabledButton]}
-              onPress={verifyEmail}
-              disabled={verifying || otp.length < 4}
+            <EaseView
+              initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
+              animate={{ opacity: 1, translateY: 0 }}
+              transition={buildEntryTransition(reduceMotion, STAGGER_STEP * 4)}
+              style={styles.buttonWrap}
             >
-              {verifying ? (
-                <ActivityIndicator color={WHITE} />
-              ) : (
-                <Text style={styles.continueButtonText}>Verify</Text>
-              )}
-            </Pressable>
+              <Pressable
+                style={[styles.continueButton, (verifying || otp.length < 4) && styles.disabledButton]}
+                onPress={verifyEmail}
+                disabled={verifying || otp.length < 4}
+              >
+                {verifying ? (
+                  <ActivityIndicator color={WHITE} />
+                ) : (
+                  <Text style={styles.continueButtonText}>Verify</Text>
+                )}
+              </Pressable>
+            </EaseView>
 
-            <View style={styles.resendContainer}>
+            <EaseView
+              initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
+              animate={{ opacity: 1, translateY: 0 }}
+              transition={buildEntryTransition(reduceMotion, STAGGER_STEP * 5)}
+              style={styles.resendContainer}
+            >
               {resendSeconds > 0 ? (
                 <Text style={styles.resendText}>You can resend in {resendSeconds}s</Text>
               ) : (
@@ -190,7 +253,7 @@ export default function EmailCodeScreen() {
                   </Text>
                 </Pressable>
               )}
-            </View>
+            </EaseView>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -250,6 +313,9 @@ const styles = StyleSheet.create({
   },
   codeInputContainer: {
     marginBottom: 32,
+    width: '100%',
+  },
+  buttonWrap: {
     width: '100%',
   },
   codeInput: {

@@ -18,7 +18,7 @@
 
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Modal,
   Pressable,
@@ -27,6 +27,9 @@ import {
   Text,
   View
 } from "react-native";
+import { EaseView } from 'react-native-ease';
+import { getEaseTransition } from '@/components/motion/easePresets';
+import { useReducedMotion } from '@/components/motion/useReducedMotion';
 import { FailedTransactionCard } from "../components/ui/FailedTransactionCard";
 import { COLORS } from "../constants/Colors";
 import { GuestCheckoutDebugInfo } from "../utils/supportEmail";
@@ -100,8 +103,16 @@ type SimulationType = 'authenticated' | 'guest' | null;
 
 export default function SupportScreen() {
   const router = useRouter();
+  const reducedMotionEnabled = useReducedMotion();
   const [showFailedModal, setShowFailedModal] = useState(false);
+  const [isFailedModalPresented, setIsFailedModalPresented] = useState(false);
   const [selectedSimulation, setSelectedSimulation] = useState<SimulationType>(null);
+
+  useEffect(() => {
+    if (showFailedModal) {
+      setIsFailedModalPresented(true);
+    }
+  }, [showFailedModal]);
 
 
   /**
@@ -274,22 +285,39 @@ export default function SupportScreen() {
 
       {/* Failed Transaction Modal */}
       <Modal
-        visible={showFailedModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
+        visible={isFailedModalPresented}
+        animationType="none"
+        presentationStyle="overFullScreen"
+        transparent
         onRequestClose={() => setShowFailedModal(false)}
       >
-        <FailedTransactionCard
-          title="Transaction Failed"
-          message={selectedTransaction?.user_type === 'USER_TYPE_GUEST'
-            ? "Your Apple Pay transaction could not be completed."
-            : "Your card payment could not be processed."
-          }
-          debugInfo={getDebugInfoForCard()}
-          errorMessage={selectedTransaction?.failure_reason || 'FAILURE_REASON_BUY_FAILED'}
-          onDismiss={() => setShowFailedModal(false)}
-          showDismiss={true}
-        />
+        <EaseView
+          initialAnimate={{ opacity: 0, translateY: 8, scale: 0.985 }}
+          animate={{
+            opacity: showFailedModal ? 1 : 0,
+            translateY: showFailedModal ? 0 : 8,
+            scale: showFailedModal ? 1 : 0.985,
+          }}
+          onTransitionEnd={({ finished }) => {
+            if (finished && !showFailedModal) {
+              setIsFailedModalPresented(false);
+            }
+          }}
+          style={StyleSheet.absoluteFillObject}
+          transition={getEaseTransition('emphasis', reducedMotionEnabled)}
+        >
+          <FailedTransactionCard
+            title="Transaction Failed"
+            message={selectedTransaction?.user_type === 'USER_TYPE_GUEST'
+              ? "Your Apple Pay transaction could not be completed."
+              : "Your card payment could not be processed."
+            }
+            debugInfo={getDebugInfoForCard()}
+            errorMessage={selectedTransaction?.failure_reason || 'FAILURE_REASON_BUY_FAILED'}
+            onDismiss={() => setShowFailedModal(false)}
+            showDismiss={true}
+          />
+        </EaseView>
       </Modal>
     </View>
   );
