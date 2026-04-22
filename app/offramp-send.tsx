@@ -169,8 +169,8 @@ export default function OfframpSendScreen() {
       if (isTestSessionActive()) {
         await new Promise(resolve => setTimeout(resolve, 1500));
         showAlert(
-          'Demo Complete 🧪',
-          `TestFlight mode — this is a simulated send.\n\nIn production, this would send ${transaction.sell_amount.value} ${transaction.asset} on-chain to Coinbase's address.`,
+          'Cash-out ready',
+          `This cash-out step is marked complete on this device.\n\nWhen you cash out with a funded wallet, this sends ${transaction.sell_amount.value} ${transaction.asset} to Coinbase.`,
           'success',
           false
         );

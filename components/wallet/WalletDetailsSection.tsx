@@ -80,31 +80,33 @@ export function WalletDetailsSection() {
         key={`${network}-${balance.token?.contractAddress || balance.token?.mintAddress || symbol}`}
         style={[styles.balanceRow, network === 'Base' && styles.balanceRowFeatured]}
       >
-        <View style={{ flex: 1 }}>
-          <Text style={styles.balanceSymbol}>{symbol}</Text>
-          {balance.token?.name ? <Text style={styles.balanceName}>{balance.token.name}</Text> : null}
+        <View style={styles.balanceHeader}>
+          <View style={styles.balanceCopy}>
+            <Text style={styles.balanceSymbol}>{symbol}</Text>
+            {balance.token?.name ? <Text style={styles.balanceName}>{balance.token.name}</Text> : null}
+          </View>
+          <View style={styles.balanceRight}>
+            <Text style={styles.balanceAmount}>{formatTokenAmount(balance)}</Text>
+            <Text style={styles.balanceUsd}>{formatUsdValue(balance.usdValue)}</Text>
+          </View>
         </View>
 
-        <View style={styles.balanceRight}>
-          <Text style={styles.balanceAmount}>{formatTokenAmount(balance)}</Text>
-          <Text style={styles.balanceUsd}>{formatUsdValue(balance.usdValue)}</Text>
-          <View style={styles.balanceActions}>
-            <Pressable style={({ pressed }) => [styles.actionChip, pressed && styles.actionChipPressed]} onPress={() => handleTransfer(balance, network)}>
-              <Text style={styles.actionChipText}>Send</Text>
+        <View style={styles.balanceActions}>
+          <Pressable style={({ pressed }) => [styles.actionChip, pressed && styles.actionChipPressed]} onPress={() => handleTransfer(balance, network)}>
+            <Text style={styles.actionChipText}>Send</Text>
+          </Pressable>
+          {cashOutEnabled ? (
+            <Pressable
+              style={({ pressed }) => [
+                styles.actionChip,
+                styles.cashOutChip,
+                pressed && styles.actionChipPressed,
+              ]}
+              onPress={() => handleCashOut(balance, network)}
+            >
+              <Text style={styles.actionChipText}>Cash out</Text>
             </Pressable>
-            {cashOutEnabled ? (
-              <Pressable
-                style={({ pressed }) => [
-                  styles.actionChip,
-                  styles.cashOutChip,
-                  pressed && styles.actionChipPressed,
-                ]}
-                onPress={() => handleCashOut(balance, network)}
-              >
-                <Text style={styles.actionChipText}>Cash out</Text>
-              </Pressable>
-            ) : null}
-          </View>
+          ) : null}
         </View>
       </View>
     );
@@ -332,9 +334,9 @@ const styles = StyleSheet.create({
     maxWidth: 260,
   },
   iconButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: CARD_ALT,
     alignItems: 'center',
     justifyContent: 'center',
@@ -344,8 +346,8 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     borderColor: BORDER,
-    padding: 16,
-    gap: 12,
+    padding: 18,
+    gap: 14,
   },
   featuredTopRow: {
     flexDirection: 'row',
@@ -411,12 +413,9 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.heading,
   },
   quickActionGrid: {
-    flexDirection: 'row',
     gap: 10,
-    flexWrap: 'wrap',
   },
   quickActionButton: {
-    minWidth: 132,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -491,7 +490,6 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.heading,
   },
   balanceRow: {
-    flexDirection: 'row',
     gap: 12,
     padding: 14,
     borderRadius: 18,
@@ -501,6 +499,15 @@ const styles = StyleSheet.create({
   },
   balanceRowFeatured: {
     backgroundColor: BLUE_WASH,
+  },
+  balanceHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  balanceCopy: {
+    flex: 1,
+    gap: 2,
   },
   balanceSymbol: {
     color: TEXT_PRIMARY,
@@ -519,7 +526,7 @@ const styles = StyleSheet.create({
   },
   balanceAmount: {
     color: TEXT_PRIMARY,
-    fontSize: 14,
+    fontSize: 15,
     fontFamily: FONTS.heading,
   },
   balanceUsd: {
@@ -530,9 +537,10 @@ const styles = StyleSheet.create({
   balanceActions: {
     flexDirection: 'row',
     gap: 8,
-    marginTop: 4,
+    marginTop: 2,
   },
   actionChip: {
+    flex: 1,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 14,

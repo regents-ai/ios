@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { COLORS } from '../../constants/Colors';
+import { FONTS } from '../../constants/Typography';
 import {
   createDebugInfoFromTransaction,
   GuestCheckoutDebugInfo,
@@ -17,7 +18,7 @@ import {
   TransactionDebugInfo
 } from '../../utils/supportEmail';
 
-const { BLUE, TEXT_SECONDARY, WHITE, DARK_BG } = COLORS;
+const { BLUE, BORDER, CARD_BG, CARD_ALT, BLUE_WASH, TEXT_PRIMARY, TEXT_SECONDARY, WHITE, DARK_BG } = COLORS;
 
 interface FailedTransactionCardProps {
   title?: string;
@@ -187,67 +188,79 @@ const styles = StyleSheet.create({
     backgroundColor: DARK_BG,
   },
   card: {
-    backgroundColor: WHITE,
+    backgroundColor: CARD_BG,
+    borderWidth: 1,
+    borderColor: BORDER,
     borderRadius: 16,
     padding: 24,
     width: '100%',
     maxWidth: 400,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 5,
+    shadowColor: BLUE,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 18,
+    elevation: 4,
   },
   title: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1a1a1a',
-    marginBottom: 24,
+    fontSize: 14,
+    color: BLUE,
+    marginBottom: 20,
+    fontFamily: FONTS.body,
   },
   illustrationContainer: {
-    marginBottom: 24,
+    marginBottom: 20,
   },
   illustration: {
-    width: 120,
-    height: 120,
+    width: 104,
+    height: 104,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FEF2F2',
-    borderRadius: 60,
+    backgroundColor: WHITE,
+    borderRadius: 52,
+    borderWidth: 1,
+    borderColor: BORDER,
   },
   heading: {
     fontSize: 20,
-    fontWeight: '700',
-    color: '#1a1a1a',
+    color: TEXT_PRIMARY,
     marginBottom: 8,
     textAlign: 'center',
+    fontFamily: FONTS.heading,
   },
   message: {
     fontSize: 14,
-    color: '#666',
+    color: TEXT_SECONDARY,
     textAlign: 'center',
     lineHeight: 20,
     marginBottom: 20,
+    fontFamily: FONTS.body,
   },
   supportSection: {
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 20,
+    padding: 14,
+    backgroundColor: BLUE_WASH,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
+    width: '100%',
   },
   contactText: {
     fontSize: 14,
-    color: '#666',
+    color: TEXT_PRIMARY,
     textAlign: 'center',
+    fontFamily: FONTS.body,
   },
   emailLink: {
     color: BLUE,
-    textDecorationLine: 'underline',
-    fontWeight: '500',
+    textDecorationLine: 'none',
   },
   responseTime: {
     fontSize: 12,
     color: TEXT_SECONDARY,
     marginTop: 4,
+    fontFamily: FONTS.body,
   },
   buttonContainer: {
     width: '100%',
@@ -255,9 +268,11 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     backgroundColor: BLUE,
-    paddingVertical: 14,
+    paddingVertical: 15,
     paddingHorizontal: 24,
-    borderRadius: 25,
+    borderRadius: 18,
+    minHeight: 52,
+    width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -265,25 +280,28 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     color: WHITE,
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 15,
+    fontFamily: FONTS.body,
   },
   secondaryButton: {
     paddingVertical: 14,
     paddingHorizontal: 24,
-    borderRadius: 25,
+    borderRadius: 18,
+    minHeight: 50,
+    width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: BORDER,
+    backgroundColor: CARD_ALT,
   },
   secondaryButtonText: {
-    color: '#1a1a1a',
-    fontSize: 16,
-    fontWeight: '600',
+    color: TEXT_PRIMARY,
+    fontSize: 15,
+    fontFamily: FONTS.body,
   },
   buttonPressed: {
-    opacity: 0.8,
+    opacity: 0.88,
     transform: [{ scale: 0.98 }],
   },
   footer: {
@@ -293,32 +311,34 @@ const styles = StyleSheet.create({
     marginTop: 24,
     paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
+    borderTopColor: BORDER,
     width: '100%',
     justifyContent: 'center',
   },
   footerText: {
     fontSize: 12,
     color: TEXT_SECONDARY,
-    fontWeight: '500',
+    fontFamily: FONTS.body,
   },
   // Badge styles for compact inline display
   badge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
     paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: '#EBF5FF',
-    borderRadius: 12,
+    paddingVertical: 8,
+    backgroundColor: CARD_BG,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: BORDER,
     marginTop: 8,
   },
   badgePressed: {
-    opacity: 0.7,
+    opacity: 0.84,
   },
   badgeText: {
     fontSize: 12,
     color: BLUE,
-    fontWeight: '500',
+    fontFamily: FONTS.body,
   },
 });

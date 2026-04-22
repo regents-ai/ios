@@ -12,10 +12,11 @@ import {
 } from 'react-native';
 
 import { COLORS } from '@/constants/Colors';
+import { FONTS } from '@/constants/Typography';
 import { getEaseTransition } from '@/components/motion/easePresets';
 import { useReducedMotion } from '@/components/motion/useReducedMotion';
 
-const { BLUE } = COLORS;
+const { BLUE, BORDER, CARD_BG, CARD_ALT, TEXT_PRIMARY } = COLORS;
 
 type Item = {
   iconUrl?: string | null;
@@ -115,11 +116,11 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   sheet: {
-    backgroundColor: '#111827',
+    backgroundColor: CARD_BG,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     borderWidth: 1,
-    borderColor: '#1f2937',
+    borderColor: BORDER,
     maxHeight: '50%',
     width: '100%',
     minHeight: 320,
@@ -129,7 +130,7 @@ const styles = StyleSheet.create({
   handle: {
     width: 36,
     height: 4,
-    backgroundColor: '#334155',
+    backgroundColor: BORDER,
     borderRadius: 2,
     alignSelf: 'center',
     marginTop: 8,
@@ -137,13 +138,13 @@ const styles = StyleSheet.create({
   },
   scrollView: {},
   item: {
-    paddingVertical: 16,
+    paddingVertical: 18,
     paddingHorizontal: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#1f2937',
+    borderBottomColor: BORDER,
   },
   selectedItem: {
-    backgroundColor: `${BLUE}15`,
+    backgroundColor: CARD_ALT,
   },
   itemContent: {
     flexDirection: 'row',
@@ -162,13 +163,13 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   text: {
-    fontSize: 18,
-    fontWeight: '500',
-    color: '#f8fafc',
+    fontSize: 17,
+    color: TEXT_PRIMARY,
     flex: 1,
+    fontFamily: FONTS.body,
   },
   selectedText: {
     color: BLUE,
-    fontWeight: '600',
+    fontFamily: FONTS.heading,
   },
 });

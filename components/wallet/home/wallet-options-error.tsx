@@ -33,12 +33,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BORDER,
     padding: 16,
-    flexDirection: 'row',
-    gap: 12,
-    alignItems: 'center',
+    gap: 14,
   },
   copy: {
-    flex: 1,
     gap: 4,
   },
   errorTitle: {
@@ -55,11 +52,13 @@ const styles = StyleSheet.create({
   retryButton: {
     backgroundColor: DANGER,
     borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    alignItems: 'center',
+    width: '100%',
   },
   retryPressed: {
-    opacity: 0.85,
+    opacity: 0.88,
   },
   retryText: {
     color: '#fff',

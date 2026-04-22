@@ -85,14 +85,14 @@ const styles = StyleSheet.create({
   },
   heroTitle: {
     color: TEXT_PRIMARY,
-    fontSize: 24,
-    lineHeight: 28,
+    fontSize: 23,
+    lineHeight: 27,
     fontFamily: FONTS.heading,
   },
   heroBody: {
     color: TEXT_SECONDARY,
     fontSize: 13,
-    lineHeight: 19,
+    lineHeight: 20,
     fontFamily: FONTS.body,
   },
   heroTagRow: {
@@ -102,7 +102,7 @@ const styles = StyleSheet.create({
   },
   heroTag: {
     paddingHorizontal: 10,
-    paddingVertical: 7,
+    paddingVertical: 8,
     borderRadius: 999,
     backgroundColor: CARD_BG,
     borderWidth: 1,

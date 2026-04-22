@@ -440,7 +440,7 @@ const styles = StyleSheet.create({
   bodyText: {
     color: TEXT_SECONDARY,
     fontSize: 13,
-    lineHeight: 19,
+    lineHeight: 20,
     fontFamily: FONTS.body,
   },
   tagRow: {
@@ -475,7 +475,7 @@ const styles = StyleSheet.create({
   helper: {
     color: TEXT_SECONDARY,
     fontSize: 12,
-    lineHeight: 17,
+    lineHeight: 18,
     fontFamily: FONTS.body,
   },
   helperTight: {
@@ -502,20 +502,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: CARD_ALT,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     borderRadius: 16,
     gap: 8,
+    minHeight: 44,
   },
   selectChipLarge: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: CARD_ALT,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     borderRadius: 16,
     gap: 8,
-    maxWidth: 200,
+    minHeight: 48,
+    flex: 1,
+    justifyContent: 'space-between',
   },
   selectChipText: {
     color: TEXT_PRIMARY,
@@ -551,7 +554,7 @@ const styles = StyleSheet.create({
   },
   quoteCard: {
     backgroundColor: CARD_ALT,
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 14,
     borderWidth: 1,
     borderColor: BORDER,
@@ -591,7 +594,7 @@ const styles = StyleSheet.create({
     backgroundColor: `${BLUE}10`,
     borderLeftWidth: 3,
     borderLeftColor: BLUE,
-    borderRadius: 10,
+    borderRadius: 12,
     padding: 12,
   },
   noticeText: {
@@ -646,6 +649,7 @@ const styles = StyleSheet.create({
   },
   termsBlock: {
     marginBottom: 8,
+    paddingTop: 2,
   },
   termsText: {
     color: TEXT_SECONDARY,

@@ -4,11 +4,35 @@ import { fetchBuyConfig } from '@/utils/fetchBuyConfig';
 import { fetchBuyOptions } from '@/utils/fetchBuyOptions';
 import { getCountry, getSubdivision, setSubdivision } from '@/utils/state/locationState';
 
+type CountryConfig = {
+  id?: string;
+  subdivisions?: string[];
+  payment_methods?: Array<{ id?: string }>;
+  payment_currencies?: string[];
+  currencies?: string[];
+};
+
+type BuyConfig = {
+  countries?: CountryConfig[];
+};
+
+type PurchaseCurrencyOption = {
+  name?: string;
+  symbol?: string;
+  networks: Array<{ name?: string; display_name?: string; icon_url?: string | null }>;
+};
+
+type BuyOptions = {
+  countries?: CountryConfig[];
+  payment_currencies?: Array<string | { id?: string }>;
+  purchase_currencies?: PurchaseCurrencyOption[];
+};
+
 type OnrampOptionsState = {
-  options: any;
+  options: BuyOptions | null;
   isLoadingOptions: boolean;
   optionsError: string | null;
-  buyConfig: any;
+  buyConfig: BuyConfig | null;
   paymentCurrencies: string[];
   getAssetSymbolFromName: (assetName: string) => string;
   getNetworkNameFromDisplayName: (displayName: string) => string;
@@ -18,10 +42,10 @@ type OnrampOptionsState = {
 };
 
 export function useOnrampOptions(): OnrampOptionsState {
-  const [options, setOptions] = useState<any>(null);
+  const [options, setOptions] = useState<BuyOptions | null>(null);
   const [isLoadingOptions, setIsLoadingOptions] = useState(false);
   const [optionsError, setOptionsError] = useState<string | null>(null);
-  const [buyConfig, setBuyConfig] = useState<any>(null);
+  const [buyConfig, setBuyConfig] = useState<BuyConfig | null>(null);
 
   const getAssetSymbolFromName = useCallback(
     (assetName: string) => {
@@ -44,7 +68,7 @@ export function useOnrampOptions(): OnrampOptionsState {
       for (const asset of options.purchase_currencies) {
         const network = asset.networks.find((option: any) => option.display_name === displayName);
         if (network) {
-          return network.name;
+          return network.name || displayName;
         }
       }
 
@@ -71,11 +95,11 @@ export function useOnrampOptions(): OnrampOptionsState {
         fetchBuyConfig(),
       ]);
 
-      setOptions(fetchedOptions);
+      setOptions(fetchedOptions as BuyOptions);
       setBuyConfig({
-        ...fetchedConfig,
-        countries: (fetchedConfig?.countries || []).filter((entry: any) =>
-          entry.payment_methods?.some((method: any) => method.id === 'CARD')
+        ...((fetchedConfig as BuyConfig | null) ?? {}),
+        countries: (((fetchedConfig as BuyConfig | null)?.countries) ?? []).filter((entry) =>
+          entry.payment_methods?.some((method) => method.id === 'CARD')
         ),
       });
       setOptionsError(null);
@@ -131,8 +155,8 @@ export function useOnrampOptions(): OnrampOptionsState {
     const country = getCountry();
     const fromOptions = Array.isArray(options?.payment_currencies)
       ? options.payment_currencies
-          .map((entry: any) => (typeof entry === 'string' ? entry : entry?.id))
-          .filter(Boolean)
+          .map((entry) => (typeof entry === 'string' ? entry : entry?.id))
+          .filter((entry): entry is string => Boolean(entry))
       : [];
 
     if (fromOptions.length) {
@@ -140,12 +164,13 @@ export function useOnrampOptions(): OnrampOptionsState {
     }
 
     const entry = Array.isArray(buyConfig?.countries)
-      ? buyConfig.countries.find((countryEntry: any) => countryEntry.id === country)
+      ? buyConfig.countries.find((countryEntry) => countryEntry.id === country)
       : null;
-    const fromConfig =
+    const fromConfig = (
       (Array.isArray(entry?.payment_currencies) && entry.payment_currencies) ||
       (Array.isArray(entry?.currencies) && entry.currencies) ||
-      [];
+      []
+    ).filter((value): value is string => typeof value === 'string' && value.length > 0);
 
     return fromConfig.length ? fromConfig : ['USD'];
   }, [options, buyConfig]);

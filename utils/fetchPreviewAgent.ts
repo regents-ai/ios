@@ -2,11 +2,15 @@ import { getBaseUrl } from '@/constants/BASE_URL';
 import { PreviewAgentDetail } from '@/types/agentPreviews';
 import { authenticatedFetch } from './authenticatedFetch';
 
+const CURRENT_AGENTS_PATH = '/mobile-preview/agents';
+const agentPath = (agentId: string) => `${CURRENT_AGENTS_PATH}/${encodeURIComponent(agentId)}`;
+
 export async function fetchPreviewAgent(agentId: string): Promise<PreviewAgentDetail> {
-  const response = await authenticatedFetch(`${getBaseUrl()}/mobile-preview/agents/${encodeURIComponent(agentId)}`);
+  const response = await authenticatedFetch(`${getBaseUrl()}${agentPath(agentId)}`);
   if (!response.ok) {
-    throw new Error('Unable to load this preview card right now.');
+    throw new Error('Unable to load this agent right now.');
   }
 
-  return response.json();
+  const agent: PreviewAgentDetail = await response.json();
+  return agent;
 }

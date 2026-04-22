@@ -42,7 +42,7 @@ import {
 } from 'react-native';
 import { parseEther, parseUnits } from 'viem';
 
-const { DARK_BG, CARD_BG, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, WHITE, BORDER } = COLORS;
+const { DARK_BG, CARD_BG, CARD_ALT, BLUE_WASH, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, WHITE, BORDER, ORANGE } = COLORS;
 const SCREEN_OFFSET = 12;
 const CARD_OFFSET = 8;
 const STAGGER_STEP = 50;
@@ -57,6 +57,49 @@ function buildSpringTransition(reduceMotion: boolean, delay = 0) {
   return reduceMotion
     ? { type: 'none' as const }
     : { type: 'spring' as const, damping: 18, stiffness: 190, mass: 1, delay };
+}
+
+function getNetworkLabel(network: string) {
+  const networkLower = network?.toLowerCase() || '';
+
+  if (networkLower === 'base') return 'Base';
+  if (networkLower === 'base-sepolia') return 'Base test network';
+  if (networkLower === 'ethereum') return 'Ethereum';
+  if (networkLower === 'ethereum-sepolia') return 'Ethereum test network';
+  if (networkLower.includes('solana') && networkLower.includes('devnet')) return 'Solana test network';
+  if (networkLower.includes('solana')) return 'Solana';
+
+  return network.charAt(0).toUpperCase() + network.slice(1);
+}
+
+function getTokenBalance(selectedToken: any) {
+  if (!selectedToken?.amount) return '0';
+
+  const rawAmount = parseFloat(selectedToken.amount.amount || '0');
+  const decimals = parseInt(selectedToken.amount.decimals || '0', 10);
+  const actualBalance = rawAmount / Math.pow(10, decimals);
+
+  return actualBalance.toLocaleString(undefined, {
+    maximumFractionDigits: actualBalance >= 1 ? 4 : 6,
+  });
+}
+
+function getUsdEstimate(selectedToken: any, amount: string) {
+  if (!selectedToken?.usdValue || !selectedToken?.amount || !amount) return null;
+
+  const tokenBalance = parseFloat(selectedToken.amount.amount || '0') / Math.pow(10, parseInt(selectedToken.amount.decimals || '0', 10));
+  const pricePerToken = tokenBalance > 0 ? selectedToken.usdValue / tokenBalance : 0;
+  const estimate = parseFloat(amount) * pricePerToken;
+
+  if (!Number.isFinite(estimate)) return null;
+
+  return estimate.toFixed(2);
+}
+
+function formatAddressPreview(address?: string | null) {
+  if (!address) return 'Not ready';
+  if (address.length <= 14) return address;
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
 export default function TransferScreen() {
@@ -264,17 +307,17 @@ export default function TransferScreen() {
 
   const handleSend = async () => {
     if (!validateAddress(recipientAddress)) {
-      showAlert('Invalid Address', addressError || 'Please enter a valid recipient address', 'error');
+      showAlert('Enter a valid address', addressError || 'Add the wallet address you want to use.', 'error');
       return;
     }
 
     if (!amount || parseFloat(amount) <= 0) {
-      showAlert('Invalid Amount', 'Please enter a valid amount', 'error');
+      showAlert('Enter an amount', 'Choose an amount greater than zero.', 'error');
       return;
     }
 
     if (!selectedToken) {
-      showAlert('No Token Selected', 'Please select a token to transfer', 'error');
+      showAlert('Choose something to send', 'Go back and pick the asset you want to send.', 'error');
       return;
     }
 
@@ -288,8 +331,8 @@ export default function TransferScreen() {
       if (isTestSessionActive()) {
         await new Promise(resolve => setTimeout(resolve, 1500));
         showAlert(
-          'Review transfer complete',
-          `${amount} ${selectedToken.token.symbol} was sent in review mode.\n\nRecipient: ${recipientAddress.slice(0, 6)}...${recipientAddress.slice(-4)}`,
+          'Transfer complete',
+          `${amount} ${selectedToken.token.symbol} is marked as sent on this device.\n\nRecipient: ${recipientAddress.slice(0, 6)}...${recipientAddress.slice(-4)}`,
           'success'
         );
         return;
@@ -304,7 +347,7 @@ export default function TransferScreen() {
       }
     } catch (error) {
       console.error('Transfer error:', error);
-      showAlert('Transfer Failed', error instanceof Error ? error.message : 'Unknown error occurred', 'error');
+      showAlert('Transfer failed', error instanceof Error ? error.message : 'Something went wrong. Please try again.', 'error');
     } finally {
       setSending(false);
     }
@@ -417,7 +460,7 @@ export default function TransferScreen() {
             `Current SOL balance: ${(senderSolBalance / 1e9).toFixed(9)} SOL\n` +
             `Required: At least 0.00001 SOL\n\n` +
             (isDevnet
-              ? `Get devnet SOL from: https://faucet.solana.com`
+              ? `Add test SOL from: https://faucet.solana.com`
               : `Add SOL to your wallet and try again.`)
           );
         }
@@ -442,7 +485,7 @@ export default function TransferScreen() {
               `Current balance: ${(senderBalance / 1e9).toFixed(6)} SOL\n` +
               `Required: ~0.003 SOL\n\n` +
               (isDevnet
-                ? `Get devnet SOL from: https://faucet.solana.com`
+                ? `Add test SOL from: https://faucet.solana.com`
                 : `Add SOL to your wallet and try again.`)
             );
           }
@@ -504,7 +547,7 @@ export default function TransferScreen() {
       const successInfo = [
         `${amount} ${tokenSymbol} sent successfully.`,
         '',
-        `Network: Solana ${isDevnet ? 'Devnet' : 'Mainnet'}`,
+        `Network: Solana ${isDevnet ? 'test network' : 'mainnet'}`,
         `From: ${solanaAddress.slice(0, 6)}...${solanaAddress.slice(-4)}`,
         `To: ${recipientAddress.slice(0, 6)}...${recipientAddress.slice(-4)}`,
       ].join('\n');
@@ -528,6 +571,11 @@ export default function TransferScreen() {
     }
   };
 
+  const networkDisplayName = getNetworkLabel(network);
+  const tokenBalance = getTokenBalance(selectedToken);
+  const usdEstimate = getUsdEstimate(selectedToken, amount);
+  const canContinue = !!recipientAddress && !!amount && !sending;
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -545,7 +593,7 @@ export default function TransferScreen() {
           animate={{ opacity: 1, translateY: 0 }}
           transition={buildTimingTransition(reduceMotion, STAGGER_STEP)}
         >
-          <Text style={styles.headerTitle}>Send funds</Text>
+          <Text style={styles.headerTitle}>Send</Text>
         </EaseView>
         <View style={{ width: 40 }} />
       </View>
@@ -555,32 +603,20 @@ export default function TransferScreen() {
         style={{ flex: 1 }}
       >
         <ScrollView
-          style={{ flex: 1, backgroundColor: CARD_BG }}
+          style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
+          contentInsetAdjustmentBehavior="automatic"
         >
-          {selectedToken?.token?.mintAddress && selectedToken?.token?.symbol?.toUpperCase() !== 'SOL' && (
-            <EaseView
-              initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
-              animate={{ opacity: 1, translateY: 0 }}
-              transition={buildTimingTransition(reduceMotion, STAGGER_STEP * 2)}
-              style={[styles.card, { backgroundColor: '#E3F2FD', borderColor: '#2196F3' }]}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
-                <Ionicons name="information-circle" size={20} color="#1976D2" style={{ marginTop: 2 }} />
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.helper, { color: '#1976D2', fontWeight: '600' }]}>
-                    Solana token send
-                  </Text>
-                  <Text style={[styles.helper, { color: '#1976D2', marginTop: 4 }]}>
-                    {network?.toLowerCase().includes('devnet')
-                      ? 'You may need a small amount of devnet SOL to finish this send.'
-                      : 'You need a small amount of SOL in your wallet to cover this send.'}
-                  </Text>
-                </View>
-              </View>
-            </EaseView>
-          )}
+          <EaseView
+            initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={buildTimingTransition(reduceMotion, STAGGER_STEP * 2)}
+            style={styles.introBlock}
+          >
+            <Text style={styles.screenTitle}>Who are you sending to?</Text>
+            <Text style={styles.screenSubtitle}>Enter the wallet details first. You will review everything before you send.</Text>
+          </EaseView>
 
           <EaseView
             initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
@@ -588,81 +624,21 @@ export default function TransferScreen() {
             transition={buildTimingTransition(reduceMotion, STAGGER_STEP * 3)}
             style={styles.card}
           >
-            <Text style={styles.label}>Network</Text>
-            <Text style={styles.networkText}>
-              {(() => {
-                const networkLower = network?.toLowerCase() || '';
-                if (networkLower === 'base') return 'Base';
-                if (networkLower === 'base-sepolia') return 'Base Sepolia';
-                if (networkLower === 'ethereum') return 'Ethereum';
-                if (networkLower === 'ethereum-sepolia') return 'Ethereum Sepolia';
-                if (networkLower.includes('solana') && networkLower.includes('devnet')) return 'Solana Devnet';
-                if (networkLower.includes('solana')) return 'Solana';
-                return network.charAt(0).toUpperCase() + network.slice(1);
-              })()}
-            </Text>
-            {isPaymasterSupported ? (
-              <Text style={styles.helper}>
-                No network fee will be charged for this send.
-                {network === 'base-sepolia' && ' This applies to all supported testnet sends.'}
-              </Text>
-            ) : (
-              <Text style={[styles.helper, { color: '#FF9800' }]}>
-                Network fees in {isNativeToken ? selectedToken?.token?.symbol : 'ETH'} will apply to this send.
-              </Text>
-            )}
-          </EaseView>
-
-          <EaseView
-            initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
-            animate={{ opacity: 1, translateY: 0 }}
-            transition={buildTimingTransition(reduceMotion, STAGGER_STEP * 4)}
-            style={styles.card}
-          >
-            <Text style={styles.label}>Token</Text>
-            {selectedToken ? (
-              <>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <View>
-                    <Text style={styles.tokenSymbol}>{selectedToken.token?.symbol}</Text>
-                    <Text style={styles.tokenName}>{selectedToken.token?.name}</Text>
-                  </View>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={styles.label}>Balance</Text>
-                    <Text style={styles.tokenAmount}>
-                      {(parseFloat(selectedToken.amount?.amount || '0') / Math.pow(10, parseInt(selectedToken.amount?.decimals || '0'))).toFixed(6)}
-                    </Text>
-                    {selectedToken.usdValue && (
-                      <Text style={styles.tokenUsd}>
-                        ≈ ${selectedToken.usdValue.toFixed(2)} USD
-                      </Text>
-                    )}
-                  </View>
-                </View>
-              </>
-            ) : (
-              <Text style={styles.helper}>No token selected</Text>
-            )}
-          </EaseView>
-
-          <EaseView
-            initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
-            animate={{ opacity: 1, translateY: 0 }}
-            transition={buildTimingTransition(reduceMotion, STAGGER_STEP * 5)}
-            style={styles.card}
-          >
             <Text style={styles.label}>Recipient</Text>
             {recipientLabel ? (
-              <Text style={styles.helper}>
-                Funds will be sent to {recipientLabel}.
-              </Text>
+              <View style={styles.recipientPill}>
+                <Text style={styles.recipientPillText}>Sending to {recipientLabel}</Text>
+              </View>
             ) : null}
             <View style={styles.inputContainer}>
+              <View style={styles.fieldIcon}>
+                <Ionicons name="person-outline" size={20} color={TEXT_SECONDARY} />
+              </View>
               <TextInput
-                style={[styles.input, { flex: 1 } , addressError && { borderColor: '#FF6B6B' }]}
+                style={[styles.input, styles.recipientInput, { flex: 1 }, addressError && styles.inputError]}
                 value={recipientAddress}
                 onChangeText={handleAddressChange}
-                placeholder={network === 'solana' ? 'Solana address' : '0x...'}
+                placeholder={network.toLowerCase().includes('solana') ? 'Solana address' : 'Wallet address'}
                 placeholderTextColor={TEXT_SECONDARY}
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -691,27 +667,36 @@ export default function TransferScreen() {
             </View>
 
             {addressError && (
-              <Text style={[styles.helper, { color: '#FF6B6B', marginTop: 8 }]}>
-                {addressError}
-              </Text>
+              <Text style={[styles.helper, styles.errorText]}>{addressError}</Text>
             )}
           </EaseView>
 
           <EaseView
             initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
             animate={{ opacity: 1, translateY: 0 }}
-            transition={buildTimingTransition(reduceMotion, STAGGER_STEP * 6)}
+            transition={buildTimingTransition(reduceMotion, STAGGER_STEP * 4)}
             style={styles.card}
           >
             <Text style={styles.label}>Amount</Text>
-            <TextInput
-              style={styles.input}
-              value={amount}
-              onChangeText={setAmount}
-              placeholder="0.00"
-              placeholderTextColor={TEXT_SECONDARY}
-              keyboardType="decimal-pad"
-            />
+            <View style={styles.amountField}>
+              <TextInput
+                style={[styles.input, styles.amountInput]}
+                value={amount}
+                onChangeText={setAmount}
+                placeholder="0.00"
+                placeholderTextColor={TEXT_SECONDARY}
+                keyboardType="decimal-pad"
+              />
+              <View style={styles.amountTokenPill}>
+                <Text style={styles.amountTokenText}>{selectedToken?.token?.symbol || 'Token'}</Text>
+              </View>
+            </View>
+
+            {usdEstimate ? (
+              <Text style={styles.helper}>About ${usdEstimate} USD</Text>
+            ) : (
+              <Text style={styles.helper}>Choose how much you want to send.</Text>
+            )}
 
             <View style={styles.quickButtons}>
               <Pressable
@@ -734,8 +719,12 @@ export default function TransferScreen() {
               </Pressable>
             </View>
 
+            <Text style={styles.helper}>
+              Available: {tokenBalance} {selectedToken?.token?.symbol || ''}
+            </Text>
+
             {needsGasFee && (
-              <Text style={[styles.helper, { color: '#FF9800', marginTop: 12 }]}>
+              <Text style={[styles.helper, styles.warningText]}>
                 Leave a small amount of {selectedToken?.token?.symbol} behind to cover network fees.
               </Text>
             )}
@@ -744,18 +733,85 @@ export default function TransferScreen() {
           <EaseView
             initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
             animate={{ opacity: 1, translateY: 0 }}
-            transition={buildTimingTransition(reduceMotion, STAGGER_STEP * 7)}
+            transition={buildTimingTransition(reduceMotion, STAGGER_STEP * 5)}
+            style={styles.reviewCard}
+          >
+            <Ionicons name="shield-checkmark-outline" size={24} color={TEXT_SECONDARY} />
+            <View style={styles.reviewCopy}>
+              <Text style={styles.reviewTitle}>Review transfer</Text>
+              <Text style={styles.reviewText}>You will have a chance to check the details before you send.</Text>
+            </View>
+          </EaseView>
+
+          <EaseView
+            initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={buildTimingTransition(reduceMotion, STAGGER_STEP * 6)}
+            style={styles.card}
+          >
+            <Text style={styles.label}>From wallet</Text>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Wallet</Text>
+              <Text style={styles.detailValue} numberOfLines={1}>
+                {network.toLowerCase().includes('solana')
+                  ? formatAddressPreview(solanaAddress)
+                  : formatAddressPreview(smartAccountAddress)}
+              </Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Network</Text>
+              <Text style={styles.detailValue}>{networkDisplayName}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Asset</Text>
+              <Text style={styles.detailValue}>{selectedToken?.token?.symbol || 'Choose from your wallet'}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Available</Text>
+              <Text style={styles.detailValue}>
+                {tokenBalance} {selectedToken?.token?.symbol || ''}
+              </Text>
+            </View>
+            {isPaymasterSupported ? (
+              <Text style={styles.helper}>No network fee will be charged for this send.</Text>
+            ) : (
+              <Text style={[styles.helper, styles.warningText]}>
+                Network fees in {isNativeToken ? selectedToken?.token?.symbol : 'ETH'} will apply.
+              </Text>
+            )}
+          </EaseView>
+
+          {selectedToken?.token?.mintAddress && selectedToken?.token?.symbol?.toUpperCase() !== 'SOL' && (
+            <EaseView
+              initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
+              animate={{ opacity: 1, translateY: 0 }}
+              transition={buildTimingTransition(reduceMotion, STAGGER_STEP * 7)}
+              style={[styles.card, styles.noticeCard]}
+            >
+              <Text style={styles.noticeTitle}>Solana token send</Text>
+              <Text style={styles.noticeText}>
+                {network?.toLowerCase().includes('devnet')
+                  ? 'You may need a small amount of test SOL to finish this send.'
+                  : 'You need a small amount of SOL in your wallet to finish this send.'}
+              </Text>
+            </EaseView>
+          )}
+
+          <EaseView
+            initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={buildTimingTransition(reduceMotion, STAGGER_STEP * 8)}
             style={styles.mainButtonWrap}
           >
             <Pressable
-              style={[styles.mainSendButton, (!recipientAddress || !amount) && styles.buttonDisabled]}
+              style={[styles.mainSendButton, !canContinue && styles.buttonDisabled]}
               onPress={handleSend}
-              disabled={!recipientAddress || !amount || sending}
+              disabled={!canContinue}
             >
               {sending ? (
                 <ActivityIndicator color={WHITE} />
               ) : (
-                <Text style={styles.mainSendButtonText}>Send</Text>
+                <Text style={styles.mainSendButtonText}>Continue</Text>
               )}
             </Pressable>
           </EaseView>
@@ -792,7 +848,7 @@ export default function TransferScreen() {
               style={styles.confirmationHeader}
             >
               <Ionicons name="shield-checkmark" size={48} color={BLUE} />
-              <Text style={styles.confirmationTitle}>Review send</Text>
+              <Text style={styles.confirmationTitle}>Review transfer</Text>
             </EaseView>
 
             <EaseView
@@ -805,8 +861,8 @@ export default function TransferScreen() {
                 <Text style={styles.confirmLabel}>From</Text>
                 <Text style={styles.confirmValue} numberOfLines={1}>
                   {network.toLowerCase().includes('solana')
-                    ? (solanaAddress?.slice(0, 6) + '...' + solanaAddress?.slice(-4))
-                    : (smartAccountAddress?.slice(0, 6) + '...' + smartAccountAddress?.slice(-4))}
+                    ? formatAddressPreview(solanaAddress)
+                    : formatAddressPreview(smartAccountAddress)}
                 </Text>
               </View>
 
@@ -820,7 +876,7 @@ export default function TransferScreen() {
               <View style={styles.confirmRow}>
                 <Text style={styles.confirmLabel}>Network</Text>
                 <Text style={styles.confirmValue}>
-                  {network.charAt(0).toUpperCase() + network.slice(1)}
+                  {networkDisplayName}
                 </Text>
               </View>
 
@@ -838,16 +894,11 @@ export default function TransferScreen() {
                 </Text>
               </View>
 
-              {selectedToken?.usdValue && selectedToken?.amount && (
+              {usdEstimate ? (
                 <Text style={styles.confirmUsd}>
-                  ≈ ${(() => {
-                    // Calculate price per token from total USD value and token balance
-                    const tokenBalance = parseFloat(selectedToken.amount.amount || '0') / Math.pow(10, parseInt(selectedToken.amount.decimals || '0'));
-                    const pricePerToken = tokenBalance > 0 ? selectedToken.usdValue / tokenBalance : 0;
-                    return (parseFloat(amount) * pricePerToken).toFixed(2);
-                  })()} USD
+                  About ${usdEstimate} USD
                 </Text>
-              )}
+              ) : null}
             </EaseView>
 
             <EaseView
@@ -894,18 +945,24 @@ export default function TransferScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: CARD_BG, // was DARK_BG
+    backgroundColor: DARK_BG,
   },
-  content: {
+  scrollView: {
     flex: 1,
+    backgroundColor: DARK_BG,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
   },
   pasteButton: {
-    padding: 8,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: BORDER,
+    backgroundColor: CARD_ALT,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -914,34 +971,49 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 16,
-    backgroundColor: CARD_BG,
-    borderBottomWidth: 1,
-    borderBottomColor: BORDER,
+    paddingVertical: 12,
+    backgroundColor: DARK_BG,
   },
   backButton: {
     padding: 8,
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 20,
     color: TEXT_PRIMARY,
     fontFamily: FONTS.heading,
   },
   scrollContent: {
-    padding: 20,
-    gap: 16,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 28,
+    gap: 18,
+  },
+  introBlock: {
+    gap: 8,
+  },
+  screenTitle: {
+    fontSize: 30,
+    lineHeight: 34,
+    color: TEXT_PRIMARY,
+    fontFamily: FONTS.heading,
+  },
+  screenSubtitle: {
+    fontSize: 15,
+    lineHeight: 21,
+    color: TEXT_SECONDARY,
+    fontFamily: FONTS.body,
   },
   card: {
     backgroundColor: CARD_BG,
-    borderRadius: 16,
+    borderRadius: 22,
     borderWidth: 1,
     borderColor: BORDER,
-    padding: 20,
+    padding: 18,
+    gap: 12,
   },
   label: {
     fontSize: 14,
     color: TEXT_SECONDARY,
-    marginBottom: 12,
     fontFamily: FONTS.body,
   },
   networkText: {
@@ -953,24 +1025,74 @@ const styles = StyleSheet.create({
   helper: {
     fontSize: 12,
     color: TEXT_SECONDARY,
-    lineHeight: 16,
+    lineHeight: 18,
     fontFamily: FONTS.body,
   },
+  recipientPill: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: CARD_ALT,
+  },
+  recipientPillText: {
+    color: TEXT_PRIMARY,
+    fontSize: 12,
+    fontFamily: FONTS.body,
+  },
+  fieldIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: CARD_ALT,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   input: {
-    backgroundColor: DARK_BG,
+    backgroundColor: WHITE,
     borderWidth: 1,
     borderColor: BORDER,
-    borderRadius: 12,
+    borderRadius: 18,
     padding: 16,
     fontSize: 16,
     color: TEXT_PRIMARY,
     fontFamily: FONTS.body,
   },
-  usdValue: {
-    fontSize: 16,
-    color: TEXT_SECONDARY,
-    marginTop: 8,
-    marginBottom: 4,
+  recipientInput: {
+    minHeight: 60,
+  },
+  amountField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: WHITE,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 24,
+    paddingHorizontal: 18,
+    paddingVertical: 18,
+  },
+  amountInput: {
+    flex: 1,
+    minHeight: 72,
+    fontSize: 34,
+    lineHeight: 40,
+    fontFamily: FONTS.heading,
+    borderWidth: 0,
+    backgroundColor: 'transparent',
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+  },
+  amountTokenPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: CARD_ALT,
+  },
+  amountTokenText: {
+    color: TEXT_PRIMARY,
+    fontSize: 14,
+    fontFamily: FONTS.heading,
   },
   quickButtons: {
     flexDirection: 'row',
@@ -979,11 +1101,14 @@ const styles = StyleSheet.create({
   },
   quickButton: {
     flex: 1,
-    backgroundColor: BORDER,
-    paddingVertical: 12,
+    backgroundColor: WHITE,
+    borderWidth: 1,
+    borderColor: BORDER,
+    paddingVertical: 16,
     paddingHorizontal: 16,
-    borderRadius: 12,
+    borderRadius: 18,
     alignItems: 'center',
+    minHeight: 52,
   },
   quickButtonText: {
     fontSize: 14,
@@ -992,16 +1117,16 @@ const styles = StyleSheet.create({
   },
   mainSendButton: {
     backgroundColor: BLUE,
-    borderRadius: 22,
+    borderRadius: 18,
     paddingVertical: 16,
     paddingHorizontal: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 24,
-    minHeight: 52,
+    minHeight: 60,
+    alignSelf: 'stretch',
   },
   mainButtonWrap: {
-    marginTop: 8,
+    marginTop: 2,
   },
   mainSendButtonText: {
     color: WHITE,
@@ -1011,31 +1136,82 @@ const styles = StyleSheet.create({
   buttonDisabled: {
     opacity: 0.5,
   },
-  tokenSymbol: {
-    fontSize: 18,
+  reviewCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 14,
+    padding: 16,
+    borderRadius: 18,
+    backgroundColor: BLUE_WASH,
+    borderWidth: 1,
+    borderColor: BORDER,
+    alignSelf: 'stretch',
+  },
+  reviewCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  reviewTitle: {
     color: TEXT_PRIMARY,
-    marginBottom: 4,
+    fontSize: 18,
+    lineHeight: 22,
     fontFamily: FONTS.heading,
   },
-  tokenName: {
+  reviewText: {
+    color: TEXT_SECONDARY,
     fontSize: 14,
-    color: TEXT_SECONDARY,
+    lineHeight: 20,
     fontFamily: FONTS.body,
   },
-  tokenAmount: {
-    fontSize: 16,
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 16,
+    marginBottom: 12,
+  },
+  detailLabel: {
+    color: TEXT_SECONDARY,
+    fontSize: 14,
+    fontFamily: FONTS.body,
+  },
+  detailValue: {
     color: TEXT_PRIMARY,
+    fontSize: 16,
+    fontFamily: FONTS.heading,
+    flexShrink: 1,
+    textAlign: 'right',
+  },
+  noticeCard: {
+    backgroundColor: CARD_ALT,
+  },
+  noticeTitle: {
+    color: TEXT_PRIMARY,
+    fontSize: 16,
+    lineHeight: 20,
+    fontFamily: FONTS.heading,
+    marginBottom: 6,
+  },
+  noticeText: {
+    color: TEXT_SECONDARY,
+    fontSize: 14,
+    lineHeight: 20,
     fontFamily: FONTS.body,
   },
-  tokenUsd: {
-    fontSize: 12,
-    color: TEXT_SECONDARY,
-    marginTop: 4,
-    fontFamily: FONTS.body,
+  inputError: {
+    borderColor: COLORS.DANGER,
+  },
+  errorText: {
+    color: COLORS.DANGER,
+    marginTop: 8,
+  },
+  warningText: {
+    color: ORANGE,
+    marginTop: 12,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: 'rgba(49, 85, 105, 0.16)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
@@ -1055,7 +1231,7 @@ const styles = StyleSheet.create({
   },
   confirmationHeader: {
     alignItems: 'center',
-    padding: 24,
+    padding: 22,
     borderBottomWidth: 1,
     borderBottomColor: BORDER,
   },
@@ -1066,8 +1242,8 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.heading,
   },
   confirmationBody: {
-    padding: 24,
-    gap: 16,
+    padding: 22,
+    gap: 14,
   },
   confirmRow: {
     flexDirection: 'row',
@@ -1107,16 +1283,18 @@ const styles = StyleSheet.create({
   },
   confirmationButtons: {
     flexDirection: 'row',
-    padding: 20,
+    padding: 18,
     gap: 12,
     borderTopWidth: 1,
     borderTopColor: BORDER,
   },
   confirmButton: {
     flex: 1,
-    paddingVertical: 16,
-    borderRadius: 12,
+    minHeight: 52,
+    paddingVertical: 14,
+    borderRadius: 14,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   cancelButton: {
     backgroundColor: BORDER,

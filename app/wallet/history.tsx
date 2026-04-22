@@ -2,7 +2,7 @@ import { isTestSessionActive } from "@/utils/state/reviewSessionState";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { router } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -114,16 +114,6 @@ export default function History() {
     }, [loadTransactions, regentsUserId])
   );
 
-  useEffect(() => {
-    const isTestFlight = isTestSessionActive();
-    const userId = isTestFlight ? TEST_ACCOUNTS.userId : regentsUserId;
-
-    if (userId) {
-      loadTransactions();
-    }
-  }, [loadTransactions, regentsUserId]);
-
-
   const handleRefresh = useCallback(() => {
     loadTransactions();
   }, [loadTransactions]);
@@ -175,24 +165,24 @@ export default function History() {
           />
         </View>
         <View style={styles.transactionContent}>
-          {/* First row: Title and Amount */}
-          <View style={styles.transactionRow}>
+          <View style={styles.transactionInfo}>
             <Text style={styles.transactionTitle}>
               {item.purchase_currency} Purchase
             </Text>
-            <Text style={styles.transactionAmount}>
-              ${item.payment_total.value}
-            </Text>
-          </View>
-
-          {/* Second row: Network/Date and Status */}
-          <View style={styles.transactionRow}>
             <Text style={styles.transactionSubtitle}>
               {item.purchase_network} • {formatDate(item.created_at)}
             </Text>
-            <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
-              {item.status.replace(/ONRAMP_TRANSACTION_STATUS_/g, '').replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase())}
+          </View>
+
+          <View style={styles.transactionMeta}>
+            <Text style={styles.transactionAmount}>
+              ${item.payment_total.value}
             </Text>
+            <View style={[styles.statusBadge, { borderColor: getStatusColor(item.status), backgroundColor: `${getStatusColor(item.status)}15` }]}>
+              <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
+                {item.status.replace(/ONRAMP_TRANSACTION_STATUS_/g, '').replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase())}
+              </Text>
+            </View>
           </View>
 
           {/* Show support badge for failed transactions */}
@@ -299,9 +289,9 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.heading,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: DARK_BG,
     borderWidth: 1,
     borderColor: BORDER,
@@ -309,16 +299,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   refreshButton: {
-    // secondary button style
     backgroundColor: CARD_BG,
     borderWidth: 1,
     borderColor: BORDER,
-    borderRadius: 16,                 
-    padding: 12,
+    borderRadius: 16,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    
-    // Subtle shadow
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
@@ -331,21 +319,22 @@ const styles = StyleSheet.create({
   transactionItem: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    backgroundColor: 'transparent',
+    padding: 16,
+    backgroundColor: CARD_BG,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 20,
+    gap: 12,
   },
   transactionIcon: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: CARD_BG, // Neutral background
+    backgroundColor: WHITE,
     borderWidth: 1,
     borderColor: BORDER,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
-    marginTop: 2,
   },
   transactionIconFailed: {
     backgroundColor: '#FEF2F2',
@@ -363,12 +352,13 @@ const styles = StyleSheet.create({
   },
   transactionContent: {
     flex: 1,
-    gap: 6, // Space between the two rows
+    gap: 8,
   },
   transactionRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 12,
   },
   transactionTitle: {
     fontSize: 16,
@@ -379,30 +369,38 @@ const styles = StyleSheet.create({
   transactionSubtitle: {
     fontSize: 14,
     color: TEXT_SECONDARY,
-    flex: 1, // Take up available space
+    flex: 1,
     fontFamily: FONTS.body,
+  },
+  transactionInfo: {
+    flex: 1,
+    gap: 4,
+  },
+  transactionMeta: {
+    alignItems: 'flex-end',
+    gap: 8,
   },
   statusText: {
     fontSize: 12,
     textAlign: 'right',
-    paddingLeft: 8, // Small padding to separate from subtitle
     fontFamily: FONTS.body,
   },
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    alignSelf: 'flex-end',
+  },
   separator: {
-    height: 1,
-    backgroundColor: BORDER,
-    marginLeft: 68,
+    height: 12,
+    backgroundColor: 'transparent',
   },
   transactionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 8,
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
   },
   transactionDate: {
     fontSize: 12,
@@ -478,12 +476,6 @@ const styles = StyleSheet.create({
     color: TEXT_PRIMARY,
     fontSize: 14,
     fontWeight: '500',
-  },
-  transactionInfo: {
-    flex: 1,
-  },
-  transactionMeta: {
-    alignItems: "flex-end",
   },
   paginationContainer: {
     flexDirection: 'row',

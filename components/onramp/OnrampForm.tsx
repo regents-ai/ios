@@ -697,13 +697,13 @@ export function OnrampForm({
       <PickerSheet
         visible={activeSheet === 'country'}
         onClose={() => setActiveSheet(null)}
-        items={countries.map(entry => ({ key: entry, label: entry, selected: entry === country }))}
+        items={countries.map((entry: string) => ({ key: entry, label: entry, selected: entry === country }))}
         onSelect={handleCountrySelect}
       />
       <PickerSheet
         visible={activeSheet === 'subdivision'}
         onClose={() => setActiveSheet(null)}
-        items={usSubs.map(entry => ({ key: entry, label: entry, selected: entry === subdivision }))}
+        items={usSubs.map((entry: string) => ({ key: entry, label: entry, selected: entry === subdivision }))}
         onSelect={handleSubdivisionSelect}
       />
     </ScrollView>
