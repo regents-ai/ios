@@ -1,5 +1,16 @@
-# Happy App Donor Source
+# Happy Donor Reference
 
-This folder holds imported source from Happy's mobile app so the Regents app can adapt the terminal and session experience inside the Coinbase-based shell.
+Regents Mobile no longer carries the imported Happy app source. The full donor
+tree was removed on April 23, 2026 because the active app does not import that
+code and the copied assets made the repo harder to review.
 
-This code is intentionally not part of the live app yet. It is stored here as donor material for the next integration phases and is excluded from the current TypeScript and lint checks.
+The useful donor ideas have already been noted for future Regent surfaces:
+
+- terminal-style conversations with clear session history
+- compact agent status and activity presentation
+- fast handoff from an agent summary into a live work thread
+- mobile-first controls for reviewing files, messages, and approvals
+
+Future Regent Manager and Talk work should rebuild those ideas inside the
+Regents Mobile design system instead of copying Happy source files back into
+the active app.
