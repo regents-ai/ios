@@ -4,7 +4,7 @@ import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
 import { PreviewTerminalSessionStatus, PreviewTerminalSessionSummary } from '@/types/terminalPreviews';
 import { formatRelativeTime } from '@/utils/agent-surfaces/formatters';
-import { fetchPreviewTerminalSessions } from '@/utils/fetchPreviewTerminalSessions';
+import { fetchPreviewTerminalSessions } from '@/utils/preview/regentPreview';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';

@@ -5,6 +5,6 @@ info:
   description: |
     There are no shipped shared mobile service routes in Regents Mobile Phase 0.
 
-    The current mobile agent, Paperclip, and terminal screens are product-local preview data
+    The current mobile agent, Regent Manager, and terminal screens are product-local preview data
     documented in `api-contract.openapiv3.yaml`, not live shared Regent services.
 paths: {}

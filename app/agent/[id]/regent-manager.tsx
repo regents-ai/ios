@@ -1,8 +1,10 @@
+import { StatusPill } from '@/components/agent-surfaces/StatusPill';
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
-import { PreviewPaperclipDetail } from '@/types/agentPreviews';
-import { fetchPreviewPaperclip } from '@/utils/fetchPreviewPaperclip';
+import { PreviewRegentManagerDetail } from '@/types/agentPreviews';
+import { formatRelativeTime } from '@/utils/agent-surfaces/formatters';
+import { fetchPreviewRegentManager } from '@/utils/preview/regentPreview';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
@@ -42,31 +44,22 @@ function statusTone(status: string) {
   return { backgroundColor: BLUE_WASH, color: BLUE };
 }
 
-function formatRelativeTime(dateString: string) {
-  const diffMs = Date.now() - new Date(dateString).getTime();
-  const diffMinutes = Math.max(1, Math.round(diffMs / 60000));
-  if (diffMinutes < 60) return `${diffMinutes}m ago`;
-  const diffHours = Math.round(diffMinutes / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
-  return `${Math.round(diffHours / 24)}d ago`;
-}
-
-function readyRosterCount(paperclip: PreviewPaperclipDetail | null) {
-  if (!paperclip) {
+function readyRosterCount(regentManager: PreviewRegentManagerDetail | null) {
+  if (!regentManager) {
     return 0;
   }
 
-  return paperclip.roster.filter((member) => {
+  return regentManager.roster.filter((member) => {
     const lower = member.status.toLowerCase();
     return lower.includes('ready') || lower.includes('online') || lower.includes('track');
   }).length;
 }
 
-export default function AgentPaperclipScreen() {
+export default function AgentRegentManagerScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string }>();
   const agentId = typeof params.id === 'string' ? params.id : '';
-  const [paperclip, setPaperclip] = useState<PreviewPaperclipDetail | null>(null);
+  const [regentManager, setRegentManager] = useState<PreviewRegentManagerDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [alertState, setAlertState] = useState<{
     visible: boolean;
@@ -80,18 +73,18 @@ export default function AgentPaperclipScreen() {
     type: 'info',
   });
 
-  const loadPaperclip = useCallback(async () => {
+  const loadRegentManager = useCallback(async () => {
     if (!agentId) {
       return;
     }
 
     try {
       setLoading(true);
-      setPaperclip(await fetchPreviewPaperclip(agentId));
+      setRegentManager(await fetchPreviewRegentManager(agentId));
     } catch (error) {
       setAlertState({
         visible: true,
-        title: 'Paperclip is unavailable right now',
+        title: 'Regent Manager is unavailable right now',
         message: error instanceof Error ? error.message : 'Try again in a moment.',
         type: 'error',
       });
@@ -102,20 +95,20 @@ export default function AgentPaperclipScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      loadPaperclip();
-    }, [loadPaperclip])
+      loadRegentManager();
+    }, [loadRegentManager])
   );
 
-  const paperclipSummary = useMemo(() => {
-    if (!paperclip) {
+  const regentManagerSummary = useMemo(() => {
+    if (!regentManager) {
       return null;
     }
 
-    const topGoal = paperclip.goals[0];
-    const nextTask = paperclip.activeTasks[0];
-    const latestEvent = paperclip.recentEvents[0];
-    const readyCount = readyRosterCount(paperclip);
-    const attentionItem = [...paperclip.goals, ...paperclip.activeTasks].find((item) => {
+    const topGoal = regentManager.goals[0];
+    const nextTask = regentManager.activeTasks[0];
+    const latestEvent = regentManager.recentEvents[0];
+    const readyCount = readyRosterCount(regentManager);
+    const attentionItem = [...regentManager.goals, ...regentManager.activeTasks].find((item) => {
       const lower = item.status.toLowerCase();
       return lower.includes('attention') || lower.includes('waiting') || lower.includes('blocked');
     });
@@ -130,24 +123,24 @@ export default function AgentPaperclipScreen() {
       focusTitle: attentionItem?.title || nextTask?.title || topGoal?.title || 'No immediate issue listed',
       focusBody: attentionItem?.note || nextTask?.note || topGoal?.note || 'A short company brief will appear here when it is ready.',
     };
-  }, [paperclip]);
+  }, [regentManager]);
 
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.centerState}>
           <ActivityIndicator size="large" color={BLUE} />
-          <Text style={styles.loadingText}>Loading Paperclip…</Text>
+          <Text style={styles.loadingText}>Loading Regent Manager…</Text>
         </View>
       </SafeAreaView>
     );
   }
 
-  if (!paperclip || !paperclipSummary) {
+  if (!regentManager || !regentManagerSummary) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.centerState}>
-          <Text style={styles.emptyTitle}>Paperclip is unavailable</Text>
+          <Text style={styles.emptyTitle}>Regent Manager is unavailable</Text>
           <Pressable style={({ pressed }) => [styles.primaryButton, pressed && styles.primaryButtonPressed]} onPress={() => router.back()}>
             <Text style={styles.primaryButtonText}>Back</Text>
           </Pressable>
@@ -162,8 +155,8 @@ export default function AgentPaperclipScreen() {
         <Pressable onPress={() => router.back()} style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}>
           <Ionicons name="chevron-back" size={22} color={TEXT_PRIMARY} />
         </Pressable>
-        <Text style={styles.headerTitle}>Paperclip</Text>
-        <Pressable onPress={loadPaperclip} style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}>
+        <Text style={styles.headerTitle}>Regent Manager</Text>
+        <Pressable onPress={loadRegentManager} style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}>
           <Ionicons name="refresh" size={18} color={BLUE} />
         </Pressable>
       </View>
@@ -172,36 +165,36 @@ export default function AgentPaperclipScreen() {
         <View style={styles.heroCard}>
           <View style={styles.heroTop}>
             <Text style={styles.eyebrow}>Regents brief</Text>
-            <View style={[styles.heroPill, { backgroundColor: paperclipSummary.briefingTone.wash }]}>
-              <Text style={[styles.heroPillText, { color: paperclipSummary.briefingTone.accent }]}>
-                {paperclipSummary.briefingLabel}
+            <View style={[styles.heroPill, { backgroundColor: regentManagerSummary.briefingTone.wash }]}>
+              <Text style={[styles.heroPillText, { color: regentManagerSummary.briefingTone.accent }]}>
+                {regentManagerSummary.briefingLabel}
               </Text>
             </View>
           </View>
-          <Text style={styles.heroTitle}>{paperclip.headline}</Text>
-          <Text style={styles.heroBody}>{paperclip.companySummary}</Text>
+          <Text style={styles.heroTitle}>{regentManager.headline}</Text>
+          <Text style={styles.heroBody}>{regentManager.companySummary}</Text>
 
           <View style={styles.briefingGrid}>
             <View style={styles.briefingTile}>
               <Text style={styles.briefingLabel}>Focus now</Text>
-              <Text style={styles.briefingTitle}>{paperclipSummary.focusTitle}</Text>
+              <Text style={styles.briefingTitle}>{regentManagerSummary.focusTitle}</Text>
               <Text style={styles.briefingMeta}>Immediate read</Text>
             </View>
             <View style={styles.briefingTile}>
               <Text style={styles.briefingLabel}>Latest shift</Text>
-              <Text style={styles.briefingTitle}>{paperclipSummary.latestEvent?.title || 'No recent change yet'}</Text>
+              <Text style={styles.briefingTitle}>{regentManagerSummary.latestEvent?.title || 'No recent change yet'}</Text>
               <Text style={styles.briefingMeta}>
-                {paperclipSummary.latestEvent ? formatRelativeTime(paperclipSummary.latestEvent.at) : 'Waiting for the next update'}
+                {regentManagerSummary.latestEvent ? formatRelativeTime(regentManagerSummary.latestEvent.at) : 'Waiting for the next update'}
               </Text>
             </View>
             <View style={styles.briefingTile}>
               <Text style={styles.briefingLabel}>Top goal</Text>
-              <Text style={styles.briefingTitle}>{paperclipSummary.topGoal?.title || 'No goal listed yet'}</Text>
-              <Text style={styles.briefingMeta}>{paperclipSummary.topGoal?.status || 'No status yet'}</Text>
+              <Text style={styles.briefingTitle}>{regentManagerSummary.topGoal?.title || 'No goal listed yet'}</Text>
+              <Text style={styles.briefingMeta}>{regentManagerSummary.topGoal?.status || 'No status yet'}</Text>
             </View>
             <View style={styles.briefingTile}>
               <Text style={styles.briefingLabel}>Team ready</Text>
-              <Text style={styles.briefingTitle}>{paperclipSummary.readyCount}/{paperclip.roster.length}</Text>
+              <Text style={styles.briefingTitle}>{regentManagerSummary.readyCount}/{regentManager.roster.length}</Text>
               <Text style={styles.briefingMeta}>Ready to move now</Text>
             </View>
           </View>
@@ -209,37 +202,36 @@ export default function AgentPaperclipScreen() {
 
         <View style={styles.focusCard}>
           <Text style={styles.focusEyebrow}>What to move next</Text>
-          <Text style={styles.focusTitle}>{paperclipSummary.focusTitle}</Text>
-          <Text style={styles.focusBody}>{paperclipSummary.focusBody}</Text>
+          <Text style={styles.focusTitle}>{regentManagerSummary.focusTitle}</Text>
+          <Text style={styles.focusBody}>{regentManagerSummary.focusBody}</Text>
         </View>
 
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Current work</Text>
           <Text style={styles.sectionHint}>The goal and task that should frame the next operator decision.</Text>
           <View style={styles.list}>
-            {paperclipSummary.topGoal ? (
+            {regentManagerSummary.topGoal ? (
               <View style={styles.listCard}>
                 <View style={styles.listHeader}>
-                  <Text style={styles.listTitle}>{paperclipSummary.topGoal.title}</Text>
-                  <View style={[styles.statusPill, { backgroundColor: statusTone(paperclipSummary.topGoal.status).backgroundColor }]}>
-                    <Text style={[styles.statusPillText, { color: statusTone(paperclipSummary.topGoal.status).color }]}>
-                      {paperclipSummary.topGoal.status}
-                    </Text>
-                  </View>
+                  <Text style={styles.listTitle}>{regentManagerSummary.topGoal.title}</Text>
+                  <StatusPill
+                    label={regentManagerSummary.topGoal.status}
+                    color={statusTone(regentManagerSummary.topGoal.status).color}
+                    backgroundColor={statusTone(regentManagerSummary.topGoal.status).backgroundColor}
+                    compact
+                  />
                 </View>
-                {paperclipSummary.topGoal.note ? <Text style={styles.listBody}>{paperclipSummary.topGoal.note}</Text> : null}
+                {regentManagerSummary.topGoal.note ? <Text style={styles.listBody}>{regentManagerSummary.topGoal.note}</Text> : null}
               </View>
             ) : null}
 
-            {paperclip.activeTasks.slice(0, 3).map((task) => {
+            {regentManager.activeTasks.slice(0, 3).map((task) => {
               const tone = statusTone(task.status);
               return (
                 <View key={task.id} style={styles.listCard}>
                   <View style={styles.listHeader}>
                     <Text style={styles.listTitle}>{task.title}</Text>
-                    <View style={[styles.statusPill, { backgroundColor: tone.backgroundColor }]}>
-                      <Text style={[styles.statusPillText, { color: tone.color }]}>{task.status}</Text>
-                    </View>
+                    <StatusPill label={task.status} color={tone.color} backgroundColor={tone.backgroundColor} compact />
                   </View>
                   <Text style={styles.metaText}>{task.owner ? `Owned by ${task.owner}` : 'Owner not listed'}</Text>
                   {task.note ? <Text style={styles.listBody}>{task.note}</Text> : null}
@@ -253,7 +245,7 @@ export default function AgentPaperclipScreen() {
           <Text style={styles.sectionTitle}>Recent movement</Text>
           <Text style={styles.sectionHint}>The latest changes shaping the company view.</Text>
           <View style={styles.list}>
-            {paperclip.recentEvents.slice(0, 4).map((event) => (
+            {regentManager.recentEvents.slice(0, 4).map((event) => (
               <View key={event.id} style={styles.listCard}>
                 <Text style={styles.listTitle}>{event.title}</Text>
                 <Text style={styles.metaText}>{new Date(event.at).toLocaleString()}</Text>
@@ -267,7 +259,7 @@ export default function AgentPaperclipScreen() {
           <Text style={styles.sectionTitle}>Operators</Text>
           <Text style={styles.sectionHint}>Who is carrying the work right now.</Text>
           <View style={styles.list}>
-            {paperclip.roster.map((member) => {
+            {regentManager.roster.map((member) => {
               const tone = statusTone(member.status);
               return (
                 <View key={member.id} style={styles.memberRow}>
@@ -275,9 +267,7 @@ export default function AgentPaperclipScreen() {
                     <Text style={styles.memberName}>{member.name}</Text>
                     <Text style={styles.memberRole}>{member.role}</Text>
                   </View>
-                  <View style={[styles.statusPill, { backgroundColor: tone.backgroundColor }]}>
-                    <Text style={[styles.statusPillText, { color: tone.color }]}>{member.status}</Text>
-                  </View>
+                  <StatusPill label={member.status} color={tone.color} backgroundColor={tone.backgroundColor} compact />
                 </View>
               );
             })}
@@ -515,15 +505,6 @@ const styles = StyleSheet.create({
   metaText: {
     color: TEXT_SECONDARY,
     fontSize: 12,
-    fontFamily: FONTS.body,
-  },
-  statusPill: {
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  statusPillText: {
-    fontSize: 11,
     fontFamily: FONTS.body,
   },
   memberRow: {

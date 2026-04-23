@@ -11,6 +11,26 @@ const USER_SCOPED_PATH_PATTERNS = [
 export const TESTFLIGHT_BEARER_TOKEN = 'testflight-mock-token';
 export const TESTFLIGHT_EXTERNAL_USER_ID = '286ef934-f3b8-4e94-b61f-1f1a088ac95e';
 
+export class CoinbaseConfigurationError extends Error {
+  statusCode = 503;
+  code = 'CoinbaseProxyUnavailable';
+
+  constructor() {
+    super('Adding cash is not available for this build yet.');
+  }
+}
+
+export function requireCoinbaseApiCredentials(env: Record<string, string | undefined>) {
+  const apiKeyId = env.CDP_API_KEY_ID?.trim();
+  const apiKeySecret = env.CDP_API_KEY_SECRET?.trim();
+
+  if (!apiKeyId || !apiKeySecret) {
+    throw new CoinbaseConfigurationError();
+  }
+
+  return { apiKeyId, apiKeySecret };
+}
+
 export function isTrustedTestflightBypassToken(token: string | undefined) {
   return token === TESTFLIGHT_BEARER_TOKEN;
 }

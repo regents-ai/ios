@@ -40,14 +40,14 @@ export type PreviewAgentDetail = PreviewAgentSummary & {
   withdrawals: PreviewAgentWithdrawal[];
 };
 
-export type PreviewPaperclipGoal = {
+export type PreviewRegentManagerGoal = {
   id: string;
   title: string;
   status: string;
   note?: string;
 };
 
-export type PreviewPaperclipTask = {
+export type PreviewRegentManagerTask = {
   id: string;
   title: string;
   status: string;
@@ -55,29 +55,29 @@ export type PreviewPaperclipTask = {
   note?: string;
 };
 
-export type PreviewPaperclipEvent = {
+export type PreviewRegentManagerEvent = {
   id: string;
   title: string;
   detail: string;
   at: string;
 };
 
-export type PreviewPaperclipRosterMember = {
+export type PreviewRegentManagerRosterMember = {
   id: string;
   name: string;
   role: string;
   status: string;
 };
 
-export type PreviewPaperclipDetail = {
+export type PreviewRegentManagerDetail = {
   agentId: string;
   headline: string;
   companySummary: string;
   dashboardUrl: string;
-  goals: PreviewPaperclipGoal[];
-  activeTasks: PreviewPaperclipTask[];
-  recentEvents: PreviewPaperclipEvent[];
-  roster: PreviewPaperclipRosterMember[];
+  goals: PreviewRegentManagerGoal[];
+  activeTasks: PreviewRegentManagerTask[];
+  recentEvents: PreviewRegentManagerEvent[];
+  roster: PreviewRegentManagerRosterMember[];
 };
 
 export type PreviewWalletFundingChoice = {

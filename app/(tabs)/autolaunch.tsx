@@ -64,7 +64,7 @@ export default function AutolaunchTab() {
             <View style={styles.featureCopy}>
               <Text style={styles.featureTitle}>Talk first, buy second</Text>
               <Text style={styles.featureBody}>
-                Use Talk and Paperclip to understand what a Regents team is building before you buy, then come back to track what you hold.
+                Use Talk and Regent Manager to understand what a Regents team is building before you buy, then come back to track what you hold.
               </Text>
             </View>
           </View>

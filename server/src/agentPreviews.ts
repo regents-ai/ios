@@ -40,14 +40,14 @@ export type PreviewAgentDetail = PreviewAgentSummary & {
   withdrawals: PreviewAgentWithdrawal[];
 };
 
-export type PreviewPaperclipGoal = {
+export type PreviewRegentManagerGoal = {
   id: string;
   title: string;
   status: string;
   note?: string;
 };
 
-export type PreviewPaperclipTask = {
+export type PreviewRegentManagerTask = {
   id: string;
   title: string;
   status: string;
@@ -55,34 +55,34 @@ export type PreviewPaperclipTask = {
   note?: string;
 };
 
-export type PreviewPaperclipEvent = {
+export type PreviewRegentManagerEvent = {
   id: string;
   title: string;
   detail: string;
   at: string;
 };
 
-export type PreviewPaperclipRosterMember = {
+export type PreviewRegentManagerRosterMember = {
   id: string;
   name: string;
   role: string;
   status: string;
 };
 
-export type PreviewPaperclipDetail = {
+export type PreviewRegentManagerDetail = {
   agentId: string;
   headline: string;
   companySummary: string;
   dashboardUrl: string;
-  goals: PreviewPaperclipGoal[];
-  activeTasks: PreviewPaperclipTask[];
-  recentEvents: PreviewPaperclipEvent[];
-  roster: PreviewPaperclipRosterMember[];
+  goals: PreviewRegentManagerGoal[];
+  activeTasks: PreviewRegentManagerTask[];
+  recentEvents: PreviewRegentManagerEvent[];
+  roster: PreviewRegentManagerRosterMember[];
 };
 
 type PreviewAgentRecord = PreviewAgentDetail & {
   ownerUserId: string;
-  paperclip: PreviewPaperclipDetail;
+  regentManager: PreviewRegentManagerDetail;
 };
 
 const previewWithdrawalIntents = new Map<string, PreviewAgentWithdrawal>();
@@ -131,11 +131,11 @@ const seededAgents: PreviewAgentRecord[] = [
         updatedAt: '2026-04-16T18:07:00.000Z',
       },
     ],
-    paperclip: {
+    regentManager: {
       agentId: 'atlas-capital',
       headline: 'Atlas keeps launch budgets funded and watches treasury runway.',
       companySummary: 'Atlas Capital manages short-horizon treasury planning, launch budgets, and payout readiness so operating teams can move without burning through reserve coverage.',
-      dashboardUrl: 'https://paperclip.sprites.dev/atlas-capital',
+      dashboardUrl: 'https://hermes-workspace.fly.dev/atlas-capital',
       goals: [
         {
           id: 'atlas-goal-1',
@@ -162,7 +162,7 @@ const seededAgents: PreviewAgentRecord[] = [
           id: 'atlas-task-2',
           title: 'Refresh treasury runway summary',
           status: 'queued',
-          owner: 'Paperclip',
+          owner: 'Regent Manager',
           note: 'Summary refresh is queued after tonight’s settlements.',
         },
       ],
@@ -182,7 +182,7 @@ const seededAgents: PreviewAgentRecord[] = [
       ],
       roster: [
         { id: 'atlas-roster-1', name: 'Hermes', role: 'Operator', status: 'online' },
-        { id: 'atlas-roster-2', name: 'Paperclip', role: 'Dashboard', status: 'ready' },
+        { id: 'atlas-roster-2', name: 'Regent Manager', role: 'Dashboard', status: 'ready' },
       ],
     },
   },
@@ -226,11 +226,11 @@ const seededAgents: PreviewAgentRecord[] = [
         updatedAt: '2026-04-17T20:58:00.000Z',
       },
     ],
-    paperclip: {
+    regentManager: {
       agentId: 'meridian-ops',
       headline: 'Meridian tracks routine spend, reimbursements, and return transfers.',
       companySummary: 'Meridian Ops keeps routine operator spending in line, watches reimbursement timing, and stages return transfers when surplus cash should come back to the mobile wallet.',
-      dashboardUrl: 'https://paperclip.sprites.dev/meridian-ops',
+      dashboardUrl: 'https://hermes-workspace.fly.dev/meridian-ops',
       goals: [
         {
           id: 'meridian-goal-1',
@@ -257,7 +257,7 @@ const seededAgents: PreviewAgentRecord[] = [
           id: 'meridian-task-2',
           title: 'Refresh reimbursement queue',
           status: 'in progress',
-          owner: 'Paperclip',
+          owner: 'Regent Manager',
           note: 'Receipts from the latest operating cycle are being matched now.',
         },
       ],
@@ -277,7 +277,7 @@ const seededAgents: PreviewAgentRecord[] = [
       ],
       roster: [
         { id: 'meridian-roster-1', name: 'Hermes', role: 'Operator', status: 'waiting' },
-        { id: 'meridian-roster-2', name: 'Paperclip', role: 'Dashboard', status: 'ready' },
+        { id: 'meridian-roster-2', name: 'Regent Manager', role: 'Dashboard', status: 'ready' },
       ],
     },
   },
@@ -290,12 +290,12 @@ function clonePreviewAgent(agent: PreviewAgentRecord): PreviewAgentRecord {
     ...agent,
     recentActivity: agent.recentActivity.map((item) => ({ ...item })),
     withdrawals: agent.withdrawals.map((item) => ({ ...item })),
-    paperclip: {
-      ...agent.paperclip,
-      goals: agent.paperclip.goals.map((item) => ({ ...item })),
-      activeTasks: agent.paperclip.activeTasks.map((item) => ({ ...item })),
-      recentEvents: agent.paperclip.recentEvents.map((item) => ({ ...item })),
-      roster: agent.paperclip.roster.map((item) => ({ ...item })),
+    regentManager: {
+      ...agent.regentManager,
+      goals: agent.regentManager.goals.map((item) => ({ ...item })),
+      activeTasks: agent.regentManager.activeTasks.map((item) => ({ ...item })),
+      recentEvents: agent.regentManager.recentEvents.map((item) => ({ ...item })),
+      roster: agent.regentManager.roster.map((item) => ({ ...item })),
     },
   };
 }
@@ -315,7 +315,7 @@ function findPreviewAgentRecord(userId: string, agentId: string) {
 }
 
 function toPreviewAgentSummary(agent: PreviewAgentRecord): PreviewAgentSummary {
-  const { ownerUserId: _ownerUserId, paperclip: _paperclip, recentActivity: _recentActivity, withdrawals: _withdrawals, runtimeHeadline: _runtimeHeadline, mission: _mission, ...summary } = agent;
+  const { ownerUserId: _ownerUserId, regentManager: _regentManager, recentActivity: _recentActivity, withdrawals: _withdrawals, runtimeHeadline: _runtimeHeadline, mission: _mission, ...summary } = agent;
   return summary;
 }
 
@@ -342,18 +342,18 @@ export function getPreviewAgentForUser(userId: string, agentId: string) {
   return toPreviewAgentDetail(agent);
 }
 
-export function getPreviewPaperclipForUser(userId: string, agentId: string) {
+export function getPreviewRegentManagerForUser(userId: string, agentId: string) {
   const agent = findPreviewAgentRecord(userId, agentId);
   if (!agent) {
     return null;
   }
 
   return {
-    ...agent.paperclip,
-    goals: agent.paperclip.goals.map((item) => ({ ...item })),
-    activeTasks: agent.paperclip.activeTasks.map((item) => ({ ...item })),
-    recentEvents: agent.paperclip.recentEvents.map((item) => ({ ...item })),
-    roster: agent.paperclip.roster.map((item) => ({ ...item })),
+    ...agent.regentManager,
+    goals: agent.regentManager.goals.map((item) => ({ ...item })),
+    activeTasks: agent.regentManager.activeTasks.map((item) => ({ ...item })),
+    recentEvents: agent.regentManager.recentEvents.map((item) => ({ ...item })),
+    roster: agent.regentManager.roster.map((item) => ({ ...item })),
   };
 }
 

@@ -41,6 +41,9 @@ type OnrampOptionsState = {
   fetchOptions: () => Promise<void>;
 };
 
+const PAYMENT_OPTIONS_UNAVAILABLE_MESSAGE =
+  'Adding cash is not available for this build yet. Wallet and sending tools are still available.';
+
 export function useOnrampOptions(): OnrampOptionsState {
   const [options, setOptions] = useState<BuyOptions | null>(null);
   const [isLoadingOptions, setIsLoadingOptions] = useState(false);
@@ -104,8 +107,8 @@ export function useOnrampOptions(): OnrampOptionsState {
       });
       setOptionsError(null);
     } catch (error) {
-      console.error('Failed to fetch options:', error);
-      setOptionsError(error instanceof Error ? error.message : 'Failed to load payment options');
+      console.warn('Failed to fetch options:', error);
+      setOptionsError(PAYMENT_OPTIONS_UNAVAILABLE_MESSAGE);
     } finally {
       setIsLoadingOptions(false);
     }

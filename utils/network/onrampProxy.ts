@@ -78,7 +78,7 @@ export async function sendOnrampProxyRequest<T>(input: ProxyRequestInput): Promi
 
   if (!response.ok) {
     if (__DEV__) {
-      console.error(`[${input.context}] request failed`, {
+      console.warn(`[${input.context}] request failed`, {
         status: response.status,
         bodyPreview: responseText.slice(0, 500),
       });

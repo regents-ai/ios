@@ -109,7 +109,7 @@ export function useWalletDetailsState() {
 
       setBalances(allBalances);
     } catch (error) {
-      console.error('Failed to load wallet balances:', error);
+      console.warn('Failed to load wallet balances:', error);
       setBalancesError('Unable to load your balances right now.');
     } finally {
       setLoadingBalances(false);
@@ -142,7 +142,7 @@ export function useWalletDetailsState() {
 
       setTestnetBalances(allBalances);
     } catch (error) {
-      console.error('Failed to load testnet balances:', error);
+      console.warn('Failed to load testnet balances:', error);
       setTestnetBalancesError('Unable to load testnet balances right now.');
     } finally {
       setLoadingTestnetBalances(false);

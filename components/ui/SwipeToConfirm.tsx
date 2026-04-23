@@ -1,6 +1,7 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import React, { useCallback, useRef, useState } from "react";
-import { AccessibilityInfo, ActivityIndicator, Animated, Easing, PanResponder, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Animated, Easing, PanResponder, StyleSheet, Text, View } from "react-native";
+import { useReducedMotion } from "@/components/motion/useReducedMotion";
 import { COLORS } from "../../constants/Colors";
 import { FONTS } from "../../constants/Typography";
 
@@ -18,7 +19,7 @@ type SwipeToConfirmProps = {
 
 export function SwipeToConfirm({ label, disabled = false, onConfirm, isLoading = false, onSwipeStart, onSwipeEnd }: SwipeToConfirmProps) {
   const [trackWidth, setTrackWidth] = useState(0);
-  const [reduceMotionEnabled, setReduceMotionEnabled] = useState(false);
+  const reduceMotionEnabled = useReducedMotion();
   const knobSize = 52;
   const horizontalPadding = 4;
   const maxX = Math.max(0, trackWidth - knobSize - horizontalPadding * 2);
@@ -28,15 +29,6 @@ export function SwipeToConfirm({ label, disabled = false, onConfirm, isLoading =
   const labelOpacity = useRef(new Animated.Value(1)).current;
   const startXRef = useRef(0);
   const currentXRef = useRef(0);
-
-  React.useEffect(() => {
-    AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotionEnabled);
-
-    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotionEnabled);
-    return () => {
-      subscription.remove();
-    };
-  }, []);
 
   const animateKnobScale = useCallback(
     (toValue: number) => {
@@ -56,14 +48,14 @@ export function SwipeToConfirm({ label, disabled = false, onConfirm, isLoading =
   );
 
   const snapBack = useCallback(() => {
-    Animated.spring(translateX, { toValue: 0, useNativeDriver: false, bounciness: 0, speed: 16 }).start(() => {
+    Animated.spring(translateX, { toValue: 0, useNativeDriver: true, bounciness: 0, speed: 16 }).start(() => {
       currentXRef.current = 0;
     });
     animateKnobScale(1);
   }, [animateKnobScale, translateX]);
 
   const complete = useCallback(() => {
-    Animated.timing(translateX, { toValue: maxX, duration: 150, useNativeDriver: false }).start(() => {
+    Animated.timing(translateX, { toValue: maxX, duration: 150, useNativeDriver: true }).start(() => {
       currentXRef.current = maxX;
       const reset = () => snapBack();
       onConfirm(reset);
@@ -80,10 +72,10 @@ export function SwipeToConfirm({ label, disabled = false, onConfirm, isLoading =
     }).start();
 
     if (isLoading) {
-      Animated.timing(translateX, { 
-        toValue: maxX, 
-        duration: 200, 
-        useNativeDriver: false 
+      Animated.timing(translateX, {
+        toValue: maxX,
+        duration: 200,
+        useNativeDriver: true
       }).start(() => {
         currentXRef.current = maxX;
       });
@@ -91,7 +83,7 @@ export function SwipeToConfirm({ label, disabled = false, onConfirm, isLoading =
     } else {
       Animated.spring(translateX, {
         toValue: 0,
-        useNativeDriver: false,
+        useNativeDriver: true,
         bounciness: 0,
         speed: 16,
       }).start(() => {
@@ -144,7 +136,12 @@ export function SwipeToConfirm({ label, disabled = false, onConfirm, isLoading =
     [animateKnobScale, disabled, knobSize, maxX, complete, snapBack, translateX, isLoading, onSwipeStart, onSwipeEnd] 
   );
 
-  const progressWidth = Animated.add(translateX, new Animated.Value(knobSize));
+  const progressScale = translateX.interpolate({
+    inputRange: [0, Math.max(1, maxX)],
+    outputRange: [1, Math.max(1, trackWidth / knobSize)],
+    extrapolate: 'clamp',
+  });
+  const progressTranslateX = Animated.multiply(Animated.subtract(progressScale, 1), knobSize / 2);
 
   return (
     <View style={[styles.swipeContainer, disabled && { opacity: 0.5 }]}>
@@ -156,7 +153,12 @@ export function SwipeToConfirm({ label, disabled = false, onConfirm, isLoading =
         accessibilityState={{ disabled: disabled || isLoading }}
         accessibilityLabel={label}
       >
-        <Animated.View style={[styles.swipeProgress, { width: progressWidth }]} />
+        <Animated.View
+          style={[
+            styles.swipeProgress,
+            { width: knobSize, transform: [{ translateX: progressTranslateX }, { scaleX: progressScale }] },
+          ]}
+        />
 
         <Animated.View style={[styles.swipeCenter, { opacity: labelOpacity }]}>
           {isLoading ? (

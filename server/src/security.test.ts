@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 
 import {
   TESTFLIGHT_EXTERNAL_USER_ID,
+  CoinbaseConfigurationError,
   isTrustedTestflightBypassToken,
+  requireCoinbaseApiCredentials,
   requireWebhookSecret,
   summarizeWebhookLog,
   summarizeProxyRequestLog,
@@ -101,6 +103,28 @@ test('webhooks require a signing secret', () => {
   assert.equal(requireWebhookSecret('secret-value'), 'secret-value');
   assert.throws(() => requireWebhookSecret(undefined), /WEBHOOK_SECRET is required/);
   assert.throws(() => requireWebhookSecret('   '), /WEBHOOK_SECRET is required/);
+});
+
+test('coinbase proxy credentials are required before signing wallet requests', () => {
+  assert.deepEqual(
+    requireCoinbaseApiCredentials({
+      CDP_API_KEY_ID: ' key-id ',
+      CDP_API_KEY_SECRET: ' secret ',
+    }),
+    {
+      apiKeyId: 'key-id',
+      apiKeySecret: 'secret',
+    }
+  );
+
+  assert.throws(
+    () => requireCoinbaseApiCredentials({ CDP_API_KEY_ID: '', CDP_API_KEY_SECRET: 'secret' }),
+    CoinbaseConfigurationError
+  );
+  assert.throws(
+    () => requireCoinbaseApiCredentials({ CDP_API_KEY_ID: 'key-id' }),
+    /Adding cash is not available/
+  );
 });
 
 test('webhook logs only include a safe event summary', () => {

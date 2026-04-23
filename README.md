@@ -16,7 +16,7 @@ What is preview-only today:
 
 - agents tab
 - agent detail
-- Paperclip summary
+- Regent Manager summary
 - terminal tab
 - terminal session detail
 
@@ -25,8 +25,8 @@ Those preview screens use built-in sample data. They are here to show the shape 
 ## Repo Story
 
 - Coinbase provides the wallet base: sign-in, wallet creation, onramp, offramp, transfer, history, and the local proxy for secret-bearing wallet work.
-- Happy is included as donor material for future terminal UX ideas.
-- Live Regent connection for agents, Paperclip, and terminal remains planned work. This repo does not claim that connection is complete today.
+- Happy is kept only as a short donor note for future terminal UX ideas.
+- Live Regent connection for agents, Regent Manager, and terminal remains planned work. This repo does not claim that connection is complete today.
 
 ## Repo Shape
 
@@ -34,7 +34,7 @@ Those preview screens use built-in sample data. They are here to show the shape 
 - `components/`: shared mobile UI pieces
 - `constants/`, `hooks/`, `utils/`: app support code
 - `server/`: local backend for wallet and preview data routes
-- `vendor/happy-app/`: imported Happy source kept separate as donor material
+- `vendor/happy-app/`: short note about donor ideas that should be rebuilt inside Regents Mobile
 
 ## Setup
 
@@ -81,6 +81,8 @@ The local backend needs:
 - `REGENTS_CDP_JWT_ALG`
 - `REGENTS_CDP_JWT_PRIVATE_KEY`
 
+Keep database secrets on the backend. A Neon Postgres URL must not be placed in the mobile app environment. This app currently uses `REDIS_URL` on the backend for push-token storage; adding Neon later should be a server-side storage change.
+
 ## Run Locally
 
 Start the backend:
@@ -99,7 +101,8 @@ npx expo start
 For an installed iPhone build:
 
 ```bash
-npx expo run:ios
+flowdeck context --project /Users/sean/Documents/regent/ios --json
+flowdeck build --project /Users/sean/Documents/regent/ios --scheme RegentsMobile
 ```
 
 ## App Checks

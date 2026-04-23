@@ -1,10 +1,10 @@
+import { StatusPill } from '@/components/agent-surfaces/StatusPill';
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { PreviewNotice } from '@/components/ui/PreviewNotice';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
 import { PreviewTerminalEvent, PreviewTerminalSessionDetail } from '@/types/terminalPreviews';
-import { fetchPreviewTerminalEvents } from '@/utils/fetchPreviewTerminalEvents';
-import { fetchPreviewTerminalSession } from '@/utils/fetchPreviewTerminalSession';
+import { fetchPreviewTerminalEvents, fetchPreviewTerminalSession } from '@/utils/preview/regentPreview';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
@@ -250,9 +250,12 @@ export default function TalkDetailScreen() {
           <Text style={styles.headerSubtitle}>{talk.agentName}</Text>
         </View>
 
-        <View style={[styles.statusPill, { backgroundColor: statusBackground(talk.status), borderColor: statusColor(talk.status) }]}>
-          <Text style={[styles.statusPillText, { color: statusColor(talk.status) }]}>{statusCopy(talk.status)}</Text>
-        </View>
+        <StatusPill
+          label={statusCopy(talk.status)}
+          color={statusColor(talk.status)}
+          backgroundColor={statusBackground(talk.status)}
+          borderColor={statusColor(talk.status)}
+        />
       </View>
 
       <View style={styles.sessionSummaryCard}>
@@ -392,16 +395,6 @@ const styles = StyleSheet.create({
     color: TEXT_SECONDARY,
     fontSize: 12,
     lineHeight: 18,
-    fontFamily: FONTS.body,
-  },
-  statusPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  statusPillText: {
-    fontSize: 12,
     fontFamily: FONTS.body,
   },
   sessionSummaryCard: {

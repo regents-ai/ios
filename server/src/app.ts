@@ -4,25 +4,9 @@ import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { z } from 'zod';
 
 import { generateJwt } from '@coinbase/cdp-sdk/auth';
-import {
-  createPreviewWithdrawalForUser,
-  getPreviewAgentForUser,
-  getPreviewPaperclipForUser,
-  getPreviewWithdrawalForUser,
-  listPreviewAgentsForUser,
-  seedReviewPreviewAgents,
-} from './agentPreviews.js';
 import { createCdpCustomAuthToken, getCdpJwks } from './identity.js';
 import { resolveClientIp } from './ip.js';
-import {
-  createPreviewTerminalSession,
-  getPreviewTerminalEvents,
-  getPreviewTerminalSession,
-  listPreviewTerminalSessions,
-  postPreviewTerminalMessage,
-  resolvePreviewTerminalApproval,
-  seedReviewPreviewTerminalSessions,
-} from './terminalPreviews.js';
+import { createPreviewRoutes } from './previewRoutes.js';
 import {
   buildPushTokenDebugResponse,
   canAccessPushTokenDebug,
@@ -33,19 +17,20 @@ import {
   summarizeProxyRequestLog,
   summarizeProxyResponseLog,
   validateProxyTarget,
+  CoinbaseConfigurationError,
+  requireCoinbaseApiCredentials,
 } from './security.js';
 import { validateAccessToken } from './validateToken.js';
 import { verifyLegacySignature, verifyWebhookSignature } from './verifyWebhookSignature.js';
 
-// Database storage setup - use external DB for production, in-memory for local dev
+// Redis storage setup - use external Redis for production, in-memory for local dev
 let database: any = null;
-// Backwards compatibility: fallback to REDIS_URL if DATABASE_URL not set
-const databaseUrl = process.env.DATABASE_URL || process.env.REDIS_URL;
+const databaseUrl = process.env.REDIS_URL;
 const useDatabase = !!databaseUrl;
 if (useDatabase) {
   const { createClient } = await import('redis');
   database = await createClient({ url: databaseUrl! }).connect();
-  console.log('✅ Using external database for push token storage (production)');
+  console.log('✅ Using Redis for push token storage (production)');
 } else {
   console.log('ℹ️ Using in-memory storage for push tokens (local dev)');
 }
@@ -83,9 +68,6 @@ if (process.env.APNS_KEY_ID && process.env.APNS_TEAM_ID && process.env.APNS_KEY)
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
-
-seedReviewPreviewAgents();
-seedReviewPreviewTerminalSessions();
 
 // On Vercel, trust proxy to read x-forwarded-for
 app.set('trust proxy', true);
@@ -216,258 +198,7 @@ app.post('/auth/cdp-token', async (req, res) => {
   }
 });
 
-app.get('/mobile-preview/agents', (req, res) => {
-  const userId = req.userId || 'seeded-user';
-  res.json({
-    agents: listPreviewAgentsForUser(userId),
-  });
-});
-
-app.get('/mobile-preview/agents/:id', (req, res) => {
-  const paramsSchema = z.object({
-    id: z.string().min(1),
-  });
-  const parsed = paramsSchema.safeParse(req.params);
-  if (!parsed.success) {
-    return res.status(400).json({
-      error: 'BadRequest',
-      message: 'A valid agent ID is required.',
-    });
-  }
-
-  const agent = getPreviewAgentForUser(req.userId || 'seeded-user', parsed.data.id);
-  if (!agent) {
-    return res.status(404).json({
-      error: 'NotFound',
-      message: 'That agent could not be found.',
-    });
-  }
-
-  return res.json(agent);
-});
-
-app.get('/mobile-preview/agents/:id/paperclip', (req, res) => {
-  const paramsSchema = z.object({
-    id: z.string().min(1),
-  });
-  const parsed = paramsSchema.safeParse(req.params);
-  if (!parsed.success) {
-    return res.status(400).json({
-      error: 'BadRequest',
-      message: 'A valid agent ID is required.',
-    });
-  }
-
-  const paperclip = getPreviewPaperclipForUser(req.userId || 'seeded-user', parsed.data.id);
-  if (!paperclip) {
-    return res.status(404).json({
-      error: 'NotFound',
-      message: 'That Paperclip view could not be found.',
-    });
-  }
-
-  return res.json(paperclip);
-});
-
-app.post('/mobile-preview/agents/:id/withdrawals', (req, res) => {
-  const paramsSchema = z.object({
-    id: z.string().min(1),
-  });
-  const bodySchema = z.object({
-    amount: z.string().min(1),
-    currency: z.string().min(1),
-    destinationWalletAddress: z.string().min(1),
-  });
-  const idempotencyKey = req.header('Idempotency-Key')?.trim();
-
-  const parsedParams = paramsSchema.safeParse(req.params);
-  if (!parsedParams.success) {
-    return res.status(400).json({
-      error: 'BadRequest',
-      message: 'A valid agent ID is required.',
-    });
-  }
-
-  const parsedBody = bodySchema.safeParse(req.body);
-  if (!parsedBody.success) {
-    return res.status(400).json({
-      error: 'BadRequest',
-      message: 'Amount, currency, and destination wallet address are required.',
-    });
-  }
-
-  if (!idempotencyKey) {
-    return res.status(400).json({
-      error: 'BadRequest',
-      message: 'An idempotency key is required for withdrawal requests.',
-    });
-  }
-
-  const withdrawal = createPreviewWithdrawalForUser(req.userId || 'seeded-user', parsedParams.data.id, parsedBody.data, idempotencyKey);
-  if (!withdrawal) {
-    return res.status(404).json({
-      error: 'NotFound',
-      message: 'That agent could not be found.',
-    });
-  }
-
-  return res.status(201).json({ withdrawal });
-});
-
-app.get('/mobile-preview/agents/:id/withdrawals/:withdrawalId', (req, res) => {
-  const paramsSchema = z.object({
-    id: z.string().min(1),
-    withdrawalId: z.string().min(1),
-  });
-  const parsed = paramsSchema.safeParse(req.params);
-  if (!parsed.success) {
-    return res.status(400).json({
-      error: 'BadRequest',
-      message: 'A valid agent ID and withdrawal ID are required.',
-    });
-  }
-
-  const withdrawal = getPreviewWithdrawalForUser(req.userId || 'seeded-user', parsed.data.id, parsed.data.withdrawalId);
-  if (!withdrawal) {
-    return res.status(404).json({
-      error: 'NotFound',
-      message: 'That withdrawal request could not be found.',
-    });
-  }
-
-  return res.json({ withdrawal });
-});
-
-app.get('/mobile-preview/terminal/sessions', (req, res) => {
-  res.json({
-    sessions: listPreviewTerminalSessions(req.userId || 'seeded-user'),
-  });
-});
-
-app.post('/mobile-preview/terminal/sessions', (req, res) => {
-  const bodySchema = z.object({
-    agentId: z.string().min(1),
-    agentName: z.string().min(1),
-  });
-  const parsedBody = bodySchema.safeParse(req.body);
-  if (!parsedBody.success) {
-    return res.status(400).json({
-      error: 'BadRequest',
-      message: 'An agent ID and agent name are required.',
-    });
-  }
-
-  const session = createPreviewTerminalSession(req.userId || 'seeded-user', parsedBody.data);
-  return res.status(201).json({ session });
-});
-
-app.get('/mobile-preview/terminal/sessions/:id', (req, res) => {
-  const paramsSchema = z.object({
-    id: z.string().min(1),
-  });
-  const parsed = paramsSchema.safeParse(req.params);
-  if (!parsed.success) {
-    return res.status(400).json({
-      error: 'BadRequest',
-      message: 'A valid session ID is required.',
-    });
-  }
-
-  const session = getPreviewTerminalSession(req.userId || 'seeded-user', parsed.data.id);
-  if (!session) {
-    return res.status(404).json({
-      error: 'NotFound',
-      message: 'That session could not be found.',
-    });
-  }
-
-  return res.json({ session });
-});
-
-app.get('/mobile-preview/terminal/sessions/:id/events', (req, res) => {
-  const paramsSchema = z.object({
-    id: z.string().min(1),
-  });
-  const parsed = paramsSchema.safeParse(req.params);
-  if (!parsed.success) {
-    return res.status(400).json({
-      error: 'BadRequest',
-      message: 'A valid session ID is required.',
-    });
-  }
-
-  const events = getPreviewTerminalEvents(req.userId || 'seeded-user', parsed.data.id);
-  if (!events) {
-    return res.status(404).json({
-      error: 'NotFound',
-      message: 'That session could not be found.',
-    });
-  }
-
-  return res.json({ events });
-});
-
-app.post('/mobile-preview/terminal/sessions/:id/messages', (req, res) => {
-  const paramsSchema = z.object({
-    id: z.string().min(1),
-  });
-  const bodySchema = z.object({
-    text: z.string().min(1),
-  });
-  const parsedParams = paramsSchema.safeParse(req.params);
-  const parsedBody = bodySchema.safeParse(req.body);
-
-  if (!parsedParams.success || !parsedBody.success) {
-    return res.status(400).json({
-      error: 'BadRequest',
-      message: 'A valid session ID and message are required.',
-    });
-  }
-
-  const session = postPreviewTerminalMessage(req.userId || 'seeded-user', parsedParams.data.id, parsedBody.data.text);
-  if (!session) {
-    return res.status(404).json({
-      error: 'NotFound',
-      message: 'That session could not be found.',
-    });
-  }
-
-  return res.status(202).json({ session });
-});
-
-app.post('/mobile-preview/terminal/sessions/:id/approvals/:requestId', (req, res) => {
-  const paramsSchema = z.object({
-    id: z.string().min(1),
-    requestId: z.string().min(1),
-  });
-  const bodySchema = z.object({
-    decision: z.enum(['approved', 'denied']),
-  });
-  const parsedParams = paramsSchema.safeParse(req.params);
-  const parsedBody = bodySchema.safeParse(req.body);
-
-  if (!parsedParams.success || !parsedBody.success) {
-    return res.status(400).json({
-      error: 'BadRequest',
-      message: 'A valid session ID, request ID, and decision are required.',
-    });
-  }
-
-  const session = resolvePreviewTerminalApproval(
-    req.userId || 'seeded-user',
-    parsedParams.data.id,
-    parsedParams.data.requestId,
-    parsedBody.data.decision
-  );
-  if (!session) {
-    return res.status(404).json({
-      error: 'NotFound',
-      message: 'That approval request could not be found.',
-    });
-  }
-
-  return res.json({ session });
-});
+app.use(createPreviewRoutes());
 
 /**
  * Generic proxy server for Coinbase API calls:
@@ -525,9 +256,10 @@ app.post("/server/api", async (req, res) => {
     // Coinbase API expects JWT to only sign the pathname, not query string
     const finalUrlObj = new URL(finalUrl);
     if (finalUrlObj.hostname === "api.developer.coinbase.com" || finalUrlObj.hostname === "api.cdp.coinbase.com") {
+      const coinbaseCredentials = requireCoinbaseApiCredentials(process.env);
       authToken = await generateJwt({
-        apiKeyId: process.env.CDP_API_KEY_ID!,
-        apiKeySecret: process.env.CDP_API_KEY_SECRET!,
+        apiKeyId: coinbaseCredentials.apiKeyId,
+        apiKeySecret: coinbaseCredentials.apiKeySecret,
         requestMethod: method || 'POST',
         requestHost: finalUrlObj.hostname,
         requestPath: finalUrlObj.pathname, // DO NOT include .search (query params) - Coinbase rejects it
@@ -592,10 +324,17 @@ app.post("/server/api", async (req, res) => {
     res.status(response.status).json(data);
   
   } catch (error) {
+    if (error instanceof CoinbaseConfigurationError) {
+      return res.status(error.statusCode).json({
+        error: error.code,
+        message: error.message,
+      });
+    }
+
     console.error('Proxy error:', error);
     res.status(500).json({ 
       error: "Proxy request failed", 
-      details: error instanceof Error ? error.message : 'Unknown error' 
+      message: 'Unable to reach Coinbase right now.'
     });
   }
 });
@@ -639,9 +378,10 @@ app.get('/balances/evm', async (req, res) => {
 
       console.log(`🔗 [BALANCES] Ethereum Sepolia URL (v1 API): ${balancesUrl}`);
 
+      const coinbaseCredentials = requireCoinbaseApiCredentials(process.env);
       const authToken = await generateJwt({
-        apiKeyId: process.env.CDP_API_KEY_ID!,
-        apiKeySecret: process.env.CDP_API_KEY_SECRET!,
+        apiKeyId: coinbaseCredentials.apiKeyId,
+        apiKeySecret: coinbaseCredentials.apiKeySecret,
         requestMethod: 'GET',
         requestHost: 'api.cdp.coinbase.com',
         requestPath: balancesPath,
@@ -704,9 +444,10 @@ app.get('/balances/evm', async (req, res) => {
     const balancesPath = `/platform/v2/evm/token-balances/${network}/${address}`;
     const balancesUrl = `https://api.cdp.coinbase.com${balancesPath}`;
 
+    const coinbaseCredentials = requireCoinbaseApiCredentials(process.env);
     const authToken = await generateJwt({
-      apiKeyId: process.env.CDP_API_KEY_ID!,
-      apiKeySecret: process.env.CDP_API_KEY_SECRET!,
+      apiKeyId: coinbaseCredentials.apiKeyId,
+      apiKeySecret: coinbaseCredentials.apiKeySecret,
       requestMethod: 'GET',
       requestHost: 'api.cdp.coinbase.com',
       requestPath: balancesPath,
@@ -792,10 +533,17 @@ app.get('/balances/evm', async (req, res) => {
     });
 
   } catch (error) {
+    if (error instanceof CoinbaseConfigurationError) {
+      return res.status(error.statusCode).json({
+        error: error.code,
+        message: 'Wallet balances are not available for this build yet.',
+      });
+    }
+
     console.error('❌ [BALANCES] Error:', error);
     res.status(500).json({
       error: 'Failed to fetch token balances',
-      details: error instanceof Error ? error.message : 'Unknown error'
+      message: 'Unable to refresh wallet balances right now.'
     });
   }
 });
@@ -838,9 +586,10 @@ app.get('/balances/solana', async (req, res) => {
 
     console.log(`🔗 [BALANCES] Full URL: ${balancesUrl}`);
 
+    const coinbaseCredentials = requireCoinbaseApiCredentials(process.env);
     const authToken = await generateJwt({
-      apiKeyId: process.env.CDP_API_KEY_ID!,
-      apiKeySecret: process.env.CDP_API_KEY_SECRET!,
+      apiKeyId: coinbaseCredentials.apiKeyId,
+      apiKeySecret: coinbaseCredentials.apiKeySecret,
       requestMethod: 'GET',
       requestHost: 'api.cdp.coinbase.com',
       requestPath: balancesPath,
@@ -926,10 +675,17 @@ app.get('/balances/solana', async (req, res) => {
     });
 
   } catch (error) {
+    if (error instanceof CoinbaseConfigurationError) {
+      return res.status(error.statusCode).json({
+        error: error.code,
+        message: 'Wallet balances are not available for this build yet.',
+      });
+    }
+
     console.error('❌ [BALANCES] Error:', error);
     res.status(500).json({
       error: 'Failed to fetch Solana token balances',
-      details: error instanceof Error ? error.message : 'Unknown error'
+      message: 'Unable to refresh wallet balances right now.'
     });
   }
 });

@@ -1,9 +1,10 @@
+import { StatusPill } from '@/components/agent-surfaces/StatusPill';
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
 import { PreviewAgentSummary } from '@/types/agentPreviews';
 import { formatCurrencyAmount, formatRelativeTime, formatWalletAddress } from '@/utils/agent-surfaces/formatters';
-import { fetchPreviewAgents } from '@/utils/fetchPreviewAgents';
+import { fetchPreviewAgents } from '@/utils/preview/regentPreview';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
@@ -218,11 +219,11 @@ export default function AgentsTab() {
                   <Text style={styles.focusTitle}>{leadRegent.name}</Text>
                   <Text style={styles.focusBody}>{regentTone(leadRegent).summary}</Text>
                 </View>
-                <View style={[styles.statusPill, { backgroundColor: regentTone(leadRegent).wash }]}>
-                  <Text style={[styles.statusPillText, { color: regentTone(leadRegent).accent }]}>
-                    {regentTone(leadRegent).label}
-                  </Text>
-                </View>
+                <StatusPill
+                  label={regentTone(leadRegent).label}
+                  color={regentTone(leadRegent).accent}
+                  backgroundColor={regentTone(leadRegent).wash}
+                />
               </View>
 
               <View style={styles.focusMetaRow}>
@@ -269,9 +270,7 @@ export default function AgentsTab() {
                           <Text style={styles.regentName}>{agent.name}</Text>
                           <Text style={styles.regentSummary}>{tone.summary}</Text>
                         </View>
-                        <View style={[styles.statusPill, { backgroundColor: tone.wash }]}>
-                          <Text style={[styles.statusPillText, { color: tone.accent }]}>{tone.label}</Text>
-                        </View>
+                        <StatusPill label={tone.label} color={tone.accent} backgroundColor={tone.wash} />
                       </View>
 
                       <View style={styles.regentRowBottom}>
@@ -479,16 +478,6 @@ const styles = StyleSheet.create({
     color: TEXT_PRIMARY,
     fontSize: 14,
     lineHeight: 20,
-    fontFamily: FONTS.body,
-  },
-  statusPill: {
-    alignSelf: 'flex-start',
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-  },
-  statusPillText: {
-    fontSize: 12,
     fontFamily: FONTS.body,
   },
   focusMetaRow: {

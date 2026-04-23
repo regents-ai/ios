@@ -124,7 +124,7 @@ export default function RootLayout() {
           <Stack.Screen name="phone-code" options={cardSlideRight} />
           <Stack.Screen name="offramp-send" options={cardSlideBottom} />
           <Stack.Screen name="agent/[id]" options={cardSlideRight} />
-          <Stack.Screen name="agent/[id]/paperclip" options={cardSlideRight} />
+          <Stack.Screen name="agent/[id]/regent-manager" options={cardSlideRight} />
           <Stack.Screen name="terminal/[id]" options={cardSlideRight} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         </Stack>
