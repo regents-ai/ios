@@ -2,7 +2,7 @@ import { useCurrentUser, useEvmAddress, useSignOut, useSolanaAddress } from '@co
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { APIGuestCheckoutWidget, OnrampForm, useOnramp } from '@/components';
 import { StaggerGroup } from '@/components/motion/StaggerGroup';
@@ -35,6 +35,7 @@ export default function WalletScreen() {
   const router = useRouter();
   const [amount, setAmount] = useState('');
   const [regionKey, setRegionKey] = useState(() => `${getCountry()}-${getSubdivision()}`);
+  const [isSwipeActive, setIsSwipeActive] = useState(false);
 
   const testSession = isTestSessionActive();
   const { isAuthenticated, signOut: signOutIdentity } = useRegentsAuth();
@@ -165,111 +166,122 @@ export default function WalletScreen() {
   return (
     <View style={styles.container}>
       <WalletScreenHeader />
-      <StaggerGroup>
-        <StaggerItem order={0}>
-          <View style={styles.summaryCard}>
-            <View style={styles.summaryTopRow}>
-              <View style={styles.summaryCopy}>
-                <Text style={styles.summaryEyebrow}>Regents wallet</Text>
-                <Text style={styles.summaryTitle}>Keep money movement simple.</Text>
-                <Text style={styles.summaryBody}>
-                  Add cash below, then use the rest of the wallet tools when you need them.
-                </Text>
-              </View>
-              <View style={styles.statusPill}>
-                <View style={[styles.statusDot, !effectiveIsSignedIn && styles.statusDotIdle]} />
-                <Text style={styles.statusText}>{effectiveIsSignedIn ? 'Ready' : 'Sign in'}</Text>
-              </View>
-            </View>
-
-            <View style={styles.summaryStats}>
-              <View style={styles.summaryStat}>
-                <Text style={styles.summaryStatLabel}>Best path</Text>
-                <Text style={styles.summaryStatValue}>Base and USDC</Text>
-              </View>
-              <View style={styles.summaryStat}>
-                <Text style={styles.summaryStatLabel}>Wallet address</Text>
-                <Text style={styles.summaryStatValue}>
-                  {address ? formatAddress(address) : 'Choose a wallet address in Settings'}
-                </Text>
-              </View>
-            </View>
-          </View>
-        </StaggerItem>
-
-        <StaggerItem order={1}>
-          <View style={styles.quickActionList}>
-            {quickActions.map((action) => (
-              <Pressable
-                key={action.label}
-                style={({ pressed }) => [styles.quickActionCard, pressed && styles.quickActionCardPressed]}
-                onPress={action.onPress}
-              >
-                <View style={styles.quickActionRow}>
-                  <View style={styles.quickActionIcon}>
-                    <Ionicons name={action.icon} size={20} color={BLUE} />
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.keyboardWrap}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          contentInsetAdjustmentBehavior="automatic"
+          keyboardShouldPersistTaps="handled"
+          removeClippedSubviews={false}
+          scrollEnabled={!isSwipeActive}
+        >
+          <StaggerGroup>
+            <StaggerItem order={0}>
+              <View style={styles.summaryCard}>
+                <View style={styles.summaryTopRow}>
+                  <View style={styles.summaryCopy}>
+                    <Text style={styles.summaryEyebrow}>Regents wallet</Text>
+                    <Text style={styles.summaryTitle}>Keep money movement simple.</Text>
+                    <Text style={styles.summaryBody}>
+                      Add cash below, then use the rest of the wallet tools when you need them.
+                    </Text>
                   </View>
-                  <View style={styles.quickActionCopy}>
-                    <Text style={styles.quickActionLabel}>{action.label}</Text>
-                    <Text style={styles.quickActionDetail}>{action.detail}</Text>
+                  <View style={styles.statusPill}>
+                    <View style={[styles.statusDot, !effectiveIsSignedIn && styles.statusDotIdle]} />
+                    <Text style={styles.statusText}>{effectiveIsSignedIn ? 'Ready' : 'Sign in'}</Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={18} color={TEXT_SECONDARY} />
                 </View>
-              </Pressable>
-            ))}
-          </View>
-        </StaggerItem>
 
-        {optionsError && !isLoadingOptions ? (
-          <StaggerItem order={2}>
-            <WalletOptionsError message={optionsError} onRetry={() => void fetchOptions()} />
-          </StaggerItem>
-        ) : null}
+                <View style={styles.summaryStats}>
+                  <View style={styles.summaryStat}>
+                    <Text style={styles.summaryStatLabel}>Best path</Text>
+                    <Text style={styles.summaryStatValue}>Base and USDC</Text>
+                  </View>
+                  <View style={styles.summaryStat}>
+                    <Text style={styles.summaryStatLabel}>Wallet address</Text>
+                    <Text style={styles.summaryStatValue}>
+                      {address ? formatAddress(address) : 'Choose a wallet address in Settings'}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            </StaggerItem>
 
-        <StaggerItem order={3}>
-          <View style={styles.sectionIntro}>
-            <Text style={styles.sectionTitle}>Add cash</Text>
-            <Text style={styles.sectionBody}>
-              Pick an amount, choose how you want to pay, and review before you continue.
-            </Text>
-          </View>
-        </StaggerItem>
+            <StaggerItem order={1}>
+              <View style={styles.quickActionList}>
+                {quickActions.map((action) => (
+                  <Pressable
+                    key={action.label}
+                    style={({ pressed }) => [styles.quickActionCard, pressed && styles.quickActionCardPressed]}
+                    onPress={action.onPress}
+                  >
+                    <View style={styles.quickActionRow}>
+                      <View style={styles.quickActionIcon}>
+                        <Ionicons name={action.icon} size={20} color={BLUE} />
+                      </View>
+                      <View style={styles.quickActionCopy}>
+                        <Text style={styles.quickActionLabel}>{action.label}</Text>
+                        <Text style={styles.quickActionDetail}>{action.detail}</Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={18} color={TEXT_SECONDARY} />
+                    </View>
+                  </Pressable>
+                ))}
+              </View>
+            </StaggerItem>
 
-        <StaggerItem order={4}>
-          <OnrampForm
-            address={address}
-            amount={amount}
-            buyConfig={buyConfig}
-            currentQuote={currentQuote}
-            fetchQuote={fetchQuote}
-            getAvailableAssets={getAvailableAssets}
-            getAvailableNetworks={getAvailableNetworks}
-            isLoading={isProcessingPayment}
-            isLoadingOptions={isLoadingOptions}
-            isLoadingQuote={isLoadingQuote}
-            onAddressChange={setAddress}
-            onAmountChange={setAmount}
-            onNetworkChange={onNetworkChange}
-            onRegionChange={(country, subdivision) => setRegionKey(`${country}-${subdivision || ''}`)}
-            onSubmit={handleSubmit}
-            options={options}
-            paymentCurrencies={paymentCurrencies}
-          />
-        </StaggerItem>
+            {optionsError && !isLoadingOptions ? (
+              <StaggerItem order={2}>
+                <WalletOptionsError message={optionsError} onRetry={() => void fetchOptions()} />
+              </StaggerItem>
+            ) : null}
 
-        <StaggerItem order={5}>
-          <View style={styles.sectionIntro}>
-            <Text style={styles.sectionTitle}>Wallet details</Text>
-            <Text style={styles.sectionBody}>
-              See your balances, copy your address, and take the next step without digging around.
-            </Text>
-          </View>
-        </StaggerItem>
+            <StaggerItem order={3}>
+              <View style={styles.sectionIntro}>
+                <Text style={styles.sectionTitle}>Add cash</Text>
+                <Text style={styles.sectionBody}>
+                  Pick an amount, choose how you want to pay, and review before you continue.
+                </Text>
+              </View>
+            </StaggerItem>
 
-        <StaggerItem order={6}>
-          <WalletDetailsSection />
-        </StaggerItem>
-      </StaggerGroup>
+            <StaggerItem order={4}>
+              <OnrampForm
+                address={address}
+                amount={amount}
+                buyConfig={buyConfig}
+                currentQuote={currentQuote}
+                fetchQuote={fetchQuote}
+                getAvailableAssets={getAvailableAssets}
+                getAvailableNetworks={getAvailableNetworks}
+                isLoading={isProcessingPayment}
+                isLoadingOptions={isLoadingOptions}
+                isLoadingQuote={isLoadingQuote}
+                onAddressChange={setAddress}
+                onAmountChange={setAmount}
+                onNetworkChange={onNetworkChange}
+                onRegionChange={(country, subdivision) => setRegionKey(`${country}-${subdivision || ''}`)}
+                onSubmit={handleSubmit}
+                onSwipeActiveChange={setIsSwipeActive}
+                options={options}
+                paymentCurrencies={paymentCurrencies}
+              />
+            </StaggerItem>
+
+            <StaggerItem order={5}>
+              <View style={styles.sectionIntro}>
+                <Text style={styles.sectionTitle}>Wallet details</Text>
+                <Text style={styles.sectionBody}>
+                  See your balances, copy your address, and take the next step without digging around.
+                </Text>
+              </View>
+            </StaggerItem>
+
+            <StaggerItem order={6}>
+              <WalletDetailsSection />
+            </StaggerItem>
+          </StaggerGroup>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       {guestCheckoutVisible && activePaymentMethod ? (
         <APIGuestCheckoutWidget
@@ -311,6 +323,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: DARK_BG,
+  },
+  keyboardWrap: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 28,
   },
   summaryCard: {
     marginHorizontal: 16,

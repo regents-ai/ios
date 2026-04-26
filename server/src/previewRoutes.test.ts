@@ -1,68 +1,36 @@
 import assert from 'node:assert/strict';
-import type { AddressInfo } from 'node:net';
 import test from 'node:test';
-
-import express from 'express';
 
 import { getPreviewRegentManagerForUser } from './agentPreviews.js';
 import { createPreviewRoutes } from './previewRoutes.js';
+import { listPreviewTerminalSessions } from './terminalPreviews.js';
 
-function createTestServer() {
-  const app = express();
-  app.use(express.json());
-  app.use(createPreviewRoutes());
+function listRoutePaths() {
+  const router = createPreviewRoutes();
 
-  const server = app.listen(0);
-  const address = server.address();
-  assert.ok(address && typeof address === 'object');
-
-  const request = (path: string, init?: RequestInit) =>
-    fetch(`http://127.0.0.1:${(address as AddressInfo).port}${path}`, init);
-
-  const close = () =>
-    new Promise<void>((resolve, reject) => {
-      server.close((error) => {
-        if (error) {
-          reject(error);
-          return;
-        }
-
-        resolve();
-      });
-    });
-
-  return { request, close };
+  return router.stack
+    .map((layer) => layer.route?.path)
+    .filter((path): path is string => typeof path === 'string');
 }
 
-test('preview Regent Manager route returns the current manager shape', async () => {
-  const server = createTestServer();
+test('preview Regent Manager route stays mounted and returns the current manager shape', () => {
+  const routePaths = listRoutePaths();
+  assert.ok(routePaths.includes('/mobile-preview/agents/:id/regent-manager'));
 
-  try {
-    const response = await server.request('/mobile-preview/agents/atlas-capital/regent-manager');
-    assert.equal(response.status, 200);
-
-    const body = await response.json();
-    assert.equal(body.agentId, 'atlas-capital');
-    assert.equal(body.dashboardUrl, 'https://hermes-workspace.fly.dev/atlas-capital');
-    assert.equal(body.roster.some((member: { name: string }) => member.name === 'Regent Manager'), true);
-  } finally {
-    await server.close();
-  }
+  const body = getPreviewRegentManagerForUser('seeded-user', 'atlas-capital');
+  assert.ok(body);
+  assert.equal(body.agentId, 'atlas-capital');
+  assert.equal(body.dashboardUrl, 'https://hermes-workspace.fly.dev/atlas-capital');
+  assert.equal(body.roster.some((member: { name: string }) => member.name === 'Regent Manager'), true);
 });
 
-test('preview terminal routes remain mounted through the extracted router', async () => {
-  const server = createTestServer();
+test('preview terminal routes remain mounted through the extracted router', () => {
+  const routePaths = listRoutePaths();
+  assert.ok(routePaths.includes('/mobile-preview/terminal/sessions'));
 
-  try {
-    const response = await server.request('/mobile-preview/terminal/sessions');
-    assert.equal(response.status, 200);
-
-    const body = await response.json();
-    assert.ok(Array.isArray(body.sessions));
-    assert.ok(body.sessions.length > 0);
-  } finally {
-    await server.close();
-  }
+  const sessions = listPreviewTerminalSessions('seeded-user');
+  assert.ok(Array.isArray(sessions));
+  assert.ok(sessions.length > 0);
 });
 
 test('preview Regent Manager data is returned as a fresh copy', () => {

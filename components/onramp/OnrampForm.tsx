@@ -1,6 +1,6 @@
 import { useCurrentUser } from '@coinbase/cdp-hooks';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Linking, Platform, ScrollView, StyleSheet } from 'react-native';
+import { Linking, Platform, StyleSheet, View } from 'react-native';
 
 import { COLORS } from '@/constants/Colors';
 import { TEST_ACCOUNTS } from '@/constants/TestAccounts';
@@ -50,6 +50,7 @@ type OnrampFormProps = {
   onAmountChange: (amount: string) => void;
   onNetworkChange?: (network: string) => void;
   onRegionChange?: (country: string, subdivision: string) => void;
+  onSwipeActiveChange?: (active: boolean) => void;
   onSubmit: (data: OnrampFormData) => void;
   options: any;
   paymentCurrencies: string[];
@@ -73,6 +74,7 @@ export function OnrampForm({
   onAmountChange,
   onNetworkChange,
   onRegionChange,
+  onSwipeActiveChange,
   onSubmit,
   options,
   paymentCurrencies,
@@ -89,7 +91,6 @@ export function OnrampForm({
   const [country, setCountryLocal] = useState(getCountry());
   const [subdivision, setSubdivisionLocal] = useState(getSubdivision());
   const [activeSheet, setActiveSheet] = useState<SheetKey>(null);
-  const [isSwipeActive, setIsSwipeActive] = useState(false);
   const [userLimits, setUserLimits] = useState<{ weekly: UserLimit; lifetime: UserLimit } | null>(null);
   const [isLoadingLimits, setIsLoadingLimits] = useState(false);
 
@@ -559,6 +560,8 @@ export function OnrampForm({
     []
   );
   const openPrivacyPolicy = useCallback(() => Linking.openURL('https://www.coinbase.com/legal/privacy'), []);
+  const handleSwipeStart = useCallback(() => onSwipeActiveChange?.(true), [onSwipeActiveChange]);
+  const handleSwipeEnd = useCallback(() => onSwipeActiveChange?.(false), [onSwipeActiveChange]);
 
   const handleCountrySelect = useCallback(
     (nextCountry: string) => {
@@ -590,15 +593,7 @@ export function OnrampForm({
   );
 
   return (
-    <ScrollView
-      contentContainerStyle={styles.content}
-      keyboardShouldPersistTaps="handled"
-      scrollEnabled={!isSwipeActive}
-      contentInsetAdjustmentBehavior="automatic"
-      removeClippedSubviews={false}
-      bounces
-      overScrollMode="always"
-    >
+    <View style={styles.content}>
       <FocusPathSection isBaseUsdcPath={isBaseUsdcPath} onPress={applyBaseUsdcPath} />
       <EnvironmentSection
         isGuestCheckout={isGuestCheckout}
@@ -649,8 +644,8 @@ export function OnrampForm({
         onOpenPrivacyPolicy={openPrivacyPolicy}
         onOpenUserAgreement={openUserAgreement}
         onSwipeConfirm={handleSwipeConfirm}
-        onSwipeEnd={() => setIsSwipeActive(false)}
-        onSwipeStart={() => setIsSwipeActive(true)}
+        onSwipeEnd={handleSwipeEnd}
+        onSwipeStart={handleSwipeStart}
       />
       <LocationSection
         country={country}
@@ -706,7 +701,7 @@ export function OnrampForm({
         items={usSubs.map((entry: string) => ({ key: entry, label: entry, selected: entry === subdivision }))}
         onSelect={handleSubdivisionSelect}
       />
-    </ScrollView>
+    </View>
   );
 }
 
