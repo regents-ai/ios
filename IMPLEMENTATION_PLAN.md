@@ -1,33 +1,32 @@
 # Regents Mobile Implementation Plan
 
-This document describes the next build after the current Phase 0 truth pass.
+This document describes the next build after the mobile Regent route cutover.
 
 ## Current Reality
 
-Today the app is split into two groups:
+Today the app has two live mobile groups:
 
-- Real wallet flows: sign-in, wallet opening, buy, cash-out, wallet send, receive, and history.
-- Preview-only Regent surfaces: agents, Regent Manager, and terminal.
+- Wallet flows: sign-in, wallet opening, buy, cash-out, wallet send, receive, and history.
+- Regent mobile surfaces: Regents, Regent Manager, Talk, and explicit wallet review steps.
 
-The preview screens use built-in sample data so the mobile product can show the intended shape of the future experience without claiming that a live Regent connection already exists.
+The old preview route family has been removed from the app, backend, and contract.
 
-This means the app does **not** yet do these things for a signed-in person:
+The mobile routes now read product-backed records where the owning product exposes them:
 
-- load live agents from Regent
-- load a live Regent Manager summary from Regent
-- open a live Regent terminal session
-- move funds between the mobile wallet and a live agent wallet
+- Regent list, detail, and Regent Manager summaries come from Platform projection.
+- Talk sessions, messages, events, and approvals come from Platform Regent Work Runtime.
+- The iOS backend owns only wallet intent and receipt state needed by the phone wallet rails.
 
 ## What The Next Build Should Do
 
-The next build should make the app truly connect to a person’s Regent account for agents, Regent Manager, and terminal while keeping the wallet side intact.
+The next build should connect the current mobile routes to a person’s Regent account while keeping the wallet side intact.
 
 That next build should:
 
-1. add real Regent-backed agent, Regent Manager, and terminal routes in the contract layer first
-2. build those routes in the Regent platform
-3. replace the preview data routes in this iOS repo with the real connected routes
-4. turn the read-only preview controls into live mobile actions only after the backend is ready
+1. keep the current mobile contract as the source of truth
+2. keep those routes connected to the owning product records
+3. keep only wallet intent and receipt state in backend storage
+4. keep wallet review steps explicit and user-confirmed
 
 ## Product Direction
 
@@ -39,28 +38,28 @@ Keep the existing foundation:
 
 ## Next Build Scope
 
-### 1. Live agent list and detail
+### 1. Live Regent list and detail
 
-- Load the signed-in person’s agents from Regent.
+- Keep loading the signed-in person’s Regents from Platform projection.
 - Show current balances, status, latest updates, and wallet addresses from live backend data.
-- Remove the built-in sample agent store and preview route names once live routes exist.
+- Keep the `/mobile/regents` route family as the only mobile Regent entry point.
 
 ### 2. Live Regent Manager summary
 
-- Replace the sample Regent Manager summary with live Regent-backed content.
+- Keep Regent Manager summaries attached to Platform projection.
 - Keep the mobile summary focused on the most useful phone-sized information first.
 - Add a larger view only when it points to the person’s real destination.
 
-### 3. Live terminal
+### 3. Live Talk
 
-- Replace sample sessions and sample event history with live Regent sessions.
-- Add real message sending and real review handling only when the backend is ready for them.
+- Keep mobile Talk attached to Platform Regent Work Runtime records.
+- Keep message sending and review handling attached to the current mobile contract.
 - Restore local notifications only when they reflect real account activity.
 
 ### 4. Live money movement between wallet and agent
 
-- Add real wallet-to-agent funding only after the live agent wallet contract is in place.
-- Add real agent-to-wallet returns only after the live backend can safely create and track them.
+- Add real wallet-to-Regent funding only after the live Regent wallet contract is in place.
+- Add real Regent-to-wallet returns only after the live backend can safely create and track them.
 - Keep the money and review steps explicit and easy to understand from the phone.
 
 ## Delivery Order
@@ -68,17 +67,17 @@ Keep the existing foundation:
 Recommended order:
 
 1. contract updates
-2. Regent backend routes
-3. iOS app wiring
-4. terminal actions
+2. stronger Platform-backed empty/error states
+3. iOS app checks against real records
+4. richer Talk actions
 5. live money movement
 
 ## Acceptance For The Next Build
 
 The next build is done when:
 
-- a signed-in person sees their real agents instead of sample cards
-- Regent Manager shows live account summaries instead of sample content
-- terminal sessions reflect real Regent activity
-- wallet-to-agent and agent-to-wallet steps work against live backend data
-- preview-only wording is removed because it is no longer needed
+- a signed-in person sees their real Regents from Platform projection
+- Regent Manager shows Platform-backed account summaries
+- Talk sessions reflect Platform Regent Work Runtime activity
+- wallet-to-Regent and Regent-to-wallet steps work against live backend data
+- old preview route names remain absent

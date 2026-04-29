@@ -3,8 +3,8 @@ info:
   title: Regents Shared Services Contract
   version: 0.1.0
   description: |
-    There are no shipped shared mobile service routes in Regents Mobile Phase 0.
+    There are no shipped shared mobile service routes in Regents Mobile.
 
-    The current mobile agent, Regent Manager, and terminal screens are product-local preview data
-    documented in `api-contract.openapiv3.yaml`, not live shared Regent services.
+    The current mobile Regent, Regent Manager, and Talk routes are product-local routes
+    documented in `api-contract.openapiv3.yaml`, not shared Regent services.
 paths: {}

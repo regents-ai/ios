@@ -1,13 +1,102 @@
 openapi: 3.0.3
 info:
-  title: Regents Mobile Phase 0 API
-  version: 0.1.0
+  title: Regents Mobile API
+  version: 0.2.0
   description: |
-    Source-of-truth contract for the current Regents Mobile Phase 0 backend surface.
+    Source-of-truth contract for the current Regents Mobile backend surface.
 
-    Real connected flows in this phase are wallet sign-in, buy, cash-out, and wallet send.
-    The agent, Regent Manager, and terminal routes below are preview-only sample data used by the mobile app.
+    Mobile wallet flows are live. Mobile Regent records are sourced from Platform projection.
+    Talk records are sourced from Platform Regent Work Runtime. The mobile backend only owns
+    wallet intent and receipt state needed for phone wallet rails.
+x-regent-chat-room-contract:
+  owner: ios
+  xmtp_room_routes: []
+  talk_source: Platform Regent Work Runtime
+  transport_boundary: Mobile Talk uses Platform work records and mobile routes. It does not create XMTP rooms today.
 paths:
+  /health:
+    get:
+      summary: Check whether the mobile backend is running
+      responses:
+        '200':
+          description: Backend health status
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, message]
+                properties:
+                  ok:
+                    type: boolean
+                  message:
+                    type: string
+  /.well-known/jwks.json:
+    get:
+      summary: Fetch public keys for Coinbase custom sign-in tokens
+      responses:
+        '200':
+          description: Public signing keys
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [keys]
+                properties:
+                  keys:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+        '500':
+          description: Signing keys are not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /auth/me:
+    get:
+      summary: Fetch the current signed-in mobile user
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current mobile user
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [userId]
+                properties:
+                  userId:
+                    type: string
+  /auth/cdp-token:
+    post:
+      summary: Create one Coinbase custom sign-in token for the signed-in user
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Coinbase custom sign-in token
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [token]
+                properties:
+                  token:
+                    type: string
+        '401':
+          description: Sign-in is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '500':
+          description: Coinbase custom sign-in is not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
   /server/api:
     post:
       summary: Proxy one signed Coinbase request for mobile wallet flows
@@ -39,27 +128,230 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
-  /mobile-preview/agents:
+  /balances/evm:
     get:
-      summary: List preview agent cards
+      summary: Fetch EVM token balances for one wallet address
       security:
         - bearerAuth: []
+      parameters:
+        - in: query
+          name: address
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: network
+          required: false
+          schema:
+            type: string
+            enum: [base, ethereum, base-sepolia, ethereum-sepolia]
       responses:
         '200':
-          description: Preview agent list
+          description: EVM token balances
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletBalanceResponse'
+        '400':
+          description: Invalid balance request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: Coinbase balance access is not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /balances/solana:
+    get:
+      summary: Fetch Solana token balances for one wallet address
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: address
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: network
+          required: false
+          schema:
+            type: string
+            enum: [solana, solana-devnet]
+      responses:
+        '200':
+          description: Solana token balances
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletBalanceResponse'
+        '400':
+          description: Invalid balance request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: Coinbase balance access is not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /push-tokens/ping:
+    post:
+      summary: Record one push-token registration attempt
+      responses:
+        '200':
+          description: Push registration attempt received
           content:
             application/json:
               schema:
                 type: object
-                required: [agents]
+                required: [received]
                 properties:
-                  agents:
+                  received:
+                    type: boolean
+  /push-tokens:
+    post:
+      summary: Register one push token for the signed-in user
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterPushTokenRequest'
+      responses:
+        '200':
+          description: Push token registered
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success:
+                    type: boolean
+        '400':
+          description: Push token request is incomplete
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '403':
+          description: Push token belongs to another user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /push-tokens/debug/{user_id}:
+    get:
+      summary: Fetch push-token status for the signed-in user or their review mirror
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: user_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Push-token status without raw token values
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '403':
+          description: Push-token status belongs to another user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /webhooks/onramp:
+    post:
+      summary: Receive one signed Coinbase onramp webhook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CoinbaseOnrampWebhook'
+      responses:
+        '200':
+          description: Webhook received
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [received]
+                properties:
+                  received:
+                    type: boolean
+                  duplicate:
+                    type: boolean
+        '400':
+          description: Webhook body does not match the current contract
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '401':
+          description: Webhook signature is missing or invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '502':
+          description: Webhook processing failed after verification
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '500':
+          description: Webhook verification is not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /mobile/regents:
+    get:
+      summary: List mobile Regent cards
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Mobile Regent list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [regents]
+                properties:
+                  regents:
                     type: array
                     items:
-                      $ref: '#/components/schemas/PreviewAgentSummary'
-  /mobile-preview/agents/{id}:
+                      $ref: '#/components/schemas/RegentSummary'
+        '502':
+          description: Platform projection is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: Platform projection base URL is not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /mobile/regents/{id}:
     get:
-      summary: Fetch one preview agent card
+      summary: Fetch one mobile Regent card
       security:
         - bearerAuth: []
       parameters:
@@ -70,20 +362,32 @@ paths:
             type: string
       responses:
         '200':
-          description: Preview agent detail
+          description: Mobile Regent detail
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PreviewAgentDetail'
+                $ref: '#/components/schemas/RegentDetail'
         '404':
-          description: Preview agent not found
+          description: Regent not found
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
-  /mobile-preview/agents/{id}/regent-manager:
+        '502':
+          description: Platform projection is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: Platform projection base URL is not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /mobile/regents/{id}/manager:
     get:
-      summary: Fetch one preview Regent Manager summary
+      summary: Fetch one Regent Manager summary
       security:
         - bearerAuth: []
       parameters:
@@ -94,20 +398,20 @@ paths:
             type: string
       responses:
         '200':
-          description: Preview Regent Manager summary
+          description: Regent Manager summary
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PreviewRegentManagerDetail'
+                $ref: '#/components/schemas/RegentManagerDetail'
         '404':
-          description: Preview Regent Manager summary not found
+          description: Regent Manager summary not found
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
-  /mobile-preview/agents/{id}/withdrawals:
+  /mobile/regents/{id}/return-requests:
     post:
-      summary: Create one preview return-to-wallet step
+      summary: Create one Regent-to-wallet return request
       security:
         - bearerAuth: []
       parameters:
@@ -121,33 +425,72 @@ paths:
           required: true
           schema:
             type: string
-          description: Reuse the same value if the same preview step is reloaded.
+          description: Reuse the same value if the same return request is submitted again.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreatePreviewWithdrawalRequest'
+              $ref: '#/components/schemas/CreateRegentReturnRequest'
       responses:
         '201':
-          description: Preview return step created
+          description: Return request created
           content:
             application/json:
               schema:
                 type: object
-                required: [withdrawal]
+                required: [returnRequest]
                 properties:
-                  withdrawal:
-                    $ref: '#/components/schemas/PreviewAgentWithdrawal'
+                  returnRequest:
+                    $ref: '#/components/schemas/RegentReturnRequest'
         '404':
-          description: Preview agent not found
+          description: Regent not found
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
-  /mobile-preview/agents/{id}/withdrawals/{withdrawal_id}:
+  /mobile/regents/{id}/funding-intents:
+    post:
+      summary: Create one wallet-to-Regent funding intent
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRegentFundingIntent'
+      responses:
+        '201':
+          description: Funding intent created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [fundingIntent]
+                properties:
+                  fundingIntent:
+                    $ref: '#/components/schemas/RegentFundingIntent'
+        '404':
+          description: Regent not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /mobile/regents/{id}/funding-intents/{funding_intent_id}:
     get:
-      summary: Fetch one preview return-to-wallet step
+      summary: Fetch one wallet-to-Regent funding intent
       security:
         - bearerAuth: []
       parameters:
@@ -157,35 +500,291 @@ paths:
           schema:
             type: string
         - in: path
-          name: withdrawal_id
+          name: funding_intent_id
           required: true
           schema:
             type: string
       responses:
         '200':
-          description: Preview return step detail
+          description: Funding intent detail
           content:
             application/json:
               schema:
                 type: object
-                required: [withdrawal]
+                required: [fundingIntent]
                 properties:
-                  withdrawal:
-                    $ref: '#/components/schemas/PreviewAgentWithdrawal'
+                  fundingIntent:
+                    $ref: '#/components/schemas/RegentFundingIntent'
         '404':
-          description: Preview return step not found
+          description: Funding intent not found
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
-  /mobile-preview/terminal/sessions:
+  /mobile/regents/{id}/funding-intents/{funding_intent_id}/confirm:
+    post:
+      summary: Confirm one wallet-to-Regent funding intent with a chain receipt
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: funding_intent_id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmChainReceiptRequest'
+      responses:
+        '200':
+          description: Funding intent confirmed from chain receipt
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [fundingIntent]
+                properties:
+                  fundingIntent:
+                    $ref: '#/components/schemas/RegentFundingIntent'
+        '404':
+          description: Funding intent not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '409':
+          description: Chain receipt is not ready or does not match this funding intent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '502':
+          description: Base RPC receipt lookup failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: Base RPC is not configured for receipt verification
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /mobile/regents/{id}/return-requests/{return_request_id}:
     get:
-      summary: List preview terminal sessions
+      summary: Fetch one Regent-to-wallet return request
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: return_request_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Return request detail
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [returnRequest]
+                properties:
+                  returnRequest:
+                    $ref: '#/components/schemas/RegentReturnRequest'
+        '404':
+          description: Return request not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /mobile/regents/{id}/return-requests/{return_request_id}/confirm:
+    post:
+      summary: Confirm one Regent return request with a chain receipt
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: return_request_id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmChainReceiptRequest'
+      responses:
+        '200':
+          description: Return request confirmed from chain receipt
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [returnRequest]
+                properties:
+                  returnRequest:
+                    $ref: '#/components/schemas/RegentReturnRequest'
+        '404':
+          description: Return request not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '409':
+          description: Chain receipt is not ready or does not match this return
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '502':
+          description: Base RPC receipt lookup failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: Base RPC is not configured for receipt verification
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /mobile/regents/{id}/base-snapshot:
+    get:
+      summary: Fetch one mobile-ready Base snapshot for a Regent
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Base snapshot
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [snapshot]
+                properties:
+                  snapshot:
+                    $ref: '#/components/schemas/BaseRegentSnapshot'
+        '404':
+          description: Regent not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /mobile/wallet-actions/{type}/prepare:
+    post:
+      summary: Prepare one mobile wallet action for signing
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: type
+          required: true
+          schema:
+            type: string
+            enum: [stake, claim, funding, return]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PrepareWalletActionRequest'
+      responses:
+        '201':
+          description: Wallet action prepared
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [action]
+                properties:
+                  action:
+                    $ref: '#/components/schemas/PreparedWalletAction'
+  /mobile/wallet-actions/{action_id}/confirm:
+    post:
+      summary: Confirm one prepared wallet action with a chain receipt
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: action_id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmChainReceiptRequest'
+      responses:
+        '200':
+          description: Wallet action confirmed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [action]
+                properties:
+                  action:
+                    $ref: '#/components/schemas/PreparedWalletAction'
+        '404':
+          description: Wallet action not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '409':
+          description: Chain receipt is not ready or does not match this action
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '502':
+          description: Base RPC receipt lookup failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: Base RPC is not configured for receipt verification
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /mobile/terminal/sessions:
+    get:
+      summary: List mobile Talk sessions from Platform Regent Work Runtime
       security:
         - bearerAuth: []
       responses:
         '200':
-          description: Preview session list
+          description: Mobile Talk session list sourced from Platform RWR work items
           content:
             application/json:
               schema:
@@ -195,9 +794,9 @@ paths:
                   sessions:
                     type: array
                     items:
-                      $ref: '#/components/schemas/PreviewTerminalSessionSummary'
+                      $ref: '#/components/schemas/TerminalSessionSummary'
     post:
-      summary: Create one preview terminal session
+      summary: Create one mobile Talk session as a Platform RWR work item and run
       security:
         - bearerAuth: []
       requestBody:
@@ -205,10 +804,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreatePreviewTerminalSessionRequest'
+              $ref: '#/components/schemas/CreateTerminalSessionRequest'
       responses:
         '201':
-          description: Preview session created
+          description: Mobile Talk session created from Platform RWR records
           content:
             application/json:
               schema:
@@ -216,10 +815,10 @@ paths:
                 required: [session]
                 properties:
                   session:
-                    $ref: '#/components/schemas/PreviewTerminalSessionDetail'
-  /mobile-preview/terminal/sessions/{id}:
+                    $ref: '#/components/schemas/TerminalSessionDetail'
+  /mobile/terminal/sessions/{id}:
     get:
-      summary: Fetch one preview terminal session
+      summary: Fetch one mobile Talk session from Platform Regent Work Runtime
       security:
         - bearerAuth: []
       parameters:
@@ -230,7 +829,7 @@ paths:
             type: string
       responses:
         '200':
-          description: Preview session detail
+          description: Mobile Talk session detail sourced from Platform RWR
           content:
             application/json:
               schema:
@@ -238,16 +837,16 @@ paths:
                 required: [session]
                 properties:
                   session:
-                    $ref: '#/components/schemas/PreviewTerminalSessionDetail'
+                    $ref: '#/components/schemas/TerminalSessionDetail'
         '404':
-          description: Preview session not found
+          description: Mobile terminal session not found
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
-  /mobile-preview/terminal/sessions/{id}/events:
+  /mobile/terminal/sessions/{id}/events:
     get:
-      summary: Fetch preview terminal session events
+      summary: Fetch new mobile Talk events from Platform Regent Work Runtime
       security:
         - bearerAuth: []
       parameters:
@@ -256,28 +855,35 @@ paths:
           required: true
           schema:
             type: string
+        - in: query
+          name: since_event_id
+          required: false
+          schema:
+            type: string
       responses:
         '200':
-          description: Preview session events
+          description: Mobile Talk events sourced from Platform RWR run events and approvals
           content:
             application/json:
               schema:
                 type: object
-                required: [events]
+                required: [events, latestEventId]
                 properties:
                   events:
                     type: array
                     items:
-                      $ref: '#/components/schemas/PreviewTerminalEvent'
+                      $ref: '#/components/schemas/TerminalEvent'
+                  latestEventId:
+                    type: string
         '404':
-          description: Preview session not found
+          description: Mobile terminal session not found
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
-  /mobile-preview/terminal/sessions/{id}/messages:
+  /mobile/terminal/sessions/{id}/messages:
     post:
-      summary: Add one sample note inside a preview terminal session
+      summary: Start a Platform RWR run from one mobile Talk message
       security:
         - bearerAuth: []
       parameters:
@@ -298,7 +904,7 @@ paths:
                   type: string
       responses:
         '202':
-          description: Preview session updated
+          description: Mobile Talk session updated from the new Platform RWR run
           content:
             application/json:
               schema:
@@ -306,16 +912,16 @@ paths:
                 required: [session]
                 properties:
                   session:
-                    $ref: '#/components/schemas/PreviewTerminalSessionDetail'
+                    $ref: '#/components/schemas/TerminalSessionDetail'
         '404':
-          description: Preview session not found
+          description: Mobile terminal session not found
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
-  /mobile-preview/terminal/sessions/{id}/approvals/{request_id}:
+  /mobile/terminal/sessions/{id}/approvals/{request_id}:
     post:
-      summary: Resolve one sample review step inside a preview terminal session
+      summary: Resolve one Platform RWR approval from mobile Talk
       security:
         - bearerAuth: []
       parameters:
@@ -342,7 +948,7 @@ paths:
                   enum: [approved, denied]
       responses:
         '200':
-          description: Preview review step updated
+          description: Mobile terminal review step updated
           content:
             application/json:
               schema:
@@ -350,9 +956,15 @@ paths:
                 required: [session]
                 properties:
                   session:
-                    $ref: '#/components/schemas/PreviewTerminalSessionDetail'
+                    $ref: '#/components/schemas/TerminalSessionDetail'
         '404':
-          description: Preview session or review step not found
+          description: Mobile terminal session or review step not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '409':
+          description: Review step is expired or already resolved
           content:
             application/json:
               schema:
@@ -364,13 +976,58 @@ components:
       scheme: bearer
       bearerFormat: JWT
   schemas:
-    PreviewAgentStatus:
+    RegentStatus:
       type: string
       enum: [active, attention, paused]
-    PreviewRuntimeStatus:
+    RegentRuntimeStatus:
       type: string
       enum: [online, waiting, offline]
-    PreviewAgentSummary:
+    PlatformFormationStatus:
+      type: string
+      enum: [pending, blocked, provisioning, ready]
+    PlatformBillingStatus:
+      type: string
+      enum: [trial, free-day, prepaid, paused, zero, failed]
+    PlatformRuntimeStatus:
+      type: string
+      enum: [provisioning, ready, paused, blocked]
+    RegentPlatformState:
+      type: object
+      required:
+        - claimedName
+        - slug
+        - formationStatus
+        - billingStatus
+        - runtimeStatus
+        - blockers
+        - dashboardUrl
+      properties:
+        claimedName:
+          type: string
+        slug:
+          type: string
+        formationStatus:
+          $ref: '#/components/schemas/PlatformFormationStatus'
+        billingStatus:
+          $ref: '#/components/schemas/PlatformBillingStatus'
+        runtimeStatus:
+          $ref: '#/components/schemas/PlatformRuntimeStatus'
+        blockers:
+          type: array
+          items:
+            type: string
+        dashboardUrl:
+          type: string
+          format: uri
+        prepaidBalanceUsd:
+          type: string
+        freeDayEndsAt:
+          type: string
+          format: date-time
+        nextPauseAt:
+          type: string
+          format: date-time
+    RegentSummary:
       type: object
       required:
         - id
@@ -378,9 +1035,7 @@ components:
         - status
         - runtimeStatus
         - walletAddress
-        - stablecoinSymbol
-        - stablecoinBalance
-        - stablecoinBalanceUsd
+        - platformState
         - lastActiveAt
       properties:
         id:
@@ -388,23 +1043,19 @@ components:
         name:
           type: string
         status:
-          $ref: '#/components/schemas/PreviewAgentStatus'
+          $ref: '#/components/schemas/RegentStatus'
         runtimeStatus:
-          $ref: '#/components/schemas/PreviewRuntimeStatus'
+          $ref: '#/components/schemas/RegentRuntimeStatus'
         walletAddress:
           type: string
-        stablecoinSymbol:
-          type: string
-        stablecoinBalance:
-          type: string
-        stablecoinBalanceUsd:
-          type: string
+        platformState:
+          $ref: '#/components/schemas/RegentPlatformState'
         lastActiveAt:
           type: string
           format: date-time
         treasuryNote:
           type: string
-    PreviewAgentActivity:
+    RegentActivity:
       type: object
       required: [id, title, detail, at]
       properties:
@@ -417,27 +1068,42 @@ components:
         at:
           type: string
           format: date-time
-    PreviewAgentWithdrawal:
+    RegentReturnRequest:
       type: object
       required:
         - id
-        - agentId
+        - regentId
         - amount
         - currency
         - destinationWalletAddress
+        - chainId
+        - expectedSigner
+        - to
+        - value
+        - data
         - status
         - createdAt
         - updatedAt
       properties:
         id:
           type: string
-        agentId:
+        regentId:
           type: string
         amount:
           type: string
         currency:
           type: string
         destinationWalletAddress:
+          type: string
+        chainId:
+          type: integer
+        expectedSigner:
+          type: string
+        to:
+          type: string
+        value:
+          type: string
+        data:
           type: string
         status:
           type: string
@@ -448,15 +1114,255 @@ components:
         updatedAt:
           type: string
           format: date-time
-    PreviewAgentDetail:
+        txHash:
+          type: string
+        blockNumber:
+          type: integer
+          minimum: 0
+    CreateRegentFundingIntent:
+      type: object
+      required:
+        - amount
+        - currency
+        - sourceWalletAddress
+        - destinationWalletAddress
+        - chainId
+        - tokenAddress
+        - expectedSigner
+        - to
+        - value
+        - data
+      properties:
+        amount:
+          type: string
+        currency:
+          type: string
+        sourceWalletAddress:
+          type: string
+        destinationWalletAddress:
+          type: string
+        chainId:
+          type: integer
+        tokenAddress:
+          type: string
+        expectedSigner:
+          type: string
+        to:
+          type: string
+        value:
+          type: string
+        data:
+          type: string
+    RegentFundingIntent:
+      type: object
+      required:
+        - id
+        - regentId
+        - amount
+        - currency
+        - sourceWalletAddress
+        - destinationWalletAddress
+        - chainId
+        - tokenAddress
+        - expectedSigner
+        - to
+        - value
+        - data
+        - status
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+        regentId:
+          type: string
+        amount:
+          type: string
+        currency:
+          type: string
+        sourceWalletAddress:
+          type: string
+        destinationWalletAddress:
+          type: string
+        chainId:
+          type: integer
+        tokenAddress:
+          type: string
+        expectedSigner:
+          type: string
+        to:
+          type: string
+        value:
+          type: string
+        data:
+          type: string
+        status:
+          type: string
+          enum: [created, signed, confirmed, failed]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        txHash:
+          type: string
+        blockNumber:
+          type: integer
+          minimum: 0
+    ConfirmChainReceiptRequest:
+      type: object
+      required: [txHash, chainId]
+      properties:
+        txHash:
+          type: string
+        chainId:
+          type: integer
+        blockNumber:
+          type: integer
+          minimum: 0
+        status:
+          type: string
+          enum: [confirmed]
+    WalletBalanceResponse:
+      type: object
+      required: [balances, totalBalances]
+      properties:
+        address:
+          type: string
+        network:
+          type: string
+        balances:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        totalBalances:
+          type: integer
+    RegisterPushTokenRequest:
+      type: object
+      additionalProperties: false
+      required: [userId, pushToken, platform, tokenType]
+      properties:
+        userId:
+          type: string
+        pushToken:
+          type: string
+        platform:
+          type: string
+        tokenType:
+          type: string
+          enum: [native, expo]
+    BaseRegentSnapshot:
+      type: object
+      required:
+        - regentId
+        - chainId
+        - blockNumber
+        - contractAddress
+        - stale
+        - claimableUsdc
+        - stakedRegent
+        - revenueLaneUsdc
+        - treasuryResidualUsdc
+        - subjectStatus
+      properties:
+        regentId:
+          type: string
+        chainId:
+          type: integer
+        blockNumber:
+          type: integer
+        contractAddress:
+          type: string
+        stale:
+          type: boolean
+          description: True when the mobile backend did not read a current onchain snapshot.
+        claimableUsdc:
+          type: string
+        stakedRegent:
+          type: string
+        revenueLaneUsdc:
+          type: string
+        treasuryResidualUsdc:
+          type: string
+        subjectStatus:
+          type: string
+    PrepareWalletActionRequest:
+      type: object
+      required: [regentId, expectedSigner, to, value, data]
+      properties:
+        regentId:
+          type: string
+        expectedSigner:
+          type: string
+        to:
+          type: string
+        value:
+          type: string
+        data:
+          type: string
+        amount:
+          type: string
+        currency:
+          type: string
+    PreparedWalletAction:
+      type: object
+      required:
+        - id
+        - type
+        - regentId
+        - chainId
+        - expectedSigner
+        - to
+        - data
+        - value
+        - label
+        - review
+        - expiresAt
+        - status
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [stake, claim, funding, return]
+        regentId:
+          type: string
+        chainId:
+          type: integer
+        expectedSigner:
+          type: string
+        to:
+          type: string
+        data:
+          type: string
+        value:
+          type: string
+        label:
+          type: string
+        review:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [prepared, confirmed, expired, failed]
+        txHash:
+          type: string
+        blockNumber:
+          type: integer
+          minimum: 0
+    RegentDetail:
       allOf:
-        - $ref: '#/components/schemas/PreviewAgentSummary'
+        - $ref: '#/components/schemas/RegentSummary'
         - type: object
           required:
             - runtimeHeadline
             - mission
             - recentActivity
-            - withdrawals
+            - returnRequests
           properties:
             runtimeHeadline:
               type: string
@@ -465,12 +1371,12 @@ components:
             recentActivity:
               type: array
               items:
-                $ref: '#/components/schemas/PreviewAgentActivity'
-            withdrawals:
+                $ref: '#/components/schemas/RegentActivity'
+            returnRequests:
               type: array
               items:
-                $ref: '#/components/schemas/PreviewAgentWithdrawal'
-    PreviewRegentManagerGoal:
+                $ref: '#/components/schemas/RegentReturnRequest'
+    RegentManagerGoal:
       type: object
       required: [id, title, status]
       properties:
@@ -482,7 +1388,7 @@ components:
           type: string
         note:
           type: string
-    PreviewRegentManagerTask:
+    RegentManagerTask:
       type: object
       required: [id, title, status]
       properties:
@@ -496,7 +1402,7 @@ components:
           type: string
         note:
           type: string
-    PreviewRegentManagerEvent:
+    RegentManagerEvent:
       type: object
       required: [id, title, detail, at]
       properties:
@@ -509,7 +1415,7 @@ components:
         at:
           type: string
           format: date-time
-    PreviewRegentManagerRosterMember:
+    RegentManagerRosterMember:
       type: object
       required: [id, name, role, status]
       properties:
@@ -521,10 +1427,10 @@ components:
           type: string
         status:
           type: string
-    PreviewRegentManagerDetail:
+    RegentManagerDetail:
       type: object
       required:
-        - agentId
+        - regentId
         - headline
         - companySummary
         - dashboardUrl
@@ -533,7 +1439,7 @@ components:
         - recentEvents
         - roster
       properties:
-        agentId:
+        regentId:
           type: string
         headline:
           type: string
@@ -544,22 +1450,22 @@ components:
         goals:
           type: array
           items:
-            $ref: '#/components/schemas/PreviewRegentManagerGoal'
+            $ref: '#/components/schemas/RegentManagerGoal'
         activeTasks:
           type: array
           items:
-            $ref: '#/components/schemas/PreviewRegentManagerTask'
+            $ref: '#/components/schemas/RegentManagerTask'
         recentEvents:
           type: array
           items:
-            $ref: '#/components/schemas/PreviewRegentManagerEvent'
+            $ref: '#/components/schemas/RegentManagerEvent'
         roster:
           type: array
           items:
-            $ref: '#/components/schemas/PreviewRegentManagerRosterMember'
-    CreatePreviewWithdrawalRequest:
+            $ref: '#/components/schemas/RegentManagerRosterMember'
+    CreateRegentReturnRequest:
       type: object
-      required: [amount, currency, destinationWalletAddress]
+      required: [amount, currency, destinationWalletAddress, chainId, expectedSigner, to, value, data]
       properties:
         amount:
           type: string
@@ -567,20 +1473,43 @@ components:
           type: string
         destinationWalletAddress:
           type: string
-    PreviewTerminalSessionStatus:
+        chainId:
+          type: integer
+        expectedSigner:
+          type: string
+        to:
+          type: string
+        value:
+          type: string
+        data:
+          type: string
+    TerminalSessionStatus:
       type: string
       enum: [idle, running, waiting, failed]
-    PreviewPendingApproval:
+    PendingTerminalApproval:
       type: object
-      required: [requestId, label, details]
+      required: [requestId, action, regentName, riskCopy, expiresAt, resolved]
       properties:
         requestId:
           type: string
-        label:
+        action:
           type: string
-        details:
+        regentName:
           type: string
-    PreviewTerminalSessionSummary:
+        riskCopy:
+          type: string
+        amount:
+          type: string
+        currency:
+          type: string
+        contractAddress:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        resolved:
+          type: boolean
+    TerminalSessionSummary:
       type: object
       required:
         - id
@@ -588,7 +1517,7 @@ components:
         - agentId
         - agentName
         - status
-        - preview
+        - latestNote
         - lastUpdatedAt
       properties:
         id:
@@ -600,23 +1529,23 @@ components:
         agentName:
           type: string
         status:
-          $ref: '#/components/schemas/PreviewTerminalSessionStatus'
-        preview:
+          $ref: '#/components/schemas/TerminalSessionStatus'
+        latestNote:
           type: string
         lastUpdatedAt:
           type: string
           format: date-time
         pendingApproval:
-          $ref: '#/components/schemas/PreviewPendingApproval'
-    PreviewTerminalSessionDetail:
+          $ref: '#/components/schemas/PendingTerminalApproval'
+    TerminalSessionDetail:
       allOf:
-        - $ref: '#/components/schemas/PreviewTerminalSessionSummary'
+        - $ref: '#/components/schemas/TerminalSessionSummary'
         - type: object
           required: [composerPlaceholder]
           properties:
             composerPlaceholder:
               type: string
-    CreatePreviewTerminalSessionRequest:
+    CreateTerminalSessionRequest:
       type: object
       required: [agentId, agentName]
       properties:
@@ -637,10 +1566,36 @@ components:
         body:
           type: object
           additionalProperties: true
-    PreviewTerminalEvent:
+    CoinbaseOnrampWebhook:
       type: object
-      required: [type, sessionId, ts]
+      additionalProperties: false
+      required: [eventType, transactionId]
       properties:
+        eventType:
+          type: string
+          enum:
+            - onramp.transaction.created
+            - onramp.transaction.updated
+            - onramp.transaction.success
+            - onramp.transaction.failed
+        transactionId:
+          type: string
+        partnerUserRef:
+          type: string
+        purchaseAmount:
+          type: string
+        purchaseCurrency:
+          type: string
+        destinationNetwork:
+          type: string
+        failureReason:
+          type: string
+    TerminalEvent:
+      type: object
+      required: [eventId, type, sessionId, ts]
+      properties:
+        eventId:
+          type: string
         type:
           type: string
         sessionId:
@@ -659,9 +1614,17 @@ components:
           type: string
         requestId:
           type: string
-        label:
+        action:
           type: string
-        details:
+        regentName:
+          type: string
+        riskCopy:
+          type: string
+        amount:
+          type: string
+        currency:
+          type: string
+        contractAddress:
           type: string
         result:
           type: string
@@ -670,9 +1633,27 @@ components:
           type: string
     ErrorEnvelope:
       type: object
-      required: [error, message]
+      required: [error]
       properties:
         error:
-          type: string
-        message:
-          type: string
+          type: object
+          required: [code, product, status, path, request_id, message]
+          properties:
+            code:
+              type: string
+            product:
+              type: string
+              enum: [ios]
+            status:
+              type: integer
+            path:
+              type: string
+            request_id:
+              type: string
+              nullable: true
+            message:
+              type: string
+            next_steps:
+              type: string
+              nullable: true
+          additionalProperties: false
