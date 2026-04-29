@@ -2,9 +2,9 @@ import { StatusPill } from '@/components/agent-surfaces/StatusPill';
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
-import { PreviewRegentManagerDetail } from '@/types/agentPreviews';
+import { RegentManagerDetail } from '@/types/regents';
 import { formatRelativeTime } from '@/utils/agent-surfaces/formatters';
-import { fetchPreviewRegentManager } from '@/utils/preview/regentPreview';
+import { regentApi } from '@/utils/regentApi/client';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
@@ -44,7 +44,7 @@ function statusTone(status: string) {
   return { backgroundColor: BLUE_WASH, color: BLUE };
 }
 
-function readyRosterCount(regentManager: PreviewRegentManagerDetail | null) {
+function readyRosterCount(regentManager: RegentManagerDetail | null) {
   if (!regentManager) {
     return 0;
   }
@@ -59,7 +59,7 @@ export default function AgentRegentManagerScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string }>();
   const agentId = typeof params.id === 'string' ? params.id : '';
-  const [regentManager, setRegentManager] = useState<PreviewRegentManagerDetail | null>(null);
+  const [regentManager, setRegentManager] = useState<RegentManagerDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [alertState, setAlertState] = useState<{
     visible: boolean;
@@ -80,7 +80,7 @@ export default function AgentRegentManagerScreen() {
 
     try {
       setLoading(true);
-      setRegentManager(await fetchPreviewRegentManager(agentId));
+      setRegentManager(await regentApi.getRegentManager(agentId));
     } catch (error) {
       setAlertState({
         visible: true,

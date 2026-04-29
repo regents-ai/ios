@@ -3,17 +3,13 @@ import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
 import {
-  PreviewAgentDetail,
-  PreviewAgentSummary,
-  PreviewRegentManagerDetail,
-  PreviewAgentWithdrawal,
-} from '@/types/agentPreviews';
-import {
-  createPreviewTerminalSession,
-  fetchPreviewAgent,
-  fetchPreviewRegentManager,
-  fetchPreviewTerminalSessions,
-} from '@/utils/preview/regentPreview';
+  RegentDetail,
+  RegentManagerDetail,
+  RegentReturnRequest,
+  RegentSummary,
+} from '@/types/regents';
+import { routes } from '@/utils/navigation/routes';
+import { regentApi } from '@/utils/regentApi/client';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
@@ -39,13 +35,6 @@ function formatAddress(address: string) {
   return `${address.slice(0, 8)}...${address.slice(-6)}`;
 }
 
-function formatCurrency(amount: string) {
-  return Number(amount).toLocaleString('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
-
 function formatRelativeTime(dateString: string) {
   const diffMs = Date.now() - new Date(dateString).getTime();
   const diffMinutes = Math.max(1, Math.round(diffMs / 60000));
@@ -55,7 +44,21 @@ function formatRelativeTime(dateString: string) {
   return `${Math.round(diffHours / 24)}d ago`;
 }
 
-function runtimeCopy(runtimeStatus: PreviewAgentSummary['runtimeStatus']) {
+function formatDateShort(dateString: string) {
+  return new Date(dateString).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+function platformStatusCopy(value: string) {
+  return value
+    .split('-')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function runtimeCopy(runtimeStatus: RegentSummary['runtimeStatus']) {
   switch (runtimeStatus) {
     case 'online':
       return 'Live';
@@ -66,7 +69,7 @@ function runtimeCopy(runtimeStatus: PreviewAgentSummary['runtimeStatus']) {
   }
 }
 
-function runtimeTone(runtimeStatus: PreviewAgentSummary['runtimeStatus']) {
+function runtimeTone(runtimeStatus: RegentSummary['runtimeStatus']) {
   switch (runtimeStatus) {
     case 'online':
       return { accent: SUCCESS, wash: GREEN_WASH };
@@ -77,7 +80,7 @@ function runtimeTone(runtimeStatus: PreviewAgentSummary['runtimeStatus']) {
   }
 }
 
-function withdrawalCopy(status: PreviewAgentWithdrawal['status']) {
+function returnRequestCopy(status: RegentReturnRequest['status']) {
   switch (status) {
     case 'requested':
       return 'Queued';
@@ -92,7 +95,7 @@ function withdrawalCopy(status: PreviewAgentWithdrawal['status']) {
   }
 }
 
-function statusTone(status: PreviewAgentWithdrawal['status']) {
+function statusTone(status: RegentReturnRequest['status']) {
   switch (status) {
     case 'requested':
     case 'approved':
@@ -105,7 +108,7 @@ function statusTone(status: PreviewAgentWithdrawal['status']) {
   }
 }
 
-function rosterReadyCount(regentManager: PreviewRegentManagerDetail | null) {
+function rosterReadyCount(regentManager: RegentManagerDetail | null) {
   if (!regentManager) {
     return 0;
   }
@@ -121,10 +124,10 @@ export default function AgentDetailScreen() {
   const params = useLocalSearchParams<{ id?: string }>();
   const agentId = typeof params.id === 'string' ? params.id : '';
 
-  const [agent, setAgent] = useState<PreviewAgentDetail | null>(null);
-  const [regentManager, setRegentManager] = useState<PreviewRegentManagerDetail | null>(null);
+  const [agent, setAgent] = useState<RegentDetail | null>(null);
+  const [regentManager, setRegentManager] = useState<RegentManagerDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [openingPreview, setOpeningPreview] = useState(false);
+  const [openingTalk, setOpeningTalk] = useState(false);
   const [alertState, setAlertState] = useState<{
     visible: boolean;
     title: string;
@@ -145,8 +148,8 @@ export default function AgentDetailScreen() {
     try {
       setLoading(true);
       const [detail, nextRegentManager] = await Promise.all([
-        fetchPreviewAgent(agentId),
-        fetchPreviewRegentManager(agentId),
+        regentApi.getRegent(agentId),
+        regentApi.getRegentManager(agentId),
       ]);
 
       setAgent(detail);
@@ -174,7 +177,7 @@ export default function AgentDetailScreen() {
       return;
     }
 
-    router.push({ pathname: '/agent/[id]/regent-manager' as any, params: { id: agent.id } });
+    router.push(routes.regentManager(agent.id));
   }, [agent, router]);
 
   const openTalk = useCallback(async () => {
@@ -183,17 +186,17 @@ export default function AgentDetailScreen() {
     }
 
     try {
-      setOpeningPreview(true);
-      const existingSessions = await fetchPreviewTerminalSessions();
+      setOpeningTalk(true);
+      const existingSessions = await regentApi.listTerminalSessions();
       const existingSession = existingSessions.find((session) => session.agentId === agent.id);
       const session = existingSession
         ? existingSession
-        : await createPreviewTerminalSession({
+        : await regentApi.createTerminalSession({
             agentId: agent.id,
             agentName: agent.name,
           });
 
-      router.push({ pathname: '/terminal/[id]' as any, params: { id: session.id } });
+      router.push(routes.terminalSession(session.id));
     } catch (error) {
       setAlertState({
         visible: true,
@@ -202,7 +205,7 @@ export default function AgentDetailScreen() {
         type: 'error',
       });
     } finally {
-      setOpeningPreview(false);
+      setOpeningTalk(false);
     }
   }, [agent, router]);
 
@@ -210,7 +213,7 @@ export default function AgentDetailScreen() {
   const topGoal = regentManager?.goals[0];
   const nextTask = regentManager?.activeTasks[0];
   const latestEvent = regentManager?.recentEvents[0];
-  const latestReturn = agent?.withdrawals[0];
+  const latestReturn = agent?.returnRequests[0];
   const teamReady = rosterReadyCount(regentManager);
 
   const nextAction = useMemo(() => {
@@ -318,7 +321,7 @@ export default function AgentDetailScreen() {
               style={({ pressed }) => [styles.primaryButton, pressed && styles.primaryButtonPressed]}
               onPress={openTalk}
             >
-              <Text style={styles.primaryButtonText}>{openingPreview ? 'Opening…' : 'Open Talk'}</Text>
+              <Text style={styles.primaryButtonText}>{openingTalk ? 'Opening…' : 'Open Talk'}</Text>
             </Pressable>
             <Pressable
               style={({ pressed }) => [styles.secondaryButton, pressed && styles.secondaryButtonPressed]}
@@ -346,15 +349,43 @@ export default function AgentDetailScreen() {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Operator view</Text>
-          <Text style={styles.sectionHint}>The essentials for this operator without leaving the phone.</Text>
+          <Text style={styles.sectionTitle}>Regent state</Text>
+          <Text style={styles.sectionHint}>Name, setup, plan, and service status for this Regent.</Text>
           <View style={styles.overviewGrid}>
             <View style={styles.overviewTile}>
-              <Text style={styles.overviewLabel}>Cash on hand</Text>
+              <Text style={styles.overviewLabel}>Name</Text>
               <Text selectable style={styles.overviewValue}>
-                {agent.stablecoinSymbol} {formatCurrency(agent.stablecoinBalance)}
+                {agent.platformState.claimedName}
               </Text>
-              <Text style={styles.overviewMeta}>Ready balance</Text>
+              <Text style={styles.overviewMeta}>{agent.platformState.slug}</Text>
+            </View>
+            <View style={styles.overviewTile}>
+              <Text style={styles.overviewLabel}>Setup</Text>
+              <Text style={styles.overviewValue}>{platformStatusCopy(agent.platformState.formationStatus)}</Text>
+              <Text style={styles.overviewMeta}>
+                {agent.platformState.blockers.length > 0 ? agent.platformState.blockers[0] : 'Ready to use'}
+              </Text>
+            </View>
+            <View style={styles.overviewTile}>
+              <Text style={styles.overviewLabel}>Plan</Text>
+              <Text style={styles.overviewValue}>{platformStatusCopy(agent.platformState.billingStatus)}</Text>
+              <Text style={styles.overviewMeta}>
+                {agent.platformState.prepaidBalanceUsd ? `$${agent.platformState.prepaidBalanceUsd} service credit` : 'Credit not listed'}
+              </Text>
+            </View>
+            <View style={styles.overviewTile}>
+              <Text style={styles.overviewLabel}>Service</Text>
+              <Text style={styles.overviewValue}>{platformStatusCopy(agent.platformState.runtimeStatus)}</Text>
+              <Text style={styles.overviewMeta}>
+                {agent.platformState.nextPauseAt ? `Next review ${formatDateShort(agent.platformState.nextPauseAt)}` : 'No pause scheduled'}
+              </Text>
+            </View>
+            <View style={styles.overviewTile}>
+              <Text style={styles.overviewLabel}>Account credit</Text>
+              <Text selectable style={styles.overviewValue}>
+                {agent.platformState.prepaidBalanceUsd ? `$${agent.platformState.prepaidBalanceUsd}` : 'Not listed'}
+              </Text>
+              <Text style={styles.overviewMeta}>Service credit</Text>
             </View>
             <View style={styles.overviewTile}>
               <Text style={styles.overviewLabel}>Wallet</Text>
@@ -425,28 +456,28 @@ export default function AgentDetailScreen() {
           )}
         </View>
 
-        {agent.withdrawals.length > 0 ? (
+        {agent.returnRequests.length > 0 ? (
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>Recent returns</Text>
             <Text style={styles.sectionHint}>Where funds were headed most recently.</Text>
             <View style={styles.timeline}>
-              {agent.withdrawals.slice(0, 3).map((withdrawal) => {
-                const tone = statusTone(withdrawal.status);
+              {agent.returnRequests.slice(0, 3).map((returnRequest) => {
+                const tone = statusTone(returnRequest.status);
                 return (
-                  <View key={withdrawal.id} style={styles.timelineRow}>
+                  <View key={returnRequest.id} style={styles.timelineRow}>
                     <View style={[styles.timelineDot, { backgroundColor: tone.accent }]} />
                     <View style={styles.timelineCard}>
                       <View style={styles.timelineHeader}>
                         <Text style={styles.timelineTitle}>
-                          {withdrawal.amount} {withdrawal.currency}
+                          {returnRequest.amount} {returnRequest.currency}
                         </Text>
                         <View style={[styles.timelinePill, { backgroundColor: tone.wash }]}>
-                          <Text style={[styles.timelinePillText, { color: tone.accent }]}>{withdrawalCopy(withdrawal.status)}</Text>
+                          <Text style={[styles.timelinePillText, { color: tone.accent }]}>{returnRequestCopy(returnRequest.status)}</Text>
                         </View>
                       </View>
-                      <Text style={styles.timelineSubtitle}>{new Date(withdrawal.updatedAt).toLocaleString()}</Text>
+                      <Text style={styles.timelineSubtitle}>{new Date(returnRequest.updatedAt).toLocaleString()}</Text>
                       <Text selectable style={styles.timelineBody}>
-                        To {formatAddress(withdrawal.destinationWalletAddress)}
+                        To {formatAddress(returnRequest.destinationWalletAddress)}
                       </Text>
                     </View>
                   </View>

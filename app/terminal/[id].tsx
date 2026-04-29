@@ -1,13 +1,13 @@
 import { StatusPill } from '@/components/agent-surfaces/StatusPill';
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
-import { PreviewNotice } from '@/components/ui/PreviewNotice';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
-import { PreviewTerminalEvent, PreviewTerminalSessionDetail } from '@/types/terminalPreviews';
-import { fetchPreviewTerminalEvents, fetchPreviewTerminalSession } from '@/utils/preview/regentPreview';
+import { TerminalEvent, TerminalSessionDetail } from '@/types/terminal';
+import { regentApi } from '@/utils/regentApi/client';
+import { buildTerminalApprovalSafetyRows } from '@/utils/terminalApprovalSafety';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -15,6 +15,7 @@ import {
   SafeAreaView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 
@@ -40,8 +41,8 @@ type MessageRow = {
   label: string;
 };
 
-type TalkDetail = PreviewTerminalSessionDetail;
-type TalkEvent = PreviewTerminalEvent;
+type TalkDetail = TerminalSessionDetail;
+type TalkEvent = TerminalEvent;
 
 function statusCopy(status: TalkDetail['status']) {
   switch (status) {
@@ -115,11 +116,11 @@ function eventsToMessages(events: TalkEvent[]): MessageRow[] {
       });
     }
 
-    if (event.type === 'tool.request' && event.details) {
+    if (event.type === 'tool.request' && event.riskCopy) {
       rows.push({
         id: `${event.ts}-system-request`,
         role: 'system',
-        text: event.details,
+        text: event.riskCopy,
         ts: event.ts,
         label: 'Approval',
       });
@@ -154,6 +155,28 @@ function eventsToMessages(events: TalkEvent[]): MessageRow[] {
   return rows;
 }
 
+function ApprovalSafetySummary({ talk }: { talk: TalkDetail }) {
+  if (!talk.pendingApproval) {
+    return null;
+  }
+
+  const safetyRows = buildTerminalApprovalSafetyRows({
+    agentName: talk.agentName,
+    approval: talk.pendingApproval,
+  });
+
+  return (
+    <View style={styles.safetyPanel}>
+      {safetyRows.map((row) => (
+        <View key={row.label} style={styles.safetyRow}>
+          <Text style={styles.safetyLabel}>{row.label}</Text>
+          <Text style={styles.safetyValue}>{row.value}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 export default function TalkDetailScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string }>();
@@ -162,6 +185,11 @@ export default function TalkDetailScreen() {
   const [events, setEvents] = useState<TalkEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [replyText, setReplyText] = useState('');
+  const [sendingReply, setSendingReply] = useState(false);
+  const [resolvingApproval, setResolvingApproval] = useState<'approved' | 'denied' | null>(null);
+  const latestEventIdRef = useRef('');
+  const pollingRef = useRef(false);
   const [alertState, setAlertState] = useState<{
     visible: boolean;
     title: string;
@@ -186,13 +214,14 @@ export default function TalkDetailScreen() {
         setLoading(true);
       }
 
-      const [nextTalk, nextEvents] = await Promise.all([
-        fetchPreviewTerminalSession(talkId),
-        fetchPreviewTerminalEvents(talkId),
+      const [nextTalk, nextEventsPayload] = await Promise.all([
+        regentApi.getTerminalSession(talkId),
+        regentApi.getTerminalEvents(talkId),
       ]);
 
       setTalk(nextTalk);
-      setEvents(nextEvents);
+      setEvents(nextEventsPayload.events);
+      latestEventIdRef.current = nextEventsPayload.latestEventId;
     } catch (error) {
       setAlertState({
         visible: true,
@@ -208,11 +237,101 @@ export default function TalkDetailScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      latestEventIdRef.current = '';
       loadTalk();
     }, [loadTalk])
   );
 
+  useEffect(() => {
+    if (!talkId || loading) {
+      return;
+    }
+
+    const poll = async () => {
+      if (pollingRef.current) {
+        return;
+      }
+
+      try {
+        pollingRef.current = true;
+        const [nextTalk, nextEventsPayload] = await Promise.all([
+          regentApi.getTerminalSession(talkId),
+          regentApi.getTerminalEvents(talkId, latestEventIdRef.current || undefined),
+        ]);
+        setTalk(nextTalk);
+        if (nextEventsPayload.events.length > 0) {
+          setEvents((current) => [...current, ...nextEventsPayload.events]);
+        }
+        latestEventIdRef.current = nextEventsPayload.latestEventId;
+      } catch (error) {
+        void error;
+      } finally {
+        pollingRef.current = false;
+      }
+    };
+
+    const interval = setInterval(poll, 4000);
+    return () => clearInterval(interval);
+  }, [loading, talkId]);
+
   const messageRows = useMemo(() => eventsToMessages(events), [events]);
+
+  const submitReply = useCallback(async () => {
+    const text = replyText.trim();
+    if (!talkId || !text || sendingReply) {
+      return;
+    }
+
+    try {
+      setSendingReply(true);
+      const nextTalk = await regentApi.sendTerminalMessage(talkId, text);
+      const nextEvents = await regentApi.getTerminalEvents(talkId);
+      setTalk(nextTalk);
+      setEvents(nextEvents.events);
+      latestEventIdRef.current = nextEvents.latestEventId;
+      setReplyText('');
+    } catch (error) {
+      setAlertState({
+        visible: true,
+        title: 'Unable to send reply',
+        message: error instanceof Error ? error.message : 'Try again in a moment.',
+        type: 'error',
+      });
+    } finally {
+      setSendingReply(false);
+    }
+  }, [replyText, sendingReply, talkId]);
+
+  const resolveApproval = useCallback(async (decision: 'approved' | 'denied') => {
+    const requestId = talk?.pendingApproval?.requestId;
+    if (!talkId || !requestId || resolvingApproval) {
+      return;
+    }
+
+    try {
+      setResolvingApproval(decision);
+      const nextTalk = await regentApi.resolveTerminalApproval(talkId, requestId, decision);
+      const nextEvents = await regentApi.getTerminalEvents(talkId);
+      setTalk(nextTalk);
+      setEvents(nextEvents.events);
+      latestEventIdRef.current = nextEvents.latestEventId;
+      setAlertState({
+        visible: true,
+        title: decision === 'approved' ? 'Approved' : 'Declined',
+        message: decision === 'approved' ? 'The review was approved.' : 'The review was declined.',
+        type: decision === 'approved' ? 'success' : 'info',
+      });
+    } catch (error) {
+      setAlertState({
+        visible: true,
+        title: 'Unable to save decision',
+        message: error instanceof Error ? error.message : 'Try again in a moment.',
+        type: 'error',
+      });
+    } finally {
+      setResolvingApproval(null);
+    }
+  }, [resolvingApproval, talk?.pendingApproval?.requestId, talkId]);
 
   if (loading) {
     return (
@@ -263,14 +382,7 @@ export default function TalkDetailScreen() {
           <Text style={styles.summaryTitle}>Latest activity</Text>
           <Text style={styles.summaryMeta}>{refreshing ? 'Refreshing…' : relativeTime(talk.lastUpdatedAt)}</Text>
         </View>
-        <Text style={styles.summaryBody}>{talk.preview}</Text>
-      </View>
-
-      <View style={styles.previewNoticeWrap}>
-        <PreviewNotice
-          title="Talk on mobile"
-          body="You can read the latest updates here today. Replies and approvals will appear here when they are ready on mobile."
-        />
+        <Text style={styles.summaryBody}>{talk.latestNote}</Text>
       </View>
 
       {talk.pendingApproval ? (
@@ -280,12 +392,26 @@ export default function TalkDetailScreen() {
               <Ionicons name="eye-outline" size={18} color={ORANGE} />
             </View>
             <View style={styles.approvalCopy}>
-              <Text style={styles.approvalTitle}>{talk.pendingApproval.label}</Text>
-              <Text style={styles.approvalBody}>{talk.pendingApproval.details}</Text>
+              <Text style={styles.approvalTitle}>{talk.pendingApproval.action}</Text>
+              <Text style={styles.approvalBody}>{talk.pendingApproval.riskCopy}</Text>
             </View>
           </View>
-          <View style={styles.emptyPanel}>
-            <Text style={styles.emptyPanelText}>Approval actions will appear here when they are ready on mobile.</Text>
+          <ApprovalSafetySummary talk={talk} />
+          <View style={styles.approvalActions}>
+            <Pressable
+              style={({ pressed }) => [styles.denyButton, pressed && styles.buttonPressed]}
+              disabled={!!resolvingApproval}
+              onPress={() => resolveApproval('denied')}
+            >
+              <Text style={styles.denyButtonText}>{resolvingApproval === 'denied' ? 'Declining…' : 'Decline'}</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.approveButton, pressed && styles.buttonPressed]}
+              disabled={!!resolvingApproval}
+              onPress={() => resolveApproval('approved')}
+            >
+              <Text style={styles.approveButtonText}>{resolvingApproval === 'approved' ? 'Approving…' : 'Approve'}</Text>
+            </Pressable>
           </View>
         </View>
       ) : null}
@@ -322,22 +448,24 @@ export default function TalkDetailScreen() {
         ListFooterComponent={
           <View style={styles.composerCard}>
             <Text style={styles.composerTitle}>Reply</Text>
-            <View style={styles.composerPlaceholderCard}>
-              <Text style={styles.composerPlaceholder}>{talk.composerPlaceholder}</Text>
-            </View>
-            <Text style={styles.composerBody}>Replying from your phone will appear here when it is ready.</Text>
+            <TextInput
+              value={replyText}
+              onChangeText={setReplyText}
+              placeholder={talk.composerPlaceholder}
+              placeholderTextColor={TEXT_SECONDARY}
+              multiline
+              style={styles.composerInput}
+            />
             <Pressable
-              style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}
-              onPress={() =>
-                setAlertState({
-                  visible: true,
-                  title: 'Reply coming soon',
-                  message: 'You will be able to reply from this screen when mobile replies are ready.',
-                  type: 'info',
-                })
-              }
+              style={({ pressed }) => [
+                styles.primaryButton,
+                (!replyText.trim() || sendingReply) && styles.primaryButtonDisabled,
+                pressed && styles.buttonPressed,
+              ]}
+              disabled={!replyText.trim() || sendingReply}
+              onPress={submitReply}
             >
-              <Text style={styles.primaryButtonText}>Reply coming soon</Text>
+              <Text style={styles.primaryButtonText}>{sendingReply ? 'Sending…' : 'Send reply'}</Text>
             </Pressable>
           </View>
         }
@@ -429,10 +557,6 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontFamily: FONTS.body,
   },
-  previewNoticeWrap: {
-    marginHorizontal: 20,
-    marginBottom: 12,
-  },
   approvalCard: {
     marginHorizontal: 20,
     marginBottom: 12,
@@ -470,15 +594,61 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontFamily: FONTS.body,
   },
-  emptyPanel: {
+  safetyPanel: {
     backgroundColor: WHITE,
     borderRadius: 16,
     padding: 14,
+    gap: 12,
   },
-  emptyPanelText: {
-    color: TEXT_SECONDARY,
+  safetyRow: {
+    gap: 4,
+  },
+  safetyLabel: {
+    color: BLUE,
+    fontSize: 11,
+    lineHeight: 14,
+    fontFamily: FONTS.body,
+    textTransform: 'uppercase',
+  },
+  safetyValue: {
+    color: TEXT_PRIMARY,
     fontSize: 13,
     lineHeight: 18,
+    fontFamily: FONTS.body,
+  },
+  approvalActions: {
+    flexDirection: 'row',
+    gap: 10,
+    flexWrap: 'wrap',
+  },
+  approveButton: {
+    flex: 1,
+    minWidth: 130,
+    backgroundColor: BLUE,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  approveButtonText: {
+    color: WHITE,
+    fontSize: 14,
+    fontFamily: FONTS.body,
+  },
+  denyButton: {
+    flex: 1,
+    minWidth: 130,
+    backgroundColor: WHITE,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  denyButtonText: {
+    color: TEXT_PRIMARY,
+    fontSize: 14,
     fontFamily: FONTS.body,
   },
   chatContent: {
@@ -570,19 +740,19 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontFamily: FONTS.heading,
   },
-  composerPlaceholderCard: {
+  composerInput: {
     backgroundColor: BLUE_WASH,
     borderWidth: 1,
     borderColor: BORDER,
     borderRadius: 18,
     paddingHorizontal: 14,
     paddingVertical: 12,
-  },
-  composerPlaceholder: {
-    color: TEXT_SECONDARY,
+    minHeight: 92,
+    color: TEXT_PRIMARY,
     fontSize: 14,
     lineHeight: 20,
     fontFamily: FONTS.body,
+    textAlignVertical: 'top',
   },
   composerBody: {
     color: TEXT_SECONDARY,
@@ -596,6 +766,9 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingHorizontal: 16,
     paddingVertical: 12,
+  },
+  primaryButtonDisabled: {
+    opacity: 0.55,
   },
   primaryButtonText: {
     color: WHITE,

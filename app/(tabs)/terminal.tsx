@@ -2,9 +2,10 @@ import { MetricChip } from '@/components/agent-surfaces/MetricChip';
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
-import { PreviewTerminalSessionStatus, PreviewTerminalSessionSummary } from '@/types/terminalPreviews';
+import { TerminalSessionStatus, TerminalSessionSummary } from '@/types/terminal';
 import { formatRelativeTime } from '@/utils/agent-surfaces/formatters';
-import { fetchPreviewTerminalSessions } from '@/utils/preview/regentPreview';
+import { routes } from '@/utils/navigation/routes';
+import { regentApi } from '@/utils/regentApi/client';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
@@ -33,7 +34,7 @@ const {
   ORANGE,
 } = COLORS;
 
-function statusCopy(status: PreviewTerminalSessionStatus) {
+function statusCopy(status: TerminalSessionStatus) {
   switch (status) {
     case 'idle':
       return 'Ready';
@@ -46,7 +47,7 @@ function statusCopy(status: PreviewTerminalSessionStatus) {
   }
 }
 
-function statusEyebrow(status: PreviewTerminalSessionStatus) {
+function statusEyebrow(status: TerminalSessionStatus) {
   switch (status) {
     case 'idle':
       return 'Ready to reopen';
@@ -59,7 +60,7 @@ function statusEyebrow(status: PreviewTerminalSessionStatus) {
   }
 }
 
-function statusColor(status: PreviewTerminalSessionStatus) {
+function statusColor(status: TerminalSessionStatus) {
   switch (status) {
     case 'idle':
       return TEXT_SECONDARY;
@@ -72,7 +73,7 @@ function statusColor(status: PreviewTerminalSessionStatus) {
   }
 }
 
-function statusBackground(status: PreviewTerminalSessionStatus) {
+function statusBackground(status: TerminalSessionStatus) {
   switch (status) {
     case 'idle':
       return WHITE;
@@ -85,7 +86,7 @@ function statusBackground(status: PreviewTerminalSessionStatus) {
   }
 }
 
-function urgencyRank(status: PreviewTerminalSessionStatus) {
+function urgencyRank(status: TerminalSessionStatus) {
   switch (status) {
     case 'waiting':
       return 0;
@@ -102,7 +103,7 @@ function SessionCard({
   item,
   onPress,
 }: {
-  item: PreviewTerminalSessionSummary;
+  item: TerminalSessionSummary;
   onPress: () => void;
 }) {
   const accent = statusColor(item.status);
@@ -136,9 +137,9 @@ function SessionCard({
         ) : null}
       </View>
 
-      <View style={styles.previewBlock}>
-        <Text style={styles.previewLabel}>Latest note</Text>
-        <Text style={styles.sessionPreview}>{item.preview}</Text>
+      <View style={styles.latestNoteBlock}>
+        <Text style={styles.latestNoteLabel}>Latest note</Text>
+        <Text style={styles.sessionLatestNote}>{item.latestNote}</Text>
       </View>
 
       {item.pendingApproval ? (
@@ -147,8 +148,8 @@ function SessionCard({
             <Ionicons name="alert-circle-outline" size={16} color={ORANGE} />
           </View>
           <View style={styles.approvalBannerCopy}>
-            <Text style={styles.approvalBannerTitle}>{item.pendingApproval.label}</Text>
-            <Text style={styles.approvalText}>{item.pendingApproval.details}</Text>
+            <Text style={styles.approvalBannerTitle}>{item.pendingApproval.action}</Text>
+            <Text style={styles.approvalText}>{item.pendingApproval.riskCopy}</Text>
           </View>
         </View>
       ) : null}
@@ -163,7 +164,7 @@ function SessionCard({
 
 export default function TerminalTab() {
   const router = useRouter();
-  const [sessions, setSessions] = useState<PreviewTerminalSessionSummary[]>([]);
+  const [sessions, setSessions] = useState<TerminalSessionSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [alertState, setAlertState] = useState<{
@@ -186,7 +187,7 @@ export default function TerminalTab() {
         setLoading(true);
       }
 
-      const nextSessions = await fetchPreviewTerminalSessions();
+      const nextSessions = await regentApi.listTerminalSessions();
       setSessions(nextSessions);
     } catch (error) {
       setAlertState({
@@ -286,7 +287,7 @@ export default function TerminalTab() {
           renderItem={({ item }) => (
             <SessionCard
               item={item}
-              onPress={() => router.push({ pathname: '/terminal/[id]' as any, params: { id: item.id } })}
+              onPress={() => router.push(routes.terminalSession(item.id))}
             />
           )}
           contentInsetAdjustmentBehavior="automatic"
@@ -521,7 +522,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: FONTS.body,
   },
-  previewBlock: {
+  latestNoteBlock: {
     gap: 6,
     padding: 12,
     borderRadius: 18,
@@ -529,13 +530,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BORDER,
   },
-  previewLabel: {
+  latestNoteLabel: {
     color: TEXT_SECONDARY,
     fontSize: 12,
     fontFamily: FONTS.body,
     textTransform: 'uppercase',
   },
-  sessionPreview: {
+  sessionLatestNote: {
     color: TEXT_PRIMARY,
     fontSize: 14,
     lineHeight: 20,

@@ -2,9 +2,11 @@ import { StatusPill } from '@/components/agent-surfaces/StatusPill';
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
-import { PreviewAgentSummary } from '@/types/agentPreviews';
+import { BaseRegentSnapshot, RegentSummary } from '@/types/regents';
+import { TerminalSessionSummary } from '@/types/terminal';
 import { formatCurrencyAmount, formatRelativeTime, formatWalletAddress } from '@/utils/agent-surfaces/formatters';
-import { fetchPreviewAgents } from '@/utils/preview/regentPreview';
+import { routes } from '@/utils/navigation/routes';
+import { regentApi } from '@/utils/regentApi/client';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
@@ -30,6 +32,7 @@ const {
   SUCCESS,
   DANGER,
   BLUE_WASH,
+  ORANGE,
 } = COLORS;
 
 const AMBER = '#A3703A';
@@ -37,7 +40,18 @@ const AMBER_WASH = '#F2E7DA';
 const GREEN_WASH = '#E6F0EA';
 const RED_WASH = '#F3E1DD';
 
-function regentPriority(agent: PreviewAgentSummary) {
+type CommandCenterItem = {
+  id: string;
+  rank: number;
+  title: string;
+  body: string;
+  meta: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  accent: string;
+  onPress: () => void;
+};
+
+function regentPriority(agent: RegentSummary) {
   if (agent.runtimeStatus === 'offline') return 0;
   if (agent.status === 'attention') return 1;
   if (agent.runtimeStatus === 'waiting') return 2;
@@ -45,7 +59,7 @@ function regentPriority(agent: PreviewAgentSummary) {
   return 4;
 }
 
-function regentTone(agent: PreviewAgentSummary) {
+function regentTone(agent: RegentSummary) {
   if (agent.runtimeStatus === 'offline') {
     return {
       label: 'Needs you',
@@ -81,9 +95,29 @@ function regentTone(agent: PreviewAgentSummary) {
   };
 }
 
+function accountCreditCopy(agent: RegentSummary) {
+  return agent.platformState.prepaidBalanceUsd
+    ? `$${formatCurrencyAmount(agent.platformState.prepaidBalanceUsd)}`
+    : 'Not listed';
+}
+
+function creditValue(agent: RegentSummary) {
+  return Number.parseFloat(agent.platformState.prepaidBalanceUsd || '0');
+}
+
+function hasFundingNeed(agent: RegentSummary) {
+  return ['zero', 'failed', 'paused'].includes(agent.platformState.billingStatus) || creditValue(agent) <= 10;
+}
+
+function snapshotMoneyValue(value: string) {
+  return Number.parseFloat(value || '0');
+}
+
 export default function AgentsTab() {
   const router = useRouter();
-  const [agents, setAgents] = useState<PreviewAgentSummary[]>([]);
+  const [agents, setAgents] = useState<RegentSummary[]>([]);
+  const [terminalSessions, setTerminalSessions] = useState<TerminalSessionSummary[]>([]);
+  const [baseSnapshots, setBaseSnapshots] = useState<Record<string, BaseRegentSnapshot>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [alertState, setAlertState] = useState<{
@@ -106,8 +140,14 @@ export default function AgentsTab() {
         setLoading(true);
       }
 
-      const nextAgents = await fetchPreviewAgents();
+      const nextAgents = await regentApi.listRegents();
+      const [nextSessions, nextSnapshots] = await Promise.all([
+        regentApi.listTerminalSessions(),
+        Promise.all(nextAgents.map(async (agent) => [agent.id, await regentApi.getBaseSnapshot(agent.id)] as const)),
+      ]);
       setAgents(nextAgents);
+      setTerminalSessions(nextSessions);
+      setBaseSnapshots(Object.fromEntries(nextSnapshots));
     } catch (error) {
       setAlertState({
         visible: true,
@@ -142,6 +182,90 @@ export default function AgentsTab() {
 
   const leadRegent = sortedAgents[0] ?? null;
   const supportingRegents = sortedAgents.slice(1);
+
+  const commandCenterItems = useMemo<CommandCenterItem[]>(() => {
+    const latestSessionByRegent = new Map<string, TerminalSessionSummary>();
+    for (const session of terminalSessions) {
+      const current = latestSessionByRegent.get(session.agentId);
+      if (!current || new Date(session.lastUpdatedAt).getTime() > new Date(current.lastUpdatedAt).getTime()) {
+        latestSessionByRegent.set(session.agentId, session);
+      }
+    }
+
+    return agents
+      .flatMap((agent) => {
+        const latestSession = latestSessionByRegent.get(agent.id);
+        const snapshot = baseSnapshots[agent.id];
+        const items: CommandCenterItem[] = [];
+
+        if (latestSession?.pendingApproval) {
+          items.push({
+            id: `${agent.id}-review`,
+            rank: 0,
+            title: `${agent.name} needs a decision`,
+            body: latestSession.pendingApproval.riskCopy,
+            meta: formatRelativeTime(latestSession.lastUpdatedAt),
+            icon: 'eye-outline',
+            accent: ORANGE,
+            onPress: () => router.push(routes.terminalSession(latestSession.id)),
+          });
+        }
+
+        if (hasFundingNeed(agent)) {
+          items.push({
+            id: `${agent.id}-funding`,
+            rank: 1,
+            title: `${agent.name} needs more runway`,
+            body: `Account credit is ${accountCreditCopy(agent)}.`,
+            meta: agent.platformState.billingStatus,
+            icon: 'wallet-outline',
+            accent: DANGER,
+            onPress: () => router.push(routes.agent(agent.id)),
+          });
+        }
+
+        if (latestSession) {
+          items.push({
+            id: `${agent.id}-terminal`,
+            rank: 2,
+            title: `${agent.name} latest Talk`,
+            body: latestSession.latestNote,
+            meta: formatRelativeTime(latestSession.lastUpdatedAt),
+            icon: 'chatbubble-ellipses-outline',
+            accent: BLUE,
+            onPress: () => router.push(routes.terminalSession(latestSession.id)),
+          });
+        }
+
+        if (snapshot && (snapshotMoneyValue(snapshot.claimableUsdc) > 0 || snapshotMoneyValue(snapshot.stakedRegent) > 0)) {
+          items.push({
+            id: `${agent.id}-base`,
+            rank: 3,
+            title: `${agent.name} Base records`,
+            body: `${snapshot.claimableUsdc} USDC claimable. ${snapshot.stakedRegent} REGENT staked.`,
+            meta: snapshot.stale ? 'Needs refresh' : 'Current',
+            icon: 'layers-outline',
+            accent: SUCCESS,
+            onPress: () => router.push(routes.agent(agent.id)),
+          });
+        }
+
+        items.push({
+          id: `${agent.id}-runway`,
+          rank: 4,
+          title: `${agent.name} wallet runway`,
+          body: `Account credit is ${accountCreditCopy(agent)}.`,
+          meta: formatWalletAddress(agent.walletAddress),
+          icon: 'speedometer-outline',
+          accent: creditValue(agent) <= 10 ? ORANGE : SUCCESS,
+          onPress: () => router.push(routes.agent(agent.id)),
+        });
+
+        return items;
+      })
+      .sort((left, right) => left.rank - right.rank || left.title.localeCompare(right.title))
+      .slice(0, 8);
+  }, [agents, baseSnapshots, router, terminalSessions]);
 
   const summary = useMemo(() => {
     const needsYou = agents.filter((agent) => agent.runtimeStatus === 'offline' || agent.status === 'attention').length;
@@ -208,9 +332,34 @@ export default function AgentsTab() {
             </View>
           </View>
 
+          {commandCenterItems.length > 0 ? (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Command center</Text>
+              <View style={styles.commandList}>
+                {commandCenterItems.map((item) => (
+                  <Pressable
+                    key={item.id}
+                    onPress={item.onPress}
+                    style={({ pressed }) => [styles.commandRow, pressed && styles.cardPressed]}
+                  >
+                    <View style={[styles.commandIcon, { backgroundColor: `${item.accent}1A` }]}>
+                      <Ionicons name={item.icon} size={18} color={item.accent} />
+                    </View>
+                    <View style={styles.commandCopy}>
+                      <Text style={styles.commandTitle}>{item.title}</Text>
+                      <Text style={styles.commandBody}>{item.body}</Text>
+                      <Text style={styles.commandMeta}>{item.meta}</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={TEXT_SECONDARY} />
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          ) : null}
+
           {leadRegent ? (
             <Pressable
-              onPress={() => router.push({ pathname: '/agent/[id]' as any, params: { id: leadRegent.id } })}
+              onPress={() => router.push(routes.agent(leadRegent.id))}
               style={({ pressed }) => [styles.focusCard, pressed && styles.cardPressed]}
             >
               <View style={styles.focusHeader}>
@@ -228,10 +377,8 @@ export default function AgentsTab() {
 
               <View style={styles.focusMetaRow}>
                 <View style={styles.focusMetaTile}>
-                  <Text style={styles.metaLabel}>Balance</Text>
-                  <Text style={styles.metaValue}>
-                    {leadRegent.stablecoinSymbol} {formatCurrencyAmount(leadRegent.stablecoinBalance)}
-                  </Text>
+                  <Text style={styles.metaLabel}>Account credit</Text>
+                  <Text style={styles.metaValue}>{accountCreditCopy(leadRegent)}</Text>
                 </View>
                 <View style={styles.focusMetaTile}>
                   <Text style={styles.metaLabel}>Last update</Text>
@@ -262,7 +409,7 @@ export default function AgentsTab() {
                   return (
                     <Pressable
                       key={agent.id}
-                      onPress={() => router.push({ pathname: '/agent/[id]' as any, params: { id: agent.id } })}
+                      onPress={() => router.push(routes.agent(agent.id))}
                       style={({ pressed }) => [styles.regentRow, pressed && styles.cardPressed]}
                     >
                       <View style={styles.regentRowTop}>
@@ -275,9 +422,7 @@ export default function AgentsTab() {
 
                       <View style={styles.regentRowBottom}>
                         <Text style={styles.regentMeta}>{formatWalletAddress(agent.walletAddress)}</Text>
-                        <Text style={styles.regentMeta}>
-                          {agent.stablecoinSymbol} {formatCurrencyAmount(agent.stablecoinBalance)}
-                        </Text>
+                        <Text style={styles.regentMeta}>Credit {accountCreditCopy(agent)}</Text>
                       </View>
                     </Pressable>
                   );
@@ -523,6 +668,47 @@ const styles = StyleSheet.create({
     color: TEXT_PRIMARY,
     fontSize: 22,
     fontFamily: FONTS.heading,
+  },
+  commandList: {
+    gap: 10,
+  },
+  commandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: CARD_ALT,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 20,
+    padding: 14,
+  },
+  commandIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  commandCopy: {
+    flex: 1,
+    gap: 3,
+  },
+  commandTitle: {
+    color: TEXT_PRIMARY,
+    fontSize: 16,
+    lineHeight: 20,
+    fontFamily: FONTS.heading,
+  },
+  commandBody: {
+    color: TEXT_SECONDARY,
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: FONTS.body,
+  },
+  commandMeta: {
+    color: BLUE,
+    fontSize: 12,
+    fontFamily: FONTS.body,
   },
   regentList: {
     gap: 10,
