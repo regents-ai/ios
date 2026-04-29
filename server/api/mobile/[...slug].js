@@ -6,6 +6,6 @@ export default function handler(req, res) {
   const queryIndex = req.url?.indexOf('?') ?? -1;
   const query = queryIndex >= 0 && req.url ? req.url.slice(queryIndex) : '';
 
-  req.url = `/mobile-preview/${path}${query}`;
+  req.url = `/mobile/${path}${query}`;
   return app(req, res);
 }

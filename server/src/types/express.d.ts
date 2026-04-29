@@ -5,7 +5,6 @@ declare namespace Express {
     userData?: {
       id: string;
       sessionId?: string;
-      testAccount?: boolean;
       [key: string]: any;
     };
   }

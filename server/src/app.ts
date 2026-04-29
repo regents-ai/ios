@@ -4,9 +4,16 @@ import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { z } from 'zod';
 
 import { generateJwt } from '@coinbase/cdp-sdk/auth';
+import { sendError } from './httpResponses.js';
 import { createCdpCustomAuthToken, getCdpJwks } from './identity.js';
 import { resolveClientIp } from './ip.js';
-import { createPreviewRoutes } from './previewRoutes.js';
+import { isReleaseRuntime } from './runtime.js';
+import { createMobileRoutes } from './mobileRoutes.js';
+import {
+  hasProcessedOnrampWebhookEvent,
+  markOnrampWebhookEventProcessed,
+  parseCanonicalOnrampWebhook,
+} from './onrampWebhook.js';
 import {
   buildPushTokenDebugResponse,
   canAccessPushTokenDebug,
@@ -21,7 +28,9 @@ import {
   requireCoinbaseApiCredentials,
 } from './security.js';
 import { validateAccessToken } from './validateToken.js';
-import { verifyLegacySignature, verifyWebhookSignature } from './verifyWebhookSignature.js';
+import { verifyWebhookSignature } from './verifyWebhookSignature.js';
+
+type PushTokenRecord = { token: string; platform: string; tokenType: 'native' | 'expo'; updatedAt: number };
 
 // Redis storage setup - use external Redis for production, in-memory for local dev
 let database: any = null;
@@ -31,6 +40,8 @@ if (useDatabase) {
   const { createClient } = await import('redis');
   database = await createClient({ url: databaseUrl! }).connect();
   console.log('✅ Using Redis for push token storage (production)');
+} else if (isReleaseRuntime()) {
+  throw new Error('REDIS_URL is required for release push-token storage.');
 } else {
   console.log('ℹ️ Using in-memory storage for push tokens (local dev)');
 }
@@ -52,7 +63,7 @@ if (process.env.APNS_KEY_ID && process.env.APNS_TEAM_ID && process.env.APNS_KEY)
         keyId: process.env.APNS_KEY_ID!,
         teamId: process.env.APNS_TEAM_ID!
       },
-      production: true // Use production APNs for TestFlight
+      production: true
     });
     useAPNs = true;
     console.log('✅ Using direct APNs for push notifications (production)');
@@ -79,7 +90,8 @@ app.set('trust proxy', true);
 const webhookRateLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute window
   max: 100, // Limit each IP to 100 requests per minute
-  message: { error: 'Too many webhook requests, please try again later' },
+  handler: (_req, res) =>
+    sendError(res, 429, 'TooManyWebhookRequests', 'Too many webhook requests. Please try again later.'),
   standardHeaders: true, // Return rate limit info in `RateLimit-*` headers
   legacyHeaders: false, // Disable `X-RateLimit-*` headers
   // Use IP address as the key
@@ -147,10 +159,12 @@ app.get('/.well-known/jwks.json', (_req, res) => {
   try {
     res.json(getCdpJwks());
   } catch (error) {
-    res.status(500).json({
-      error: 'ConfigurationError',
-      message: error instanceof Error ? error.message : 'JWKS is not configured.',
-    });
+    return sendError(
+      res,
+      500,
+      'ConfigurationError',
+      error instanceof Error ? error.message : 'JWKS is not configured.'
+    );
   }
 });
 
@@ -174,31 +188,29 @@ app.use((req, res, next) => {
 app.get('/auth/me', (req, res) => {
   res.json({
     userId: req.userId,
-    testAccount: req.userData?.testAccount === true,
   });
 });
 
 app.post('/auth/cdp-token', async (req, res) => {
   try {
     if (!req.userId) {
-      return res.status(401).json({
-        error: 'Unauthorized',
-        message: 'Sign in before opening your wallet.',
-      });
+      return sendError(res, 401, 'Unauthorized', 'Sign in before opening your wallet.');
     }
 
     const token = await createCdpCustomAuthToken(req.userId);
     return res.json({ token });
   } catch (error) {
     console.error('❌ [AUTH] Unable to create Coinbase custom sign-in token:', error);
-    return res.status(500).json({
-      error: 'ConfigurationError',
-      message: error instanceof Error ? error.message : 'Unable to open the wallet right now.',
-    });
+    return sendError(
+      res,
+      500,
+      'ConfigurationError',
+      error instanceof Error ? error.message : 'Unable to open the wallet right now.'
+    );
   }
 });
 
-app.use(createPreviewRoutes());
+app.use(createMobileRoutes());
 
 /**
  * Generic proxy server for Coinbase API calls:
@@ -231,16 +243,14 @@ app.post("/server/api", async (req, res) => {
 
     const parsed = requestSchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ error: parsed.error.flatten() });
+      return sendError(res, 400, 'BadRequest', 'A valid Coinbase proxy request is required.');
     }
 
     const { url: targetUrl, method: method, body: targetBody } = parsed.data;
     let authToken = null;
-    const isTestFlight = req.userData?.testAccount === true;
     const validatedTargetUrl = validateProxyTarget({
       targetUrl,
       currentUserId: req.userId,
-      isTestAccount: isTestFlight,
     });
 
     console.log('📤 [SERVER] Outgoing request:', summarizeProxyRequestLog(targetUrl, method, targetBody));
@@ -307,17 +317,16 @@ app.post("/server/api", async (req, res) => {
         });
 
         // Return text error as JSON
-        return res.status(response.status).json({
-          error: textResponse || 'Upstream API error',
-          status: response.status
-        });
+        return sendError(
+          res,
+          response.ok ? 502 : response.status,
+          'UpstreamApiError',
+          textResponse || 'Coinbase returned an unreadable response.'
+        );
       }
     } catch (parseError) {
       console.error('Failed to parse response:', parseError);
-      return res.status(response.status).json({
-        error: 'Failed to parse upstream response',
-        status: response.status
-      });
+      return sendError(res, response.ok ? 502 : response.status, 'UpstreamResponseInvalid', 'Unable to read Coinbase response right now.');
     }
 
     // Return the upstream response (preserve status code)
@@ -325,17 +334,11 @@ app.post("/server/api", async (req, res) => {
   
   } catch (error) {
     if (error instanceof CoinbaseConfigurationError) {
-      return res.status(error.statusCode).json({
-        error: error.code,
-        message: error.message,
-      });
+      return sendError(res, error.statusCode, error.code, error.message);
     }
 
     console.error('Proxy error:', error);
-    res.status(500).json({ 
-      error: "Proxy request failed", 
-      message: 'Unable to reach Coinbase right now.'
-    });
+    sendError(res, 500, 'ProxyRequestFailed', 'Unable to reach Coinbase right now.');
   }
 });
 
@@ -361,10 +364,7 @@ app.get('/balances/evm', async (req, res) => {
     const validationResult = evmBalanceQuerySchema.safeParse(req.query);
 
     if (!validationResult.success) {
-      return res.status(400).json({
-        error: 'Invalid request parameters',
-        details: validationResult.error.issues
-      });
+      return sendError(res, 400, 'BadRequest', 'Enter a valid EVM address and supported network.');
     }
 
     const { address, network } = validationResult.data;
@@ -407,10 +407,7 @@ app.get('/balances/evm', async (req, res) => {
         }
 
         console.error('❌ [BALANCES] CDP API error details:', errorData);
-        return res.status(balancesResponse.status).json({
-          error: 'Failed to fetch Ethereum Sepolia balances from CDP',
-          details: errorData
-        });
+        return sendError(res, balancesResponse.status, 'CoinbaseBalanceUnavailable', 'Unable to refresh wallet balances right now.');
       }
 
       const balancesData = await balancesResponse.json();
@@ -473,10 +470,7 @@ app.get('/balances/evm', async (req, res) => {
       }
 
       console.error('❌ [BALANCES] CDP API error details:', errorData);
-      return res.status(balancesResponse.status).json({
-        error: 'Failed to fetch balances from CDP',
-        details: errorData
-      });
+      return sendError(res, balancesResponse.status, 'CoinbaseBalanceUnavailable', 'Unable to refresh wallet balances right now.');
     }
 
     const balancesData = await balancesResponse.json();
@@ -534,17 +528,11 @@ app.get('/balances/evm', async (req, res) => {
 
   } catch (error) {
     if (error instanceof CoinbaseConfigurationError) {
-      return res.status(error.statusCode).json({
-        error: error.code,
-        message: 'Wallet balances are not available for this build yet.',
-      });
+      return sendError(res, error.statusCode, error.code, 'Wallet balances are not available for this build yet.');
     }
 
     console.error('❌ [BALANCES] Error:', error);
-    res.status(500).json({
-      error: 'Failed to fetch token balances',
-      message: 'Unable to refresh wallet balances right now.'
-    });
+    sendError(res, 500, 'BalanceRefreshFailed', 'Unable to refresh wallet balances right now.');
   }
 });
 
@@ -560,12 +548,12 @@ app.get('/balances/solana', async (req, res) => {
     const { address, network = 'solana' } = req.query;
 
     if (!address || typeof address !== 'string') {
-      return res.status(400).json({ error: 'address query parameter required' });
+      return sendError(res, 400, 'BadRequest', 'A valid Solana address is required.');
     }
 
     // Basic Solana address validation (base58, 32-44 chars)
     if (!address.match(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/)) {
-      return res.status(400).json({ error: 'Invalid Solana address format' });
+      return sendError(res, 400, 'BadRequest', 'Enter a valid Solana address.');
     }
 
     // Validate and sanitize network input - use allowlist to prevent SSRF
@@ -575,7 +563,7 @@ app.get('/balances/solana', async (req, res) => {
     };
     const sanitizedNetwork = validNetworks[network as string];
     if (!sanitizedNetwork) {
-      return res.status(400).json({ error: `Invalid network. Supported: ${Object.keys(validNetworks).join(', ')}` });
+      return sendError(res, 400, 'BadRequest', 'Choose a supported Solana network.');
     }
 
     console.log(`💰 [BALANCES] Fetching Solana balances - Address: ${address}, Network: ${sanitizedNetwork}`);
@@ -615,10 +603,7 @@ app.get('/balances/solana', async (req, res) => {
       }
 
       console.error('❌ [BALANCES] CDP API error details:', errorData);
-      return res.status(balancesResponse.status).json({
-        error: 'Failed to fetch Solana balances from CDP',
-        details: errorData
-      });
+      return sendError(res, balancesResponse.status, 'CoinbaseBalanceUnavailable', 'Unable to refresh wallet balances right now.');
     }
 
     const balancesData = await balancesResponse.json();
@@ -676,17 +661,11 @@ app.get('/balances/solana', async (req, res) => {
 
   } catch (error) {
     if (error instanceof CoinbaseConfigurationError) {
-      return res.status(error.statusCode).json({
-        error: error.code,
-        message: 'Wallet balances are not available for this build yet.',
-      });
+      return sendError(res, error.statusCode, error.code, 'Wallet balances are not available for this build yet.');
     }
 
     console.error('❌ [BALANCES] Error:', error);
-    res.status(500).json({
-      error: 'Failed to fetch Solana token balances',
-      message: 'Unable to refresh wallet balances right now.'
-    });
+    sendError(res, 500, 'BalanceRefreshFailed', 'Unable to refresh wallet balances right now.');
   }
 });
 
@@ -700,11 +679,93 @@ app.get('/balances/solana', async (req, res) => {
  */
 
 // In-memory storage for local development
-const pushTokenStore = new Map<string, { token: string; platform: string; tokenType?: string; updatedAt: number }>();
+const pushTokenStore = new Map<string, PushTokenRecord>();
+
+const pushTokenRequestSchema = z.object({
+  userId: z.string().min(1),
+  pushToken: z.string().min(1),
+  platform: z.string().min(1),
+  tokenType: z.enum(['native', 'expo']),
+}).strict();
+
+async function readPushTokenForUser(userId: string): Promise<PushTokenRecord | null> {
+  if (useDatabase && database) {
+    const data = await database.get(`pushtoken:${userId}`);
+    return data ? JSON.parse(data) as PushTokenRecord : null;
+  }
+
+  return pushTokenStore.get(userId) || null;
+}
+
+async function writePushTokenForUser(userId: string, tokenData: PushTokenRecord) {
+  if (useDatabase && database) {
+    await database.set(`pushtoken:${userId}`, JSON.stringify(tokenData));
+    console.log('✅ [PUSH] Token stored in database for user:', userId);
+    return;
+  }
+
+  pushTokenStore.set(userId, tokenData);
+  console.log('✅ [PUSH] Token stored in memory for user:', userId);
+  console.log('📊 [PUSH] Total tokens in store:', pushTokenStore.size);
+}
+
+async function sendPushNotification(
+  tokenData: PushTokenRecord,
+  input: { title: string; body: string; data: Record<string, string | undefined> }
+) {
+  if (tokenData.tokenType === 'native' && useAPNs && apnProvider && tokenData.platform === 'ios') {
+    console.log('📤 [WEBHOOK] Sending via direct APNs', {
+      platform: tokenData.platform,
+      tokenType: tokenData.tokenType,
+      tokenLength: tokenData.token.length,
+    });
+
+    const apn = await import('@parse/node-apn');
+    const notification = new apn.Notification({
+      alert: { title: input.title, body: input.body },
+      topic: 'com.regentslabs.mobile',
+      sound: 'default',
+      payload: input.data,
+    });
+
+    const result = await apnProvider.send(notification, tokenData.token);
+    console.log('📊 [WEBHOOK] APNs result:', {
+      sent: result.sent?.length || 0,
+      failed: result.failed?.length || 0,
+    });
+
+    if (result.failed && result.failed.length > 0) {
+      throw new Error('APNs rejected the notification.');
+    }
+    return;
+  }
+
+  console.log('📤 [WEBHOOK] Sending via Expo push service');
+  const pushResponse = await fetch('https://exp.host/--/api/v2/push/send', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      to: tokenData.token,
+      sound: 'default',
+      title: input.title,
+      body: input.body,
+      data: input.data,
+    }),
+  });
+
+  const pushResult = await pushResponse.json().catch(() => null) as { data?: { status?: string; message?: string } } | null;
+  if (!pushResponse.ok || pushResult?.data?.status === 'error') {
+    throw new Error(pushResult?.data?.message || 'Push notification service rejected the notification.');
+  }
+
+  console.log('✅ [WEBHOOK] Push notification sent');
+}
 
 /**
  * Debug endpoint: Log when push token registration is attempted
- * No auth required - just for debugging TestFlight
+ * No auth required - used to confirm that the app attempted registration.
  */
 app.post('/push-tokens/ping', async (req, res) => {
   console.log('🔔 [PUSH DEBUG] Registration attempt detected from client:', {
@@ -716,7 +777,13 @@ app.post('/push-tokens/ping', async (req, res) => {
 
 app.post('/push-tokens', async (req, res) => {
   try {
-    const { userId, pushToken, platform, tokenType } = req.body;
+    const parsedBody = pushTokenRequestSchema.safeParse(req.body);
+    if (!parsedBody.success) {
+      console.error('❌ [PUSH] Invalid registration request');
+      return sendError(res, 400, 'BadRequest', 'A valid push token registration is required.');
+    }
+
+    const { userId, pushToken, platform, tokenType } = parsedBody.data;
 
     console.log('📥 [PUSH] Registration request received:', {
       userId,
@@ -727,44 +794,22 @@ app.post('/push-tokens', async (req, res) => {
       tokenLength: pushToken?.length
     });
 
-    if (!userId || !pushToken) {
-      console.error('❌ [PUSH] Missing required fields');
-      return res.status(400).json({ error: 'userId and pushToken are required' });
-    }
-
-    // Security: Verify the authenticated user matches the userId they're trying to register
-    // Allow both exact match AND sandbox-prefixed version (for webhook matching)
-    const isValidUser = req.userId === userId || `sandbox-${req.userId}` === userId;
-    if (!isValidUser) {
+    if (req.userId !== userId) {
       console.error('❌ [PUSH] Unauthorized token registration attempt:', {
         tokenUserId: req.userId,
         requestUserId: userId,
-        match: req.userId === userId,
-        sandboxMatch: `sandbox-${req.userId}` === userId
       });
-      return res.status(403).json({ error: 'Forbidden: Cannot register push token for another user' });
+      return sendError(res, 403, 'Forbidden', 'Cannot register a push token for another user.');
     }
 
-    const tokenData = {
+    const tokenData: PushTokenRecord = {
       token: pushToken,
-      platform: platform || 'unknown',
-      tokenType: tokenType || 'native', // 'native' for APNs/FCM, 'expo' for Expo push service
+      platform,
+      tokenType,
       updatedAt: Date.now(),
     };
 
-    // Store in database (production) or in-memory (local dev)
-    // Store for BOTH regular userId AND sandbox-prefixed userId
-    // This ensures webhooks with "sandbox-{userId}" can find the token
-    if (useDatabase && database) {
-      await database.set(`pushtoken:${userId}`, JSON.stringify(tokenData));
-      await database.set(`pushtoken:sandbox-${userId}`, JSON.stringify(tokenData));
-      console.log('✅ [PUSH] Token stored in database for user:', userId, 'and sandbox-' + userId);
-    } else {
-      pushTokenStore.set(userId, tokenData);
-      pushTokenStore.set(`sandbox-${userId}`, tokenData);
-      console.log('✅ [PUSH] Token stored in memory for user:', userId, 'and sandbox-' + userId);
-      console.log('📊 [PUSH] Total tokens in store:', pushTokenStore.size);
-    }
+    await writePushTokenForUser(userId, tokenData);
 
     console.log('✅ [PUSH] Token registered successfully:', {
       userId,
@@ -774,7 +819,7 @@ app.post('/push-tokens', async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     console.error('❌ [PUSH] Error:', error);
-    res.status(500).json({ error: 'Failed to store push token' });
+    sendError(res, 500, 'PushTokenStoreFailed', 'Unable to register this device for notifications right now.');
   }
 });
 
@@ -783,20 +828,14 @@ app.get('/push-tokens/debug/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
     if (!canAccessPushTokenDebug(userId, req.userId)) {
-      return res.status(403).json({ error: 'Forbidden: Cannot inspect another user\'s push token status' });
+      return sendError(res, 403, 'Forbidden', 'Cannot inspect another user\'s push token status.');
     }
 
-    let tokenData: any = null;
-    if (useDatabase && database) {
-      const data = await database.get(`pushtoken:${userId}`);
-      tokenData = data ? JSON.parse(data) : null;
-    } else {
-      tokenData = pushTokenStore.get(userId) || null;
-    }
+    const tokenData = await readPushTokenForUser(userId);
 
     res.json(buildPushTokenDebugResponse(userId, tokenData));
   } catch (error) {
-    res.status(500).json({ error: 'Failed to check token' });
+    sendError(res, 500, 'PushTokenStatusUnavailable', 'Unable to check push-token status right now.');
   }
 });
 
@@ -813,342 +852,99 @@ app.get('/push-tokens/debug/:userId', async (req, res) => {
  * Note: This endpoint is PUBLIC (no auth middleware) because Coinbase servers call it
  */
 app.post('/webhooks/onramp', webhookRateLimiter, async (req, res) => {
+  const rawBody = Buffer.isBuffer(req.body) ? req.body.toString('utf8') : JSON.stringify(req.body ?? {});
+
   try {
-    // Get raw body (from express.raw middleware)
-    const rawBody = Buffer.isBuffer(req.body) ? req.body.toString('utf8') : JSON.stringify(req.body);
+    const webhookSecret = requireWebhookSecret(process.env.WEBHOOK_SECRET);
+    const hook0Signature = req.headers['x-hook0-signature'];
 
-    // Parse JSON from raw body
-    const webhookData = Buffer.isBuffer(req.body) ? JSON.parse(rawBody) : req.body;
-
-    const eventType = webhookData.eventType || webhookData.event;
-    console.log('🔔 [WEBHOOK] Received:', eventType);
-    console.log('📦 [WEBHOOK] Summary:', summarizeWebhookLog(webhookData));
-
-    // Verify webhook signature (security check)
-    try {
-      const webhookSecret = requireWebhookSecret(process.env.WEBHOOK_SECRET);
-      // Try X-Hook0-Signature (new format)
-      const hook0Signature = req.headers['x-hook0-signature'] as string;
-
-      if (hook0Signature) {
-        const isValid = verifyWebhookSignature(hook0Signature, req.headers, rawBody, webhookSecret);
-        if (!isValid) {
-          console.error('❌ [WEBHOOK] Invalid signature');
-          return res.status(401).json({ error: 'Invalid signature' });
-        }
-        console.log('✅ [WEBHOOK] Signature verified');
-      }
-      // Fallback: Try x-coinbase-signature (legacy format)
-      else {
-        const coinbaseSignature = req.headers['x-coinbase-signature'] as string;
-        const timestamp = req.headers['x-coinbase-timestamp'] as string;
-
-        if (coinbaseSignature && timestamp) {
-          const isValid = verifyLegacySignature(coinbaseSignature, timestamp, rawBody, webhookSecret);
-          if (!isValid) {
-            console.error('❌ [WEBHOOK] Invalid x-coinbase-signature');
-            return res.status(401).json({ error: 'Invalid signature' });
-          }
-          console.log('✅ [WEBHOOK] x-coinbase-signature verified');
-        } else {
-          console.warn('⚠️ [WEBHOOK] No signature headers found - rejecting webhook');
-          return res.status(401).json({ error: 'Missing signature headers' });
-        }
-      }
-    } catch (error) {
-      console.error('❌ [WEBHOOK] Webhook verification is not configured:', error);
-      return res.status(500).json({ error: 'Webhook verification is not configured' });
+    if (typeof hook0Signature !== 'string' || !hook0Signature.trim()) {
+      console.warn('⚠️ [WEBHOOK] Missing X-Hook0-Signature header');
+      return sendError(res, 401, 'MissingSignature', 'Webhook signature is required.');
     }
 
-    // Extract transaction ID (different field names)
-    const txId = webhookData.transactionId || webhookData.orderId || webhookData.data?.transaction?.id;
+    if (!verifyWebhookSignature(hook0Signature, req.headers, rawBody, webhookSecret)) {
+      console.error('❌ [WEBHOOK] Invalid signature');
+      return sendError(res, 401, 'InvalidSignature', 'Webhook signature is invalid.');
+    }
+  } catch (error) {
+    console.error('❌ [WEBHOOK] Webhook verification is not configured:', error);
+    return sendError(res, 500, 'WebhookVerificationUnavailable', 'Webhook verification is not configured.');
+  }
 
-    // Handle different webhook events
-    switch (eventType) {
+  const parsed = parseCanonicalOnrampWebhook(rawBody);
+  if (parsed.kind !== 'ok') {
+    return sendError(res, 400, 'BadRequest', 'Webhook body does not match the current onramp contract.');
+  }
+
+  const webhook = parsed.webhook;
+  console.log('🔔 [WEBHOOK] Received:', webhook.eventType);
+  console.log('📦 [WEBHOOK] Summary:', summarizeWebhookLog(webhook));
+
+  if (await hasProcessedOnrampWebhookEvent(webhook, useDatabase ? database : null)) {
+    return res.status(200).json({ received: true, duplicate: true });
+  }
+
+  try {
+    switch (webhook.eventType) {
       case 'onramp.transaction.created':
-        console.log('📝 [WEBHOOK] Transaction created:', txId);
-        // Transaction initiated - could send "processing" notification
+        console.log('📝 [WEBHOOK] Transaction created:', webhook.transactionId);
         break;
 
       case 'onramp.transaction.updated':
-        console.log('🔄 [WEBHOOK] Transaction updated:', txId);
-        // Transaction status changed - could track intermediate states
+        console.log('🔄 [WEBHOOK] Transaction updated:', webhook.transactionId);
         break;
 
-      case 'onramp.transaction.success':
-      case 'onramp.transaction.completed': // Support both event names
-        console.log('✅ [WEBHOOK] Transaction completed:', txId);
+      case 'onramp.transaction.success': {
+        console.log('✅ [WEBHOOK] Transaction completed:', webhook.transactionId);
+        const partnerUserRef = webhook.partnerUserRef!;
+        const userTokenData = await readPushTokenForUser(partnerUserRef);
 
-        // Extract fields (handle both Apple Pay and Widget formats)
-        // Apple Pay: { purchaseAmount: "100.000000", purchaseCurrency: "USDC", destinationNetwork: "base" }
-        // Widget: { purchaseAmount: { value: "4.81", currency: "USDC" }, purchaseCurrency: "USDC", purchaseNetwork: "ethereum" }
+        if (!userTokenData) {
+          console.log('⚠️ [WEBHOOK] No push token found for user:', partnerUserRef);
+          break;
+        }
 
-        const amount = typeof webhookData.purchaseAmount === 'object'
-          ? webhookData.purchaseAmount?.value
-          : webhookData.purchaseAmount;
-
-        const currency = webhookData.purchaseCurrency;
-
-        const network = webhookData.destinationNetwork || webhookData.purchaseNetwork;
-
-        const partnerUserRef = webhookData.partnerUserRef;
-
-        console.log('💰 [WEBHOOK] User received:', {
-          amount,
-          currency,
-          network,
-          hasPartnerUserRef: !!partnerUserRef
-        });
-
-        // Send push notification via Expo Push API (user-specific)
-        try {
-          if (!partnerUserRef) {
-            console.log('⚠️ [WEBHOOK] No partnerUserRef in transaction - cannot send notification');
-            break;
-          }
-
-          // Prepare notification content
-          const title = '🎉 Crypto Purchase Complete!';
-          const body = `Your ${amount} ${currency} has been delivered to your ${network} wallet!`;
-          const notificationData = {
-            transactionId: txId,
+        await sendPushNotification(userTokenData, {
+          title: 'Purchase complete',
+          body: `Your ${webhook.purchaseAmount} ${webhook.purchaseCurrency} has been delivered to your ${webhook.destinationNetwork} wallet.`,
+          data: {
+            transactionId: webhook.transactionId,
             type: 'onramp_complete',
-            partnerUserRef
-          };
-
-          // Retrieve push token from database (production) or in-memory (local dev)
-          let userTokenData: { token: string; platform: string; tokenType?: string; updatedAt: number } | null;
-          if (useDatabase && database) {
-            const data = await database.get(`pushtoken:${partnerUserRef}`);
-            userTokenData = data ? JSON.parse(data) : null;
-          } else {
-            userTokenData = pushTokenStore.get(partnerUserRef) || null;
-          }
-
-          if (userTokenData) {
-            try {
-              // Choose notification service based on token type
-              // Native tokens: Use direct APNs (if configured)
-              // Expo tokens: Use Expo push service
-              const isNativeToken = userTokenData.tokenType === 'native' || !userTokenData.tokenType; // default to native for backwards compatibility
-
-              if (isNativeToken && useAPNs && apnProvider && userTokenData.platform === 'ios') {
-                console.log('📤 [WEBHOOK] Sending via direct APNs');
-                console.log('🔍 [WEBHOOK] Token data:', {
-                  token: userTokenData.token,
-                  tokenType: typeof userTokenData.token,
-                  tokenLength: typeof userTokenData.token === 'string' ? userTokenData.token.length : 'N/A'
-                });
-
-                const apn = await import('@parse/node-apn');
-                const notification = new apn.Notification({
-                  alert: { title, body },
-                  topic: 'com.regentslabs.mobile', // Your bundle ID
-                  sound: 'default',
-                  payload: notificationData
-                });
-
-                const result = await apnProvider.send(notification, userTokenData.token);
-                console.log('📊 [WEBHOOK] APNs result:', {
-                  sent: result.sent?.length || 0,
-                  failed: result.failed?.length || 0
-                });
-
-                if (result.failed && result.failed.length > 0) {
-                  const failure = result.failed[0];
-                  console.error('❌ [WEBHOOK] APNs failures:', result.failed.map((f: any) => ({
-                    device: f.device,
-                    status: f.status,
-                    response: f.response
-                  })));
-
-                  // If BadDeviceToken, token might be for wrong environment (sandbox vs production)
-                  // Try sandbox environment as fallback
-                  if (failure.response?.reason === 'BadDeviceToken') {
-                    console.log('🔄 [WEBHOOK] Trying sandbox APNs environment...');
-                    try {
-                      const sandboxProvider = new apn.Provider({
-                        token: {
-                          key: process.env.APNS_KEY!.replace(/\\n/g, '\n'),
-                          keyId: process.env.APNS_KEY_ID!,
-                          teamId: process.env.APNS_TEAM_ID!
-                        },
-                        production: false // Try sandbox
-                      });
-                      const sandboxResult = await sandboxProvider.send(notification, userTokenData.token);
-                      if (sandboxResult.sent && sandboxResult.sent.length > 0) {
-                        console.log('✅ [WEBHOOK] APNs notification sent via SANDBOX environment');
-                      } else {
-                        console.error('❌ [WEBHOOK] Sandbox APNs also failed');
-                      }
-                    } catch (sandboxError) {
-                      console.error('❌ [WEBHOOK] Sandbox APNs error:', sandboxError);
-                    }
-                  }
-                } else {
-                  console.log('✅ [WEBHOOK] APNs notification sent successfully');
-                }
-              } else {
-                console.log('📤 [WEBHOOK] Sending via Expo push service');
-                const message = {
-                  to: userTokenData.token,
-                  sound: 'default',
-                  title,
-                  body,
-                  data: notificationData,
-                };
-
-                const pushResponse = await fetch('https://exp.host/--/api/v2/push/send', {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify(message),
-                });
-
-                const pushResult = await pushResponse.json();
-                console.log('📤 [WEBHOOK] Push notification response:', JSON.stringify(pushResult));
-
-                // Check if push failed due to credentials
-                if (pushResult.data?.status === 'error') {
-                  console.error('❌ [WEBHOOK] Push delivery error:', pushResult.data.message);
-                  console.error('💡 [WEBHOOK] Hint: Add APNs credentials to .env for direct APNs');
-                } else {
-                  console.log('✅ [WEBHOOK] Push notification sent for transaction:', txId);
-                }
-              }
-            } catch (pushError) {
-              console.error('❌ [WEBHOOK] Failed to send push notification:', pushError);
-            }
-          } else {
-            console.log('⚠️ [WEBHOOK] No push token found for user:', partnerUserRef);
-          }
-        } catch (error) {
-          console.error('❌ [WEBHOOK] Failed to process notification:', error);
-        }
-        break;
-
-      case 'onramp.transaction.failed':
-        console.log('❌ [WEBHOOK] Transaction failed:', txId);
-
-        // Extract failure fields (handle both formats)
-        const failedAmount = typeof webhookData.paymentAmount === 'object'
-          ? webhookData.paymentAmount?.value
-          : webhookData.paymentAmount;
-
-        const failedCurrency = typeof webhookData.paymentAmount === 'object'
-          ? webhookData.paymentAmount?.currency
-          : webhookData.paymentCurrency;
-
-        const failureReason = webhookData.failureReason || 'Unknown error';
-        const failedPartnerUserRef = webhookData.partnerUserRef;
-
-        console.log('⚠️ [WEBHOOK] Failure details:', {
-          amount: failedAmount,
-          currency: failedCurrency,
-          reason: failureReason,
-          partnerUserRef: failedPartnerUserRef
+            partnerUserRef,
+          },
         });
-
-        // Send notification for failed transaction (user-specific)
-        try {
-          if (!failedPartnerUserRef) {
-            console.log('⚠️ [WEBHOOK] No partnerUserRef in failed transaction - cannot send notification');
-            break;
-          }
-
-          // Prepare notification content
-          const failTitle = '❌ Transaction Failed';
-          const failBody = `Your purchase failed: ${failureReason}. Please try again.`;
-          const failData = {
-            transactionId: txId,
-            type: 'onramp_failed',
-            partnerUserRef: failedPartnerUserRef
-          };
-
-          // Retrieve push token from database (production) or in-memory (local dev)
-          let failedUserTokenData: { token: string; platform: string; tokenType?: string; updatedAt: number } | null;
-          if (useDatabase && database) {
-            const data = await database.get(`pushtoken:${failedPartnerUserRef}`);
-            failedUserTokenData = data ? JSON.parse(data) : null;
-          } else {
-            failedUserTokenData = pushTokenStore.get(failedPartnerUserRef) || null;
-          }
-
-          if (failedUserTokenData) {
-            try {
-              // Choose notification service based on token type
-              const isNativeToken = failedUserTokenData.tokenType === 'native' || !failedUserTokenData.tokenType;
-
-              if (isNativeToken && useAPNs && apnProvider && failedUserTokenData.platform === 'ios') {
-                console.log('📤 [WEBHOOK] Sending failure notification via direct APNs');
-                const apn = await import('@parse/node-apn');
-                const notification = new apn.Notification({
-                  alert: { title: failTitle, body: failBody },
-                  topic: 'com.regentslabs.mobile', // Your bundle ID
-                  sound: 'default',
-                  payload: failData
-                });
-
-                const result = await apnProvider.send(notification, failedUserTokenData.token);
-                console.log('📊 [WEBHOOK] APNs result:', {
-                  sent: result.sent?.length || 0,
-                  failed: result.failed?.length || 0
-                });
-
-                if (result.failed && result.failed.length > 0) {
-                  console.error('❌ [WEBHOOK] APNs failures:', result.failed.map((f: any) => ({
-                    device: f.device,
-                    status: f.status,
-                    response: f.response
-                  })));
-                } else {
-                  console.log('✅ [WEBHOOK] APNs failure notification sent successfully');
-                }
-              } else {
-                console.log('📤 [WEBHOOK] Sending failure notification via Expo push service');
-                const failureMessage = {
-                  to: failedUserTokenData.token,
-                  sound: 'default',
-                  title: failTitle,
-                  body: failBody,
-                  data: failData,
-                };
-
-                const pushResponse = await fetch('https://exp.host/--/api/v2/push/send', {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify(failureMessage),
-                });
-
-                const pushResult = await pushResponse.json();
-                console.log('✅ [WEBHOOK] Failure push notification sent for transaction:', txId);
-              }
-            } catch (pushError) {
-              console.error('❌ [WEBHOOK] Failed to send failure push notification:', pushError);
-            }
-          } else {
-            console.log('⚠️ [WEBHOOK] No push token found for user:', failedPartnerUserRef);
-          }
-        } catch (error) {
-          console.error('❌ [WEBHOOK] Error processing failure notification:', error);
-        }
         break;
+      }
 
-      default:
-        console.log('ℹ️ [WEBHOOK] Unknown event type:', event);
+      case 'onramp.transaction.failed': {
+        console.log('❌ [WEBHOOK] Transaction failed:', webhook.transactionId);
+        const partnerUserRef = webhook.partnerUserRef!;
+        const userTokenData = await readPushTokenForUser(partnerUserRef);
+
+        if (!userTokenData) {
+          console.log('⚠️ [WEBHOOK] No push token found for user:', partnerUserRef);
+          break;
+        }
+
+        await sendPushNotification(userTokenData, {
+          title: 'Purchase failed',
+          body: `Your purchase failed: ${webhook.failureReason}. Please try again.`,
+          data: {
+            transactionId: webhook.transactionId,
+            type: 'onramp_failed',
+            partnerUserRef,
+          },
+        });
+        break;
+      }
     }
 
-    // Always return 200 to acknowledge receipt
-    // Coinbase will retry if we don't respond with 2xx
-    res.status(200).json({ received: true });
-
+    await markOnrampWebhookEventProcessed(webhook, useDatabase ? database : null);
+    return res.status(200).json({ received: true });
   } catch (error) {
     console.error('❌ [WEBHOOK] Error processing webhook:', error);
-    // Still return 200 to prevent retries on parsing errors
-    res.status(200).json({ received: true, error: 'Processing error' });
+    return sendError(res, 502, 'WebhookProcessingFailed', 'Unable to process this webhook right now.');
   }
 });
 

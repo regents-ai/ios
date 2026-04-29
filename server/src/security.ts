@@ -8,9 +8,6 @@ const USER_SCOPED_PATH_PATTERNS = [
   /^\/onramp\/v1\/sell\/user\/([^/]+)\/transactions$/,
 ];
 
-export const TESTFLIGHT_BEARER_TOKEN = 'testflight-mock-token';
-export const TESTFLIGHT_EXTERNAL_USER_ID = '286ef934-f3b8-4e94-b61f-1f1a088ac95e';
-
 export class CoinbaseConfigurationError extends Error {
   statusCode = 503;
   code = 'CoinbaseProxyUnavailable';
@@ -31,10 +28,6 @@ export function requireCoinbaseApiCredentials(env: Record<string, string | undef
   return { apiKeyId, apiKeySecret };
 }
 
-export function isTrustedTestflightBypassToken(token: string | undefined) {
-  return token === TESTFLIGHT_BEARER_TOKEN;
-}
-
 function readUserScopedRef(url: URL) {
   for (const pattern of USER_SCOPED_PATH_PATTERNS) {
     const match = url.pathname.match(pattern);
@@ -49,7 +42,6 @@ function readUserScopedRef(url: URL) {
 export function validateProxyTarget(input: {
   targetUrl: string;
   currentUserId?: string | undefined;
-  isTestAccount?: boolean | undefined;
 }) {
   const url = new URL(input.targetUrl);
 
@@ -67,16 +59,7 @@ export function validateProxyTarget(input: {
       throw new Error('Authenticated user is required for user-scoped proxy requests.');
     }
 
-    const allowedRefs = new Set<string>([
-      input.currentUserId,
-      `sandbox-${input.currentUserId}`,
-    ]);
-
-    if (input.isTestAccount) {
-      allowedRefs.add(TESTFLIGHT_EXTERNAL_USER_ID);
-    }
-
-    if (!allowedRefs.has(scopedRef)) {
+    if (scopedRef !== input.currentUserId) {
       throw new Error('You can only access your own Coinbase records.');
     }
   }
@@ -160,18 +143,8 @@ export function summarizeWebhookLog(data: Record<string, unknown>) {
   const keys = Object.keys(data).sort();
 
   return {
-    eventType: typeof data.eventType === 'string'
-      ? data.eventType
-      : typeof data.event === 'string'
-        ? data.event
-        : 'unknown',
-    transactionId: typeof data.transactionId === 'string'
-      ? data.transactionId
-      : typeof data.orderId === 'string'
-        ? data.orderId
-        : typeof (data.data as { transaction?: { id?: unknown } } | undefined)?.transaction?.id === 'string'
-          ? (data.data as { transaction?: { id?: string } }).transaction?.id
-          : null,
+    eventType: typeof data.eventType === 'string' ? data.eventType : 'unknown',
+    transactionId: typeof data.transactionId === 'string' ? data.transactionId : null,
     keyCount: keys.length,
     keys,
   };

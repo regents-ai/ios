@@ -3,9 +3,8 @@ import assert from 'node:assert/strict';
 
 import { buildPushTokenDebugResponse, canAccessPushTokenDebug } from './pushTokens.js';
 
-test('push token debug only allows the current user or their sandbox mirror', () => {
+test('push token debug only allows the current user', () => {
   assert.equal(canAccessPushTokenDebug('user-1', 'user-1'), true);
-  assert.equal(canAccessPushTokenDebug('sandbox-user-1', 'user-1'), true);
   assert.equal(canAccessPushTokenDebug('user-2', 'user-1'), false);
   assert.equal(canAccessPushTokenDebug('user-1', undefined), false);
 });

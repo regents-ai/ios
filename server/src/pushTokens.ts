@@ -1,7 +1,7 @@
 type PushTokenRecord = {
   token: string;
   platform: string;
-  tokenType?: string;
+  tokenType: 'native' | 'expo';
   updatedAt: number;
 };
 
@@ -10,7 +10,7 @@ export function canAccessPushTokenDebug(requestedUserId: string, currentUserId: 
     return false;
   }
 
-  return requestedUserId === currentUserId || requestedUserId === `sandbox-${currentUserId}`;
+  return requestedUserId === currentUserId;
 }
 
 export function buildPushTokenDebugResponse(userId: string, tokenData: PushTokenRecord | null) {
