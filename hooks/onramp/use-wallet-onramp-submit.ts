@@ -1,15 +1,12 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useRouter } from 'expo-router';
 
-import { TEST_ACCOUNTS } from '@/constants/TestAccounts';
 import { useRegentsAuth } from '@/hooks/useRegentsAuth';
 import type { OnrampFormData } from '@/components/onramp/onramp-form-types';
 import {
   clearPendingForm,
   setPendingForm,
 } from '@/utils/state/flowRuntimeState';
-import { isTestSessionActive } from '@/utils/state/reviewSessionState';
-import { getSandboxMode } from '@/utils/state/sandboxState';
 import { getVerifiedPhone } from '@/utils/state/verificationState';
 import { getWalletAddressForNetwork } from '@/utils/state/walletRuntimeState';
 import {
@@ -70,8 +67,6 @@ export function useWalletOnrampSubmit({
     type: 'info',
   });
 
-  const testSession = isTestSessionActive();
-
   const resetAlertState = useCallback(() => {
     setAlertState({
       visible: false,
@@ -117,10 +112,6 @@ export function useWalletOnrampSubmit({
 
   const resolveTargetAddress = useCallback(
     (networkApiName: string, fallbackAddress: string) => {
-      if (getSandboxMode()) {
-        return fallbackAddress;
-      }
-
       return getWalletAddressForNetwork(networkApiName) ?? fallbackAddress;
     },
     []
@@ -175,7 +166,7 @@ export function useWalletOnrampSubmit({
 
         if (error.code === 'MISSING_PHONE') {
           setPendingForm(updatedFormData);
-          const cdpPhone = testSession ? TEST_ACCOUNTS.phone : linkedPhone;
+          const cdpPhone = linkedPhone;
 
           if (cdpPhone) {
             const isUSPhone = cdpPhone.startsWith('+1');
@@ -190,11 +181,9 @@ export function useWalletOnrampSubmit({
               type: 'info',
               onConfirmCallback: async () => {
                 try {
-                  if (!testSession) {
-                    await signOutIdentity();
-                    await signOutWallet();
-                    await new Promise(resolve => setTimeout(resolve, 500));
-                  }
+                  await signOutIdentity();
+                  await signOutWallet();
+                  await new Promise(resolve => setTimeout(resolve, 500));
 
                   router.replace({
                     pathname: '/phone-verify',
@@ -279,7 +268,7 @@ export function useWalletOnrampSubmit({
           setAlertState({
             visible: true,
             title: 'US Phone Required',
-            message: `${paymentLabel} Guest Checkout is only available for US phone numbers.\n\nYou can:\n• Switch to Coinbase Widget for international payments\n• Use Sandbox mode to test the ${paymentLabel} flow\n• Link a US phone number to your account`,
+            message: `${paymentLabel} is available with US phone numbers. Use More payment options or add a US phone number to continue.`,
             type: 'info',
           });
           setIsProcessingPayment(false);
@@ -304,7 +293,6 @@ export function useWalletOnrampSubmit({
       showSupportError,
       signOutIdentity,
       signOutWallet,
-      testSession,
     ]
   );
 

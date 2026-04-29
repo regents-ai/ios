@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import { Image, Platform, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { SwipeToConfirm } from '@/components/ui/SwipeToConfirm';
 import { COLORS } from '@/constants/Colors';
@@ -40,36 +40,6 @@ export function FocusPathSection({
   );
 }
 
-export function EnvironmentSection({
-  isGuestCheckout,
-  localSandboxEnabled,
-  onToggleSandbox,
-}: {
-  isGuestCheckout: boolean;
-  localSandboxEnabled: boolean;
-  onToggleSandbox: (value: boolean) => void;
-}) {
-  return (
-    <View style={styles.card}>
-      <View style={styles.rowBetween}>
-        <Text style={styles.label}>{localSandboxEnabled ? 'Sandbox Environment' : 'Production Environment'}</Text>
-        <Switch
-          value={localSandboxEnabled}
-          onValueChange={onToggleSandbox}
-          trackColor={{ true: BLUE, false: BORDER }}
-          thumbColor={Platform.OS === 'android' ? (localSandboxEnabled ? '#ffffff' : '#f4f3f4') : undefined}
-        />
-      </View>
-      <Text style={styles.helper}>
-        {localSandboxEnabled ? 'Test without real transactions' : 'Real transactions will be executed'}
-      </Text>
-      {localSandboxEnabled && isGuestCheckout ? (
-        <Text style={[styles.helper, styles.helperTight]}>Test checkout will finish without moving real money.</Text>
-      ) : null}
-    </View>
-  );
-}
-
 export function AmountQuoteSection({
   amount,
   amountError,
@@ -80,7 +50,6 @@ export function AmountQuoteSection({
   isLoadingQuote,
   isValidAmount,
   limits,
-  localSandboxEnabled,
   onAmountChange,
   onOpenPaymentCurrencyPicker,
   paymentCurrency,
@@ -96,7 +65,6 @@ export function AmountQuoteSection({
   isLoadingQuote: boolean;
   isValidAmount: boolean;
   limits: any;
-  localSandboxEnabled: boolean;
   onAmountChange: (value: string) => void;
   onOpenPaymentCurrencyPicker: () => void;
   paymentCurrency: string;
@@ -131,12 +99,12 @@ export function AmountQuoteSection({
                 {limits.display}
               </Text>
             ) : null}
-            {userLimits && !localSandboxEnabled ? (
+            {userLimits ? (
               <Text style={styles.helper}>
                 Remaining limit: ${userLimits.weekly.remaining}/{userLimits.weekly.limit} {userLimits.weekly.currency} this week • {userLimits.lifetime.remaining}/{userLimits.lifetime.limit} purchases left
               </Text>
             ) : null}
-            {isLoadingLimits && !localSandboxEnabled ? (
+            {isLoadingLimits ? (
               <Text style={[styles.helper, { fontStyle: 'italic' }]}>Loading your limits...</Text>
             ) : null}
             {limits ? <Text style={[styles.helper, styles.helperTight]}>Test purchases are capped at $5 per transaction.</Text> : null}

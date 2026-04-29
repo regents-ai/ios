@@ -3,7 +3,6 @@ export type OnrampFormData = {
   asset: string;
   network: string;
   address: string;
-  sandbox: boolean;
   paymentMethod: string;
   paymentCurrency: string;
   phoneNumber?: string;

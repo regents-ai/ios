@@ -1,7 +1,6 @@
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
-import { isTestAccount, TEST_ACCOUNTS } from '@/constants/TestAccounts';
 import { useLinkEmail, useLoginWithEmail } from '@privy-io/expo';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -22,8 +21,6 @@ import {
 } from 'react-native';
 
 import { getVerificationSuccessAction } from '../utils/authFlowState';
-import { setTestSession } from '../utils/state/reviewSessionState';
-import { setCurrentSolanaAddress, setCurrentWalletAddress } from '../utils/state/walletRuntimeState';
 
 const { DARK_BG, CARD_BG, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, WHITE, BORDER } = COLORS;
 const RESEND_SECONDS = 30;
@@ -104,11 +101,6 @@ export default function EmailCodeScreen() {
   };
 
   const resendCode = async () => {
-    if (isTestAccount(email)) {
-      setResendSeconds(RESEND_SECONDS);
-      return;
-    }
-
     setSending(true);
     try {
       if (mode === 'signin') {
@@ -134,23 +126,6 @@ export default function EmailCodeScreen() {
     setVerifying(true);
 
     try {
-      if (isTestAccount(email) && mode === 'signin') {
-        if (otp !== TEST_ACCOUNTS.otp) {
-          throw new Error(`Use ${TEST_ACCOUNTS.otp} for the preview account.`);
-        }
-
-        await setTestSession(TEST_ACCOUNTS.wallets.evm, TEST_ACCOUNTS.wallets.solana);
-        setCurrentWalletAddress(TEST_ACCOUNTS.wallets.evm);
-        setCurrentSolanaAddress(TEST_ACCOUNTS.wallets.solana);
-        const nextAction = getVerificationSuccessAction(mode);
-        if (nextAction === 'go_wallet') {
-          router.replace('/agents');
-        } else {
-          router.dismissAll();
-        }
-        return;
-      }
-
       if (mode === 'signin') {
         await loginWithCode({ email, code: otp });
         const nextAction = getVerificationSuccessAction(mode);

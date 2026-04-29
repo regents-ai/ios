@@ -8,15 +8,7 @@ import { WebView } from "react-native-webview";
  *
  * 1. Loads the Coinbase hosted payment page (paymentLink URL from Create Order API)
  * 2. On load_success (page event), auto-clicks the native pay button
- * 3. What happens next depends on the mode:
- *
- *    PRODUCTION (isSandbox=false):
- *      Native payment sheet appears (Apple Pay on iOS, Google Pay on Android).
- *      User confirms on the native sheet.
- *
- *    SANDBOX (isSandbox=true):
- *      partnerUserRef is prefixed with "sandbox-" (handled by useOnramp).
- *      URL gets useApplePaySandbox=true or useGooglePaySandbox=true appended.
+ * 3. The native payment sheet appears and the user confirms there.
  *      Transaction completes automatically without real funds.
  *
  * 4. All transaction lifecycle events are dispatched by the payment page itself
@@ -28,13 +20,11 @@ const PAYMENT_CONFIG = {
     buttonId: 'api-onramp-apple-pay-button',
     hideCSS: 'apple-pay-button { display: none !important; }',
     label: 'Apple Pay',
-    sandboxParam: 'useApplePaySandbox',
   },
   GUEST_CHECKOUT_GOOGLE_PAY: {
     buttonId: 'gpay-button-online-api-id',
     hideCSS: '#api-onramp-google-pay-button { visibility: hidden !important; height: 0 !important; overflow: hidden !important; }',
     label: 'Google Pay',
-    sandboxParam: 'useGooglePaySandbox',
   },
 } as const;
 
@@ -47,7 +37,6 @@ export function APIGuestCheckoutWidget({
   setIsProcessingPayment,
   setTransactionStatus,
   onAlert,
-  isSandbox = false,
 }: {
   paymentUrl: string;
   paymentMethod: GuestCheckoutMethod;
@@ -55,14 +44,12 @@ export function APIGuestCheckoutWidget({
   setIsProcessingPayment?: (loading: boolean) => void;
   setTransactionStatus?: (status: 'pending' | 'success' | 'error' | null) => void;
   onAlert?: (title: string, message: string, type: 'success' | 'error' | 'info') => void;
-  isSandbox?: boolean;
 }) {
   const webViewRef = useRef<WebView>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const config = PAYMENT_CONFIG[paymentMethod] ?? PAYMENT_CONFIG.GUEST_CHECKOUT_APPLE_PAY;
   const finalUrl = paymentUrl;
-  const sandboxPrefix = isSandbox ? '[SANDBOX] ' : '';
 
   useEffect(() => {
     return () => {
@@ -143,7 +130,7 @@ export function APIGuestCheckoutWidget({
               break;
 
             case "onramp_api.cancel":
-              onAlert?.(`${sandboxPrefix}Payment Cancelled`, "The payment was cancelled by the user", 'info');
+              onAlert?.("Payment Cancelled", "The payment was cancelled by the user", 'info');
               setIsProcessingPayment?.(false);
               onClose?.();
               break;
@@ -151,7 +138,7 @@ export function APIGuestCheckoutWidget({
             case "onramp_api.commit_error":
             case "onramp_api.load_error":
               onAlert?.(
-                `${sandboxPrefix}Payment Error`,
+                "Payment Error",
                 `The payment failed: ${data.data?.errorCode} - ${data.data?.errorMessage}`,
                 'error'
               );
@@ -166,7 +153,7 @@ export function APIGuestCheckoutWidget({
               }
               setTransactionStatus?.('pending');
               onAlert?.(
-                `${sandboxPrefix}Payment Successful!`,
+                "Payment Successful!",
                 "Your payment has been processed. We're now delivering your crypto to your wallet.",
                 'success'
               );
@@ -188,7 +175,7 @@ export function APIGuestCheckoutWidget({
                 timeoutRef.current = null;
               }
               setTransactionStatus?.('success');
-              onAlert?.(`${sandboxPrefix}Complete!`, "Your crypto has been delivered to your wallet!", 'success');
+              onAlert?.("Complete!", "Your crypto has been delivered to your wallet!", 'success');
               setTimeout(() => onClose?.(), 2000);
               break;
 
@@ -199,7 +186,7 @@ export function APIGuestCheckoutWidget({
               }
               setTransactionStatus?.('error');
               onAlert?.(
-                `${sandboxPrefix}Transaction Failed`,
+                "Transaction Failed",
                 `There was an issue: ${data.data?.errorCode} - ${data.data?.errorMessage}`,
                 'error'
               );

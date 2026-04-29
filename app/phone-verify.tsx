@@ -8,7 +8,6 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { EaseView } from 'react-native-ease';
 import { AccessibilityInfo, ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { CoinbaseAlert } from '../components/ui/CoinbaseAlerts';
-import { TEST_ACCOUNTS } from '../constants/TestAccounts';
 import { PHONE_COUNTRIES } from '../constants/PhoneCountries';
 
 const { DARK_BG, CARD_BG, TEXT_PRIMARY, TEXT_SECONDARY, BORDER, BLUE, WHITE } = COLORS;
@@ -108,14 +107,6 @@ export default function PhoneVerifyScreen() {
 
     setSending(true);
     try {
-      if (phoneE164 === TEST_ACCOUNTS.phone) {
-        router.push({
-          pathname: '/phone-code',
-          params: { phone: phoneE164, mode },
-        });
-        return;
-      }
-
       if (mode === 'signin' || mode === 'reverify') {
         await sendLoginCode({ phone: phoneE164 });
       } else {

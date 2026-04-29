@@ -1,13 +1,11 @@
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
 import { useRegentsAuth } from '@/hooks/useRegentsAuth';
-import { isTestSessionActive } from '@/utils/state/reviewSessionState';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { EaseView } from 'react-native-ease';
 import {
   AccessibilityInfo,
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -15,7 +13,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  View,
 } from 'react-native';
 
 const { DARK_BG, CARD_BG, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, WHITE, BORDER } = COLORS;
@@ -32,8 +29,6 @@ function buildEntryTransition(reduceMotion: boolean, delay = 0, duration = 220) 
 export default function LoginScreen() {
   const { isAuthenticated } = useRegentsAuth();
   const router = useRouter();
-  const testSession = isTestSessionActive();
-  const [showTestMessage, setShowTestMessage] = useState(false);
   const [reduceMotion, setReduceMotion] = useState(false);
 
   useEffect(() => {
@@ -55,41 +50,10 @@ export default function LoginScreen() {
   }, []);
 
   useEffect(() => {
-    if (testSession) {
-      setShowTestMessage(true);
-      const redirectTimer = setTimeout(() => {
-        router.replace('/agents');
-      }, 1500);
-
-      return () => clearTimeout(redirectTimer);
-    }
-  }, [router, testSession]);
-
-  useEffect(() => {
-    if (isAuthenticated && !testSession) {
+    if (isAuthenticated) {
       router.replace('/agents');
     }
-  }, [isAuthenticated, router, testSession]);
-
-  if (showTestMessage) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingWrap}>
-          <EaseView
-            initialAnimate={{ opacity: 0, translateY: SCREEN_OFFSET }}
-            animate={{ opacity: 1, translateY: 0 }}
-            transition={buildEntryTransition(reduceMotion)}
-            style={styles.loadingCard}
-          >
-            <Text style={styles.brand}>Regents</Text>
-            <ActivityIndicator size="large" color={BLUE} style={styles.loadingSpinner} />
-            <Text style={styles.loadingTitle}>Getting Regents ready</Text>
-            <Text style={styles.loadingText}>This device is already signed in.</Text>
-          </EaseView>
-        </View>
-      </SafeAreaView>
-    );
-  }
+  }, [isAuthenticated, router]);
 
   return (
     <SafeAreaView style={styles.container}>

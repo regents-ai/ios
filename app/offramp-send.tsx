@@ -17,8 +17,8 @@
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { COLORS } from '@/constants/Colors';
 import { fetchOfframpTransaction, OfframpTransaction } from '@/utils/fetchOfframpTransaction';
+import { buildEvmTransferCall, isNativeEvmToken } from '@/utils/onchain/buildTransferCall';
 import { getPendingOfframpBalance } from '@/utils/state/flowRuntimeState';
-import { isTestSessionActive } from '@/utils/state/reviewSessionState';
 import {
   useCurrentUser,
   useSendSolanaTransaction,
@@ -37,7 +37,6 @@ import {
   Text,
   View,
 } from 'react-native';
-import { parseEther, parseUnits } from 'viem';
 
 const { DARK_BG, CARD_BG, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, WHITE, BORDER } = COLORS;
 
@@ -166,17 +165,6 @@ export default function OfframpSendScreen() {
     setSending(true);
 
     try {
-      if (isTestSessionActive()) {
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        showAlert(
-          'Cash-out ready',
-          `This cash-out step is marked complete on this device.\n\nWhen you cash out with a funded wallet, this sends ${transaction.sell_amount.value} ${transaction.asset} to Coinbase.`,
-          'success',
-          false
-        );
-        return;
-      }
-
       const isSolana = transaction.network === 'solana';
       if (isSolana) {
         await handleSolanaOfframpSend();
@@ -203,14 +191,13 @@ export default function OfframpSendScreen() {
     const storedDecimals = storedBalance?.amount?.decimals ? parseInt(storedBalance.amount.decimals) : null;
     const decimals = storedDecimals ?? getKnownDecimals(asset);
 
-    const isNative =
-      !contractAddress ||
-      contractAddress === '0x0000000000000000000000000000000000000000' ||
-      contractAddress.toLowerCase() === '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
-
-    const amountBigInt = isNative
-      ? parseEther(sellAmountValue)
-      : parseUnits(sellAmountValue, decimals);
+    const isNative = isNativeEvmToken(contractAddress);
+    const call = buildEvmTransferCall({
+      recipientAddress: to_address,
+      amountDecimal: sellAmountValue,
+      tokenAddress: contractAddress,
+      decimals: isNative ? undefined : decimals,
+    });
 
     const assetUpper = asset.toUpperCase();
     const isPaymasterSupported = network === 'base' && ['USDC', 'EURC', 'BTC'].includes(assetUpper);
@@ -221,19 +208,14 @@ export default function OfframpSendScreen() {
       await sendUserOperation({
         evmSmartAccount: smartAccountAddress as `0x${string}`,
         network: network as any,
-        calls: [{ to: to_address as `0x${string}`, value: amountBigInt, data: '0x' }],
+        calls: [call],
         useCdpPaymaster: isPaymasterSupported,
       });
     } else {
-      const transferSelector = '0xa9059cbb';
-      const encodedRecipient = to_address.slice(2).padStart(64, '0');
-      const encodedAmount = amountBigInt.toString(16).padStart(64, '0');
-      const calldata = `${transferSelector}${encodedRecipient}${encodedAmount}` as `0x${string}`;
-
       await sendUserOperation({
         evmSmartAccount: smartAccountAddress as `0x${string}`,
         network: network as any,
-        calls: [{ to: contractAddress as `0x${string}`, value: 0n, data: calldata }],
+        calls: [call],
         useCdpPaymaster: isPaymasterSupported,
       });
     }

@@ -1,5 +1,4 @@
 type GuestCheckoutBlockerInput = {
-  localSandboxEnabled: boolean;
   isGuestCheckout: boolean;
   country: string;
   linkedEmail?: string | null;
@@ -8,7 +7,7 @@ type GuestCheckoutBlockerInput = {
 };
 
 export function getGuestCheckoutBlocker(input: GuestCheckoutBlockerInput) {
-  if (input.localSandboxEnabled || !input.isGuestCheckout) {
+  if (!input.isGuestCheckout) {
     return null;
   }
 

@@ -1,9 +1,9 @@
 import { getBaseUrl } from '@/constants/BASE_URL';
-import { PreviewWalletFundingChoice } from '@/types/agentPreviews';
+import { WalletFundingChoice } from '@/types/walletFunding';
 import { authenticatedFetch } from './authenticatedFetch';
 
 type BalanceResponse = {
-  balances?: PreviewWalletFundingChoice[];
+  balances?: WalletFundingChoice[];
 };
 
 async function fetchAuthorizedJson(url: string): Promise<BalanceResponse> {
@@ -21,7 +21,7 @@ export async function fetchWalletFundingChoices(input: {
   evmAddress?: string | null;
   solanaAddress?: string | null;
 }) {
-  const balances: PreviewWalletFundingChoice[] = [];
+  const balances: WalletFundingChoice[] = [];
 
   if (input.evmAddress) {
     const [baseData, ethereumData] = await Promise.all([

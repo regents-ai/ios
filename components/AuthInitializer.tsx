@@ -19,7 +19,6 @@ import { useAuthenticateWithJWT, useCurrentUser, useIsSignedIn } from '@coinbase
 import { useRegentsAuth } from '@/hooks/useRegentsAuth';
 import { clearWalletInitFailureMessage, setWalletInitFailureMessage } from '@/utils/authStartupState';
 import { initializeAccessTokenGetter } from '@/utils/getAccessTokenGlobal';
-import { isTestSessionActive } from '@/utils/state/reviewSessionState';
 import { configureNotificationHandling, registerForPushNotifications, sendPushTokenToServer } from '@/utils/pushNotifications';
 import { useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
@@ -43,14 +42,13 @@ export function AuthInitializer({ children }: { children: React.ReactNode }) {
   const { currentUser } = useCurrentUser();
   const isAuthenticatingWallet = useRef(false);
   const isWeb = Platform.OS === 'web';
-  const isTestSession = isTestSessionActive();
 
   useEffect(() => {
     initializeAccessTokenGetter(getAccessToken);
   }, [getAccessToken]);
 
   useEffect(() => {
-    if (isWeb || isTestSession) {
+    if (isWeb) {
       clearWalletInitFailureMessage();
       return;
     }
@@ -74,7 +72,7 @@ export function AuthInitializer({ children }: { children: React.ReactNode }) {
       .finally(() => {
         isAuthenticatingWallet.current = false;
       });
-  }, [authenticateWithJWT, isAuthenticated, isReady, isSignedIn, isTestSession, isWeb]);
+  }, [authenticateWithJWT, isAuthenticated, isReady, isSignedIn, isWeb]);
 
   useEffect(() => {
     if (isWeb) {

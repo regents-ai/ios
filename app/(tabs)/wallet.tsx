@@ -21,7 +21,6 @@ import {
   clearPhoneVerifyWasCanceled,
   getPhoneVerifyWasCanceled,
 } from '@/utils/state/flowRuntimeState';
-import { isTestSessionActive } from '@/utils/state/reviewSessionState';
 import { getCountry, getSubdivision } from '@/utils/state/locationState';
 
 const { DARK_BG, CARD_BG, CARD_ALT, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, BORDER, WHITE, SUCCESS } = COLORS;
@@ -37,20 +36,18 @@ export default function WalletScreen() {
   const [regionKey, setRegionKey] = useState(() => `${getCountry()}-${getSubdivision()}`);
   const [isSwipeActive, setIsSwipeActive] = useState(false);
 
-  const testSession = isTestSessionActive();
   const { isAuthenticated, signOut: signOutIdentity } = useRegentsAuth();
   const { currentUser } = useCurrentUser();
   const { evmAddress } = useEvmAddress();
   const { solanaAddress } = useSolanaAddress();
   const { signOut: signOutWallet } = useSignOut();
-  const effectiveIsSignedIn = testSession || isAuthenticated;
+  const effectiveIsSignedIn = isAuthenticated;
 
   const { address, onNetworkChange, setAddress } = useWalletAddresses({
     currentUser,
     effectiveIsSignedIn,
     evmAddress,
     solanaAddress,
-    testSession,
   });
 
   const {
@@ -71,7 +68,6 @@ export default function WalletScreen() {
     isLoadingOptions,
     isLoadingQuote,
     isProcessingPayment,
-    isSandboxOrder,
     options,
     optionsError,
     paymentCurrencies,
@@ -289,7 +285,6 @@ export default function WalletScreen() {
           paymentMethod={activePaymentMethod as 'GUEST_CHECKOUT_APPLE_PAY' | 'GUEST_CHECKOUT_GOOGLE_PAY'}
           onClose={closeGuestCheckout}
           setIsProcessingPayment={setIsProcessingPayment}
-          isSandbox={isSandboxOrder}
           onAlert={(title, message, type) => {
             const transactionSummary = currentTransaction
               ? `\n\n${currentTransaction.amount} ${currentTransaction.paymentCurrency} → ${currentTransaction.asset} (${currentTransaction.network})`

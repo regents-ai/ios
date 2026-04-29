@@ -208,7 +208,7 @@ export async function registerForPushNotifications(): Promise<{ token: string; t
 /**
  * Send push token to server for webhook notifications
  */
-export async function sendPushTokenToServer(pushToken: string, userId: string, getAccessToken: () => Promise<string | null>, tokenType: 'native' | 'expo' = 'native'): Promise<void> {
+export async function sendPushTokenToServer(pushToken: string, userId: string, getAccessToken: () => Promise<string | null>, tokenType: 'native' | 'expo'): Promise<void> {
   try {
     const accessToken = await getAccessToken();
 

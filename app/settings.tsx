@@ -5,23 +5,14 @@ import { getEaseTransition } from '@/components/motion/easePresets';
 import { useReducedMotion } from '@/components/motion/useReducedMotion';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
-import { TEST_ACCOUNTS } from '@/constants/TestAccounts';
 import { useRegentsAuth } from '@/hooks/useRegentsAuth';
 import {
   setCountry,
   setSubdivision,
 } from '@/utils/state/locationState';
 import {
-  clearTestSession,
-  getTestWalletSol,
-  isTestSessionActive,
-} from '@/utils/state/reviewSessionState';
-import {
-  clearManualAddress,
-  getManualWalletAddress,
   setCurrentSolanaAddress,
   setCurrentWalletAddress,
-  setManualWalletAddress,
 } from '@/utils/state/walletRuntimeState';
 import {
   daysUntilExpiry,
@@ -33,10 +24,6 @@ import {
   setLifetimeTransactionThreshold,
   setVerifiedPhone,
 } from '@/utils/state/verificationState';
-import {
-  getSandboxMode,
-  setSandboxMode,
-} from '@/utils/state/sandboxState';
 import {
   useCurrentUser,
   useEvmAddress,
@@ -59,7 +46,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   View,
@@ -115,10 +101,9 @@ function SettingsModalSurface({
   );
 }
 
-type SettingsSectionKey = 'account' | 'wallet' | 'testing' | 'help';
+type SettingsSectionKey = 'account' | 'wallet' | 'help';
 
 export default function SettingsScreen() {
-  const testSession = isTestSessionActive();
   const { isInitialized } = useIsInitialized();
   const {
     linkedEmail,
@@ -134,20 +119,18 @@ export default function SettingsScreen() {
   const { evmAddress } = useEvmAddress();
   const { solanaAddress: cdpSolanaAddress } = useSolanaAddress();
 
-  const explicitEOAAddress = testSession ? TEST_ACCOUNTS.wallets.eoaDummy : (currentUser?.evmAccounts?.[0] as string | undefined);
-  const smartAccountAddress = testSession ? TEST_ACCOUNTS.wallets.evm : (currentUser?.evmSmartAccounts?.[0] as string | undefined);
-  const solanaAddress = testSession ? getTestWalletSol() : cdpSolanaAddress;
+  const explicitEOAAddress = currentUser?.evmAccounts?.[0] as string | undefined;
+  const smartAccountAddress = currentUser?.evmSmartAccounts?.[0] as string | undefined;
+  const solanaAddress = cdpSolanaAddress;
   const evmWalletAddress = explicitEOAAddress || evmAddress || smartAccountAddress;
 
-  const effectiveIsSignedIn = testSession || isAuthenticated;
-  const displayEmail = testSession ? TEST_ACCOUNTS.email : (linkedEmail || 'No email linked');
+  const effectiveIsSignedIn = isAuthenticated;
+  const displayEmail = linkedEmail || 'No email linked';
 
   const [verifiedPhone, setVerifiedPhoneLocal] = useState(getVerifiedPhone());
   const [phoneFresh, setPhoneFresh] = useState(isPhoneFresh60d());
   const [phoneExpiry, setPhoneExpiry] = useState(daysUntilExpiry());
 
-  const [localSandboxEnabled, setLocalSandboxEnabled] = useState(getSandboxMode());
-  const [manualAddress, setManualAddress] = useState(getManualWalletAddress() || '');
   const [lifetimeTxThreshold, setLifetimeTxThresholdLocal] = useState(getLifetimeTransactionThreshold());
 
   const [alertState, setAlertState] = useState<{
@@ -168,7 +151,6 @@ export default function SettingsScreen() {
   const [showExportConfirm, setShowExportConfirm] = useState(false);
   const [exportType, setExportType] = useState<'evm' | 'solana'>('evm');
   const [exporting, setExporting] = useState(false);
-  const [productionSwitchAlertVisible, setProductionSwitchAlertVisible] = useState(false);
   const [activeSection, setActiveSection] = useState<SettingsSectionKey>('account');
 
   const isExpoGo = process.env.EXPO_PUBLIC_USE_EXPO_CRYPTO === 'true';
@@ -207,21 +189,11 @@ export default function SettingsScreen() {
   }, [linkedPhone, regentsUserId]);
 
   useEffect(() => {
-    if (localSandboxEnabled) {
-      setManualWalletAddress(manualAddress || null);
-    } else {
-      setManualWalletAddress(null);
-    }
-  }, [manualAddress, localSandboxEnabled]);
-
-  useEffect(() => {
     setLifetimeTransactionThreshold(lifetimeTxThreshold);
   }, [lifetimeTxThreshold]);
 
   const openPhoneVerify = useCallback(() => {
-    const cdpPhone = testSession
-      ? TEST_ACCOUNTS.phone
-      : linkedPhone;
+    const cdpPhone = linkedPhone;
 
     if (cdpPhone) {
       setReverifyPhone(cdpPhone);
@@ -233,7 +205,7 @@ export default function SettingsScreen() {
       pathname: '/phone-verify',
       params: { initialPhone: verifiedPhone || '', mode: 'link' },
     });
-  }, [linkedPhone, testSession, verifiedPhone]);
+  }, [linkedPhone, verifiedPhone]);
 
   const handleReverifyConfirm = useCallback(async () => {
     if (!reverifyPhone) return;
@@ -241,11 +213,9 @@ export default function SettingsScreen() {
     setShowReverifyConfirm(false);
 
     try {
-      if (!testSession) {
-        await signOutIdentity();
-        await signOutWallet();
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
+      await signOutIdentity();
+      await signOutWallet();
+      await new Promise(resolve => setTimeout(resolve, 500));
 
       router.replace({
         pathname: '/phone-verify',
@@ -263,28 +233,22 @@ export default function SettingsScreen() {
         type: 'error',
       });
     }
-  }, [reverifyPhone, signOutIdentity, signOutWallet, testSession]);
+  }, [reverifyPhone, signOutIdentity, signOutWallet]);
 
   const handleSignOut = useCallback(async () => {
     try {
-      if (testSession) {
-        await clearTestSession();
-      } else {
-        await signOutIdentity();
-        await signOutWallet();
-      }
+      await signOutIdentity();
+      await signOutWallet();
     } catch (error) {
       console.error('Sign out failed:', error);
     } finally {
       setCurrentWalletAddress(null);
       setCurrentSolanaAddress(null);
-      setManualWalletAddress(null);
       setCountry('US');
       setSubdivision('CA');
-      setSandboxMode(true);
       router.replace('/auth/login');
     }
-  }, [signOutIdentity, signOutWallet, testSession]);
+  }, [signOutIdentity, signOutWallet]);
 
   const handleRequestExport = () => {
     if (!effectiveIsSignedIn || (!evmWalletAddress && !solanaAddress)) return;
@@ -326,27 +290,17 @@ export default function SettingsScreen() {
 
     setExporting(true);
     try {
-      if (testSession) {
-        await Clipboard.setStringAsync(TEST_ACCOUNTS.seedPhrase);
-        setAlertState({
-          visible: true,
-          title: 'Mock seed phrase copied',
-          message: 'This copied a review-only seed phrase for testing.',
-          type: 'info',
-        });
-      } else {
-        const result = isEvmExport
-          ? await exportEvmAccount({ evmAccount: evmWalletAddress! as `0x${string}` })
-          : await exportSolanaAccount({ solanaAccount: solanaAddress! });
+      const result = isEvmExport
+        ? await exportEvmAccount({ evmAccount: evmWalletAddress! as `0x${string}` })
+        : await exportSolanaAccount({ solanaAccount: solanaAddress! });
 
-        await Clipboard.setStringAsync(result.privateKey);
-        setAlertState({
-          visible: true,
-          title: 'Wallet key copied',
-          message: `Your ${isEvmExport ? 'Base and Ethereum' : 'Solana'} wallet key is now in the clipboard. Keep it somewhere safe and clear the clipboard when you are done.`,
-          type: 'info',
-        });
-      }
+      await Clipboard.setStringAsync(result.privateKey);
+      setAlertState({
+        visible: true,
+        title: 'Wallet key copied',
+        message: `Your ${isEvmExport ? 'Base and Ethereum' : 'Solana'} wallet key is now in the clipboard. Keep it somewhere safe and clear the clipboard when you are done.`,
+        type: 'info',
+      });
     } catch (error: any) {
       setAlertState({
         visible: true,
@@ -370,8 +324,8 @@ export default function SettingsScreen() {
     );
   }
 
-  const cdpPhone = testSession ? TEST_ACCOUNTS.phone : linkedPhone;
-  const hasLinkedEmail = !!linkedEmail || testSession;
+  const cdpPhone = linkedPhone;
+  const hasLinkedEmail = !!linkedEmail;
   const phoneIsVerified = verifiedPhone === cdpPhone && phoneFresh;
   const phoneIsExpired = verifiedPhone === cdpPhone && !phoneFresh;
   const sectionOptions: {
@@ -390,13 +344,7 @@ export default function SettingsScreen() {
       key: 'wallet',
       icon: 'wallet-outline',
       title: 'Wallet',
-      detail: localSandboxEnabled ? 'Practice mode is on' : 'Ready for everyday use',
-    },
-    {
-      key: 'testing',
-      icon: 'flask-outline',
-      title: 'Practice',
-      detail: localSandboxEnabled ? 'Practice wallet ready' : 'Turn on practice mode',
+      detail: 'Ready for everyday use',
     },
     {
       key: 'help',
@@ -467,7 +415,7 @@ export default function SettingsScreen() {
                 <View style={styles.infoBlock}>
                   <Text style={styles.labelText}>Email</Text>
                   <Text style={styles.valueText}>{displayEmail}</Text>
-                  {!hasLinkedEmail && !testSession ? (
+                  {!hasLinkedEmail ? (
                     <Pressable style={styles.primaryButton} onPress={() => router.push('/email-verify?mode=link')}>
                       <Text style={styles.primaryButtonText}>Add email</Text>
                     </Pressable>
@@ -511,27 +459,6 @@ export default function SettingsScreen() {
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Wallet</Text>
 
-            <View style={styles.rowBetween}>
-              <View style={styles.rowCopyBlock}>
-                <Text style={styles.labelText}>Practice mode</Text>
-                <Text style={styles.helperText}>
-                  {localSandboxEnabled ? 'Try money movement without using real money.' : 'Use your everyday wallet and real checkout.'}
-                </Text>
-              </View>
-              <Switch
-                value={localSandboxEnabled}
-                onValueChange={value => {
-                  if (!value && manualAddress) {
-                    setProductionSwitchAlertVisible(true);
-                    return;
-                  }
-                  setLocalSandboxEnabled(value);
-                  setSandboxMode(value);
-                }}
-                trackColor={{ true: BLUE, false: BORDER }}
-              />
-            </View>
-
             <View style={styles.infoBlock}>
               <Text style={styles.labelText}>Apple Pay reminder</Text>
               <Text style={styles.helperText}>Choose when to remind someone that their Apple Pay limit is running low.</Text>
@@ -552,49 +479,6 @@ export default function SettingsScreen() {
                 placeholderTextColor={TEXT_SECONDARY}
               />
             </View>
-          </View>
-        ) : null}
-
-        {activeSection === 'testing' ? (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Practice</Text>
-            {localSandboxEnabled ? (
-              <>
-                <Text style={styles.helperText}>Use a different wallet address while you are practicing.</Text>
-                <View style={styles.manualAddressRow}>
-                  <TextInput
-                    style={styles.textInput}
-                    value={manualAddress}
-                    onChangeText={setManualAddress}
-                    placeholder="Enter a wallet address"
-                    placeholderTextColor={TEXT_SECONDARY}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                  />
-                  <Pressable
-                    style={styles.pasteButton}
-                    onPress={async () => {
-                      if (manualAddress) {
-                        setManualAddress('');
-                        return;
-                      }
-                      const text = await Clipboard.getStringAsync();
-                      if (text) setManualAddress(text);
-                    }}
-                  >
-                    <Ionicons name={manualAddress ? 'close-circle' : 'clipboard-outline'} size={20} color={manualAddress ? TEXT_SECONDARY : BLUE} />
-                  </Pressable>
-                </View>
-                <Text style={styles.helperText}>This address clears itself when you leave practice mode.</Text>
-              </>
-            ) : (
-              <>
-                <Text style={styles.helperText}>Turn on practice mode in the Wallet section to use a separate practice wallet address.</Text>
-                <Pressable style={styles.secondaryButton} onPress={() => setActiveSection('wallet')}>
-                  <Text style={styles.secondaryButtonText}>Open wallet settings</Text>
-                </Pressable>
-              </>
-            )}
           </View>
         ) : null}
 
@@ -707,35 +591,6 @@ export default function SettingsScreen() {
           </StaggerGroup>
         </SettingsModalSurface>
 
-        <SettingsModalSurface visible={productionSwitchAlertVisible} onRequestClose={() => setProductionSwitchAlertVisible(false)}>
-          <StaggerGroup>
-            <StaggerItem order={0}>
-              <Text style={styles.modalTitle}>Leave practice mode?</Text>
-            </StaggerItem>
-            <StaggerItem order={1}>
-              <Text style={styles.helperText}>Your practice wallet address will be cleared when you leave practice mode.</Text>
-            </StaggerItem>
-            <StaggerItem order={2}>
-              <View style={styles.buttonRow}>
-                <Pressable style={styles.secondaryButton} onPress={() => setProductionSwitchAlertVisible(false)}>
-                  <Text style={styles.secondaryButtonText}>Cancel</Text>
-                </Pressable>
-                <Pressable
-                  style={[styles.primaryButton, { flex: 1 }]}
-                  onPress={() => {
-                    setProductionSwitchAlertVisible(false);
-                    setLocalSandboxEnabled(false);
-                    setSandboxMode(false);
-                    clearManualAddress();
-                    setManualAddress('');
-                  }}
-                >
-                  <Text style={styles.primaryButtonText}>Confirm</Text>
-                </Pressable>
-              </View>
-            </StaggerItem>
-          </StaggerGroup>
-        </SettingsModalSurface>
       </ScrollView>
     </KeyboardAvoidingView>
   );

@@ -5,7 +5,6 @@
  * Shows loading spinner while checking auth status.
  * Redirects to login screen if not authenticated.
  *
- * TestFlight accounts bypass this check automatically.
  */
 
 import { COLORS } from '@/constants/Colors';
@@ -15,9 +14,7 @@ import { isAuthManagedRoute, resolveAuthGateState } from '@/utils/authFlowState'
 import { useRegentsAuth } from '@/hooks/useRegentsAuth';
 import { getEaseAnimate, getEaseInitialAnimate, getEaseTransition } from '@/components/motion/easePresets';
 import { useReducedMotion } from '@/components/motion/useReducedMotion';
-import { isTestSessionActive } from '@/utils/state/reviewSessionState';
 import { setCountry, setSubdivision } from '@/utils/state/locationState';
-import { setSandboxMode } from '@/utils/state/sandboxState';
 import { setCurrentSolanaAddress, setCurrentWalletAddress, setManualWalletAddress } from '@/utils/state/walletRuntimeState';
 import { useIsInitialized, useSignOut } from '@coinbase/cdp-hooks';
 import { router, useRootNavigationState, useSegments } from 'expo-router';
@@ -35,23 +32,19 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const { signOut: signOutWallet } = useSignOut();
   const segments = useSegments();
   const navigationState = useRootNavigationState();
-  const testSession = isTestSessionActive();
   const [isReady, setIsReady] = useState(false);
   const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
   const [startupTimeoutReached, setStartupTimeoutReached] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
-  const privyReady = testSession ? true : isPrivyReady;
-
-  const isAuthenticated = testSession || isPrivyAuthenticated;
-  const requiresWalletInitialization = !testSession && isPrivyAuthenticated;
+  const isAuthenticated = isPrivyAuthenticated;
+  const requiresWalletInitialization = isPrivyAuthenticated;
   const walletReady = !requiresWalletInitialization || isInitialized;
   const gateState = resolveAuthGateState({
     isReady,
-    isPrivyReady: privyReady,
+    isPrivyReady,
     walletReady,
     hasCheckedAuth,
     isAuthenticated,
-    testSession,
     hasAuthError: !!authError,
     startupTimeoutReached,
     walletInitFailureMessage: getWalletInitFailureMessage(),
@@ -70,7 +63,6 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       setManualWalletAddress(null);
       setCountry('US');
       setSubdivision('CA');
-      setSandboxMode(true);
       setStartupTimeoutReached(false);
       setHasCheckedAuth(false);
       setRetryKey(prev => prev + 1);
@@ -85,16 +77,16 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   }, [navigationState?.key]);
 
   useEffect(() => {
-    if (privyReady && walletReady) {
+    if (isPrivyReady && walletReady) {
       const timer = setTimeout(() => {
         setHasCheckedAuth(true);
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [privyReady, walletReady]);
+  }, [isPrivyReady, walletReady]);
 
   useEffect(() => {
-    if (testSession || isAuthenticated || privyReady) {
+    if (isAuthenticated || isPrivyReady) {
       setStartupTimeoutReached(false);
       return;
     }
@@ -104,14 +96,14 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     }, 4000);
 
     return () => clearTimeout(timer);
-  }, [isAuthenticated, privyReady, retryKey, testSession]);
+  }, [isAuthenticated, isPrivyReady, retryKey]);
 
   useEffect(() => {
     if (!isReady) {
       return;
     }
 
-    if (!privyReady || !walletReady) {
+    if (!isPrivyReady || !walletReady) {
       return;
     }
 
@@ -136,7 +128,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     }, 0);
 
     return () => clearTimeout(redirectTimer);
-  }, [hasCheckedAuth, isAuthenticated, isReady, privyReady, segments, walletReady]);
+  }, [hasCheckedAuth, isAuthenticated, isPrivyReady, isReady, segments, walletReady]);
 
   if (gateState.mode === 'issue') {
     return (

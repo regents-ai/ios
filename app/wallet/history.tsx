@@ -1,4 +1,3 @@
-import { isTestSessionActive } from "@/utils/state/reviewSessionState";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { router } from "expo-router";
@@ -14,7 +13,6 @@ import {
 import { CoinbaseAlert } from "../../components/ui/CoinbaseAlerts";
 import { FailedTransactionBadge } from "../../components/ui/FailedTransactionCard";
 import { COLORS } from "../../constants/Colors";
-import { TEST_ACCOUNTS } from "../../constants/TestAccounts";
 import { FONTS } from "../../constants/Typography";
 import { useRegentsAuth } from "../../hooks/useRegentsAuth";
 import { fetchTransactionHistory } from "../../utils/fetchTransactionHistory";
@@ -62,8 +60,7 @@ export default function History() {
   });
 
   const loadTransactions = useCallback(async (pageKey?: string, append: boolean = false) => {
-    const isTestFlight = isTestSessionActive();
-    const userId = isTestFlight ? TEST_ACCOUNTS.userId : regentsUserId;
+    const userId = regentsUserId;
 
     if (!userId) {
       return;
@@ -105,8 +102,7 @@ export default function History() {
 
   useFocusEffect(
     useCallback(() => {
-      const isTestFlight = isTestSessionActive();
-      const userId = isTestFlight ? TEST_ACCOUNTS.userId : regentsUserId;
+      const userId = regentsUserId;
 
       if (userId) {
         loadTransactions();
@@ -224,7 +220,7 @@ export default function History() {
           <Ionicons name="time-outline" size={64} color={TEXT_SECONDARY} />
           <Text style={styles.emptyTitle}>No activity yet</Text>
           <Text style={styles.emptyMessage}>
-            {regentsUserId || isTestSessionActive()
+            {regentsUserId
               ? "Your wallet activity will appear here after you buy, send, or cash out."
               : "Sign in to view your wallet activity."}
           </Text>

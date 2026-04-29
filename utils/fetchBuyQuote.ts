@@ -3,10 +3,8 @@ import { getBaseUrl } from '@/constants/BASE_URL';
 import { authenticatedFetch } from './authenticatedFetch';
 import { createGuestCheckoutOrder } from './createGuestCheckoutOrder';
 import { buildGuestCheckoutQuotePayload } from './guestCheckout';
-import { demoAddressForNetwork } from './randomAddresses';
 import { getCountry, getSubdivision } from './state/locationState';
-import { getSandboxMode } from './state/sandboxState';
-import { getCurrentWalletAddress } from './state/walletRuntimeState';
+import { getWalletAddressForNetwork } from './state/walletRuntimeState';
 
 export async function fetchBuyQuote(payload: {
   paymentCurrency: string;
@@ -16,15 +14,10 @@ export async function fetchBuyQuote(payload: {
   paymentMethod: string;
   partnerUserRef: string;
 }) {
-  // In sandbox mode, use the current wallet address (could be manual override)
-  // In production, fall back to demo address for quote purposes
-  const isSandbox = getSandboxMode();
-  const userAddress = getCurrentWalletAddress();
-  const destinationAddress = (isSandbox && userAddress) ? userAddress : demoAddressForNetwork(payload.destinationNetwork);
+  const destinationAddress = getWalletAddressForNetwork(payload.destinationNetwork);
 
-  // If we couldn't generate a demo address for this network, return null instead of erroring
   if (!destinationAddress) {
-    console.log(`No demo address available for network: ${payload.destinationNetwork}`);
+    console.log(`No wallet address available for network: ${payload.destinationNetwork}`);
     return null;
   }
 

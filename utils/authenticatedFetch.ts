@@ -23,7 +23,6 @@
  */
 
 import { getAccessTokenGlobal } from './getAccessTokenGlobal';
-import { isTestSessionActive } from './state/reviewSessionState';
 
 export async function authenticatedFetch(
   input: RequestInfo | URL,
@@ -32,24 +31,14 @@ export async function authenticatedFetch(
   // Prepare headers
   const headers = new Headers(init?.headers || {});
 
-  // Handle review sessions without a live account
-  if (isTestSessionActive()) {
-    console.log('🧪 [AUTH FETCH] TestFlight mode - using mock authentication');
-    if (!headers.has('Authorization')) {
-      headers.set('Authorization', 'Bearer testflight-mock-token');
-    }
-  } else {
-    // Real account - get the current app access token
-    const token = await getAccessTokenGlobal();
+  const token = await getAccessTokenGlobal();
 
-    if (!token) {
-      throw new Error('Authentication required. Please connect your wallet first.');
-    }
+  if (!token) {
+    throw new Error('Authentication required. Please connect your wallet first.');
+  }
 
-    // Add Authorization header (won't overwrite if already exists)
-    if (!headers.has('Authorization')) {
-      headers.set('Authorization', `Bearer ${token}`);
-    }
+  if (!headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`);
   }
 
   // Log for debugging (in development)

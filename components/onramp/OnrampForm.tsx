@@ -3,15 +3,11 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Linking, Platform, StyleSheet, View } from 'react-native';
 
 import { COLORS } from '@/constants/Colors';
-import { TEST_ACCOUNTS } from '@/constants/TestAccounts';
 import { useRegentsAuth } from '@/hooks/useRegentsAuth';
 import { fetchUserLimits, UserLimit } from '@/utils/fetchUserLimits';
 import { getAccessTokenGlobal } from '@/utils/getAccessTokenGlobal';
 import { getGuestCheckoutBlocker } from '@/utils/onrampEligibility';
-import { getPendingForm } from '@/utils/state/flowRuntimeState';
 import { getCountry, getSubdivision, setCountry, setSubdivision } from '@/utils/state/locationState';
-import { isTestSessionActive } from '@/utils/state/reviewSessionState';
-import { getSandboxMode, setSandboxMode } from '@/utils/state/sandboxState';
 import {
   getLifetimeTransactionThreshold,
   getVerifiedPhone,
@@ -24,7 +20,6 @@ import {
   AssetNetworkSection,
   ConfirmationSection,
   EligibilityNoticeSection,
-  EnvironmentSection,
   FocusPathSection,
   LocationSection,
   PaymentMethodSection,
@@ -79,7 +74,7 @@ export function OnrampForm({
   options,
   paymentCurrencies,
 }: OnrampFormProps) {
-  const { isAuthenticated, linkedEmail, linkedPhone, regentsUserId } = useRegentsAuth();
+  const { isAuthenticated, linkedEmail, linkedPhone } = useRegentsAuth();
   const { currentUser } = useCurrentUser();
   const prevNetworkRef = useRef('Base');
 
@@ -87,7 +82,6 @@ export function OnrampForm({
   const [network, setNetwork] = useState('Base');
   const [paymentMethod, setPaymentMethod] = useState('GUEST_CHECKOUT_APPLE_PAY');
   const [paymentCurrency, setPaymentCurrency] = useState('USD');
-  const [localSandboxEnabled, setLocalSandboxEnabled] = useState(getSandboxMode());
   const [country, setCountryLocal] = useState(getCountry());
   const [subdivision, setSubdivisionLocal] = useState(getSubdivision());
   const [activeSheet, setActiveSheet] = useState<SheetKey>(null);
@@ -137,7 +131,6 @@ export function OnrampForm({
   const verifiedPhone = getVerifiedPhone();
   const hasFreshVerifiedPhone = !!linkedPhone && verifiedPhone === linkedPhone && isPhoneFresh60d();
   const guestCheckoutBlocker = getGuestCheckoutBlocker({
-    localSandboxEnabled,
     isGuestCheckout,
     country,
     linkedEmail,
@@ -171,9 +164,7 @@ export function OnrampForm({
   }, [network]);
 
   const smartAccount = useMemo(() => {
-    return isTestSessionActive()
-      ? TEST_ACCOUNTS.wallets.evm
-      : (currentUser?.evmSmartAccounts?.[0] as string | undefined);
+    return currentUser?.evmSmartAccounts?.[0] as string | undefined;
   }, [currentUser]);
 
   const isAmountValid = Number.isFinite(amountNumber) && amountNumber > 0;
@@ -183,15 +174,13 @@ export function OnrampForm({
     address.length >= 32 &&
     address.length <= 44 &&
     /^[1-9A-HJ-NP-Za-km-z]+$/.test(address);
-  const needsSmartAccount = !localSandboxEnabled && isEvmNetwork;
+  const needsSmartAccount = isEvmNetwork;
   const hasSmartAccount = !!smartAccount;
-  const hasValidAddress = localSandboxEnabled
-    ? !!address.trim()
-    : isEvmNetwork
-      ? isEvmAddressValid
-      : isSolanaNetwork
-        ? isSolanaAddressValid
-        : false;
+  const hasValidAddress = isEvmNetwork
+    ? isEvmAddressValid
+    : isSolanaNetwork
+      ? isSolanaAddressValid
+      : false;
   const isFormValid = isAmountValid && !!network && !!asset && hasValidAddress && (!needsSmartAccount || hasSmartAccount);
 
   const currencyLimits = useMemo(() => {
@@ -249,7 +238,7 @@ export function OnrampForm({
   }, [amountNumber, isGuestCheckout, options, paymentCurrency, paymentMethod]);
 
   const limitsValidation = useMemo(() => {
-    if (!userLimits || localSandboxEnabled || !isGuestCheckout) {
+    if (!userLimits || !isGuestCheckout) {
       return { isValid: true, error: null as string | null, warning: null as string | null };
     }
 
@@ -282,7 +271,7 @@ export function OnrampForm({
     }
 
     return { isValid: true, error: null, warning: null };
-  }, [amountNumber, isAmountValid, isGuestCheckout, localSandboxEnabled, userLimits]);
+  }, [amountNumber, isAmountValid, isGuestCheckout, userLimits]);
 
   const isFormValidWithLimits = isFormValid && limitsValidation.isValid && !guestCheckoutBlocker;
 
@@ -328,19 +317,19 @@ export function OnrampForm({
     }
 
     prevNetworkRef.current = network;
-    if (!localSandboxEnabled && (isEvmNetwork || isSolanaNetwork)) {
+    if (isEvmNetwork || isSolanaNetwork) {
       const nextAddress = getCurrentWalletAddress();
       if (nextAddress && nextAddress !== address) {
         onAddressChange(nextAddress);
       }
     }
-  }, [address, isEvmNetwork, isSolanaNetwork, localSandboxEnabled, network, onAddressChange]);
+  }, [address, isEvmNetwork, isSolanaNetwork, network, onAddressChange]);
 
   useEffect(() => {
-    if (!localSandboxEnabled && !isEvmNetwork && !isSolanaNetwork && address) {
+    if (!isEvmNetwork && !isSolanaNetwork && address) {
       onAddressChange('');
     }
-  }, [address, isEvmNetwork, isSolanaNetwork, localSandboxEnabled, onAddressChange]);
+  }, [address, isEvmNetwork, isSolanaNetwork, onAddressChange]);
 
   useEffect(() => {
     if (asset && availableNetworks.length > 0) {
@@ -362,27 +351,11 @@ export function OnrampForm({
     }
   }, [asset, availableAssets, network]);
 
-  useEffect(() => {
-    if (!regentsUserId) {
-      return;
-    }
-
-    const pending = getPendingForm();
-    if (pending && typeof pending.sandbox === 'boolean') {
-      setLocalSandboxEnabled(pending.sandbox);
-      setSandboxMode(pending.sandbox);
-      return;
-    }
-
-    setLocalSandboxEnabled(true);
-    setSandboxMode(true);
-  }, [regentsUserId]);
-
   const fetchUserLimitsData = useCallback(async () => {
     const freshPhone = getVerifiedPhone();
     const isFresh = isPhoneFresh60d();
 
-    if (!isGuestCheckout || localSandboxEnabled || !freshPhone || !isFresh) {
+    if (!isGuestCheckout || !freshPhone || !isFresh) {
       setUserLimits(null);
       return;
     }
@@ -405,7 +378,7 @@ export function OnrampForm({
     } finally {
       setIsLoadingLimits(false);
     }
-  }, [isGuestCheckout, localSandboxEnabled]);
+  }, [isGuestCheckout]);
 
   useEffect(() => {
     void fetchUserLimitsData();
@@ -445,11 +418,10 @@ export function OnrampForm({
         address,
         paymentMethod,
         paymentCurrency,
-        sandbox: localSandboxEnabled,
         agreementAcceptedAt: new Date().toISOString(),
       });
     },
-    [address, amount, asset, isFormValidWithLimits, localSandboxEnabled, network, onSubmit, paymentCurrency, paymentMethod]
+    [address, amount, asset, isFormValidWithLimits, network, onSubmit, paymentCurrency, paymentMethod]
   );
 
   const applyBaseUsdcPath = useCallback(() => {
@@ -467,7 +439,7 @@ export function OnrampForm({
       nextNotices.push({
         title: 'Region not supported',
         message:
-          'Apple Pay checkout from this app is only available in the United States right now. Use the hosted checkout instead, or switch to test mode to keep exploring.',
+          'Apple Pay checkout from this app is only available in the United States right now. Use More payment options instead.',
         tone: 'warning',
       });
     }
@@ -484,11 +456,11 @@ export function OnrampForm({
       });
     }
 
-    if (!localSandboxEnabled && !isEvmNetwork && !isSolanaNetwork) {
+    if (!isEvmNetwork && !isSolanaNetwork) {
       nextNotices.push({
         title: 'Choose a supported network',
         message:
-          'This wallet can buy on Base, Ethereum, and Solana right now. Choose one of those networks, or switch to test mode to keep exploring.',
+          'This wallet can buy on Base, Ethereum, and Solana right now.',
         tone: 'warning',
       });
     } else if (needsSmartAccount && !hasSmartAccount) {
@@ -497,23 +469,11 @@ export function OnrampForm({
         message: 'This network is almost ready. Finish setting up your wallet, then come back to buy.',
         tone: 'error',
       });
-    } else if (!localSandboxEnabled && !hasValidAddress) {
+    } else if (!hasValidAddress) {
       nextNotices.push({
         title: 'Wallet needed',
         message: `Connect a valid ${isEvmNetwork ? 'Base or Ethereum' : isSolanaNetwork ? 'Solana' : 'wallet'} address to continue.`,
         tone: 'error',
-      });
-    } else if (localSandboxEnabled && !address) {
-      nextNotices.push({
-        title: 'Add a test wallet',
-        message: 'Add a wallet address in Settings to keep testing this flow.',
-        tone: 'error',
-      });
-    } else if (localSandboxEnabled) {
-      nextNotices.push({
-        title: 'Test mode',
-        message: `Buying to: ${address}\n\nYou can change this address any time from Settings.`,
-        tone: 'info',
       });
     } else if (isAuthenticated) {
       nextNotices.push({
@@ -544,7 +504,6 @@ export function OnrampForm({
     limitsValidation.warning,
     linkedEmail,
     linkedPhone,
-    localSandboxEnabled,
     needsGuestCheckoutVerification,
     needsSmartAccount,
   ]);
@@ -595,14 +554,6 @@ export function OnrampForm({
   return (
     <View style={styles.content}>
       <FocusPathSection isBaseUsdcPath={isBaseUsdcPath} onPress={applyBaseUsdcPath} />
-      <EnvironmentSection
-        isGuestCheckout={isGuestCheckout}
-        localSandboxEnabled={localSandboxEnabled}
-        onToggleSandbox={value => {
-          setLocalSandboxEnabled(value);
-          setSandboxMode(value);
-        }}
-      />
       <AmountQuoteSection
         amount={amount}
         amountError={amountError}
@@ -613,7 +564,6 @@ export function OnrampForm({
         isLoadingQuote={isLoadingQuote}
         isValidAmount={isAmountValid}
         limits={currencyLimits}
-        localSandboxEnabled={localSandboxEnabled}
         onAmountChange={onAmountChange}
         onOpenPaymentCurrencyPicker={() => setActiveSheet('currency')}
         paymentCurrency={paymentCurrency}

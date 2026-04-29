@@ -4,7 +4,6 @@ export type AuthGateStateInput = {
   walletReady: boolean;
   hasCheckedAuth: boolean;
   isAuthenticated: boolean;
-  testSession: boolean;
   hasAuthError: boolean;
   startupTimeoutReached: boolean;
   walletInitFailureMessage: string | null;
@@ -19,7 +18,7 @@ export function resolveAuthGateState(input: AuthGateStateInput) {
     return { mode: 'ready' as const };
   }
 
-  if (!input.testSession && input.isAuthenticated && input.walletInitFailureMessage) {
+  if (input.isAuthenticated && input.walletInitFailureMessage) {
     return {
       mode: 'issue' as const,
       title: 'Wallet unavailable',
@@ -27,7 +26,7 @@ export function resolveAuthGateState(input: AuthGateStateInput) {
     };
   }
 
-  if (!input.isAuthenticated && !input.testSession && (input.hasAuthError || input.startupTimeoutReached)) {
+  if (!input.isAuthenticated && (input.hasAuthError || input.startupTimeoutReached)) {
     return {
       mode: 'issue' as const,
       title: 'Sign-in is unavailable',

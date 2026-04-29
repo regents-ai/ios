@@ -1,9 +1,6 @@
-import { getSandboxMode } from './sandboxState';
-
 let currentWalletAddress: string | null = null;
 let currentSolanaAddress: string | null = null;
 let currentNetwork = 'Base';
-let manualWalletAddress: string | null = null;
 const listeners = new Set<() => void>();
 
 function notifyWalletRuntimeListeners() {
@@ -27,20 +24,6 @@ export function setCurrentNetwork(network: string) {
 
 export function getCurrentNetwork() {
   return currentNetwork;
-}
-
-export function setManualWalletAddress(address: string | null) {
-  manualWalletAddress = address;
-  notifyWalletRuntimeListeners();
-}
-
-export function getManualWalletAddress() {
-  return manualWalletAddress;
-}
-
-export function clearManualAddress() {
-  manualWalletAddress = '';
-  notifyWalletRuntimeListeners();
 }
 
 export function subscribeWalletRuntime(listener: () => void) {
@@ -69,14 +52,6 @@ export function getWalletAddressForNetwork(network: string) {
     'zksync',
     'scroll',
   ].some((key) => networkLower.includes(key));
-
-  if (getSandboxMode()) {
-    if (isSolanaNetwork) {
-      return manualWalletAddress || currentSolanaAddress || null;
-    }
-
-    return manualWalletAddress || currentWalletAddress || null;
-  }
 
   if (isSolanaNetwork) {
     return currentSolanaAddress || null;

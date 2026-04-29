@@ -34,7 +34,6 @@ import * as Localization from 'expo-localization';
 import { Linking, Platform } from 'react-native';
 import { getCurrentPartnerUserRef } from './state/flowRuntimeState';
 import { getCountry } from './state/locationState';
-import { getSandboxMode } from './state/sandboxState';
 
 // Support email - not exposed in UI, only used internally for mailto
 const SUPPORT_EMAIL = 'onrampsupport@coinbase.com';
@@ -132,7 +131,6 @@ function buildDebugBlock(info: TransactionDebugInfo | GuestCheckoutDebugInfo): s
   const timezone = Localization.getCalendars?.()[0]?.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone;
   const appVersion = Application.nativeApplicationVersion || 'unknown';
   const appId = process.env.EXPO_PUBLIC_CDP_PROJECT_ID || 'unknown';
-  const sandboxMode = getSandboxMode();
 
   const lines: string[] = [
     '--- Debug Information (please do not edit) ---',
@@ -186,7 +184,6 @@ function buildDebugBlock(info: TransactionDebugInfo | GuestCheckoutDebugInfo): s
   lines.push(`timestamp: ${timestamp}`);
   lines.push(`locale: ${locale}`);
   lines.push(`timezone: ${timezone}`);
-  if (sandboxMode) lines.push(`environment: sandbox`);
 
   // Error information (at the end)
   const errorMessage = 'errorMessage' in info ? info.errorMessage : undefined;

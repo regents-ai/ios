@@ -8,10 +8,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { EaseView } from 'react-native-ease';
 import { AccessibilityInfo, ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { CoinbaseAlert } from '../components/ui/CoinbaseAlerts';
-import { TEST_ACCOUNTS } from '../constants/TestAccounts';
-import { setTestSession } from '../utils/state/reviewSessionState';
 import { setVerifiedPhone } from '../utils/state/verificationState';
-import { setCurrentSolanaAddress, setCurrentWalletAddress } from '../utils/state/walletRuntimeState';
 
 const { DARK_BG, CARD_BG, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, WHITE, BORDER } = COLORS;
 const RESEND_SECONDS = 30;
@@ -95,11 +92,6 @@ export default function PhoneCodeScreen() {
   };
 
   const resendCode = async () => {
-    if (phone === TEST_ACCOUNTS.phone) {
-      setResendSeconds(RESEND_SECONDS);
-      return;
-    }
-
     setSending(true);
     try {
       if (mode === 'signin' || mode === 'reverify') {
@@ -129,31 +121,6 @@ export default function PhoneCodeScreen() {
     setVerifying(true);
 
     try {
-      if (phone === TEST_ACCOUNTS.phone) {
-        if (code !== TEST_ACCOUNTS.smsCode) {
-          throw new Error(`Use ${TEST_ACCOUNTS.smsCode} for the preview account.`);
-        }
-
-        if (mode === 'signin') {
-          await setTestSession(TEST_ACCOUNTS.wallets.evm, TEST_ACCOUNTS.wallets.solana);
-          setCurrentWalletAddress(TEST_ACCOUNTS.wallets.evm);
-          setCurrentSolanaAddress(TEST_ACCOUNTS.wallets.solana);
-          await setVerifiedPhone(phone, TEST_ACCOUNTS.userId);
-          router.replace('/agents');
-          return;
-        }
-
-        await setVerifiedPhone(phone, TEST_ACCOUNTS.userId);
-        setAlert({
-          visible: true,
-          title: mode === 'reverify' ? 'Phone ready' : 'Phone added',
-          message: mode === 'reverify' ? 'Your phone is ready to use again.' : 'Your phone is ready to use.',
-          type: 'success',
-        });
-        scheduleDismiss(() => router.dismissAll());
-        return;
-      }
-
       if (mode === 'signin' || mode === 'reverify') {
         const user = await loginWithCode({ phone, code });
         await setVerifiedPhone(phone, user?.id || regentsUserId || undefined);

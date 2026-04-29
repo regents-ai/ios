@@ -21,11 +21,9 @@ const cardSlideBottom = { presentation: 'card', animation: 'slide_from_bottom' }
 function WalletProviders({
   children,
   cdpProjectId,
-  localTestSessionEnabled,
 }: {
   children: React.ReactNode;
   cdpProjectId: string;
-  localTestSessionEnabled: boolean;
 }) {
   const { getAccessToken } = useRegentsAuth();
 
@@ -34,10 +32,6 @@ function WalletProviders({
     basePath: "https://api.cdp.coinbase.com/platform",
     customAuth: {
       getJwt: async () => {
-        if (localTestSessionEnabled) {
-          return undefined;
-        }
-
         const privyAccessToken = await getAccessToken();
 
         if (!privyAccessToken) {
@@ -53,8 +47,8 @@ function WalletProviders({
     solana: {
       createOnLogin: true
     },
-    useMock: localTestSessionEnabled
-  }), [cdpProjectId, getAccessToken, localTestSessionEnabled]);
+    useMock: false
+  }), [cdpProjectId, getAccessToken]);
 
   return (
     <CDPHooksProvider config={cdpConfig}>
@@ -68,13 +62,13 @@ function WalletProviders({
 }
 
 export default function RootLayout() {
-  const { localTestSessionEnabled } = useAppBootstrap();
+  useAppBootstrap();
   const privyAppId = process.env.EXPO_PUBLIC_PRIVY_APP_ID;
   const privyClientId = process.env.EXPO_PUBLIC_PRIVY_CLIENT_ID;
   const cdpProjectId = process.env.EXPO_PUBLIC_CDP_PROJECT_ID;
-  const resolvedPrivyAppId = privyAppId || (localTestSessionEnabled ? 'regents-local-test-app' : undefined);
-  const resolvedPrivyClientId = privyClientId || (localTestSessionEnabled ? 'regents-local-test-client' : undefined);
-  const resolvedCdpProjectId = cdpProjectId || (localTestSessionEnabled ? 'regents-local-test-project' : undefined);
+  const resolvedPrivyAppId = privyAppId;
+  const resolvedPrivyClientId = privyClientId;
+  const resolvedCdpProjectId = cdpProjectId;
 
   if (!resolvedPrivyAppId || !resolvedPrivyClientId || !resolvedCdpProjectId) {
     return (
@@ -108,7 +102,7 @@ export default function RootLayout() {
 
   return (
     <PrivyProvider appId={resolvedPrivyAppId} clientId={resolvedPrivyClientId}>
-      <WalletProviders cdpProjectId={resolvedCdpProjectId} localTestSessionEnabled={localTestSessionEnabled}>
+      <WalletProviders cdpProjectId={resolvedCdpProjectId}>
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen
             name="auth/login"

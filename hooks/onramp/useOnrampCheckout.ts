@@ -3,15 +3,12 @@ import { useCallback, useState } from 'react';
 import { useCurrentUser } from '@coinbase/cdp-hooks';
 
 import type { OnrampFormData } from '@/components/onramp/onramp-form-types';
-import { TEST_ACCOUNTS } from '@/constants/TestAccounts';
 import { createGuestCheckoutOrder } from '@/utils/createGuestCheckoutOrder';
 import { createOnrampSession } from '@/utils/createOnrampSession';
 import { getAccessTokenGlobal } from '@/utils/getAccessTokenGlobal';
 import { registerForPushNotifications, sendPushTokenToServer } from '@/utils/pushNotifications';
 import { getCountry, getSubdivision, setSubdivision } from '@/utils/state/locationState';
 import { setCurrentPartnerUserRef } from '@/utils/state/flowRuntimeState';
-import { isTestSessionActive } from '@/utils/state/reviewSessionState';
-import { getSandboxMode } from '@/utils/state/sandboxState';
 import { getVerifiedPhone, getVerifiedPhoneAt, isPhoneFresh60d } from '@/utils/state/verificationState';
 
 type UseOnrampCheckoutArgs = {
@@ -46,53 +43,44 @@ export function useOnrampCheckout({
   const [hostedUrl, setHostedUrl] = useState('');
   const [transactionStatus, setTransactionStatus] = useState<'pending' | 'success' | 'error' | null>(null);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
-  const [isSandboxOrder, setIsSandboxOrder] = useState(false);
 
   const createOrder = useCallback(
     async (formData: OnrampFormData) => {
       try {
         setIsProcessingPayment(true);
 
-        const testSession = isTestSessionActive();
-        const sandboxMode = getSandboxMode();
         const paymentMethodValue = formData.paymentMethod || 'GUEST_CHECKOUT_APPLE_PAY';
         const paymentLabel = paymentMethodValue === 'GUEST_CHECKOUT_GOOGLE_PAY' ? 'Google Pay' : 'Apple Pay';
-        const partnerUserRef = `${sandboxMode ? 'sandbox-' : ''}${regentsUserId || 'unknown-user'}`;
+        const partnerUserRef = regentsUserId || 'unknown-user';
 
         setCurrentPartnerUserRef(partnerUserRef);
-        setIsSandboxOrder(sandboxMode);
         await registerTransactionPushToken(partnerUserRef);
 
-        const userEmail = testSession ? TEST_ACCOUNTS.email : linkedEmail || null;
-        const cdpPhone = testSession ? TEST_ACCOUNTS.phone : linkedPhone || null;
+        const userEmail = linkedEmail || null;
+        const cdpPhone = linkedPhone || null;
 
         let phone = getVerifiedPhone();
         let phoneAt = getVerifiedPhoneAt();
 
-        if (!sandboxMode) {
-          if (!userEmail) {
-            const error: any = new Error(`Email verification required for ${paymentLabel}`);
-            error.code = 'MISSING_EMAIL';
-            throw error;
-          }
-
-          if (!cdpPhone) {
-            const error: any = new Error(`Phone verification required for ${paymentLabel}`);
-            error.code = 'MISSING_PHONE';
-            throw error;
-          }
-
-          if (phone !== cdpPhone || !isPhoneFresh60d()) {
-            const error: any = new Error(`Phone verification required for ${paymentLabel}. Please verify your phone on the Profile page.`);
-            error.code = 'MISSING_PHONE';
-            throw error;
-          }
-        } else {
-          phone = TEST_ACCOUNTS.phone;
-          phoneAt = Date.now();
+        if (!userEmail) {
+          const error: any = new Error(`Email verification required for ${paymentLabel}`);
+          error.code = 'MISSING_EMAIL';
+          throw error;
         }
 
-        if (!sandboxMode && (!phone || !isPhoneFresh60d())) {
+        if (!cdpPhone) {
+          const error: any = new Error(`Phone verification required for ${paymentLabel}`);
+          error.code = 'MISSING_PHONE';
+          throw error;
+        }
+
+        if (phone !== cdpPhone || !isPhoneFresh60d()) {
+          const error: any = new Error(`Phone verification required for ${paymentLabel}. Please verify your phone on the Profile page.`);
+          error.code = 'MISSING_PHONE';
+          throw error;
+        }
+
+        if (!phone || !isPhoneFresh60d()) {
           const error: any = new Error(`Phone verification has expired. Please re-verify your phone to continue with ${paymentLabel}.`);
           error.code = 'PHONE_EXPIRED';
           throw error;
@@ -105,13 +93,11 @@ export function useOnrampCheckout({
 
         let destinationAddress = formData.address;
 
-        if (!sandboxMode && isEvmNetwork) {
-          const smartAccount = testSession
-            ? TEST_ACCOUNTS.wallets.evm
-            : (currentUser?.evmSmartAccounts?.[0] as string);
+        if (isEvmNetwork) {
+          const smartAccount = currentUser?.evmSmartAccounts?.[0] as string;
 
           if (!smartAccount) {
-            throw new Error('Smart Account required for EVM onramp transactions. Your balances are stored in the Smart Account. Please ensure your Embedded Wallet is properly initialized.');
+            throw new Error('Your wallet is still getting ready. Try again in a moment.');
           }
 
           destinationAddress = smartAccount;
@@ -174,28 +160,22 @@ export function useOnrampCheckout({
           networkName.toLowerCase()
         );
         const isSolanaNetwork = networkName.toLowerCase().includes('solana');
-        const sandboxMode = getSandboxMode();
-        const testSession = isTestSessionActive();
 
         let destinationAddress = formData.address;
 
-        if (!sandboxMode && isEvmNetwork) {
-          const smartAccount = testSession
-            ? TEST_ACCOUNTS.wallets.evm
-            : (currentUser?.evmSmartAccounts?.[0] as string);
+        if (isEvmNetwork) {
+          const smartAccount = currentUser?.evmSmartAccounts?.[0] as string;
 
           if (!smartAccount) {
-            throw new Error('Smart Account required for EVM onramp transactions. Your balances are stored in the Smart Account. Please ensure your Embedded Wallet is properly initialized.');
+            throw new Error('Your wallet is still getting ready. Try again in a moment.');
           }
 
           destinationAddress = smartAccount;
-        } else if (!sandboxMode && isSolanaNetwork) {
-          const solanaAddress = testSession
-            ? TEST_ACCOUNTS.wallets.solana
-            : (currentUser?.solanaAccounts?.[0] as string);
+        } else if (isSolanaNetwork) {
+          const solanaAddress = currentUser?.solanaAccounts?.[0] as string;
 
           if (!solanaAddress) {
-            throw new Error('Solana account required for Solana onramp transactions. Please ensure your Embedded Wallet is properly initialized.');
+            throw new Error('Your Solana wallet is still getting ready. Try again in a moment.');
           }
 
           destinationAddress = solanaAddress;
@@ -212,10 +192,6 @@ export function useOnrampCheckout({
         });
 
         let url = response?.session?.onrampUrl;
-
-        if ((getSandboxMode() || testSession) && url) {
-          url = url.replace('pay.coinbase.com', 'pay-sandbox.coinbase.com');
-        }
 
         if (url) {
           const separator = url.includes('?') ? '&' : '?';
@@ -240,7 +216,6 @@ export function useOnrampCheckout({
     setHostedUrl('');
     setIsProcessingPayment(false);
     setTransactionStatus(null);
-    setIsSandboxOrder(false);
   }, []);
 
   return {
@@ -249,7 +224,6 @@ export function useOnrampCheckout({
     hostedUrl,
     transactionStatus,
     isProcessingPayment,
-    isSandboxOrder,
     createOrder,
     createWidgetSession,
     closeGuestCheckout,

@@ -16,7 +16,7 @@
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
-import { isTestSessionActive } from '@/utils/state/reviewSessionState';
+import { buildEvmTransferCall, isNativeEvmToken } from '@/utils/onchain/buildTransferCall';
 import { useCurrentUser, useSendSolanaTransaction, useSendUserOperation, useSolanaAddress } from '@coinbase/cdp-hooks';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
@@ -40,7 +40,6 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { parseEther, parseUnits } from 'viem';
 
 const { DARK_BG, CARD_BG, CARD_ALT, BLUE_WASH, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, WHITE, BORDER, ORANGE } = COLORS;
 const SCREEN_OFFSET = 12;
@@ -328,16 +327,6 @@ export default function TransferScreen() {
     setShowConfirmation(false);
     setSending(true);
     try {
-      if (isTestSessionActive()) {
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        showAlert(
-          'Transfer complete',
-          `${amount} ${selectedToken.token.symbol} is marked as sent on this device.\n\nRecipient: ${recipientAddress.slice(0, 6)}...${recipientAddress.slice(-4)}`,
-          'success'
-        );
-        return;
-      }
-
       const isSolanaNetwork = network?.toLowerCase().includes('solana');
 
       if (isSolanaNetwork) {
@@ -362,40 +351,27 @@ export default function TransferScreen() {
     }
 
     const tokenAddress = selectedToken.token?.contractAddress;
-    const isNativeTransfer = !tokenAddress ||
-      tokenAddress === '0x0000000000000000000000000000000000000000' ||
-      tokenAddress.toLowerCase() === '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
-
-    const amountInSmallestUnit = isNativeTransfer
-      ? parseEther(amount)
-      : parseUnits(amount, parseInt(selectedToken.amount?.decimals || '0'));
+    const isNativeTransfer = isNativeEvmToken(tokenAddress);
+    const call = buildEvmTransferCall({
+      recipientAddress,
+      amountDecimal: amount,
+      tokenAddress,
+      decimals: isNativeTransfer ? undefined : parseInt(selectedToken.amount?.decimals || '0', 10),
+    });
 
     try {
       if (isNativeTransfer) {
         await sendUserOperation({
           evmSmartAccount: smartAccountAddress as `0x${string}`,
           network: network as any,
-          calls: [{
-            to: recipientAddress as `0x${string}`,
-            value: amountInSmallestUnit,
-            data: '0x'
-          }],
+          calls: [call],
           useCdpPaymaster: isPaymasterSupported,
         });
       } else {
-        const transferFunctionSelector = '0xa9059cbb';
-        const encodedRecipient = recipientAddress.slice(2).padStart(64, '0');
-        const encodedAmount = amountInSmallestUnit.toString(16).padStart(64, '0');
-        const calldata = `${transferFunctionSelector}${encodedRecipient}${encodedAmount}`;
-
         await sendUserOperation({
           evmSmartAccount: smartAccountAddress as `0x${string}`,
           network: network as any,
-          calls: [{
-            to: tokenAddress as `0x${string}`,
-            value: 0n,
-            data: calldata as `0x${string}`,
-          }],
+          calls: [call],
           useCdpPaymaster: isPaymasterSupported
         });
       }

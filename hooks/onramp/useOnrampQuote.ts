@@ -1,7 +1,6 @@
 import { useCallback, useState } from 'react';
 
 import { fetchBuyQuote } from '@/utils/fetchBuyQuote';
-import { getSandboxMode } from '@/utils/state/sandboxState';
 
 type QuoteRequest = {
   amount: string;
@@ -39,12 +38,6 @@ export function useOnrampQuote({
         const assetSymbol = getAssetSymbolFromName(formData.asset);
         const networkName = getNetworkNameFromDisplayName(formData.network);
         const userId = regentsUserId || 'unknown-user';
-        const sandboxPrefix =
-          formData.paymentMethod === 'GUEST_CHECKOUT_APPLE_PAY' || formData.paymentMethod === 'GUEST_CHECKOUT_GOOGLE_PAY'
-            ? getSandboxMode()
-              ? 'sandbox-'
-              : ''
-            : '';
 
         const quote = await fetchBuyQuote({
           paymentAmount: formData.amount,
@@ -52,7 +45,7 @@ export function useOnrampQuote({
           purchaseCurrency: assetSymbol,
           destinationNetwork: networkName,
           paymentMethod: formData.paymentMethod || 'COINBASE_WIDGET',
-          partnerUserRef: `${sandboxPrefix}${userId}`,
+          partnerUserRef: userId,
         });
 
         setCurrentQuote(quote);

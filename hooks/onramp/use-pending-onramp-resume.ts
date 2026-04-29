@@ -7,7 +7,6 @@ import {
   clearPendingForm,
   getPendingForm,
 } from '@/utils/state/flowRuntimeState';
-import { getSandboxMode } from '@/utils/state/sandboxState';
 import { getVerifiedPhone, isPhoneFresh60d } from '@/utils/state/verificationState';
 import { getWalletAddressForNetwork } from '@/utils/state/walletRuntimeState';
 
@@ -40,10 +39,6 @@ export function usePendingOnrampResume({
 }: Params) {
   const resolvePendingAddress = useCallback(
     (networkApiName: string, fallbackAddress: string) => {
-      if (getSandboxMode()) {
-        return fallbackAddress;
-      }
-
       return getWalletAddressForNetwork(networkApiName) ?? fallbackAddress;
     },
     []
@@ -71,11 +66,10 @@ export function usePendingOnrampResume({
             return;
           }
 
-          const isSandbox = getSandboxMode();
           const phoneFresh = isPhoneFresh60d();
           const verifiedPhone = getVerifiedPhone();
 
-          if (!isSandbox && (!phoneFresh || !verifiedPhone)) {
+          if (!phoneFresh || !verifiedPhone) {
             return;
           }
 

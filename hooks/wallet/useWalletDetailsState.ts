@@ -5,12 +5,10 @@ import * as WebBrowser from 'expo-web-browser';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { getBaseUrl } from '@/constants/BASE_URL';
-import { TEST_ACCOUNTS } from '@/constants/TestAccounts';
 import { useRegentsAuth } from '@/hooks/useRegentsAuth';
 import { authenticatedFetch } from '@/utils/authenticatedFetch';
 import { createOfframpSession } from '@/utils/createOfframpSession';
 import { setPendingOfframpBalance } from '@/utils/state/flowRuntimeState';
-import { getTestWalletSol, isTestSessionActive } from '@/utils/state/reviewSessionState';
 import { setCurrentSolanaAddress, setCurrentWalletAddress } from '@/utils/state/walletRuntimeState';
 
 export type BalanceRecord = {
@@ -38,21 +36,16 @@ async function fetchAuthorizedJson(url: string) {
 
 export function useWalletDetailsState() {
   const router = useRouter();
-  const testSession = isTestSessionActive();
   const { regentsUserId } = useRegentsAuth();
   const { currentUser } = useCurrentUser();
   const { evmAddress } = useEvmAddress();
   const { solanaAddress: cdpSolanaAddress } = useSolanaAddress();
 
-  const explicitEOAAddress = testSession
-    ? TEST_ACCOUNTS.wallets.eoaDummy
-    : ((currentUser?.evmAccounts?.[0] as string | undefined) ?? undefined);
-  const smartAccountAddress = testSession
-    ? TEST_ACCOUNTS.wallets.evm
-    : ((currentUser?.evmSmartAccounts?.[0] as string | undefined) ?? undefined);
-  const solanaAddress = testSession ? getTestWalletSol() : cdpSolanaAddress;
+  const explicitEOAAddress = (currentUser?.evmAccounts?.[0] as string | undefined) ?? undefined;
+  const smartAccountAddress = (currentUser?.evmSmartAccounts?.[0] as string | undefined) ?? undefined;
+  const solanaAddress = cdpSolanaAddress;
   const primaryAddress = smartAccountAddress || explicitEOAAddress || evmAddress || null;
-  const userId = testSession ? TEST_ACCOUNTS.userId : regentsUserId;
+  const userId = regentsUserId;
   const isExpoGo = process.env.EXPO_PUBLIC_USE_EXPO_CRYPTO === 'true';
 
   const [balances, setBalances] = useState<BalanceRecord[]>([]);

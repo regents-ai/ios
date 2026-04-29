@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import {
-  getTestWalletEvm,
-  getTestWalletSol,
-} from '@/utils/state/reviewSessionState';
-import {
   getCurrentWalletAddress,
   getWalletAddressForNetwork,
   setCurrentSolanaAddress,
@@ -17,7 +13,6 @@ type WalletAddressSyncParams = {
   effectiveIsSignedIn: boolean;
   evmAddress?: string | null;
   solanaAddress?: string | null;
-  testSession: boolean;
 };
 
 export function useWalletAddresses({
@@ -25,7 +20,6 @@ export function useWalletAddresses({
   effectiveIsSignedIn,
   evmAddress,
   solanaAddress,
-  testSession,
 }: WalletAddressSyncParams) {
   const [address, setAddress] = useState('');
 
@@ -36,13 +30,6 @@ export function useWalletAddresses({
   useEffect(() => {
     if (!effectiveIsSignedIn) {
       setAddress('');
-      return;
-    }
-
-    if (testSession) {
-      setCurrentWalletAddress(getTestWalletEvm());
-      setCurrentSolanaAddress(getTestWalletSol());
-      syncSelectedAddress();
       return;
     }
 
@@ -59,7 +46,7 @@ export function useWalletAddresses({
     }
 
     syncSelectedAddress();
-  }, [currentUser, effectiveIsSignedIn, evmAddress, solanaAddress, syncSelectedAddress, testSession]);
+  }, [currentUser, effectiveIsSignedIn, evmAddress, solanaAddress, syncSelectedAddress]);
 
   useEffect(() => {
     return subscribeWalletRuntime(() => {
