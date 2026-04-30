@@ -7,4 +7,10 @@ info:
 
     The current mobile Regent, Regent Manager, and Talk routes are product-local routes
     documented in `api-contract.openapiv3.yaml`, not shared Regent services.
+x-regent-capability:
+  status: beta
+  owner: ios
+  money_path: false
+  cli_surface: false
+  mobile_surface: true
 paths: {}

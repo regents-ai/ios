@@ -8,7 +8,6 @@ import { getGuestCheckoutBlocker } from '../utils/onrampEligibility';
 test('guest checkout buy flow stays blocked outside the US', () => {
   assert.equal(
     getGuestCheckoutBlocker({
-      localSandboxEnabled: false,
       isGuestCheckout: true,
       country: 'CA',
       linkedEmail: 'person@example.com',
@@ -22,7 +21,6 @@ test('guest checkout buy flow stays blocked outside the US', () => {
 test('guest checkout buy flow stays blocked until contact details are fully verified', () => {
   assert.equal(
     getGuestCheckoutBlocker({
-      localSandboxEnabled: false,
       isGuestCheckout: true,
       country: 'US',
       linkedEmail: 'person@example.com',
@@ -34,7 +32,6 @@ test('guest checkout buy flow stays blocked until contact details are fully veri
 
   assert.equal(
     getGuestCheckoutBlocker({
-      localSandboxEnabled: false,
       isGuestCheckout: true,
       country: 'US',
       linkedEmail: 'person@example.com',

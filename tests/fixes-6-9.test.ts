@@ -11,7 +11,6 @@ test('auth gate shows an issue instead of loading forever after wallet init fail
     walletReady: false,
     hasCheckedAuth: false,
     isAuthenticated: true,
-    testSession: false,
     hasAuthError: false,
     startupTimeoutReached: false,
     walletInitFailureMessage: 'We could not finish opening your wallet. Please sign in again.',

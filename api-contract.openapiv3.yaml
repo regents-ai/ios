@@ -8,6 +8,12 @@ info:
     Mobile wallet flows are live. Mobile Regent records are sourced from Platform projection.
     Talk records are sourced from Platform Regent Work Runtime. The mobile backend only owns
     wallet intent and receipt state needed for phone wallet rails.
+x-regent-capability:
+  status: beta
+  owner: ios
+  money_path: true
+  cli_surface: false
+  mobile_surface: true
 x-regent-chat-room-contract:
   owner: ios
   xmtp_room_routes: []
@@ -765,6 +771,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+        '410':
+          description: Prepared wallet action expired
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '502':
           description: Base RPC receipt lookup failed
           content:
@@ -1346,6 +1358,7 @@ components:
         expiresAt:
           type: string
           format: date-time
+          description: Prepared wallet actions expire 10 minutes after creation.
         status:
           type: string
           enum: [prepared, confirmed, expired, failed]

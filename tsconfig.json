@@ -13,8 +13,7 @@
     "**/*.tsx",
     ".expo/types/**/*.ts",
     "expo-env.d.ts"
-, "server/api/index.js"  ]
-  ,
+  ],
   "exclude": [
     "vendor/**/*"
   ]

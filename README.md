@@ -91,9 +91,10 @@ Start the mobile app in a second terminal:
 npx expo start
 ```
 
-For an installed iPhone build:
+For an installed iPhone build from a clean checkout, generate the native project first. The generated `ios/` directory is intentionally not committed.
 
 ```bash
+npx expo prebuild --platform ios
 flowdeck context --project /Users/sean/Documents/regent/ios --json
 flowdeck build --project /Users/sean/Documents/regent/ios --scheme RegentsMobile
 ```
