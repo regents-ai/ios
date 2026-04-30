@@ -247,29 +247,38 @@ function eventFromRwr(event: RwrRunEvent, sessionId: string): TerminalEvent {
   };
 }
 
-function approvalEvent(approval: RwrApproval, sessionId: string, regentName: string): TerminalEvent {
-  if (approval.status === 'pending') {
-    return {
-      eventId: `approval:${approval.id}:${approval.updated_at}`,
-      type: 'tool.request',
-      sessionId,
-      ts: approval.created_at,
-      requestId: String(approval.id),
-      action: approval.approval_type || 'Review request',
-      regentName,
-      riskCopy: approval.risk_summary || 'Review the requested work before it continues.',
-      ...approvalMoneyFields(approval),
-    };
-  }
-
+function approvalRequestEvent(approval: RwrApproval, sessionId: string, regentName: string): TerminalEvent {
   return {
-    eventId: `approval:${approval.id}:${approval.updated_at}`,
+    eventId: `approval:${approval.id}:requested`,
+    type: 'tool.request',
+    sessionId,
+    ts: approval.created_at,
+    requestId: String(approval.id),
+    action: approval.approval_type || 'Review request',
+    regentName,
+    riskCopy: approval.risk_summary || 'Review the requested work before it continues.',
+    ...approvalMoneyFields(approval),
+  };
+}
+
+function approvalResolvedEvent(approval: RwrApproval, sessionId: string): TerminalEvent {
+  return {
+    eventId: `approval:${approval.id}:resolved`,
     type: 'tool.resolved',
     sessionId,
     ts: approval.resolved_at || approval.updated_at,
     requestId: String(approval.id),
     result: approval.status === 'approved' ? 'approved' : approval.status === 'denied' ? 'denied' : 'timed_out',
   };
+}
+
+function approvalEvents(approval: RwrApproval, sessionId: string, regentName: string): TerminalEvent[] {
+  const requestEvent = approvalRequestEvent(approval, sessionId, regentName);
+  if (approval.status === 'pending') {
+    return [requestEvent];
+  }
+
+  return [requestEvent, approvalResolvedEvent(approval, sessionId)];
 }
 
 async function account(client: PlatformRwrClient, auth: PlatformRequestAuth) {
@@ -426,8 +435,8 @@ export async function getTerminalEvents(
     workItemResult.kind === 'ok' && accountResult.kind === 'ok'
       ? companyName(accountResult.data.companies, workItemResult.data.company_id)
       : `Company ${parsed.companyId}`;
-  const approvalEvents =
-    approvalsResult.kind === 'ok' ? approvalsResult.data.map((approval) => approvalEvent(approval, sessionId, regentName)) : [];
+  const approvalTimelineEvents =
+    approvalsResult.kind === 'ok' ? approvalsResult.data.flatMap((approval) => approvalEvents(approval, sessionId, regentName)) : [];
   const events = [
     {
       eventId: `session:${sessionId}:started`,
@@ -436,7 +445,7 @@ export async function getTerminalEvents(
       ts: eventsResult.data[0]?.occurred_at || new Date(0).toISOString(),
     },
     ...eventsResult.data.map((event) => eventFromRwr(event, sessionId)),
-    ...approvalEvents,
+    ...approvalTimelineEvents,
   ].sort((a, b) => a.ts.localeCompare(b.ts));
   const cursorIndex = sinceEventId ? events.findIndex((event) => event.eventId === sinceEventId) : -1;
 

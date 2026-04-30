@@ -15,7 +15,7 @@ import { useRegentsAuth } from '@/hooks/useRegentsAuth';
 import { getEaseAnimate, getEaseInitialAnimate, getEaseTransition } from '@/components/motion/easePresets';
 import { useReducedMotion } from '@/components/motion/useReducedMotion';
 import { setCountry, setSubdivision } from '@/utils/state/locationState';
-import { setCurrentSolanaAddress, setCurrentWalletAddress, setManualWalletAddress } from '@/utils/state/walletRuntimeState';
+import { setCurrentSolanaAddress, setCurrentWalletAddress } from '@/utils/state/walletRuntimeState';
 import { useIsInitialized, useSignOut } from '@coinbase/cdp-hooks';
 import { router, useRootNavigationState, useSegments } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
@@ -60,7 +60,6 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     } finally {
       setCurrentWalletAddress(null);
       setCurrentSolanaAddress(null);
-      setManualWalletAddress(null);
       setCountry('US');
       setSubdivision('CA');
       setStartupTimeoutReached(false);

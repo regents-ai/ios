@@ -439,6 +439,37 @@ const platformRwrClient: PlatformRwrClient = {
   },
 };
 
+const resolvedApprovalClient: PlatformRwrClient = {
+  ...platformRwrClient,
+  async fetchApprovals() {
+    return {
+      kind: 'ok',
+      data: [
+        {
+          id: 501,
+          company_id: 101,
+          run_id: 301,
+          approval_type: 'transfer',
+          status: 'approved',
+          requested_by_actor_kind: 'agent',
+          requested_by_actor_id: null,
+          risk_summary: 'Approve the treasury transfer.',
+          payload: {
+            amount: '500',
+            currency: 'USDC',
+            contract_address: '0x4444444444444444444444444444444444444444',
+          },
+          resolved_by_human_id: 1,
+          resolved_at: '2026-04-17T23:51:00.000Z',
+          expires_at: '2026-04-18T00:00:00.000Z',
+          created_at: '2026-04-17T23:50:00.000Z',
+          updated_at: '2026-04-17T23:51:00.000Z',
+        },
+      ],
+    };
+  },
+};
+
 test('mobile Regent Manager route stays mounted and returns the current manager shape', () => {
   const routePaths = listRoutePaths();
   assert.ok(routePaths.includes('/mobile/regents/:id/manager'));
@@ -607,6 +638,25 @@ test('mobile terminal events expose explicit approval review fields and event po
   assert.equal(next.kind, 'ok');
   if (next.kind === 'ok') {
     assert.deepEqual(next.data, []);
+  }
+});
+
+test('mobile terminal event polling returns only the approval decision after approval resolves', async () => {
+  const first = await getTerminalEvents(platformRwrClient, {}, '101~202~301');
+  assert.equal(first.kind, 'ok');
+  if (first.kind !== 'ok') {
+    return;
+  }
+
+  const requestEvent = first.data.find((event) => event.type === 'tool.request');
+  assert.equal(requestEvent?.eventId, 'approval:501:requested');
+
+  const next = await getTerminalEvents(resolvedApprovalClient, {}, '101~202~301', requestEvent.eventId);
+  assert.equal(next.kind, 'ok');
+  if (next.kind === 'ok') {
+    assert.deepEqual(next.data.map((event) => event.type), ['tool.resolved']);
+    assert.equal(next.data[0]?.eventId, 'approval:501:resolved');
+    assert.equal(next.data[0]?.result, 'approved');
   }
 });
 
