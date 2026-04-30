@@ -157,13 +157,13 @@ export async function registerForPushNotifications(): Promise<{ token: string; t
         }
         const tok = await Notifications.getExpoPushTokenAsync({ projectId });
         await ping('expo-token-success', { len: tok.data?.length });
-        console.log('✅ [PUSH] Expo push token obtained:', tok.data);
+        console.log('✅ [PUSH] Expo push token obtained:', { tokenLength: tok.data?.length });
         return { token: tok.data, type: 'expo' };
       } else {
         // Standalone build: Get native device token (for direct APNs)
         const tok = await Notifications.getDevicePushTokenAsync();
         await ping('native-token-success', { type: tok.type, len: tok.data?.length });
-        console.log('✅ [PUSH] Native device push token obtained:', tok.data);
+        console.log('✅ [PUSH] Native device push token obtained:', { tokenType: tok.type, tokenLength: tok.data?.length });
         console.log('📱 [PUSH] Build environment - isDevice:', Constants.isDevice, '| Platform:', Platform.OS);
 
         // iOS-specific: Register notification categories

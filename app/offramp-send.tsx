@@ -202,7 +202,7 @@ export default function OfframpSendScreen() {
     const assetUpper = asset.toUpperCase();
     const isPaymasterSupported = network === 'base' && ['USDC', 'EURC', 'BTC'].includes(assetUpper);
 
-    console.log('💸 [OFFRAMP SEND] EVM transfer:', { to_address, sell_amount: sellAmountValue, asset, network, isNative, isPaymasterSupported });
+    console.log('💸 [OFFRAMP SEND] EVM transfer:', { asset, network, isNative, isPaymasterSupported });
 
     if (isNative) {
       await sendUserOperation({
@@ -237,7 +237,7 @@ export default function OfframpSendScreen() {
 
     showAlert('Sending ⏳', 'Building and submitting Solana transaction...\n\nDo not close this screen.', 'info', true);
 
-    console.log('💸 [OFFRAMP SEND] Solana transfer:', { to_address, sell_amount: sellAmountValue, asset, isSPL, mintAddress });
+    console.log('💸 [OFFRAMP SEND] Solana transfer:', { asset, isSPL, hasMintAddress: !!mintAddress });
 
     const { Connection, clusterApiUrl, PublicKey, SystemProgram, Transaction } = await import('@solana/web3.js');
     const connection = new Connection(clusterApiUrl('mainnet-beta'));

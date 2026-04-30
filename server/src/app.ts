@@ -369,14 +369,20 @@ app.get('/balances/evm', async (req, res) => {
 
     const { address, network } = validationResult.data;
 
-    console.log(`💰 [BALANCES] Fetching EVM balances - Address: ${address}, Network: ${network}`);
+    console.log('💰 [BALANCES] Fetching EVM balances', {
+      addressLength: address.length,
+      network,
+    });
 
     // Ethereum Sepolia uses v1 REST API with network name (not chain ID)
     if (network === 'ethereum-sepolia') {
       const balancesPath = `/platform/v1/networks/ethereum-sepolia/addresses/${address}/balances`;
       const balancesUrl = `https://api.cdp.coinbase.com${balancesPath}`;
 
-      console.log(`🔗 [BALANCES] Ethereum Sepolia URL (v1 API): ${balancesUrl}`);
+      console.log('🔗 [BALANCES] Ethereum Sepolia URL prepared', {
+        host: 'api.cdp.coinbase.com',
+        path: '/platform/v1/networks/ethereum-sepolia/addresses/{address}/balances',
+      });
 
       const coinbaseCredentials = requireCoinbaseApiCredentials(process.env);
       const authToken = await generateJwt({
@@ -566,13 +572,19 @@ app.get('/balances/solana', async (req, res) => {
       return sendError(res, 400, 'BadRequest', 'Choose a supported Solana network.');
     }
 
-    console.log(`💰 [BALANCES] Fetching Solana balances - Address: ${address}, Network: ${sanitizedNetwork}`);
+    console.log('💰 [BALANCES] Fetching Solana balances', {
+      addressLength: address.length,
+      network: sanitizedNetwork,
+    });
 
     // Use sanitized values in URL construction to prevent SSRF
     const balancesPath = `/platform/v2/solana/token-balances/${sanitizedNetwork}/${address}`;
     const balancesUrl = `https://api.cdp.coinbase.com${balancesPath}`;
 
-    console.log(`🔗 [BALANCES] Full URL: ${balancesUrl}`);
+    console.log('🔗 [BALANCES] Solana URL prepared', {
+      host: 'api.cdp.coinbase.com',
+      path: `/platform/v2/solana/token-balances/${sanitizedNetwork}/{address}`,
+    });
 
     const coinbaseCredentials = requireCoinbaseApiCredentials(process.env);
     const authToken = await generateJwt({

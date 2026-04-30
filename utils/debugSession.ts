@@ -88,12 +88,8 @@ export async function debugSecureStoreSession(): Promise<string> {
       const value = await SecureStore.getItemAsync(key);
       if (value) {
         foundTokens++;
-        const preview = value.length > 20
-          ? `${value.substring(0, 8)}...`
-          : '[SHORT]';
         results.push(`✅ ${key}`);
         results.push(`   Length: ${value.length} chars`);
-        results.push(`   Preview: ${preview}`);
       }
     } catch (error: any) {
       results.push(`⚠️ ${key}: ${error.message}`);

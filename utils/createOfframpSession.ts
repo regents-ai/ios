@@ -37,7 +37,12 @@ export async function createOfframpSession({
 }): Promise<string> {
   const blockchain = toBlockchainId(network);
 
-  console.log('📤 [OFFRAMP] Creating session token', { address, blockchain, asset, userId });
+  console.log('📤 [OFFRAMP] Creating session token', {
+    blockchain,
+    asset,
+    hasAddress: !!address,
+    userRefLength: userId.length,
+  });
 
   // 1. Fetch a single-use session token from the backend proxy
   const tokenRes = await authenticatedFetch(`${getBaseUrl()}/server/api`, {
@@ -58,10 +63,13 @@ export async function createOfframpSession({
   }
 
   const tokenData = await tokenRes.json();
-  console.log('✅ [OFFRAMP] Session token response:', JSON.stringify(tokenData));
   const token = tokenData.token;
+  console.log('✅ [OFFRAMP] Session token response:', {
+    hasToken: !!token,
+    keyCount: tokenData && typeof tokenData === 'object' ? Object.keys(tokenData).length : 0,
+  });
   if (!token) {
-    throw new Error(`No token in response: ${JSON.stringify(tokenData)}`);
+    throw new Error('No cash-out session token was received.');
   }
 
   // 2. Deep link redirectUrl — Coinbase calls this after the user clicks "Cash out now".
@@ -80,7 +88,10 @@ export async function createOfframpSession({
   });
 
   const offrampUrl = `https://pay.coinbase.com/v3/sell/input?${params.toString()}`;
-  console.log('🔗 [OFFRAMP] Full URL:', offrampUrl);
+  console.log('🔗 [OFFRAMP] Cash-out URL prepared:', {
+    host: 'pay.coinbase.com',
+    path: '/v3/sell/input',
+  });
 
   return offrampUrl;
 }
