@@ -782,6 +782,9 @@ test('prepared wallet actions expire and confirm from Base receipts only', () =>
   assert.equal(action.chainId, 8453);
   assert.equal(action.expectedSigner, expectedSigner);
   assert.match(action.expiresAt, /T/);
+  const ttlMs = Date.parse(action.expiresAt) - Date.now();
+  assert.ok(ttlMs > 9 * 60 * 1000);
+  assert.ok(ttlMs <= 10 * 60 * 1000);
 });
 
 test('prepared wallet actions support staking, claiming, funding, and returns with the same required fields', () => {
@@ -824,6 +827,30 @@ test('prepared wallet actions reject receipts for the wrong transaction details'
   assert.equal(confirmPreparedWalletActionForUser(action.id, confirmedReceipt({ value: '1' })).kind, 'conflict');
   assert.equal(confirmPreparedWalletActionForUser(action.id, confirmedReceipt({ data: '0x1234' })).kind, 'conflict');
   assert.equal(confirmPreparedWalletActionForUser(action.id, confirmedReceipt()).kind, 'ok');
+});
+
+test('prepared wallet actions cannot be confirmed after their expiry time', () => {
+  const action = prepareWalletActionForUser('expired-wallet-action-user', 'funding', {
+    regentId: 'atlas-capital',
+    expectedSigner,
+    to: expectedRecipient,
+    value: '0',
+    data: expectedData,
+    amount: '25',
+    currency: 'USDC',
+  });
+  assert.ok(action);
+
+  const result = confirmPreparedWalletActionForUser(
+    action.id,
+    confirmedReceipt(),
+    new Date(Date.parse(action.expiresAt))
+  );
+
+  assert.equal(result.kind, 'expired');
+  if (result.kind === 'expired') {
+    assert.equal(result.action.status, 'expired');
+  }
 });
 
 test('mobile Regent Manager data is returned as a fresh copy', () => {

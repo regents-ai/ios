@@ -135,6 +135,8 @@ type MobileRegentStoreState = {
   preparedWalletActions: Record<string, PreparedWalletAction>;
 };
 
+const preparedWalletActionTtlMs = 10 * 60 * 1000;
+
 const mobileRegentStore = createJsonFileStore<MobileRegentStoreState>('mobile-regent-state.json', () => ({
   returnRequestIntents: {},
   fundingIntentIntents: {},
@@ -598,7 +600,7 @@ export function prepareWalletActionForUser(
     value: normalizeValue(input.value),
     label: `${type.charAt(0).toUpperCase()}${type.slice(1)} ${input.currency || 'USDC'}`,
     review: input.amount ? `${input.amount} ${input.currency || 'USDC'}` : 'Review this wallet action before signing.',
-    expiresAt: new Date(createdAt + 10 * 60 * 1000).toISOString(),
+    expiresAt: new Date(createdAt + preparedWalletActionTtlMs).toISOString(),
     status: 'prepared',
   };
 
@@ -611,10 +613,12 @@ export function prepareWalletActionForUser(
 
 export function confirmPreparedWalletActionForUser(
   actionId: string,
-  receipt: ConfirmedBaseReceipt
+  receipt: ConfirmedBaseReceipt,
+  confirmedAt = new Date()
 ):
   | { kind: 'ok'; action: PreparedWalletAction }
   | { kind: 'not_found' }
+  | { kind: 'expired'; action: PreparedWalletAction }
   | { kind: 'conflict' } {
   const action = mobileRegentStore.read().preparedWalletActions[actionId];
   if (!action) {
@@ -625,6 +629,23 @@ export function confirmPreparedWalletActionForUser(
   }
   if (!receiptMatchesExpected(receipt, action)) {
     return { kind: 'conflict' };
+  }
+
+  if (action.status === 'confirmed') {
+    return { kind: 'ok', action: cloneJson(action) };
+  }
+
+  if (action.status === 'expired' || confirmedAt.getTime() >= Date.parse(action.expiresAt)) {
+    let expiredAction: PreparedWalletAction | null = null;
+    mobileRegentStore.update((state) => {
+      const stored = state.preparedWalletActions[actionId];
+      if (stored) {
+        stored.status = 'expired';
+        expiredAction = stored;
+      }
+    });
+
+    return expiredAction ? { kind: 'expired', action: cloneJson(expiredAction) } : { kind: 'not_found' };
   }
 
   let updatedAction: PreparedWalletAction | null = null;

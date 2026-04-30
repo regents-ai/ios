@@ -464,6 +464,10 @@ export function createMobileRoutes(input?: {
       return sendError(res, 409, 'ReceiptMismatch', 'The chain receipt does not match this action.');
     }
 
+    if (result.kind === 'expired') {
+      return sendError(res, 410, 'WalletActionExpired', 'This wallet action has expired. Start it again before signing.');
+    }
+
     return res.json({ action: result.action });
   });
 
