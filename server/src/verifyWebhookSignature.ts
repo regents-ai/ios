@@ -36,13 +36,7 @@ function parseSignatureHeader(signatureHeader: string): SignatureComponents | nu
         // Header names are space-separated, not colon-separated
         components.headerNames = value.split(' ');
       } else if (key === 'v1') {
-        // Prefer v1 signature (newer format with period delimiters)
         components.signature = value;
-      } else if (key === 'v0') {
-        // Use v0 only if v1 wasn't found (older format)
-        if (!components.signature) {
-          components.signature = value;
-        }
       }
     }
 
@@ -165,8 +159,8 @@ export function verifyWebhookSignature(
 
     if (!isValid) {
       console.error('❌ [WEBHOOK] Signature mismatch', {
-        expected: expectedSignature,
-        received: components.signature
+        expectedLength: expectedSignature.length,
+        receivedLength: components.signature.length
       });
     }
 
