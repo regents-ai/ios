@@ -116,6 +116,7 @@ export default function RootLayout() {
           <Stack.Screen name="email-code" options={cardSlideRight} />
           <Stack.Screen name="phone-verify" options={cardSlideRight} />
           <Stack.Screen name="phone-code" options={cardSlideRight} />
+          <Stack.Screen name="onramp-return" options={cardSlideBottom} />
           <Stack.Screen name="offramp-send" options={cardSlideBottom} />
           <Stack.Screen name="agent/[id]" options={cardSlideRight} />
           <Stack.Screen name="agent/[id]/regent-manager" options={cardSlideRight} />

@@ -43,21 +43,21 @@ test('guest checkout buy flow stays blocked until contact details are fully veri
 });
 
 test('webhook logs keep event context without printing full payloads', () => {
-  assert.deepEqual(
-    summarizeWebhookLog({
-      eventType: 'onramp.transaction.success',
-      transactionId: 'tx-123',
-      partnerUserRef: 'user-1',
-      destinationAddress: '0xabc',
-      purchaseAmount: { value: '25.00', currency: 'USDC' },
-    }),
-    {
-      eventType: 'onramp.transaction.success',
-      transactionId: 'tx-123',
-      keyCount: 5,
-      keys: ['destinationAddress', 'eventType', 'partnerUserRef', 'purchaseAmount', 'transactionId'],
-    }
-  );
+  const summary = summarizeWebhookLog({
+    eventType: 'onramp.transaction.success',
+    transactionId: 'tx-123',
+    partnerUserRef: 'user-1',
+    destinationAddress: '0xabc',
+    purchaseAmount: { value: '25.00', currency: 'USDC' },
+  });
+
+  assert.equal(summary.eventType, 'onramp.transaction.success');
+  assert.match(summary.transactionIdHash!, /^[a-f0-9]{16}$/);
+  assert.match(summary.partnerUserRefHash!, /^[a-f0-9]{16}$/);
+  assert.equal(JSON.stringify(summary).includes('tx-123'), false);
+  assert.equal(JSON.stringify(summary).includes('user-1'), false);
+  assert.equal(summary.keyCount, 5);
+  assert.deepEqual(summary.keys, ['destinationAddress', 'eventType', 'partnerUserRef', 'purchaseAmount', 'transactionId']);
 });
 
 test('guest checkout success logs only expose a short response summary', () => {

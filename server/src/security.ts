@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 const ALLOWED_PROXY_HOSTS = new Set([
   'api.cdp.coinbase.com',
   'api.developer.coinbase.com',
@@ -7,6 +9,11 @@ const USER_SCOPED_PATH_PATTERNS = [
   /^\/onramp\/v1\/buy\/user\/([^/]+)\/transactions$/,
   /^\/onramp\/v1\/sell\/user\/([^/]+)\/transactions$/,
 ];
+
+const IDEMPOTENT_COINBASE_PROXY_POST_PATHS = new Set([
+  '/platform/v2/onramp/orders',
+  '/platform/v2/onramp/sessions',
+]);
 
 export class CoinbaseConfigurationError extends Error {
   statusCode = 503;
@@ -90,6 +97,11 @@ export function summarizeProxyRequestLog(targetUrl: string, method: string | und
   };
 }
 
+export function requiresCoinbaseProxyIdempotency(targetUrl: string, method: string | undefined) {
+  const url = new URL(targetUrl);
+  return (method || 'POST') === 'POST' && IDEMPOTENT_COINBASE_PROXY_POST_PATHS.has(url.pathname);
+}
+
 export function summarizeProxyResponseLog(data: unknown) {
   if (Array.isArray(data)) {
     return {
@@ -144,8 +156,13 @@ export function summarizeWebhookLog(data: Record<string, unknown>) {
 
   return {
     eventType: typeof data.eventType === 'string' ? data.eventType : 'unknown',
-    transactionId: typeof data.transactionId === 'string' ? data.transactionId : null,
+    transactionIdHash: typeof data.transactionId === 'string' ? hashLogIdentifier(data.transactionId) : null,
+    partnerUserRefHash: typeof data.partnerUserRef === 'string' ? hashLogIdentifier(data.partnerUserRef) : null,
     keyCount: keys.length,
     keys,
   };
+}
+
+function hashLogIdentifier(value: string) {
+  return createHash('sha256').update(value).digest('hex').slice(0, 16);
 }

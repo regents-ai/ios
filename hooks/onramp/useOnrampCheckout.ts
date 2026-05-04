@@ -6,6 +6,7 @@ import type { OnrampFormData } from '@/components/onramp/onramp-form-types';
 import { createGuestCheckoutOrder } from '@/utils/createGuestCheckoutOrder';
 import { createOnrampSession } from '@/utils/createOnrampSession';
 import { getAccessTokenGlobal } from '@/utils/getAccessTokenGlobal';
+import { coinbaseWidgetReturnUrl } from '@/utils/onramp/openCoinbaseWidgetSession';
 import { registerForPushNotifications, sendPushTokenToServer } from '@/utils/pushNotifications';
 import { getCountry, getSubdivision, setSubdivision } from '@/utils/state/locationState';
 import { setCurrentPartnerUserRef } from '@/utils/state/flowRuntimeState';
@@ -189,6 +190,7 @@ export function useOnrampCheckout({
           paymentCurrency: formData.paymentCurrency,
           country,
           subdivision,
+          redirectUrl: `${coinbaseWidgetReturnUrl}?partnerUserRef=${encodeURIComponent(partnerUserRef)}`,
         });
 
         let url = response?.session?.onrampUrl;

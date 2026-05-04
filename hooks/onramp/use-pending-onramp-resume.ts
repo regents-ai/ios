@@ -1,8 +1,8 @@
 import { useCallback } from 'react';
-import { Linking } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 
 import type { OnrampFormData } from '@/components/onramp/onramp-form-types';
+import { openCoinbaseWidgetSession } from '@/utils/onramp/openCoinbaseWidgetSession';
 import {
   clearPendingForm,
   getPendingForm,
@@ -37,6 +37,7 @@ export function usePendingOnrampResume({
   showSupportError,
   solanaAddress,
 }: Params) {
+  const router = useRouter();
   const resolvePendingAddress = useCallback(
     (networkApiName: string, fallbackAddress: string) => {
       return getWalletAddressForNetwork(networkApiName) ?? fallbackAddress;
@@ -56,7 +57,11 @@ export function usePendingOnrampResume({
           if ((pendingForm.paymentMethod || '').toUpperCase() === 'COINBASE_WIDGET') {
             const url = await createWidgetSession(pendingForm);
             if (url) {
-              Linking.openURL(url);
+              await openCoinbaseWidgetSession({
+                router,
+                url,
+                partnerUserRef: currentUser?.userId,
+              });
               clearPendingForm();
             }
             return;
@@ -104,10 +109,12 @@ export function usePendingOnrampResume({
       createOrder,
       createWidgetSession,
       effectiveIsSignedIn,
+      currentUser?.userId,
       getAssetSymbolFromName,
       getNetworkNameFromDisplayName,
       onTransactionPrepared,
       resolvePendingAddress,
+      router,
       setAlertState,
       showSupportError,
     ])

@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   CoinbaseConfigurationError,
   requireCoinbaseApiCredentials,
+  requiresCoinbaseProxyIdempotency,
   requireWebhookSecret,
   summarizeWebhookLog,
   summarizeProxyRequestLog,
@@ -70,6 +71,21 @@ test('proxy log summaries expose structure without raw personal data', () => {
   });
 });
 
+test('Coinbase create paths require app-owned idempotency keys', () => {
+  assert.equal(
+    requiresCoinbaseProxyIdempotency('https://api.cdp.coinbase.com/platform/v2/onramp/orders', 'POST'),
+    true
+  );
+  assert.equal(
+    requiresCoinbaseProxyIdempotency('https://api.cdp.coinbase.com/platform/v2/onramp/sessions', 'POST'),
+    true
+  );
+  assert.equal(
+    requiresCoinbaseProxyIdempotency('https://api.developer.coinbase.com/onramp/v1/buy/user/user-1/transactions', 'GET'),
+    false
+  );
+});
+
 test('webhooks require a signing secret', () => {
   assert.equal(requireWebhookSecret('secret-value'), 'secret-value');
   assert.throws(() => requireWebhookSecret(undefined), /WEBHOOK_SECRET is required/);
@@ -99,18 +115,18 @@ test('coinbase proxy credentials are required before signing wallet requests', (
 });
 
 test('webhook logs only include a safe event summary', () => {
-  assert.deepEqual(
-    summarizeWebhookLog({
-      eventType: 'onramp.transaction.success',
-      transactionId: 'tx-123',
-      partnerUserRef: 'user-1',
-      destinationAddress: '0xabc',
-    }),
-    {
-      eventType: 'onramp.transaction.success',
-      transactionId: 'tx-123',
-      keyCount: 4,
-      keys: ['destinationAddress', 'eventType', 'partnerUserRef', 'transactionId'],
-    }
-  );
+  const summary = summarizeWebhookLog({
+    eventType: 'onramp.transaction.success',
+    transactionId: 'tx-123',
+    partnerUserRef: 'user-1',
+    destinationAddress: '0xabc',
+  });
+
+  assert.equal(summary.eventType, 'onramp.transaction.success');
+  assert.match(summary.transactionIdHash!, /^[a-f0-9]{16}$/);
+  assert.match(summary.partnerUserRefHash!, /^[a-f0-9]{16}$/);
+  assert.equal(JSON.stringify(summary).includes('tx-123'), false);
+  assert.equal(JSON.stringify(summary).includes('user-1'), false);
+  assert.equal(summary.keyCount, 4);
+  assert.deepEqual(summary.keys, ['destinationAddress', 'eventType', 'partnerUserRef', 'transactionId']);
 });

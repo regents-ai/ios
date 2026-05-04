@@ -20,6 +20,7 @@ import {
 } from './pushTokens.js';
 import {
   requireWebhookSecret,
+  requiresCoinbaseProxyIdempotency,
   summarizeWebhookLog,
   summarizeProxyRequestLog,
   summarizeProxyResponseLog,
@@ -239,6 +240,7 @@ app.post("/server/api", async (req, res) => {
       url: z.string(), // Must be a valid URL
       method: z.enum(['GET', 'POST']).optional(),
       body: z.any().optional(), // Any JSON body
+      idempotencyKey: z.string().min(1).optional(),
     });
 
     const parsed = requestSchema.safeParse(req.body);
@@ -246,12 +248,16 @@ app.post("/server/api", async (req, res) => {
       return sendError(res, 400, 'BadRequest', 'A valid Coinbase proxy request is required.');
     }
 
-    const { url: targetUrl, method: method, body: targetBody } = parsed.data;
+    const { url: targetUrl, method: method, body: targetBody, idempotencyKey } = parsed.data;
     let authToken = null;
     const validatedTargetUrl = validateProxyTarget({
       targetUrl,
       currentUserId: req.userId,
     });
+
+    if (requiresCoinbaseProxyIdempotency(validatedTargetUrl.toString(), method) && !idempotencyKey) {
+      return sendError(res, 400, 'BadRequest', 'An idempotency key is required for this Coinbase request.');
+    }
 
     console.log('📤 [SERVER] Outgoing request:', summarizeProxyRequestLog(targetUrl, method, targetBody));
 
@@ -279,8 +285,9 @@ app.post("/server/api", async (req, res) => {
 
     // Build headers
     const headers = {
-      ...(method === 'POST' && { "Content-Type": "application/json" }),
+      ...((method || 'POST') === 'POST' && { "Content-Type": "application/json" }),
       ...(authToken && { "Authorization": `Bearer ${authToken}` }),
+      ...((method || 'POST') === 'POST' && idempotencyKey && { "Idempotency-Key": idempotencyKey }),
     };
 
     console.log('📌 [SERVER] Fetching final URL:', {
@@ -292,7 +299,7 @@ app.post("/server/api", async (req, res) => {
     const response = await fetch(finalUrl, {
       method: method || 'POST',
       headers: headers,
-      ...(method === 'POST' && finalBody && { body: JSON.stringify(finalBody) })
+      ...((method || 'POST') === 'POST' && finalBody && { body: JSON.stringify(finalBody) })
     });
 
     // Try to parse as JSON, but handle text responses gracefully
@@ -900,20 +907,20 @@ app.post('/webhooks/onramp', webhookRateLimiter, async (req, res) => {
   try {
     switch (webhook.eventType) {
       case 'onramp.transaction.created':
-        console.log('📝 [WEBHOOK] Transaction created:', webhook.transactionId);
+        console.log('📝 [WEBHOOK] Transaction created');
         break;
 
       case 'onramp.transaction.updated':
-        console.log('🔄 [WEBHOOK] Transaction updated:', webhook.transactionId);
+        console.log('🔄 [WEBHOOK] Transaction updated');
         break;
 
       case 'onramp.transaction.success': {
-        console.log('✅ [WEBHOOK] Transaction completed:', webhook.transactionId);
+        console.log('✅ [WEBHOOK] Transaction completed');
         const partnerUserRef = webhook.partnerUserRef!;
         const userTokenData = await readPushTokenForUser(partnerUserRef);
 
         if (!userTokenData) {
-          console.log('⚠️ [WEBHOOK] No push token found for user:', partnerUserRef);
+          console.log('⚠️ [WEBHOOK] No push token found:', summarizeWebhookLog(webhook));
           break;
         }
 
@@ -930,12 +937,12 @@ app.post('/webhooks/onramp', webhookRateLimiter, async (req, res) => {
       }
 
       case 'onramp.transaction.failed': {
-        console.log('❌ [WEBHOOK] Transaction failed:', webhook.transactionId);
+        console.log('❌ [WEBHOOK] Transaction failed');
         const partnerUserRef = webhook.partnerUserRef!;
         const userTokenData = await readPushTokenForUser(partnerUserRef);
 
         if (!userTokenData) {
-          console.log('⚠️ [WEBHOOK] No push token found for user:', partnerUserRef);
+          console.log('⚠️ [WEBHOOK] No push token found:', summarizeWebhookLog(webhook));
           break;
         }
 

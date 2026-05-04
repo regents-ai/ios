@@ -6,6 +6,7 @@ type ProxyRequestInput = {
   authToken?: string;
   body?: unknown;
   context: string;
+  idempotencyKey?: string;
   method: 'GET' | 'POST';
   url: string;
 };
@@ -19,12 +20,17 @@ function buildProxyInit(input: ProxyRequestInput): RequestInit {
     headers.Authorization = `Bearer ${input.authToken}`;
   }
 
+  if (input.idempotencyKey) {
+    headers['Idempotency-Key'] = input.idempotencyKey;
+  }
+
   return {
     method: 'POST',
     headers,
     body: JSON.stringify({
       url: input.url,
       method: input.method,
+      ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}),
       ...(input.body !== undefined ? { body: input.body } : {}),
     }),
   };

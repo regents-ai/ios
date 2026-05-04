@@ -7,6 +7,7 @@ import {
   clearPendingForm,
   setPendingForm,
 } from '@/utils/state/flowRuntimeState';
+import { openCoinbaseWidgetSession } from '@/utils/onramp/openCoinbaseWidgetSession';
 import { getVerifiedPhone } from '@/utils/state/verificationState';
 import { getWalletAddressForNetwork } from '@/utils/state/walletRuntimeState';
 import {
@@ -141,8 +142,11 @@ export function useWalletOnrampSubmit({
         if ((formData.paymentMethod || '').toUpperCase() === 'COINBASE_WIDGET') {
           const url = await createWidgetSession(updatedFormData);
           if (url) {
-            const { Linking } = await import('react-native');
-            Linking.openURL(url);
+            await openCoinbaseWidgetSession({
+              router,
+              url,
+              partnerUserRef: currentUser?.userId,
+            });
           }
           return;
         }

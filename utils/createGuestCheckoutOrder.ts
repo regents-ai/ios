@@ -1,5 +1,6 @@
 import { summarizeGuestCheckoutOrderLog } from './guestCheckout';
 import { sendOnrampProxyRequest } from './network/onrampProxy';
+import { buildOnrampIdempotencyKey } from './onramp/idempotency';
 
 /**
  * Pattern used across all API utilities:
@@ -14,6 +15,7 @@ export async function createGuestCheckoutOrder(payload: any) {
 
   const responseJson = await sendOnrampProxyRequest<any>({
     context: 'createGuestCheckoutOrder',
+    idempotencyKey: buildOnrampIdempotencyKey('order', payload),
     method: 'POST',
     url: 'https://api.cdp.coinbase.com/platform/v2/onramp/orders',
     body: payload,
