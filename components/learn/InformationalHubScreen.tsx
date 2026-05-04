@@ -1,7 +1,6 @@
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
-import * as Clipboard from 'expo-clipboard';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useState } from 'react';
 import {
@@ -24,9 +23,10 @@ type InformationalHubScreenProps = {
   whyItMatters: string[];
   websiteLabel: string;
   websiteUrl: string;
-  cliInstallCommand: string;
-  cliStartCommand: string;
-  cliTitle: string;
+  resourceTitle: string;
+  resourceBody: string;
+  resourceLabel: string;
+  resourceUrl: string;
 };
 
 export function InformationalHubScreen({
@@ -37,9 +37,10 @@ export function InformationalHubScreen({
   whyItMatters,
   websiteLabel,
   websiteUrl,
-  cliInstallCommand,
-  cliStartCommand,
-  cliTitle,
+  resourceTitle,
+  resourceBody,
+  resourceLabel,
+  resourceUrl,
 }: InformationalHubScreenProps) {
   const [alertState, setAlertState] = useState<{
     visible: boolean;
@@ -53,32 +54,13 @@ export function InformationalHubScreen({
     type: 'info',
   });
 
-  const openWebsite = async () => {
+  const openUrl = async (url: string) => {
     try {
-      await Linking.openURL(websiteUrl);
+      await Linking.openURL(url);
     } catch (error) {
       setAlertState({
         visible: true,
-        title: 'Unable to open website',
-        message: error instanceof Error ? error.message : 'Try again in a moment.',
-        type: 'error',
-      });
-    }
-  };
-
-  const copyCommand = async (label: string, command: string) => {
-    try {
-      await Clipboard.setStringAsync(command);
-      setAlertState({
-        visible: true,
-        title: 'Copied',
-        message: `${label} is ready to paste.`,
-        type: 'success',
-      });
-    } catch (error) {
-      setAlertState({
-        visible: true,
-        title: 'Unable to copy command',
+        title: 'Unable to open link',
         message: error instanceof Error ? error.message : 'Try again in a moment.',
         type: 'error',
       });
@@ -93,7 +75,7 @@ export function InformationalHubScreen({
           <Text style={styles.heroTitle}>{title}</Text>
           <Text style={styles.heroBody}>{intro}</Text>
           <View style={styles.heroActions}>
-            <Pressable style={styles.primaryButton} onPress={openWebsite}>
+            <Pressable style={styles.primaryButton} onPress={() => openUrl(websiteUrl)}>
               <Text style={styles.primaryButtonText}>{websiteLabel}</Text>
             </Pressable>
           </View>
@@ -117,26 +99,12 @@ export function InformationalHubScreen({
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>{cliTitle}</Text>
-          <Text style={styles.sectionHint}>Start from the command line when you want the full experience.</Text>
-
-          <View style={styles.commandCard}>
-            <Text style={styles.commandLabel}>Install the CLI</Text>
-            <Text style={styles.commandText}>{cliInstallCommand}</Text>
-            <Pressable style={styles.secondaryButton} onPress={() => copyCommand('The install command', cliInstallCommand)}>
-              <Ionicons name="copy-outline" size={16} color={TEXT_PRIMARY} />
-              <Text style={styles.secondaryButtonText}>Copy install command</Text>
-            </Pressable>
-          </View>
-
-          <View style={styles.commandCard}>
-            <Text style={styles.commandLabel}>Try this next</Text>
-            <Text style={styles.commandText}>{cliStartCommand}</Text>
-            <Pressable style={styles.secondaryButton} onPress={() => copyCommand('The start command', cliStartCommand)}>
-              <Ionicons name="copy-outline" size={16} color={TEXT_PRIMARY} />
-              <Text style={styles.secondaryButtonText}>Copy start command</Text>
-            </Pressable>
-          </View>
+          <Text style={styles.sectionTitle}>{resourceTitle}</Text>
+          <Text style={styles.sectionHint}>{resourceBody}</Text>
+          <Pressable style={styles.secondaryButton} onPress={() => openUrl(resourceUrl)}>
+            <Ionicons name="open-outline" size={16} color={TEXT_PRIMARY} />
+            <Text style={styles.secondaryButtonText}>{resourceLabel}</Text>
+          </Pressable>
         </View>
       </ScrollView>
 

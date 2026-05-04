@@ -555,7 +555,7 @@ export default function SettingsScreen() {
               <Text style={styles.modalTitle}>Export wallet key</Text>
             </StaggerItem>
             <StaggerItem order={1}>
-              <Text style={styles.helperText}>This copies the selected wallet key to the clipboard.</Text>
+              <Text style={styles.helperText}>Anyone with this key can control this wallet. Only continue somewhere private, then clear the clipboard when you are done.</Text>
             </StaggerItem>
             <StaggerItem order={2}>
               <View style={styles.buttonRow}>
@@ -563,7 +563,7 @@ export default function SettingsScreen() {
                   <Text style={styles.secondaryButtonText}>Cancel</Text>
                 </Pressable>
                 <Pressable style={[styles.primaryButton, { flex: 1 }]} onPress={handleConfirmedExport}>
-                  <Text style={styles.primaryButtonText}>{exporting ? 'Exporting...' : 'Export'}</Text>
+                  <Text style={styles.primaryButtonText}>{exporting ? 'Getting key...' : 'Copy key'}</Text>
                 </Pressable>
               </View>
             </StaggerItem>

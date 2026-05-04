@@ -14,9 +14,10 @@ export default function TechtreeTab() {
       ]}
       websiteLabel="Open techtree.sh"
       websiteUrl="https://techtree.sh"
-      cliTitle="CLI path"
-      cliInstallCommand="pnpm add -g @regentslabs/cli"
-      cliStartCommand="regent techtree start"
+      resourceTitle="Operator tools"
+      resourceBody="For more tools, open the Regent CLI project."
+      resourceLabel="Open Regent CLI project"
+      resourceUrl="https://github.com/regents-ai/regents-cli"
     />
   );
 }

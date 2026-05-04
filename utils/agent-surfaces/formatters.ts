@@ -24,5 +24,3 @@ export function formatRelativeTime(dateString: string) {
 export function formatWalletAddress(address: string) {
   return `${address.slice(0, 8)}...${address.slice(-6)}`;
 }
-
-export const formatPreviewAddress = formatWalletAddress;
