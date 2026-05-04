@@ -19,6 +19,7 @@ type MobileRegentPath =
   | `${typeof mobileRegentsPath}/${string}`
   | `${typeof mobileRegentsPath}/${string}/manager`
   | `${typeof mobileRegentsPath}/${string}/return-requests`
+  | `${typeof mobileRegentsPath}/${string}/return-requests/${string}`
   | `${typeof mobileRegentsPath}/${string}/return-requests/${string}/confirm`
   | `${typeof mobileRegentsPath}/${string}/funding-intents`
   | `${typeof mobileRegentsPath}/${string}/funding-intents/${string}`
@@ -26,7 +27,7 @@ type MobileRegentPath =
   | `${typeof mobileRegentsPath}/${string}/base-snapshot`;
 
 type MobileWalletActionPath =
-  | `/mobile/wallet-actions/${PreparedWalletAction['type']}/prepare`
+  | `/mobile/wallet-actions/${PreparedWalletAction['action']}/prepare`
   | `/mobile/wallet-actions/${string}/confirm`;
 
 type MobileTerminalPath =
@@ -60,11 +61,17 @@ const regentPath = (regentId: string): `${typeof mobileRegentsPath}/${string}` =
 const regentReturnRequestsPath = (regentId: string): `${typeof mobileRegentsPath}/${string}/return-requests` =>
   `${regentPath(regentId)}/return-requests`;
 
+const regentReturnRequestPath = (
+  regentId: string,
+  returnRequestId: string
+): `${typeof mobileRegentsPath}/${string}/return-requests/${string}` =>
+  `${regentReturnRequestsPath(regentId)}/${encodeURIComponent(returnRequestId)}`;
+
 const regentReturnRequestConfirmPath = (
   regentId: string,
   returnRequestId: string
 ): `${typeof mobileRegentsPath}/${string}/return-requests/${string}/confirm` =>
-  `${regentReturnRequestsPath(regentId)}/${encodeURIComponent(returnRequestId)}/confirm`;
+  `${regentReturnRequestPath(regentId, returnRequestId)}/confirm`;
 
 const regentFundingIntentsPath = (regentId: string): `${typeof mobileRegentsPath}/${string}/funding-intents` =>
   `${regentPath(regentId)}/funding-intents`;
@@ -82,9 +89,9 @@ const regentFundingIntentConfirmPath = (
   `${regentFundingIntentPath(regentId, fundingIntentId)}/confirm`;
 
 const mobileWalletPreparePath = (
-  type: PreparedWalletAction['type']
-): `/mobile/wallet-actions/${PreparedWalletAction['type']}/prepare` =>
-  `/mobile/wallet-actions/${encodeURIComponent(type) as PreparedWalletAction['type']}/prepare`;
+  type: PreparedWalletAction['action']
+): `/mobile/wallet-actions/${PreparedWalletAction['action']}/prepare` =>
+  `/mobile/wallet-actions/${encodeURIComponent(type) as PreparedWalletAction['action']}/prepare`;
 
 const mobileWalletConfirmPath = (actionId: string): `/mobile/wallet-actions/${string}/confirm` =>
   `/mobile/wallet-actions/${encodeURIComponent(actionId)}/confirm`;
@@ -173,6 +180,19 @@ export const regentApi = {
         }),
       },
       'Unable to confirm this return right now.'
+    );
+
+    return payload.returnRequest;
+  },
+
+  async getReturnRequest(input: {
+    regentId: string;
+    returnRequestId: string;
+  }): Promise<RegentReturnRequest> {
+    const payload = await requestJson<{ returnRequest: RegentReturnRequest }>(
+      regentReturnRequestPath(input.regentId, input.returnRequestId),
+      undefined,
+      'Unable to load this return right now.'
     );
 
     return payload.returnRequest;
@@ -270,7 +290,7 @@ export const regentApi = {
   },
 
   async prepareWalletAction(input: {
-    type: PreparedWalletAction['type'];
+    type: PreparedWalletAction['action'];
     regentId: string;
     expectedSigner: string;
     to: string;
@@ -278,13 +298,16 @@ export const regentApi = {
     data: string;
     amount?: string;
     currency?: string;
+    riskCopy: string;
+    idempotencyKey: string;
   }): Promise<PreparedWalletAction> {
-    const payload = await requestJson<{ action: PreparedWalletAction }>(
+    const payload = await requestJson<{ wallet_action: PreparedWalletAction }>(
       mobileWalletPreparePath(input.type),
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Idempotency-Key': input.idempotencyKey,
         },
         body: JSON.stringify({
           regentId: input.regentId,
@@ -294,12 +317,13 @@ export const regentApi = {
           data: input.data,
           amount: input.amount,
           currency: input.currency,
+          riskCopy: input.riskCopy,
         }),
       },
       'Unable to prepare this wallet action right now.'
     );
 
-    return payload.action;
+    return payload.wallet_action;
   },
 
   async confirmWalletAction(input: {
@@ -308,7 +332,7 @@ export const regentApi = {
     chainId: number;
     blockNumber: number;
   }): Promise<PreparedWalletAction> {
-    const payload = await requestJson<{ action: PreparedWalletAction }>(
+    const payload = await requestJson<{ wallet_action: PreparedWalletAction }>(
       mobileWalletConfirmPath(input.actionId),
       {
         method: 'POST',
@@ -325,7 +349,7 @@ export const regentApi = {
       'Unable to confirm this wallet action right now.'
     );
 
-    return payload.action;
+    return payload.wallet_action;
   },
 
   async listTerminalSessions(): Promise<TerminalSessionSummary[]> {

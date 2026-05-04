@@ -89,20 +89,27 @@ export type BaseRegentSnapshot = {
 };
 
 export type PreparedWalletAction = {
-  id: string;
-  type: 'stake' | 'claim' | 'funding' | 'return';
-  regentId: string;
-  chainId: number;
-  expectedSigner: string;
+  action_id: string;
+  owner_product: 'ios';
+  resource: 'mobile_wallet_action';
+  resource_id: string;
+  action: 'stake' | 'claim' | 'funding' | 'return';
+  chain_id: number;
   to: string;
-  data: string;
   value: string;
-  label: string;
-  review: string;
-  expiresAt: string;
+  data: string;
+  expected_signer: string;
+  expires_at: string;
+  idempotency_key: string;
+  simulation: {
+    required: boolean;
+    status: 'not_required' | 'pending' | 'passed' | 'failed';
+    block_number: number | null;
+  };
+  risk_copy: string;
   status: 'prepared' | 'confirmed' | 'expired' | 'failed';
-  txHash?: string;
-  blockNumber?: number;
+  tx_hash?: string;
+  block_number?: number;
 };
 
 export type RegentDetail = RegentSummary & {

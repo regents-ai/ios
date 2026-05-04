@@ -95,20 +95,27 @@ type BaseRegentSnapshot = {
 };
 
 export type PreparedWalletAction = {
-  id: string;
-  type: WalletActionType;
-  regentId: string;
-  chainId: number;
-  expectedSigner: string;
+  action_id: string;
+  owner_product: 'ios';
+  resource: 'mobile_wallet_action';
+  resource_id: string;
+  action: WalletActionType;
+  chain_id: number;
   to: string;
-  data: string;
   value: string;
-  label: string;
-  review: string;
-  expiresAt: string;
+  data: string;
+  expected_signer: string;
+  expires_at: string;
+  idempotency_key: string;
+  simulation: {
+    required: boolean;
+    status: 'not_required' | 'pending' | 'passed' | 'failed';
+    block_number: number | null;
+  };
+  risk_copy: string;
   status: 'prepared' | 'confirmed' | 'expired' | 'failed';
-  txHash?: string;
-  blockNumber?: number;
+  tx_hash?: string;
+  block_number?: number;
 };
 
 type RegentDetail = RegentSummary & {
@@ -186,6 +193,20 @@ function receiptMatchesExpected(
     return (
       receipt.chainId === expected.chainId &&
       normalizeAddress(receipt.from) === normalizeAddress(expected.expectedSigner) &&
+      normalizeAddress(receipt.to) === normalizeAddress(expected.to) &&
+      normalizeValue(receipt.value) === normalizeValue(expected.value) &&
+      normalizeData(receipt.data) === normalizeData(expected.data)
+    );
+  } catch {
+    return false;
+  }
+}
+
+function receiptMatchesWalletAction(receipt: ConfirmedBaseReceipt, expected: PreparedWalletAction) {
+  try {
+    return (
+      receipt.chainId === expected.chain_id &&
+      normalizeAddress(receipt.from) === normalizeAddress(expected.expected_signer) &&
       normalizeAddress(receipt.to) === normalizeAddress(expected.to) &&
       normalizeValue(receipt.value) === normalizeValue(expected.value) &&
       normalizeData(receipt.data) === normalizeData(expected.data)
@@ -583,29 +604,41 @@ export function prepareWalletActionForUser(
     to: string;
     value: string;
     data: string;
+    riskCopy: string;
+    idempotencyKey: string;
     amount?: string | undefined;
     currency?: string | undefined;
   }
 ): PreparedWalletAction | null {
   const createdAt = Date.now();
-  const id = `${input.regentId}-${type}-action-${idFromParts(['', userId, String(createdAt)]).slice(1)}`;
+  const key = `${userId}:${input.regentId}:${type}:${input.idempotencyKey}`;
+  const existing = mobileRegentStore.read().preparedWalletActions[key];
+  if (existing) {
+    return cloneJson(existing);
+  }
+
+  const id = `${input.regentId}-${type}-action-${idFromParts(['', userId, input.idempotencyKey]).slice(1)}`;
   const action: PreparedWalletAction = {
-    id,
-    type,
-    regentId: input.regentId,
-    chainId: 8453,
-    expectedSigner: input.expectedSigner,
+    action_id: id,
+    owner_product: 'ios',
+    resource: 'mobile_wallet_action',
+    resource_id: input.regentId,
+    action: type,
+    chain_id: 8453,
     to: input.to,
-    data: input.data,
     value: normalizeValue(input.value),
-    label: `${type.charAt(0).toUpperCase()}${type.slice(1)} ${input.currency || 'USDC'}`,
-    review: input.amount ? `${input.amount} ${input.currency || 'USDC'}` : 'Review this wallet action before signing.',
-    expiresAt: new Date(createdAt + preparedWalletActionTtlMs).toISOString(),
+    data: input.data,
+    expected_signer: input.expectedSigner,
+    expires_at: new Date(createdAt + preparedWalletActionTtlMs).toISOString(),
+    idempotency_key: input.idempotencyKey,
+    simulation: { required: false, status: 'not_required', block_number: null },
+    risk_copy: input.riskCopy,
     status: 'prepared',
   };
 
   mobileRegentStore.update((state) => {
-    state.preparedWalletActions[id] = action;
+    state.preparedWalletActions[action.action_id] = action;
+    state.preparedWalletActions[key] = action;
   });
 
   return cloneJson(action);
@@ -624,22 +657,13 @@ export function confirmPreparedWalletActionForUser(
   if (!action) {
     return { kind: 'not_found' };
   }
-  if (receipt.chainId !== 8453 || receipt.status !== 'confirmed' || !/^0x[a-fA-F0-9]{64}$/.test(receipt.txHash)) {
-    return { kind: 'conflict' };
-  }
-  if (!receiptMatchesExpected(receipt, action)) {
-    return { kind: 'conflict' };
-  }
-
-  if (action.status === 'confirmed') {
-    return { kind: 'ok', action: cloneJson(action) };
-  }
-
-  if (action.status === 'expired' || confirmedAt.getTime() >= Date.parse(action.expiresAt)) {
+  if (action.status !== 'confirmed' && (action.status === 'expired' || confirmedAt.getTime() >= Date.parse(action.expires_at))) {
     let expiredAction: PreparedWalletAction | null = null;
     mobileRegentStore.update((state) => {
-      const stored = state.preparedWalletActions[actionId];
-      if (stored) {
+      for (const stored of Object.values(state.preparedWalletActions)) {
+        if (stored.action_id !== actionId) {
+          continue;
+        }
         stored.status = 'expired';
         expiredAction = stored;
       }
@@ -648,13 +672,26 @@ export function confirmPreparedWalletActionForUser(
     return expiredAction ? { kind: 'expired', action: cloneJson(expiredAction) } : { kind: 'not_found' };
   }
 
+  if (receipt.chainId !== 8453 || receipt.status !== 'confirmed' || !/^0x[a-fA-F0-9]{64}$/.test(receipt.txHash)) {
+    return { kind: 'conflict' };
+  }
+  if (!receiptMatchesWalletAction(receipt, action)) {
+    return { kind: 'conflict' };
+  }
+
+  if (action.status === 'confirmed') {
+    return { kind: 'ok', action: cloneJson(action) };
+  }
+
   let updatedAction: PreparedWalletAction | null = null;
   mobileRegentStore.update((state) => {
-    const stored = state.preparedWalletActions[actionId];
-    if (stored) {
+    for (const stored of Object.values(state.preparedWalletActions)) {
+      if (stored.action_id !== actionId) {
+        continue;
+      }
       stored.status = 'confirmed';
-      stored.txHash = receipt.txHash;
-      stored.blockNumber = receipt.blockNumber;
+      stored.tx_hash = receipt.txHash;
+      stored.block_number = receipt.blockNumber;
       updatedAction = stored;
     }
   });

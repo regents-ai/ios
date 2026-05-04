@@ -234,6 +234,31 @@ function expectedReturnInput(input?: Partial<{
   };
 }
 
+function expectedWalletActionInput(input?: Partial<{
+  regentId: string;
+  expectedSigner: string;
+  to: string;
+  value: string;
+  data: string;
+  riskCopy: string;
+  idempotencyKey: string;
+  amount: string;
+  currency: string;
+}>) {
+  return {
+    regentId: 'atlas-capital',
+    expectedSigner,
+    to: expectedRecipient,
+    value: '0',
+    data: expectedData,
+    riskCopy: 'You are preparing a wallet action for review before signing.',
+    idempotencyKey: 'wallet-action-key',
+    amount: '25',
+    currency: 'USDC',
+    ...input,
+  };
+}
+
 function confirmedReceipt(input?: Partial<{
   txHash: string;
   chainId: number;
@@ -554,6 +579,7 @@ test('mobile money routes accept the listed Regent ID when Platform slugs differ
     url: '/mobile/wallet-actions/funding/prepare',
     headers: {
       'Content-Type': 'application/json',
+      'Idempotency-Key': 'public-wallet-action',
     },
     body: {
       regentId: 'atlas-public',
@@ -561,12 +587,13 @@ test('mobile money routes accept the listed Regent ID when Platform slugs differ
       to: expectedRecipient,
       value: '0',
       data: expectedData,
+      riskCopy: 'You are preparing a funding action for review before signing.',
       amount: '25',
       currency: 'USDC',
     },
   });
   assert.equal(walletActionResponse.status, 201);
-  assert.equal(walletActionResponse.body.action.regentId, 'atlas-public');
+  assert.equal(walletActionResponse.body.wallet_action.resource_id, 'atlas-public');
 });
 
 test('mobile terminal and money routes remain mounted through the extracted router', async () => {
@@ -817,90 +844,113 @@ test('Base snapshots come from the mobile Base snapshot path', () => {
 });
 
 test('prepared wallet actions expire and confirm from Base receipts only', () => {
-  const action = prepareWalletActionForUser('wallet-action-user', 'funding', {
-    regentId: 'atlas-capital',
-    expectedSigner,
-    to: expectedRecipient,
-    value: '0',
-    data: expectedData,
-    amount: '25',
-    currency: 'USDC',
-  });
+  const action = prepareWalletActionForUser('wallet-action-user', 'funding', expectedWalletActionInput());
 
   assert.ok(action);
-  assert.equal(action.type, 'funding');
-  assert.equal(action.chainId, 8453);
-  assert.equal(action.expectedSigner, expectedSigner);
-  assert.match(action.expiresAt, /T/);
-  const ttlMs = Date.parse(action.expiresAt) - Date.now();
+  assert.equal(action.action, 'funding');
+  assert.equal(action.owner_product, 'ios');
+  assert.equal(action.resource_id, 'atlas-capital');
+  assert.equal(action.chain_id, 8453);
+  assert.equal(action.expected_signer, expectedSigner);
+  assert.match(action.expires_at, /T/);
+  const ttlMs = Date.parse(action.expires_at) - Date.now();
   assert.ok(ttlMs > 9 * 60 * 1000);
   assert.ok(ttlMs <= 10 * 60 * 1000);
 });
 
 test('prepared wallet actions support staking, claiming, funding, and returns with the same required fields', () => {
   for (const type of ['stake', 'claim', 'funding', 'return'] as const) {
-    const action = prepareWalletActionForUser(`wallet-action-${type}-user`, type, {
-      regentId: 'atlas-capital',
-      expectedSigner,
-      to: expectedRecipient,
-      value: '0',
-      data: expectedData,
-      amount: '25',
-      currency: 'USDC',
-    });
+    const action = prepareWalletActionForUser(
+      `wallet-action-${type}-user`,
+      type,
+      expectedWalletActionInput({ idempotencyKey: `${type}-wallet-action-key` })
+    );
 
     assert.ok(action);
-    assert.equal(action.type, type);
-    assert.equal(action.regentId, 'atlas-capital');
-    assert.equal(action.chainId, 8453);
-    assert.equal(action.expectedSigner, expectedSigner);
+    assert.equal(action.action, type);
+    assert.equal(action.owner_product, 'ios');
+    assert.equal(action.resource_id, 'atlas-capital');
+    assert.equal(action.chain_id, 8453);
+    assert.equal(action.expected_signer, expectedSigner);
     assert.equal(action.to, expectedRecipient);
     assert.equal(action.value, '0');
     assert.equal(action.data, expectedData);
+    assert.deepEqual(action.simulation, { required: false, status: 'not_required', block_number: null });
+    assert.equal(action.risk_copy, 'You are preparing a wallet action for review before signing.');
+    assert.equal(action.idempotency_key, `${type}-wallet-action-key`);
   }
 });
 
+test('prepared wallet actions reuse the same idempotency key for duplicate prepares', () => {
+  const input = expectedWalletActionInput({ idempotencyKey: 'duplicate-wallet-action-key' });
+  const first = prepareWalletActionForUser('duplicate-wallet-action-user', 'funding', input);
+  const second = prepareWalletActionForUser('duplicate-wallet-action-user', 'funding', input);
+
+  assert.ok(first);
+  assert.ok(second);
+  assert.equal(second.action_id, first.action_id);
+  assert.equal(second.expires_at, first.expires_at);
+  assert.equal(second.risk_copy, first.risk_copy);
+
+  const confirmed = confirmPreparedWalletActionForUser(first.action_id, confirmedReceipt());
+  assert.equal(confirmed.kind, 'ok');
+
+  const afterConfirm = prepareWalletActionForUser('duplicate-wallet-action-user', 'funding', input);
+  assert.ok(afterConfirm);
+  assert.equal(afterConfirm.action_id, first.action_id);
+  assert.equal(afterConfirm.status, 'confirmed');
+});
+
 test('prepared wallet actions reject receipts for the wrong transaction details', () => {
-  const action = prepareWalletActionForUser('wallet-action-user', 'funding', {
-    regentId: 'atlas-capital',
-    expectedSigner,
-    to: expectedRecipient,
-    value: '0',
-    data: expectedData,
-    amount: '25',
-    currency: 'USDC',
-  });
+  const action = prepareWalletActionForUser(
+    'wallet-action-user',
+    'funding',
+    expectedWalletActionInput({ idempotencyKey: 'wallet-action-conflict-key' })
+  );
   assert.ok(action);
 
-  assert.equal(confirmPreparedWalletActionForUser(action.id, confirmedReceipt({ from: '0x3333333333333333333333333333333333333333' })).kind, 'conflict');
-  assert.equal(confirmPreparedWalletActionForUser(action.id, confirmedReceipt({ to: '0x3333333333333333333333333333333333333333' })).kind, 'conflict');
-  assert.equal(confirmPreparedWalletActionForUser(action.id, confirmedReceipt({ value: '1' })).kind, 'conflict');
-  assert.equal(confirmPreparedWalletActionForUser(action.id, confirmedReceipt({ data: '0x1234' })).kind, 'conflict');
-  assert.equal(confirmPreparedWalletActionForUser(action.id, confirmedReceipt()).kind, 'ok');
+  assert.equal(confirmPreparedWalletActionForUser(action.action_id, confirmedReceipt({ from: '0x3333333333333333333333333333333333333333' })).kind, 'conflict');
+  assert.equal(confirmPreparedWalletActionForUser(action.action_id, confirmedReceipt({ to: '0x3333333333333333333333333333333333333333' })).kind, 'conflict');
+  assert.equal(confirmPreparedWalletActionForUser(action.action_id, confirmedReceipt({ value: '1' })).kind, 'conflict');
+  assert.equal(confirmPreparedWalletActionForUser(action.action_id, confirmedReceipt({ data: '0x1234' })).kind, 'conflict');
+  assert.equal(confirmPreparedWalletActionForUser(action.action_id, confirmedReceipt()).kind, 'ok');
 });
 
 test('prepared wallet actions cannot be confirmed after their expiry time', () => {
-  const action = prepareWalletActionForUser('expired-wallet-action-user', 'funding', {
-    regentId: 'atlas-capital',
-    expectedSigner,
-    to: expectedRecipient,
-    value: '0',
-    data: expectedData,
-    amount: '25',
-    currency: 'USDC',
-  });
+  const action = prepareWalletActionForUser(
+    'expired-wallet-action-user',
+    'funding',
+    expectedWalletActionInput({ idempotencyKey: 'expired-wallet-action-key' })
+  );
   assert.ok(action);
 
   const result = confirmPreparedWalletActionForUser(
-    action.id,
+    action.action_id,
     confirmedReceipt(),
-    new Date(Date.parse(action.expiresAt))
+    new Date(Date.parse(action.expires_at))
   );
 
   assert.equal(result.kind, 'expired');
   if (result.kind === 'expired') {
     assert.equal(result.action.status, 'expired');
   }
+});
+
+test('expired prepared wallet actions report expiry before receipt mismatches', () => {
+  const action = prepareWalletActionForUser(
+    'expired-wallet-action-mismatch-user',
+    'funding',
+    expectedWalletActionInput({ idempotencyKey: 'expired-wallet-action-mismatch-key' })
+  );
+  assert.ok(action);
+
+  const result = confirmPreparedWalletActionForUser(
+    action.action_id,
+    confirmedReceipt({ from: '0x3333333333333333333333333333333333333333' }),
+    new Date(Date.parse(action.expires_at))
+  );
+
+  assert.equal(result.kind, 'expired');
 });
 
 test('mobile Regent Manager data is returned as a fresh copy', () => {

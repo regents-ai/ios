@@ -22,6 +22,7 @@ x-regent-chat-room-contract:
 paths:
   /health:
     get:
+      operationId: getHealth
       summary: Check whether the mobile backend is running
       responses:
         '200':
@@ -38,6 +39,7 @@ paths:
                     type: string
   /.well-known/jwks.json:
     get:
+      operationId: getCdpJwks
       summary: Fetch public keys for Coinbase custom sign-in tokens
       responses:
         '200':
@@ -61,6 +63,7 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
   /auth/me:
     get:
+      operationId: getCurrentMobileUser
       summary: Fetch the current signed-in mobile user
       security:
         - bearerAuth: []
@@ -77,6 +80,7 @@ paths:
                     type: string
   /auth/cdp-token:
     post:
+      operationId: createCdpToken
       summary: Create one Coinbase custom sign-in token for the signed-in user
       security:
         - bearerAuth: []
@@ -105,6 +109,7 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
   /server/api:
     post:
+      operationId: proxyCoinbaseRequest
       summary: Proxy one signed Coinbase request for mobile wallet flows
       security:
         - bearerAuth: []
@@ -136,6 +141,7 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
   /balances/evm:
     get:
+      operationId: getEvmBalances
       summary: Fetch EVM token balances for one wallet address
       security:
         - bearerAuth: []
@@ -172,6 +178,7 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
   /balances/solana:
     get:
+      operationId: getSolanaBalances
       summary: Fetch Solana token balances for one wallet address
       security:
         - bearerAuth: []
@@ -208,6 +215,7 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
   /push-tokens/ping:
     post:
+      operationId: recordPushTokenPing
       summary: Record one push-token registration attempt
       responses:
         '200':
@@ -222,6 +230,7 @@ paths:
                     type: boolean
   /push-tokens:
     post:
+      operationId: registerPushToken
       summary: Register one push token for the signed-in user
       security:
         - bearerAuth: []
@@ -256,6 +265,7 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
   /push-tokens/debug/{user_id}:
     get:
+      operationId: getPushTokenDebug
       summary: Fetch push-token status for the signed-in user or their review mirror
       security:
         - bearerAuth: []
@@ -281,6 +291,7 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
   /webhooks/onramp:
     post:
+      operationId: receiveOnrampWebhook
       summary: Receive one signed Coinbase onramp webhook
       requestBody:
         required: true
@@ -327,6 +338,7 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
   /mobile/regents:
     get:
+      operationId: listMobileRegents
       summary: List mobile Regent cards
       security:
         - bearerAuth: []
@@ -357,6 +369,7 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
   /mobile/regents/{id}:
     get:
+      operationId: getMobileRegent
       summary: Fetch one mobile Regent card
       security:
         - bearerAuth: []
@@ -393,6 +406,7 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
   /mobile/regents/{id}/manager:
     get:
+      operationId: getMobileRegentManager
       summary: Fetch one Regent Manager summary
       security:
         - bearerAuth: []
@@ -417,6 +431,7 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
   /mobile/regents/{id}/return-requests:
     post:
+      operationId: createRegentReturnRequest
       summary: Create one Regent-to-wallet return request
       security:
         - bearerAuth: []
@@ -457,6 +472,7 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
   /mobile/regents/{id}/funding-intents:
     post:
+      operationId: createRegentFundingIntent
       summary: Create one wallet-to-Regent funding intent
       security:
         - bearerAuth: []
@@ -496,6 +512,7 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
   /mobile/regents/{id}/funding-intents/{funding_intent_id}:
     get:
+      operationId: getRegentFundingIntent
       summary: Fetch one wallet-to-Regent funding intent
       security:
         - bearerAuth: []
@@ -529,6 +546,7 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
   /mobile/regents/{id}/funding-intents/{funding_intent_id}/confirm:
     post:
+      operationId: confirmRegentFundingIntent
       summary: Confirm one wallet-to-Regent funding intent with a chain receipt
       security:
         - bearerAuth: []
@@ -586,6 +604,7 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
   /mobile/regents/{id}/return-requests/{return_request_id}:
     get:
+      operationId: getRegentReturnRequest
       summary: Fetch one Regent-to-wallet return request
       security:
         - bearerAuth: []
@@ -619,6 +638,7 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
   /mobile/regents/{id}/return-requests/{return_request_id}/confirm:
     post:
+      operationId: confirmRegentReturnRequest
       summary: Confirm one Regent return request with a chain receipt
       security:
         - bearerAuth: []
@@ -676,6 +696,7 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
   /mobile/regents/{id}/base-snapshot:
     get:
+      operationId: getRegentBaseSnapshot
       summary: Fetch one mobile-ready Base snapshot for a Regent
       security:
         - bearerAuth: []
@@ -704,6 +725,7 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
   /mobile/wallet-actions/{type}/prepare:
     post:
+      operationId: prepareMobileWalletAction
       summary: Prepare one mobile wallet action for signing
       security:
         - bearerAuth: []
@@ -714,6 +736,12 @@ paths:
           schema:
             type: string
             enum: [stake, claim, funding, return]
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema:
+            type: string
+          description: Reuse the same value if the same wallet action is prepared again.
       requestBody:
         required: true
         content:
@@ -727,12 +755,13 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [action]
+                required: [wallet_action]
                 properties:
-                  action:
+                  wallet_action:
                     $ref: '#/components/schemas/PreparedWalletAction'
   /mobile/wallet-actions/{action_id}/confirm:
     post:
+      operationId: confirmMobileWalletAction
       summary: Confirm one prepared wallet action with a chain receipt
       security:
         - bearerAuth: []
@@ -755,9 +784,9 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [action]
+                required: [wallet_action]
                 properties:
-                  action:
+                  wallet_action:
                     $ref: '#/components/schemas/PreparedWalletAction'
         '404':
           description: Wallet action not found
@@ -791,6 +820,7 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
   /mobile/terminal/sessions:
     get:
+      operationId: listMobileTerminalSessions
       summary: List mobile Talk sessions from Platform Regent Work Runtime
       security:
         - bearerAuth: []
@@ -808,6 +838,7 @@ paths:
                     items:
                       $ref: '#/components/schemas/TerminalSessionSummary'
     post:
+      operationId: createMobileTerminalSession
       summary: Create one mobile Talk session as a Platform RWR work item and run
       security:
         - bearerAuth: []
@@ -830,6 +861,7 @@ paths:
                     $ref: '#/components/schemas/TerminalSessionDetail'
   /mobile/terminal/sessions/{id}:
     get:
+      operationId: getMobileTerminalSession
       summary: Fetch one mobile Talk session from Platform Regent Work Runtime
       security:
         - bearerAuth: []
@@ -858,6 +890,7 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
   /mobile/terminal/sessions/{id}/events:
     get:
+      operationId: getMobileTerminalEvents
       summary: Fetch new mobile Talk events from Platform Regent Work Runtime
       security:
         - bearerAuth: []
@@ -895,6 +928,7 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
   /mobile/terminal/sessions/{id}/messages:
     post:
+      operationId: postMobileTerminalMessage
       summary: Start a Platform RWR run from one mobile Talk message
       security:
         - bearerAuth: []
@@ -933,6 +967,7 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
   /mobile/terminal/sessions/{id}/approvals/{request_id}:
     post:
+      operationId: resolveMobileTerminalApproval
       summary: Resolve one Platform RWR approval from mobile Talk
       security:
         - bearerAuth: []
@@ -1302,7 +1337,7 @@ components:
           type: string
     PrepareWalletActionRequest:
       type: object
-      required: [regentId, expectedSigner, to, value, data]
+      required: [regentId, expectedSigner, to, value, data, riskCopy]
       properties:
         regentId:
           type: string
@@ -1313,6 +1348,8 @@ components:
         value:
           type: string
         data:
+          type: string
+        riskCopy:
           type: string
         amount:
           type: string
@@ -1321,50 +1358,71 @@ components:
     PreparedWalletAction:
       type: object
       required:
-        - id
-        - type
-        - regentId
-        - chainId
-        - expectedSigner
+        - action_id
+        - owner_product
+        - resource
+        - resource_id
+        - action
+        - chain_id
         - to
-        - data
         - value
-        - label
-        - review
-        - expiresAt
+        - data
+        - expected_signer
+        - expires_at
+        - idempotency_key
+        - simulation
+        - risk_copy
         - status
       properties:
-        id:
+        action_id:
           type: string
-        type:
+        owner_product:
+          type: string
+          enum: [ios]
+        resource:
+          type: string
+          enum: [mobile_wallet_action]
+        resource_id:
+          type: string
+        action:
           type: string
           enum: [stake, claim, funding, return]
-        regentId:
-          type: string
-        chainId:
+        chain_id:
           type: integer
-        expectedSigner:
-          type: string
         to:
-          type: string
-        data:
           type: string
         value:
           type: string
-        label:
+        data:
           type: string
-        review:
+        expected_signer:
           type: string
-        expiresAt:
+        expires_at:
           type: string
           format: date-time
           description: Prepared wallet actions expire 10 minutes after creation.
+        idempotency_key:
+          type: string
+        simulation:
+          type: object
+          additionalProperties: false
+          required: [required, status]
+          properties:
+            required:
+              type: boolean
+            status:
+              type: string
+              enum: [not_required, pending, passed, failed]
+            block_number:
+              type: [integer, 'null']
+        risk_copy:
+          type: string
         status:
           type: string
           enum: [prepared, confirmed, expired, failed]
-        txHash:
+        tx_hash:
           type: string
-        blockNumber:
+        block_number:
           type: integer
           minimum: 0
     RegentDetail:
@@ -1579,6 +1637,9 @@ components:
         body:
           type: object
           additionalProperties: true
+        idempotencyKey:
+          type: string
+          description: Required for creating Coinbase onramp sessions and guest checkout orders.
     CoinbaseOnrampWebhook:
       type: object
       additionalProperties: false

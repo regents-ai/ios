@@ -406,12 +406,14 @@ export function createMobileRoutes(input?: {
       regentId: z.string().min(1),
       amount: z.string().optional(),
       currency: z.string().optional(),
+      riskCopy: z.string().min(1),
     }).merge(expectedBaseTransactionSchema.omit({ chainId: true }));
     const parsedParams = paramsSchema.safeParse(req.params);
     const parsedBody = bodySchema.safeParse(req.body);
+    const idempotencyKey = req.header('Idempotency-Key')?.trim();
 
-    if (!parsedParams.success || !parsedBody.success) {
-      return sendError(res, 400, 'BadRequest', 'A valid wallet action and Regent ID are required.');
+    if (!parsedParams.success || !parsedBody.success || !idempotencyKey) {
+      return sendError(res, 400, 'BadRequest', 'A valid wallet action, Regent ID, and idempotency key are required.');
     }
 
     const projection = await readPlatformProjection(req, res);
@@ -424,12 +426,13 @@ export function createMobileRoutes(input?: {
 
     const action = prepareWalletActionForUser(currentUserId(req.userId), parsedParams.data.type, {
       ...parsedBody.data,
+      idempotencyKey,
     });
     if (!action) {
       return sendError(res, 404, 'NotFound', 'That Regent could not be found.');
     }
 
-    return res.status(201).json({ action });
+    return res.status(201).json({ wallet_action: action });
   });
 
   router.post('/mobile/wallet-actions/:actionId/confirm', async (req, res) => {
@@ -468,7 +471,7 @@ export function createMobileRoutes(input?: {
       return sendError(res, 410, 'WalletActionExpired', 'This wallet action has expired. Start it again before signing.');
     }
 
-    return res.json({ action: result.action });
+    return res.json({ wallet_action: result.action });
   });
 
   function sendPlatformResult<T>(res: Response, result: Awaited<ReturnType<PlatformRwrClient['fetchAccount']>> | { kind: 'ok'; data: T } | { kind: 'missing_config'; requiredEnv: 'PLATFORM_API_BASE_URL' } | { kind: 'unauthorized' } | { kind: 'not_found' } | { kind: 'conflict' } | { kind: 'upstream_error'; message: string }, render: (data: T) => unknown) {
