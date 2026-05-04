@@ -17,6 +17,7 @@ import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
 import { buildEvmTransferCall, isNativeEvmToken } from '@/utils/onchain/buildTransferCall';
+import { parseSolanaAmountToBaseUnits } from '@/utils/onchain/solanaAmount';
 import { useCurrentUser, useSendSolanaTransaction, useSendUserOperation, useSolanaAddress } from '@coinbase/cdp-hooks';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
@@ -386,12 +387,13 @@ export default function TransferScreen() {
     if (!solanaAddress || !selectedToken) return;
 
     try {
-      const amountFloat = parseFloat(amount);
-      const decimals = parseInt(selectedToken.amount?.decimals || '9');
-      const amountRaw = Math.floor(amountFloat * Math.pow(10, decimals));
-
       const tokenSymbol = selectedToken.token?.symbol?.toUpperCase() || 'SOL';
       const isSPLToken = selectedToken.token?.mintAddress && tokenSymbol !== 'SOL';
+      const tokenDecimals = selectedToken.amount?.decimals;
+      const decimals = isSPLToken
+        ? (typeof tokenDecimals === 'string' && /^\d+$/.test(tokenDecimals) ? Number.parseInt(tokenDecimals, 10) : NaN)
+        : 9;
+      const amountRaw = parseSolanaAmountToBaseUnits(amount, decimals);
       const isDevnet = network?.toLowerCase().includes('devnet');
       showAlert(
         'Sending funds',

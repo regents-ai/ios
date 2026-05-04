@@ -18,6 +18,7 @@ import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { COLORS } from '@/constants/Colors';
 import { fetchOfframpTransaction, OfframpTransaction } from '@/utils/fetchOfframpTransaction';
 import { buildEvmTransferCall, isNativeEvmToken } from '@/utils/onchain/buildTransferCall';
+import { parseSolanaAmountToBaseUnits } from '@/utils/onchain/solanaAmount';
 import { getPendingOfframpBalance } from '@/utils/state/flowRuntimeState';
 import {
   useCurrentUser,
@@ -40,8 +41,7 @@ import {
 
 const { DARK_BG, CARD_BG, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, WHITE, BORDER } = COLORS;
 
-// Fallback decimals for known assets when the stored balance doesn't include them
-function getKnownDecimals(asset: string): number {
+function getKnownDecimals(asset: string): number | null {
   switch (asset.toUpperCase()) {
     case 'ETH': return 18;
     case 'SOL': return 9;
@@ -49,8 +49,18 @@ function getKnownDecimals(asset: string): number {
     case 'EURC': return 6;
     case 'BTC':
     case 'CBBTC': return 8;
-    default: return 18;
+    default: return null;
   }
+}
+
+function readAssetDecimals(asset: string, decimals?: string | null): number {
+  const storedDecimals = decimals && /^\d+$/.test(decimals) ? Number.parseInt(decimals, 10) : NaN;
+  const resolvedDecimals = Number.isInteger(storedDecimals) ? storedDecimals : getKnownDecimals(asset);
+  if (resolvedDecimals === null) {
+    throw new Error('This asset cannot be sent right now.');
+  }
+
+  return resolvedDecimals;
 }
 
 export default function OfframpSendScreen() {
@@ -180,7 +190,7 @@ export default function OfframpSendScreen() {
 
   const handleEvmOfframpSend = async () => {
     if (!transaction || !smartAccountAddress) {
-      showAlert('Error', 'Smart account not found. Cannot send funds.', 'error', false);
+      showAlert('Wallet not ready', 'Your wallet is still getting ready. Try again in a moment.', 'error', false);
       return;
     }
 
@@ -188,8 +198,7 @@ export default function OfframpSendScreen() {
     const sellAmountValue = sell_amount.value;
 
     const contractAddress = storedBalance?.token?.contractAddress;
-    const storedDecimals = storedBalance?.amount?.decimals ? parseInt(storedBalance.amount.decimals) : null;
-    const decimals = storedDecimals ?? getKnownDecimals(asset);
+    const decimals = readAssetDecimals(asset, storedBalance?.amount?.decimals);
 
     const isNative = isNativeEvmToken(contractAddress);
     const call = buildEvmTransferCall({
@@ -230,12 +239,11 @@ export default function OfframpSendScreen() {
     const { to_address, sell_amount, asset } = transaction;
     const sellAmountValue = sell_amount.value;
     const mintAddress = storedBalance?.token?.mintAddress;
-    const storedDecimals = storedBalance?.amount?.decimals ? parseInt(storedBalance.amount.decimals) : null;
-    const decimals = storedDecimals ?? getKnownDecimals(asset);
-    const amountRaw = Math.floor(parseFloat(sellAmountValue) * Math.pow(10, decimals));
+    const decimals = readAssetDecimals(asset, storedBalance?.amount?.decimals);
+    const amountRaw = parseSolanaAmountToBaseUnits(sellAmountValue, decimals);
     const isSPL = !!mintAddress && asset.toUpperCase() !== 'SOL';
 
-    showAlert('Sending ⏳', 'Building and submitting Solana transaction...\n\nDo not close this screen.', 'info', true);
+    showAlert('Sending ⏳', 'Your transfer is on the way. This can take a few moments.\n\nDo not close this screen.', 'info', true);
 
     console.log('💸 [OFFRAMP SEND] Solana transfer:', { asset, isSPL, hasMintAddress: !!mintAddress });
 
@@ -377,7 +385,7 @@ export default function OfframpSendScreen() {
             </Pressable>
 
             <Text style={styles.disclaimer}>
-              Once confirmed on-chain, Coinbase will validate and process your cash-out. Fiat will be deposited to your linked account.
+              Once this transfer is confirmed, Coinbase will validate and process your cash-out. Fiat will be deposited to your linked account.
             </Text>
           </>
         )}
