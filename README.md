@@ -73,8 +73,9 @@ The local backend needs:
 - `REGENTS_CDP_JWT_KID`
 - `REGENTS_CDP_JWT_ALG`
 - `REGENTS_CDP_JWT_PRIVATE_KEY`
+- `WEBHOOK_SECRET`
 
-Keep database secrets on the backend. A Neon Postgres URL must not be placed in the mobile app environment. This app currently uses `REDIS_URL` on the backend for push-token storage. Regent records come from Platform’s `/api/agent-platform/projection` endpoint, and Talk records come from Platform Regent Work Runtime routes. The mobile backend stores only wallet intent and receipt state under `.regents-mobile-state` unless `REGENTS_MOBILE_STATE_DIR` points to another backend-owned directory.
+Keep database secrets on the backend. A Neon Postgres URL must not be placed in the mobile app environment. This app currently uses `REDIS_URL` on the backend for push-token storage. Production push delivery also uses the backend APNs settings in `server/.env.example`. Regent records come from Platform’s `/api/agent-platform/projection` endpoint, and Talk records come from Platform Regent Work Runtime routes. The mobile backend stores only wallet intent and receipt state under `.regents-mobile-state` unless `REGENTS_MOBILE_STATE_DIR` points to another backend-owned directory.
 
 ## Run Locally
 

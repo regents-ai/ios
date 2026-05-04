@@ -36,6 +36,8 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
+server/.env
 .env*.local
 
 # typescript
@@ -66,5 +68,4 @@ RELEASE_CHECKLIST.md
 scripts/
 /assets/mockups/
 /assets/review-docs/
-/layer2.md
 /layer3.md
