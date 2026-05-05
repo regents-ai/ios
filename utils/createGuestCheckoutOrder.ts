@@ -15,7 +15,7 @@ export async function createGuestCheckoutOrder(payload: any) {
 
   const responseJson = await sendOnrampProxyRequest<any>({
     context: 'createGuestCheckoutOrder',
-    idempotencyKey: buildOnrampIdempotencyKey('order', payload),
+    idempotencyKey: buildOnrampIdempotencyKey('order', payload, payload.agreementAcceptedAt),
     method: 'POST',
     url: 'https://api.cdp.coinbase.com/platform/v2/onramp/orders',
     body: payload,

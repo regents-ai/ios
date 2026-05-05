@@ -6,7 +6,7 @@ export type OnrampFormData = {
   paymentMethod: string;
   paymentCurrency: string;
   phoneNumber?: string;
-  agreementAcceptedAt?: string;
+  agreementAcceptedAt: string;
 };
 
 export type PaymentMethodOption = {

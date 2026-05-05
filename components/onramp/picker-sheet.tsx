@@ -15,6 +15,7 @@ import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
 import { getEaseTransition } from '@/components/motion/easePresets';
 import { useReducedMotion } from '@/components/motion/useReducedMotion';
+import { RegentPressable } from '@/components/ui/RegentPressable';
 
 const { BLUE, BORDER, CARD_BG, CARD_ALT, TEXT_PRIMARY } = COLORS;
 
@@ -81,12 +82,14 @@ export function PickerSheet({ emptyLabel = 'No options available', items, loadin
               </View>
             ) : items.length ? (
               items.map(item => (
-                <Pressable
+                <RegentPressable
                   key={item.key}
+                  haptic="selection"
                   onPress={() => {
                     onSelect(item.key);
                     onClose();
                   }}
+                  pressStyle="card"
                   style={[styles.item, item.selected && styles.selectedItem]}
                 >
                   <View style={styles.itemContent}>
@@ -94,9 +97,18 @@ export function PickerSheet({ emptyLabel = 'No options available', items, loadin
                       {item.iconUrl ? <Image source={{ uri: item.iconUrl }} style={styles.icon} /> : null}
                       <Text style={[styles.text, item.selected && styles.selectedText]}>{item.label}</Text>
                     </View>
-                    {item.selected ? <Ionicons name="checkmark" size={20} color={BLUE} /> : null}
+                    {item.selected ? (
+                      <EaseView
+                        initialAnimate={{ opacity: 0, scale: 0.92 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={getEaseTransition('card', reducedMotionEnabled)}
+                        style={styles.checkIcon}
+                      >
+                        <Ionicons name="checkmark" size={18} color={BLUE} />
+                      </EaseView>
+                    ) : null}
                   </View>
-                </Pressable>
+                </RegentPressable>
               ))
             ) : (
               <View style={styles.item}>
@@ -145,6 +157,17 @@ const styles = StyleSheet.create({
   },
   selectedItem: {
     backgroundColor: CARD_ALT,
+  },
+  checkIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: CARD_BG,
+    borderWidth: 1,
+    borderColor: BLUE,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 12,
   },
   itemContent: {
     flexDirection: 'row',

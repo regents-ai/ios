@@ -21,10 +21,19 @@ function readSegment(value: unknown) {
   return normalized ? encodeURIComponent(normalized).slice(0, 120) : null;
 }
 
-export function buildOnrampIdempotencyKey(kind: OnrampIdempotencyKind, payload: Record<string, unknown>) {
+export function buildOnrampIdempotencyKey(
+  kind: OnrampIdempotencyKind,
+  payload: Record<string, unknown>,
+  operationId: string
+) {
+  const operationSegment = readSegment(operationId);
+  if (!operationSegment) {
+    throw new Error('This purchase cannot be started right now.');
+  }
+
   const segments = IDEMPOTENCY_FIELDS
     .map((field) => readSegment(payload[field]))
     .filter((segment): segment is string => !!segment);
 
-  return ['regents-mobile', 'onramp', kind, ...segments].join(':');
+  return ['regents-mobile', 'onramp', kind, operationSegment, ...segments].join(':');
 }

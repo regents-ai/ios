@@ -115,7 +115,7 @@ export function useOnrampCheckout({
           phoneNumber: phone,
           phoneNumberVerifiedAt: new Date(phoneAt!).toISOString(),
           partnerUserRef,
-          agreementAcceptedAt: new Date().toISOString(),
+          agreementAcceptedAt: formData.agreementAcceptedAt,
           isQuote: false,
         });
 
@@ -182,16 +182,19 @@ export function useOnrampCheckout({
           destinationAddress = solanaAddress;
         }
 
-        const response = await createOnrampSession({
-          purchaseCurrency: assetSymbol,
-          destinationNetwork: networkName,
-          destinationAddress,
-          paymentAmount: formData.amount,
-          paymentCurrency: formData.paymentCurrency,
-          country,
-          subdivision,
-          redirectUrl: `${coinbaseWidgetReturnUrl}?partnerUserRef=${encodeURIComponent(partnerUserRef)}`,
-        });
+        const response = await createOnrampSession(
+          {
+            purchaseCurrency: assetSymbol,
+            destinationNetwork: networkName,
+            destinationAddress,
+            paymentAmount: formData.amount,
+            paymentCurrency: formData.paymentCurrency,
+            country,
+            subdivision,
+            redirectUrl: `${coinbaseWidgetReturnUrl}?partnerUserRef=${encodeURIComponent(partnerUserRef)}`,
+          },
+          formData.agreementAcceptedAt
+        );
 
         let url = response?.session?.onrampUrl;
 

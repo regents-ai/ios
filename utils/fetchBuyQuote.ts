@@ -3,6 +3,7 @@ import { getBaseUrl } from '@/constants/BASE_URL';
 import { authenticatedFetch } from './authenticatedFetch';
 import { createGuestCheckoutOrder } from './createGuestCheckoutOrder';
 import { buildGuestCheckoutQuotePayload } from './guestCheckout';
+import { buildOnrampIdempotencyKey } from './onramp/idempotency';
 import { getCountry, getSubdivision } from './state/locationState';
 import { getWalletAddressForNetwork } from './state/walletRuntimeState';
 
@@ -70,6 +71,12 @@ export async function fetchBuyQuote(payload: {
       destinationAddress,
       paymentMethod: payload.paymentMethod === 'COINBASE_WIDGET' ? 'CARD' : payload.paymentMethod
     };
+    const quoteIdempotencyPayload = {
+      ...v2Payload,
+      partnerUserRef: payload.partnerUserRef,
+      isQuote: true,
+    };
+    const quoteIdempotencyKey = buildOnrampIdempotencyKey('session', quoteIdempotencyPayload, 'widget-quote');
 
     console.log('📤 [API] fetchBuyQuote (Widget)');
 
@@ -82,6 +89,7 @@ export async function fetchBuyQuote(payload: {
       body: JSON.stringify({
         url: 'https://api.cdp.coinbase.com/platform/v2/onramp/sessions',
         method: 'POST',
+        idempotencyKey: quoteIdempotencyKey,
         body: v2Payload,
       }),
     });

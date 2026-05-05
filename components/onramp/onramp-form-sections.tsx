@@ -1,8 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { SwipeToConfirm } from '@/components/ui/SwipeToConfirm';
+import { LiveValueFlash } from '@/components/motion/LiveValueFlash';
+import { RegentPressable } from '@/components/ui/RegentPressable';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
 
@@ -16,7 +18,7 @@ export function FocusPathSection({
   onPress: () => void;
 }) {
   return (
-    <Pressable style={({ pressed }) => [styles.focusCard, isBaseUsdcPath && styles.focusCardActive, pressed && styles.focusPressed]} onPress={onPress}>
+    <RegentPressable haptic="selection" pressStyle="card" style={[styles.focusCard, isBaseUsdcPath && styles.focusCardActive]} onPress={onPress}>
       <View style={styles.focusHeader}>
         <View style={styles.focusCopy}>
           <Text style={styles.eyebrow}>Base + USDC</Text>
@@ -36,7 +38,7 @@ export function FocusPathSection({
           </View>
         ))}
       </View>
-    </Pressable>
+    </RegentPressable>
   );
 }
 
@@ -71,23 +73,29 @@ export function AmountQuoteSection({
   quoteDisclaimer?: string | null;
   userLimits: { weekly: any; lifetime: any } | null;
 }) {
+  const [amountFocused, setAmountFocused] = React.useState(false);
+  const receiveAmount = currentQuote?.purchase_amount?.value || '0';
+
   return (
     <>
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Buy</Text>
-        <View style={styles.inputRow}>
+        <View style={[styles.inputRow, amountFocused && styles.inputRowFocused]}>
           <TextInput
             value={amount}
             onChangeText={onAmountChange}
+            onBlur={() => setAmountFocused(false)}
+            onFocus={() => setAmountFocused(true)}
             placeholder="0"
             placeholderTextColor={TEXT_SECONDARY}
             keyboardType="decimal-pad"
+            selectionColor={BLUE}
             style={styles.amountInput}
           />
-          <Pressable style={styles.selectChip} onPress={onOpenPaymentCurrencyPicker}>
+          <RegentPressable haptic="selection" pressStyle="chip" style={styles.selectChip} onPress={onOpenPaymentCurrencyPicker}>
             <Text style={styles.selectChipText}>{paymentCurrency}</Text>
             <Ionicons name="chevron-down" size={16} color={TEXT_SECONDARY} />
-          </Pressable>
+          </RegentPressable>
         </View>
         {amountError ? (
           <Text style={styles.errorText}>{amountError}</Text>
@@ -121,7 +129,9 @@ export function AmountQuoteSection({
               <View style={[styles.pulse, styles.pulseShort]} />
             </View>
           ) : (
-            <Text style={styles.receiveAmount}>{currentQuote?.purchase_amount?.value || '0'}</Text>
+            <LiveValueFlash value={`receive-${receiveAmount}`} nudge style={styles.receiveFlash}>
+              <Text style={styles.receiveAmount}>{receiveAmount}</Text>
+            </LiveValueFlash>
           )}
         </View>
 
@@ -161,7 +171,9 @@ function QuoteRow({ label, total, value }: { label: string; total?: boolean; val
   return (
     <View style={[styles.quoteLine, total && styles.quoteTotalLine]}>
       <Text style={total ? styles.quoteTotalLabel : styles.quoteLabel}>{label}</Text>
-      <Text style={total ? styles.quoteTotalValue : styles.quoteValue}>{value}</Text>
+      <LiveValueFlash value={`${label}-${value}`} nudge={total} style={styles.quoteValueFlash}>
+        <Text style={total ? styles.quoteTotalValue : styles.quoteValue}>{value}</Text>
+      </LiveValueFlash>
     </View>
   );
 }
@@ -185,13 +197,13 @@ export function AssetNetworkSection({
 }) {
   return (
     <View style={styles.card}>
-      <Pressable style={styles.selectChipLarge} onPress={onOpenAssetPicker}>
+      <RegentPressable haptic="selection" pressStyle="chip" style={styles.selectChipLarge} onPress={onOpenAssetPicker}>
         <View style={styles.selectContent}>
           {assetIconUrl ? <Image source={{ uri: assetIconUrl }} style={styles.coinIcon} /> : null}
           <Text style={styles.selectText}>{asset}</Text>
         </View>
         <Ionicons name="chevron-down" size={16} color={TEXT_SECONDARY} />
-      </Pressable>
+      </RegentPressable>
       <Text style={styles.helper}>
         {isBaseUsdcPath
           ? 'This keeps your default buy path on Base with USDC.'
@@ -199,13 +211,13 @@ export function AssetNetworkSection({
       </Text>
       <View style={[styles.rowBetween, styles.dividerTop]}>
         <Text style={styles.label}>Network</Text>
-        <Pressable style={styles.selectChipLarge} onPress={onOpenNetworkPicker}>
+        <RegentPressable haptic="selection" pressStyle="chip" style={styles.selectChipLarge} onPress={onOpenNetworkPicker}>
           <View style={styles.selectContent}>
             {networkIconUrl ? <Image source={{ uri: networkIconUrl }} style={styles.coinIcon} /> : null}
             <Text style={styles.selectText}>{network}</Text>
           </View>
           <Ionicons name="chevron-down" size={16} color={TEXT_SECONDARY} />
-        </Pressable>
+        </RegentPressable>
       </View>
     </View>
   );
@@ -222,10 +234,10 @@ export function PaymentMethodSection({
     <View style={styles.card}>
       <View style={styles.rowBetween}>
         <Text style={styles.label}>Pay with</Text>
-        <Pressable style={styles.selectChipLarge} onPress={onOpenPaymentPicker}>
+        <RegentPressable haptic="selection" pressStyle="chip" style={styles.selectChipLarge} onPress={onOpenPaymentPicker}>
           <Text style={styles.selectText}>{paymentMethodLabel}</Text>
           <Ionicons name="chevron-down" size={16} color={TEXT_SECONDARY} />
-        </Pressable>
+        </RegentPressable>
       </View>
     </View>
   );
@@ -276,18 +288,18 @@ export function LocationSection({
       <Text style={styles.sectionTitle}>Location</Text>
       <View style={styles.rowBetween}>
         <Text style={styles.label}>Country</Text>
-        <Pressable style={styles.selectChipLarge} onPress={onOpenCountryPicker}>
+        <RegentPressable haptic="selection" pressStyle="chip" style={styles.selectChipLarge} onPress={onOpenCountryPicker}>
           <Text style={styles.selectText}>{country}</Text>
           <Ionicons name="chevron-down" size={16} color={TEXT_SECONDARY} />
-        </Pressable>
+        </RegentPressable>
       </View>
       {country === 'US' ? (
         <View style={[styles.rowBetween, styles.helperTight]}>
           <Text style={styles.label}>Subdivision</Text>
-          <Pressable style={styles.selectChipLarge} onPress={onOpenSubdivisionPicker}>
+          <RegentPressable haptic="selection" pressStyle="chip" style={styles.selectChipLarge} onPress={onOpenSubdivisionPicker}>
             <Text style={styles.selectText}>{subdivision || 'Select'}</Text>
             <Ionicons name="chevron-down" size={16} color={TEXT_SECONDARY} />
-          </Pressable>
+          </RegentPressable>
         </View>
       ) : null}
     </View>
@@ -359,10 +371,6 @@ const styles = StyleSheet.create({
   },
   focusCardActive: {
     backgroundColor: CARD_BG,
-  },
-  focusPressed: {
-    transform: [{ scale: 0.985 }],
-    opacity: 0.97,
   },
   focusHeader: {
     flexDirection: 'row',
@@ -458,6 +466,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    backgroundColor: WHITE,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 22,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  inputRowFocused: {
+    borderColor: BLUE,
+    shadowColor: BLUE,
+    shadowOpacity: 0.14,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
   amountInput: {
     flex: 1,
@@ -496,6 +518,9 @@ const styles = StyleSheet.create({
   receiveRow: {
     minHeight: 40,
     justifyContent: 'center',
+  },
+  receiveFlash: {
+    alignSelf: 'flex-start',
   },
   receiveAmount: {
     fontSize: 32,
@@ -542,21 +567,31 @@ const styles = StyleSheet.create({
     color: TEXT_SECONDARY,
     fontSize: 14,
     fontFamily: FONTS.body,
+    flexShrink: 1,
+    paddingRight: 12,
   },
   quoteValue: {
     color: TEXT_PRIMARY,
     fontSize: 14,
     fontFamily: FONTS.body,
+    textAlign: 'right',
   },
   quoteTotalLabel: {
     color: TEXT_PRIMARY,
     fontSize: 16,
     fontFamily: FONTS.heading,
+    flexShrink: 1,
+    paddingRight: 12,
   },
   quoteTotalValue: {
     color: TEXT_PRIMARY,
     fontSize: 16,
     fontFamily: FONTS.heading,
+    textAlign: 'right',
+  },
+  quoteValueFlash: {
+    alignSelf: 'flex-end',
+    maxWidth: '55%',
   },
   noticeCard: {
     backgroundColor: `${BLUE}10`,
