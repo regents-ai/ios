@@ -14,6 +14,9 @@
  */
 
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
+import { RegentPressable } from '@/components/ui/RegentPressable';
+import { runRegentHaptic } from '@/components/ui/haptics';
+import { LiveValueFlash } from '@/components/motion/LiveValueFlash';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
 import { buildEvmTransferCall, isNativeEvmToken } from '@/utils/onchain/buildTransferCall';
@@ -33,7 +36,6 @@ import {
   Linking,
   Modal,
   Platform,
-  Pressable,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -109,6 +111,7 @@ export default function TransferScreen() {
 
   const [recipientAddress, setRecipientAddress] = useState('');
   const [amount, setAmount] = useState('');
+  const [amountFocused, setAmountFocused] = useState(false);
   const [selectedToken, setSelectedToken] = useState<any>(null);
   const [network, setNetwork] = useState('base'); // base, ethereum, solana
   const [sending, setSending] = useState(false);
@@ -285,6 +288,12 @@ export default function TransferScreen() {
 
   // Helper to show custom alerts
   const showAlert = (title: string, message: string, type: 'success' | 'error' | 'info' = 'info', url?: string, isPending = false) => {
+    if (type === 'success') {
+      runRegentHaptic('success');
+    } else if (type === 'error') {
+      runRegentHaptic('warning');
+    }
+
     setAlertTitle(title);
     setAlertMessage(message);
     setAlertType(type);
@@ -562,9 +571,9 @@ export default function TransferScreen() {
           animate={{ opacity: 1, translateY: 0 }}
           transition={buildTimingTransition(reduceMotion)}
         >
-          <Pressable onPress={() => router.back()} style={styles.backButton}>
+          <RegentPressable pressStyle="icon" onPress={() => router.back()} style={styles.backButton}>
             <Ionicons name="chevron-back" size={24} color={TEXT_PRIMARY} />
-          </Pressable>
+          </RegentPressable>
         </EaseView>
         <EaseView
           initialAnimate={{ opacity: 0, translateY: SCREEN_OFFSET }}
@@ -622,7 +631,9 @@ export default function TransferScreen() {
                 autoCorrect={false}
               />
               {recipientAddress ? (
-                <Pressable
+                <RegentPressable
+                  haptic="selection"
+                  pressStyle="icon"
                   style={styles.pasteButton}
                   onPress={() => {
                     setRecipientAddress('');
@@ -630,9 +641,10 @@ export default function TransferScreen() {
                   }}
                 >
                   <Ionicons name="close-circle" size={20} color={TEXT_SECONDARY} />
-                </Pressable>
+                </RegentPressable>
               ) : (
-                <Pressable
+                <RegentPressable
+                  pressStyle="icon"
                   style={styles.pasteButton}
                   onPress={async () => {
                     const text = await Clipboard.getStringAsync();
@@ -640,7 +652,7 @@ export default function TransferScreen() {
                   }}
                 >
                   <Ionicons name="clipboard-outline" size={20} color={BLUE} />
-                </Pressable>
+                </RegentPressable>
               )}
             </View>
 
@@ -656,14 +668,17 @@ export default function TransferScreen() {
             style={styles.card}
           >
             <Text style={styles.label}>Amount</Text>
-            <View style={styles.amountField}>
+            <View style={[styles.amountField, amountFocused && styles.amountFieldFocused]}>
               <TextInput
                 style={[styles.input, styles.amountInput]}
                 value={amount}
                 onChangeText={setAmount}
+                onBlur={() => setAmountFocused(false)}
+                onFocus={() => setAmountFocused(true)}
                 placeholder="0.00"
                 placeholderTextColor={TEXT_SECONDARY}
                 keyboardType="decimal-pad"
+                selectionColor={BLUE}
               />
               <View style={styles.amountTokenPill}>
                 <Text style={styles.amountTokenText}>{selectedToken?.token?.symbol || 'Token'}</Text>
@@ -677,29 +692,37 @@ export default function TransferScreen() {
             )}
 
             <View style={styles.quickButtons}>
-              <Pressable
+              <RegentPressable
+                haptic="selection"
+                pressStyle="chip"
                 style={styles.quickButton}
                 onPress={() => handleQuickAmount(10)}
               >
                 <Text style={styles.quickButtonText}>10%</Text>
-              </Pressable>
-              <Pressable
+              </RegentPressable>
+              <RegentPressable
+                haptic="selection"
+                pressStyle="chip"
                 style={styles.quickButton}
                 onPress={() => handleQuickAmount(50)}
               >
                 <Text style={styles.quickButtonText}>50%</Text>
-              </Pressable>
-              <Pressable
+              </RegentPressable>
+              <RegentPressable
+                haptic="selection"
+                pressStyle="chip"
                 style={styles.quickButton}
                 onPress={() => handleQuickAmount(100)}
               >
                 <Text style={styles.quickButtonText}>Max</Text>
-              </Pressable>
+              </RegentPressable>
             </View>
 
-            <Text style={styles.helper}>
-              Available: {tokenBalance} {selectedToken?.token?.symbol || ''}
-            </Text>
+            <LiveValueFlash value={`available-${tokenBalance}-${selectedToken?.token?.symbol || ''}`} style={styles.availableFlash}>
+              <Text style={styles.helper}>
+                Available: {tokenBalance} {selectedToken?.token?.symbol || ''}
+              </Text>
+            </LiveValueFlash>
 
             {needsGasFee && (
               <Text style={[styles.helper, styles.warningText]}>
@@ -746,9 +769,11 @@ export default function TransferScreen() {
             </View>
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Available</Text>
-              <Text style={styles.detailValue}>
-                {tokenBalance} {selectedToken?.token?.symbol || ''}
-              </Text>
+              <LiveValueFlash value={`from-wallet-available-${tokenBalance}-${selectedToken?.token?.symbol || ''}`} style={styles.detailValueFlash}>
+                <Text style={styles.detailValue}>
+                  {tokenBalance} {selectedToken?.token?.symbol || ''}
+                </Text>
+              </LiveValueFlash>
             </View>
             {isPaymasterSupported ? (
               <Text style={styles.helper}>No network fee will be charged for this send.</Text>
@@ -781,7 +806,7 @@ export default function TransferScreen() {
             transition={buildTimingTransition(reduceMotion, STAGGER_STEP * 8)}
             style={styles.mainButtonWrap}
           >
-            <Pressable
+            <RegentPressable
               style={[styles.mainSendButton, !canContinue && styles.buttonDisabled]}
               onPress={handleSend}
               disabled={!canContinue}
@@ -791,7 +816,7 @@ export default function TransferScreen() {
               ) : (
                 <Text style={styles.mainSendButtonText}>Continue</Text>
               )}
-            </Pressable>
+            </RegentPressable>
           </EaseView>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -885,18 +910,19 @@ export default function TransferScreen() {
               transition={buildTimingTransition(reduceMotion, STAGGER_STEP * 3)}
               style={styles.confirmationButtons}
             >
-              <Pressable
+              <RegentPressable
                 style={[styles.confirmButton, styles.cancelButton]}
                 onPress={() => setShowConfirmation(false)}
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
-              </Pressable>
-              <Pressable
+              </RegentPressable>
+              <RegentPressable
+                haptic="warning"
                 style={[styles.confirmButton, styles.sendButton]}
                 onPress={handleConfirmedSend}
               >
                 <Text style={styles.sendButtonText}>Send now</Text>
-              </Pressable>
+              </RegentPressable>
             </EaseView>
           </EaseView>
         </EaseView>
@@ -1042,6 +1068,7 @@ const styles = StyleSheet.create({
   amountField: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 12,
     backgroundColor: WHITE,
     borderWidth: 1,
@@ -1050,8 +1077,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 18,
   },
+  amountFieldFocused: {
+    borderColor: BLUE,
+    shadowColor: BLUE,
+    shadowOpacity: 0.14,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
   amountInput: {
     flex: 1,
+    minWidth: 120,
     minHeight: 72,
     fontSize: 34,
     lineHeight: 40,
@@ -1062,6 +1098,7 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
   },
   amountTokenPill: {
+    maxWidth: '100%',
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 999,
@@ -1074,11 +1111,13 @@ const styles = StyleSheet.create({
   },
   quickButtons: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
     marginTop: 12,
   },
   quickButton: {
     flex: 1,
+    minWidth: 84,
     backgroundColor: WHITE,
     borderWidth: 1,
     borderColor: BORDER,
@@ -1109,6 +1148,8 @@ const styles = StyleSheet.create({
   mainSendButtonText: {
     color: WHITE,
     fontSize: 16,
+    lineHeight: 22,
+    textAlign: 'center',
     fontFamily: FONTS.body,
   },
   buttonDisabled: {
@@ -1145,6 +1186,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 16,
     marginBottom: 12,
   },
@@ -1153,12 +1195,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: FONTS.body,
   },
+  detailValueFlash: {
+    alignSelf: 'flex-end',
+    maxWidth: '100%',
+  },
   detailValue: {
     color: TEXT_PRIMARY,
     fontSize: 16,
     fontFamily: FONTS.heading,
     flexShrink: 1,
     textAlign: 'right',
+  },
+  availableFlash: {
+    alignSelf: 'flex-start',
+    maxWidth: '100%',
   },
   noticeCard: {
     backgroundColor: CARD_ALT,
@@ -1227,6 +1277,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
   },
   confirmLabel: {
     fontSize: 14,
@@ -1250,6 +1302,8 @@ const styles = StyleSheet.create({
   confirmAmountValue: {
     fontSize: 20,
     color: BLUE,
+    lineHeight: 26,
+    flexShrink: 1,
     fontFamily: FONTS.heading,
   },
   confirmUsd: {
@@ -1263,11 +1317,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     padding: 18,
     gap: 12,
+    flexWrap: 'wrap',
     borderTopWidth: 1,
     borderTopColor: BORDER,
   },
   confirmButton: {
     flex: 1,
+    minWidth: 130,
     minHeight: 52,
     paddingVertical: 14,
     borderRadius: 14,

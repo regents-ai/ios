@@ -5,6 +5,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { getBaseUrl } from '@/constants/BASE_URL';
+import { runRegentHaptic } from '@/components/ui/haptics';
 import { useRegentsAuth } from '@/hooks/useRegentsAuth';
 import { authenticatedFetch } from '@/utils/authenticatedFetch';
 import { createOfframpSession } from '@/utils/createOfframpSession';
@@ -189,15 +190,25 @@ export function useWalletDetailsState() {
   const hasAnyWalletBalance = balances.length > 0;
 
   const showAlert = useCallback((title: string, message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    if (type === 'success') {
+      runRegentHaptic('success');
+    } else if (type === 'error') {
+      runRegentHaptic('warning');
+    }
+
     setAlertState({ visible: true, title, message, type });
   }, []);
 
   const copyAddress = useCallback(
     async (addressToCopy: string, label: string, key: string) => {
-      await Clipboard.setStringAsync(addressToCopy);
-      setRecentCopyKey(key);
-      showAlert('Address copied', `${label} copied to the clipboard.`, 'info');
-      setTimeout(() => setRecentCopyKey((current) => (current === key ? null : current)), 1400);
+      try {
+        await Clipboard.setStringAsync(addressToCopy);
+        runRegentHaptic('copy');
+        setRecentCopyKey(key);
+        setTimeout(() => setRecentCopyKey((current) => (current === key ? null : current)), 1400);
+      } catch {
+        showAlert('Copy failed', `Unable to copy your ${label.toLowerCase()}.`, 'error');
+      }
     },
     [showAlert]
   );

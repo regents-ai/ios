@@ -2,6 +2,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import React, { useCallback, useRef, useState } from "react";
 import { ActivityIndicator, Animated, Easing, PanResponder, StyleSheet, Text, View } from "react-native";
 import { useReducedMotion } from "@/components/motion/useReducedMotion";
+import { runRegentHaptic } from "@/components/ui/haptics";
 import { COLORS } from "../../constants/Colors";
 import { FONTS } from "../../constants/Typography";
 
@@ -29,6 +30,21 @@ export function SwipeToConfirm({ label, disabled = false, onConfirm, isLoading =
   const labelOpacity = useRef(new Animated.Value(1)).current;
   const startXRef = useRef(0);
   const currentXRef = useRef(0);
+  const thresholdReachedRef = useRef(false);
+  const [pastThreshold, setPastThreshold] = useState(false);
+
+  const setThresholdReached = useCallback((next: boolean) => {
+    if (thresholdReachedRef.current === next) {
+      return;
+    }
+
+    thresholdReachedRef.current = next;
+    setPastThreshold(next);
+
+    if (next) {
+      runRegentHaptic('selection');
+    }
+  }, []);
 
   const animateKnobScale = useCallback(
     (toValue: number) => {
@@ -48,20 +64,22 @@ export function SwipeToConfirm({ label, disabled = false, onConfirm, isLoading =
   );
 
   const snapBack = useCallback(() => {
+    setThresholdReached(false);
     Animated.spring(translateX, { toValue: 0, useNativeDriver: true, bounciness: 0, speed: 16 }).start(() => {
       currentXRef.current = 0;
     });
     animateKnobScale(1);
-  }, [animateKnobScale, translateX]);
+  }, [animateKnobScale, setThresholdReached, translateX]);
 
   const complete = useCallback(() => {
+    setThresholdReached(false);
     Animated.timing(translateX, { toValue: maxX, duration: 150, useNativeDriver: true }).start(() => {
       currentXRef.current = maxX;
       const reset = () => snapBack();
       onConfirm(reset);
     });
     animateKnobScale(1);
-  }, [animateKnobScale, maxX, onConfirm, snapBack, translateX]);
+  }, [animateKnobScale, maxX, onConfirm, setThresholdReached, snapBack, translateX]);
 
   React.useEffect(() => {
     Animated.timing(labelOpacity, {
@@ -102,24 +120,27 @@ export function SwipeToConfirm({ label, disabled = false, onConfirm, isLoading =
         onPanResponderGrant: (e) => {
           if (isLoading) return;
           onSwipeStart?.();
+          runRegentHaptic('tap');
           animateKnobScale(1.03);
           const localX = e.nativeEvent.locationX - knobSize / 2;
           const clamped = Math.max(0, Math.min(maxX, localX));
           startXRef.current = clamped;
           currentXRef.current = clamped;
+          setThresholdReached(maxX > 0 && clamped >= maxX * 0.8);
           translateX.setValue(clamped);
         },
         onPanResponderMove: (_e, g) => {
           if (isLoading) return;
           const next = Math.max(0, Math.min(maxX, startXRef.current + g.dx));
           currentXRef.current = next;
+          setThresholdReached(maxX > 0 && next >= maxX * 0.8);
           translateX.setValue(next);
         },
         onPanResponderRelease: () => {
           if (isLoading) return;
           onSwipeEnd?.();
           const threshold = maxX * 0.8;
-          if (currentXRef.current >= threshold) {
+          if (maxX > 0 && currentXRef.current >= threshold) {
             complete();
           } else {
             snapBack();
@@ -133,7 +154,7 @@ export function SwipeToConfirm({ label, disabled = false, onConfirm, isLoading =
           }
         },
       }),
-    [animateKnobScale, disabled, knobSize, maxX, complete, snapBack, translateX, isLoading, onSwipeStart, onSwipeEnd] 
+    [animateKnobScale, disabled, knobSize, maxX, complete, snapBack, translateX, isLoading, onSwipeStart, onSwipeEnd, setThresholdReached] 
   );
 
   const progressScale = translateX.interpolate({
@@ -152,6 +173,13 @@ export function SwipeToConfirm({ label, disabled = false, onConfirm, isLoading =
         accessibilityRole="button"
         accessibilityState={{ disabled: disabled || isLoading }}
         accessibilityLabel={label}
+        accessibilityHint="Swipe right to confirm."
+        accessibilityActions={[{ name: 'activate', label }]}
+        onAccessibilityAction={(event) => {
+          if (event.nativeEvent.actionName === 'activate' && !disabled && !isLoading) {
+            complete();
+          }
+        }}
       >
         <Animated.View
           style={[
@@ -167,12 +195,14 @@ export function SwipeToConfirm({ label, disabled = false, onConfirm, isLoading =
               <Text style={styles.loadingLabel}>Preparing your purchase…</Text>
             </View>
           ) : (
-            <Text style={styles.swipeLabel}>{label}</Text>
+            <Text style={[styles.swipeLabel, pastThreshold && styles.swipeLabelReady]}>
+              {pastThreshold ? 'Release to confirm' : label}
+            </Text>
           )}
         </Animated.View>
 
         <Animated.View style={[styles.swipeKnob, { transform: [{ translateX }, { scale: knobScale }] }]}>
-          <Ionicons name={isLoading ? "checkmark" : "chevron-forward"} size={22} color="#FFFFFF" />
+          <Ionicons name={isLoading || pastThreshold ? "checkmark" : "chevron-forward"} size={22} color="#FFFFFF" />
         </Animated.View>
       </View>
     </View>
@@ -213,6 +243,10 @@ const styles = StyleSheet.create({
     color: TEXT_PRIMARY,
     fontSize: 16,
     fontFamily: FONTS.body,
+  },
+  swipeLabelReady: {
+    color: BLUE,
+    fontFamily: FONTS.heading,
   },
   loadingContent: {
     flexDirection: 'row',

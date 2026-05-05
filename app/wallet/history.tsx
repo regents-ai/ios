@@ -3,15 +3,16 @@ import { useFocusEffect } from "@react-navigation/native";
 import { router } from "expo-router";
 import React, { useCallback, useState } from "react";
 import {
-  ActivityIndicator,
   FlatList,
-  Pressable,
   StyleSheet,
   Text,
   View
 } from "react-native";
+import { LiveValueFlash } from "../../components/motion/LiveValueFlash";
+import { SpinningRefreshIcon } from "../../components/motion/SpinningRefreshIcon";
 import { CoinbaseAlert } from "../../components/ui/CoinbaseAlerts";
 import { FailedTransactionBadge } from "../../components/ui/FailedTransactionCard";
+import { RegentPressable } from "../../components/ui/RegentPressable";
 import { COLORS } from "../../constants/Colors";
 import { FONTS } from "../../constants/Typography";
 import { useRegentsAuth } from "../../hooks/useRegentsAuth";
@@ -171,9 +172,11 @@ export default function History() {
           </View>
 
           <View style={styles.transactionMeta}>
-            <Text style={styles.transactionAmount}>
-              ${item.payment_total.value}
-            </Text>
+            <LiveValueFlash value={`${item.transaction_id}-${item.payment_total.value}`} style={styles.transactionAmountFlash}>
+              <Text style={styles.transactionAmount}>
+                ${item.payment_total.value}
+              </Text>
+            </LiveValueFlash>
             <View style={[styles.statusBadge, { borderColor: getStatusColor(item.status), backgroundColor: `${getStatusColor(item.status)}15` }]}>
               <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
                 {item.status.replace(/ONRAMP_TRANSACTION_STATUS_/g, '').replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase())}
@@ -195,25 +198,18 @@ export default function History() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backButton}>
+        <RegentPressable pressStyle="icon" onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="chevron-back" size={20} color={TEXT_PRIMARY} />
-        </Pressable>
+        </RegentPressable>
         <Text style={styles.title}>Wallet History</Text>
-        <Pressable
+        <RegentPressable
+          pressStyle="icon"
           onPress={handleRefresh}
           disabled={loading}
-          style={({ pressed }) => [
-            styles.refreshButton,
-            pressed && { opacity: 0.7 },
-            loading && { opacity: 0.5 },
-          ]}
+          style={[styles.refreshButton, loading && { opacity: 0.5 }]}
         >
-          {loading ? (
-            <ActivityIndicator size="small" color={BLUE} />
-          ) : (
-            <Ionicons name="refresh" size={20} color={BLUE} />
-          )}
-        </Pressable>
+          <SpinningRefreshIcon refreshing={loading} size={20} color={BLUE} />
+        </RegentPressable>
       </View>
       {transactions.length === 0 ? (
         <View style={styles.emptyState}>
@@ -238,7 +234,7 @@ export default function History() {
             ListFooterComponent={() =>
               loadingMore ? (
                 <View style={styles.footerLoader}>
-                  <ActivityIndicator size="small" color={BLUE} />
+                  <SpinningRefreshIcon refreshing size={18} color={BLUE} />
                   <Text style={styles.footerText}>Loading more...</Text>
                 </View>
               ) : nextPageKey ? (
@@ -280,9 +276,12 @@ const styles = StyleSheet.create({
     borderBottomColor: BORDER,
   },
   title: {
+    flex: 1,
+    minWidth: 0,
     fontSize: 20,
     color: TEXT_PRIMARY,
     fontFamily: FONTS.heading,
+    textAlign: 'center',
   },
   backButton: {
     width: 44,
@@ -346,8 +345,12 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     fontFamily: FONTS.body,
   },
+  transactionAmountFlash: {
+    alignSelf: 'flex-end',
+  },
   transactionContent: {
     flex: 1,
+    minWidth: 0,
     gap: 8,
   },
   transactionRow: {
@@ -374,11 +377,13 @@ const styles = StyleSheet.create({
   },
   transactionMeta: {
     alignItems: 'flex-end',
+    maxWidth: '100%',
     gap: 8,
   },
   statusText: {
     fontSize: 12,
     textAlign: 'right',
+    flexShrink: 1,
     fontFamily: FONTS.body,
   },
   statusBadge: {
@@ -387,6 +392,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
     alignSelf: 'flex-end',
+    maxWidth: '100%',
   },
   separator: {
     height: 12,

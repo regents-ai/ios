@@ -6,6 +6,7 @@ import { COLORS } from '../../constants/Colors';
 import { FONTS } from '../../constants/Typography';
 import { getEaseTransition } from '@/components/motion/easePresets';
 import { useReducedMotion } from '@/components/motion/useReducedMotion';
+import { RegentPressable } from '@/components/ui/RegentPressable';
 
 const { BLUE, CARD_BG, CARD_ALT, BORDER, TEXT_PRIMARY, TEXT_SECONDARY, WHITE, SUCCESS, DANGER, BACKDROP } = COLORS;
 
@@ -94,26 +95,26 @@ export function CoinbaseAlert({
             <>
               {onCancel ? (
                 <View style={styles.buttonRow}>
-                  <Pressable
-                    style={({ pressed }) => [styles.buttonSecondary, pressed && styles.buttonPressed]}
+                  <RegentPressable
+                    style={styles.buttonSecondary}
                     onPress={onCancel}
                   >
                     <Text style={styles.buttonTextSecondary}>{cancelText}</Text>
-                  </Pressable>
-                  <Pressable
-                    style={({ pressed }) => [styles.buttonInRow, pressed && styles.buttonPressed]}
+                  </RegentPressable>
+                  <RegentPressable
+                    style={styles.buttonInRow}
                     onPress={onConfirm}
                   >
                     <Text style={styles.buttonText}>{confirmText}</Text>
-                  </Pressable>
+                  </RegentPressable>
                 </View>
               ) : (
-                <Pressable
-                  style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+                <RegentPressable
+                  style={styles.button}
                   onPress={onConfirm}
                 >
                   <Text style={styles.buttonText}>{confirmText}</Text>
-                </Pressable>
+                </RegentPressable>
               )}
             </>
           )}
@@ -213,10 +214,6 @@ const styles = StyleSheet.create({
     borderColor: BORDER,
     flex: 1,
     minWidth: 120,
-  },
-  buttonPressed: {
-    opacity: 0.8,
-    transform: [{ scale: 0.98 }],
   },
   buttonText: {
     color: WHITE,

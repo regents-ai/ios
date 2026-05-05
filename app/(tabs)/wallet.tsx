@@ -2,12 +2,14 @@ import { useCurrentUser, useEvmAddress, useSignOut, useSolanaAddress } from '@co
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { APIGuestCheckoutWidget, OnrampForm, useOnramp } from '@/components';
+import { LiveValueFlash } from '@/components/motion/LiveValueFlash';
 import { StaggerGroup } from '@/components/motion/StaggerGroup';
 import { StaggerItem } from '@/components/motion/StaggerItem';
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
+import { RegentPressable } from '@/components/ui/RegentPressable';
 import { WalletOptionsError } from '@/components/wallet/home/wallet-options-error';
 import { WalletScreenHeader } from '@/components/wallet/home/wallet-screen-header';
 import { WalletDetailsSection } from '@/components/wallet/WalletDetailsSection';
@@ -194,9 +196,11 @@ export default function WalletScreen() {
                   </View>
                   <View style={styles.summaryStat}>
                     <Text style={styles.summaryStatLabel}>Wallet address</Text>
-                    <Text style={styles.summaryStatValue}>
-                      {address ? formatAddress(address) : 'Choose a wallet address in Settings'}
-                    </Text>
+                    <LiveValueFlash value={address ? formatAddress(address) : 'choose-wallet-address'}>
+                      <Text style={styles.summaryStatValue}>
+                        {address ? formatAddress(address) : 'Choose a wallet address in Settings'}
+                      </Text>
+                    </LiveValueFlash>
                   </View>
                 </View>
               </View>
@@ -205,9 +209,10 @@ export default function WalletScreen() {
             <StaggerItem order={1}>
               <View style={styles.quickActionList}>
                 {quickActions.map((action) => (
-                  <Pressable
+                  <RegentPressable
                     key={action.label}
-                    style={({ pressed }) => [styles.quickActionCard, pressed && styles.quickActionCardPressed]}
+                    pressStyle="card"
+                    style={styles.quickActionCard}
                     onPress={action.onPress}
                   >
                     <View style={styles.quickActionRow}>
@@ -220,7 +225,7 @@ export default function WalletScreen() {
                       </View>
                       <Ionicons name="chevron-forward" size={18} color={TEXT_SECONDARY} />
                     </View>
-                  </Pressable>
+                  </RegentPressable>
                 ))}
               </View>
             </StaggerItem>
@@ -343,6 +348,7 @@ const styles = StyleSheet.create({
   },
   summaryCopy: {
     flex: 1,
+    minWidth: 0,
     gap: 8,
   },
   summaryEyebrow: {
@@ -365,6 +371,7 @@ const styles = StyleSheet.create({
   statusPill: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexShrink: 0,
     gap: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -404,6 +411,7 @@ const styles = StyleSheet.create({
   summaryStatValue: {
     color: TEXT_PRIMARY,
     fontSize: 15,
+    lineHeight: 20,
     fontFamily: FONTS.heading,
   },
   quickActionList: {
@@ -418,9 +426,6 @@ const styles = StyleSheet.create({
     borderColor: BORDER,
     minHeight: 84,
     alignSelf: 'stretch',
-  },
-  quickActionCardPressed: {
-    transform: [{ scale: 0.98 }],
   },
   quickActionRow: {
     flexDirection: 'row',
@@ -437,6 +442,7 @@ const styles = StyleSheet.create({
   },
   quickActionCopy: {
     flex: 1,
+    minWidth: 0,
     gap: 2,
   },
   quickActionLabel: {
