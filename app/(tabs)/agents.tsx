@@ -1,5 +1,7 @@
 import { StatusPill } from '@/components/agent-surfaces/StatusPill';
+import { LiveValueFlash } from '@/components/motion/LiveValueFlash';
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
+import { RegentPressable } from '@/components/ui/RegentPressable';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
 import { BaseRegentSnapshot, RegentSummary } from '@/types/regents';
@@ -12,7 +14,6 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -93,6 +94,10 @@ function regentTone(agent: RegentSummary) {
     wash: GREEN_WASH,
     summary: agent.treasuryNote || 'This Regent is moving without needing much from you right now.',
   };
+}
+
+function shouldShowRegentDot(agent: RegentSummary) {
+  return agent.runtimeStatus === 'online' && agent.status === 'active';
 }
 
 function accountCreditCopy(agent: RegentSummary) {
@@ -296,38 +301,44 @@ export default function AgentsTab() {
             </Text>
 
             <View style={styles.heroActions}>
-              <Pressable
+              <RegentPressable
                 onPress={() => router.push('/wallet')}
-                style={({ pressed }) => [styles.primaryButton, pressed && styles.primaryButtonPressed]}
+                style={styles.primaryButton}
               >
                 <Text style={styles.primaryButtonText}>Open Wallet</Text>
-              </Pressable>
-              <Pressable
+              </RegentPressable>
+              <RegentPressable
                 onPress={() => router.push('/terminal')}
-                style={({ pressed }) => [styles.secondaryButton, pressed && styles.secondaryButtonPressed]}
+                style={styles.secondaryButton}
               >
                 <Text style={styles.secondaryButtonText}>Open Talk</Text>
-              </Pressable>
-              <Pressable
+              </RegentPressable>
+              <RegentPressable
                 onPress={() => router.push('/autolaunch')}
-                style={({ pressed }) => [styles.secondaryButton, pressed && styles.secondaryButtonPressed]}
+                style={styles.secondaryButton}
               >
                 <Text style={styles.secondaryButtonText}>Open Buy</Text>
-              </Pressable>
+              </RegentPressable>
             </View>
           </View>
 
           <View style={styles.summaryRow}>
             <View style={styles.summaryTile}>
-              <Text style={styles.summaryValue}>{summary.needsYou}</Text>
+              <LiveValueFlash value={`needs-${summary.needsYou}`} style={styles.summaryValueFlash}>
+                <Text style={styles.summaryValue}>{summary.needsYou}</Text>
+              </LiveValueFlash>
               <Text style={styles.summaryLabel}>Need you</Text>
             </View>
             <View style={styles.summaryTile}>
-              <Text style={styles.summaryValue}>{summary.waiting}</Text>
+              <LiveValueFlash value={`waiting-${summary.waiting}`} style={styles.summaryValueFlash}>
+                <Text style={styles.summaryValue}>{summary.waiting}</Text>
+              </LiveValueFlash>
               <Text style={styles.summaryLabel}>Waiting</Text>
             </View>
             <View style={styles.summaryTile}>
-              <Text style={styles.summaryValue}>{summary.steady}</Text>
+              <LiveValueFlash value={`steady-${summary.steady}`} style={styles.summaryValueFlash}>
+                <Text style={styles.summaryValue}>{summary.steady}</Text>
+              </LiveValueFlash>
               <Text style={styles.summaryLabel}>Steady</Text>
             </View>
           </View>
@@ -337,10 +348,11 @@ export default function AgentsTab() {
               <Text style={styles.sectionTitle}>Command center</Text>
               <View style={styles.commandList}>
                 {commandCenterItems.map((item) => (
-                  <Pressable
+                  <RegentPressable
                     key={item.id}
                     onPress={item.onPress}
-                    style={({ pressed }) => [styles.commandRow, pressed && styles.cardPressed]}
+                    pressStyle="card"
+                    style={styles.commandRow}
                   >
                     <View style={[styles.commandIcon, { backgroundColor: `${item.accent}1A` }]}>
                       <Ionicons name={item.icon} size={18} color={item.accent} />
@@ -351,16 +363,17 @@ export default function AgentsTab() {
                       <Text style={styles.commandMeta}>{item.meta}</Text>
                     </View>
                     <Ionicons name="chevron-forward" size={18} color={TEXT_SECONDARY} />
-                  </Pressable>
+                  </RegentPressable>
                 ))}
               </View>
             </View>
           ) : null}
 
           {leadRegent ? (
-            <Pressable
+            <RegentPressable
               onPress={() => router.push(routes.agent(leadRegent.id))}
-              style={({ pressed }) => [styles.focusCard, pressed && styles.cardPressed]}
+              pressStyle="card"
+              style={styles.focusCard}
             >
               <View style={styles.focusHeader}>
                 <View style={styles.focusCopy}>
@@ -372,17 +385,22 @@ export default function AgentsTab() {
                   label={regentTone(leadRegent).label}
                   color={regentTone(leadRegent).accent}
                   backgroundColor={regentTone(leadRegent).wash}
+                  showDot={shouldShowRegentDot(leadRegent)}
                 />
               </View>
 
               <View style={styles.focusMetaRow}>
                 <View style={styles.focusMetaTile}>
                   <Text style={styles.metaLabel}>Account credit</Text>
-                  <Text style={styles.metaValue}>{accountCreditCopy(leadRegent)}</Text>
+                  <LiveValueFlash value={`lead-credit-${accountCreditCopy(leadRegent)}`}>
+                    <Text style={styles.metaValue}>{accountCreditCopy(leadRegent)}</Text>
+                  </LiveValueFlash>
                 </View>
                 <View style={styles.focusMetaTile}>
                   <Text style={styles.metaLabel}>Last update</Text>
-                  <Text style={styles.metaValue}>{formatRelativeTime(leadRegent.lastActiveAt)}</Text>
+                  <LiveValueFlash value={`lead-active-${formatRelativeTime(leadRegent.lastActiveAt)}`}>
+                    <Text style={styles.metaValue}>{formatRelativeTime(leadRegent.lastActiveAt)}</Text>
+                  </LiveValueFlash>
                 </View>
               </View>
 
@@ -390,7 +408,7 @@ export default function AgentsTab() {
                 <Text style={styles.footerLink}>Open Regent</Text>
                 <Ionicons name="arrow-forward" size={18} color={BLUE} />
               </View>
-            </Pressable>
+            </RegentPressable>
           ) : (
             <View style={styles.emptyCard}>
               <Ionicons name="sparkles-outline" size={28} color={BLUE} />
@@ -407,24 +425,27 @@ export default function AgentsTab() {
                   const tone = regentTone(agent);
 
                   return (
-                    <Pressable
+                    <RegentPressable
                       key={agent.id}
                       onPress={() => router.push(routes.agent(agent.id))}
-                      style={({ pressed }) => [styles.regentRow, pressed && styles.cardPressed]}
+                      pressStyle="card"
+                      style={styles.regentRow}
                     >
                       <View style={styles.regentRowTop}>
                         <View style={styles.regentRowCopy}>
                           <Text style={styles.regentName}>{agent.name}</Text>
                           <Text style={styles.regentSummary}>{tone.summary}</Text>
                         </View>
-                        <StatusPill label={tone.label} color={tone.accent} backgroundColor={tone.wash} />
+                        <StatusPill label={tone.label} color={tone.accent} backgroundColor={tone.wash} showDot={shouldShowRegentDot(agent)} />
                       </View>
 
                       <View style={styles.regentRowBottom}>
                         <Text style={styles.regentMeta}>{formatWalletAddress(agent.walletAddress)}</Text>
-                        <Text style={styles.regentMeta}>Credit {accountCreditCopy(agent)}</Text>
+                        <LiveValueFlash value={`${agent.id}-credit-${accountCreditCopy(agent)}`} style={styles.regentMetaFlash}>
+                          <Text style={styles.regentMeta}>Credit {accountCreditCopy(agent)}</Text>
+                        </LiveValueFlash>
                       </View>
-                    </Pressable>
+                    </RegentPressable>
                   );
                 })}
               </View>
@@ -434,32 +455,35 @@ export default function AgentsTab() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Keep moving</Text>
             <View style={styles.quickGrid}>
-              <Pressable
+              <RegentPressable
                 onPress={() => router.push('/terminal')}
-                style={({ pressed }) => [styles.quickCard, pressed && styles.cardPressed]}
+                pressStyle="card"
+                style={styles.quickCard}
               >
                 <Ionicons name="chatbubble-ellipses-outline" size={18} color={BLUE} />
                 <Text style={styles.quickTitle}>Talk</Text>
                 <Text style={styles.quickBody}>Check what Hermes changed most recently.</Text>
-              </Pressable>
+              </RegentPressable>
 
-              <Pressable
+              <RegentPressable
                 onPress={() => router.push('/wallet')}
-                style={({ pressed }) => [styles.quickCard, pressed && styles.cardPressed]}
+                pressStyle="card"
+                style={styles.quickCard}
               >
                 <Ionicons name="wallet-outline" size={18} color={BLUE} />
                 <Text style={styles.quickTitle}>Wallet</Text>
                 <Text style={styles.quickBody}>Fund a Regent or move money back when the work is done.</Text>
-              </Pressable>
+              </RegentPressable>
 
-              <Pressable
+              <RegentPressable
                 onPress={() => router.push('/autolaunch')}
-                style={({ pressed }) => [styles.quickCard, pressed && styles.cardPressed]}
+                pressStyle="card"
+                style={styles.quickCard}
               >
                 <Ionicons name="trending-up-outline" size={18} color={BLUE} />
                 <Text style={styles.quickTitle}>Buy</Text>
                 <Text style={styles.quickBody}>Open Autolaunch when a story is ready for outside support.</Text>
-              </Pressable>
+              </RegentPressable>
             </View>
           </View>
         </ScrollView>
@@ -538,10 +562,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     alignSelf: 'stretch',
   },
-  primaryButtonPressed: {
-    opacity: 0.92,
-    transform: [{ scale: 0.985 }],
-  },
   primaryButtonText: {
     color: WHITE,
     fontSize: 14,
@@ -556,9 +576,6 @@ const styles = StyleSheet.create({
     borderColor: BORDER,
     alignItems: 'center',
     alignSelf: 'stretch',
-  },
-  secondaryButtonPressed: {
-    opacity: 0.95,
   },
   secondaryButtonText: {
     color: TEXT_PRIMARY,
@@ -584,7 +601,11 @@ const styles = StyleSheet.create({
   summaryValue: {
     color: BLUE,
     fontSize: 22,
+    lineHeight: 26,
     fontFamily: FONTS.heading,
+  },
+  summaryValueFlash: {
+    alignSelf: 'flex-start',
   },
   summaryLabel: {
     color: TEXT_SECONDARY,
@@ -602,10 +623,12 @@ const styles = StyleSheet.create({
   focusHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
     gap: 12,
   },
   focusCopy: {
     flex: 1,
+    minWidth: 0,
     gap: 4,
   },
   focusEyebrow: {
@@ -627,10 +650,12 @@ const styles = StyleSheet.create({
   },
   focusMetaRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 10,
   },
   focusMetaTile: {
     flex: 1,
+    minWidth: 130,
     backgroundColor: WHITE,
     borderRadius: 18,
     padding: 14,
@@ -691,6 +716,7 @@ const styles = StyleSheet.create({
   },
   commandCopy: {
     flex: 1,
+    minWidth: 0,
     gap: 3,
   },
   commandTitle: {
@@ -724,10 +750,12 @@ const styles = StyleSheet.create({
   regentRowTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
     gap: 12,
   },
   regentRowCopy: {
     flex: 1,
+    minWidth: 0,
     gap: 4,
   },
   regentName: {
@@ -744,12 +772,17 @@ const styles = StyleSheet.create({
   regentRowBottom: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
     gap: 12,
   },
   regentMeta: {
     color: TEXT_SECONDARY,
     fontSize: 12,
+    lineHeight: 17,
     fontFamily: FONTS.body,
+  },
+  regentMetaFlash: {
+    alignSelf: 'flex-start',
   },
   quickGrid: {
     gap: 10,
@@ -772,10 +805,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 19,
     fontFamily: FONTS.body,
-  },
-  cardPressed: {
-    opacity: 0.96,
-    transform: [{ scale: 0.985 }],
   },
   emptyCard: {
     backgroundColor: CARD_BG,

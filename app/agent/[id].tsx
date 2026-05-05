@@ -1,5 +1,8 @@
 import { StatusPill } from '@/components/agent-surfaces/StatusPill';
+import { LiveValueFlash } from '@/components/motion/LiveValueFlash';
+import { SpinningRefreshIcon } from '@/components/motion/SpinningRefreshIcon';
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
+import { RegentPressable } from '@/components/ui/RegentPressable';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
 import {
@@ -15,7 +18,6 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Pressable,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -127,6 +129,7 @@ export default function AgentDetailScreen() {
   const [agent, setAgent] = useState<RegentDetail | null>(null);
   const [regentManager, setRegentManager] = useState<RegentManagerDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [openingTalk, setOpeningTalk] = useState(false);
   const [alertState, setAlertState] = useState<{
     visible: boolean;
@@ -140,13 +143,17 @@ export default function AgentDetailScreen() {
     type: 'info',
   });
 
-  const loadAgent = useCallback(async () => {
+  const loadAgent = useCallback(async (refresh = false) => {
     if (!agentId) {
       return;
     }
 
     try {
-      setLoading(true);
+      if (refresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
       const [detail, nextRegentManager] = await Promise.all([
         regentApi.getRegent(agentId),
         regentApi.getRegentManager(agentId),
@@ -163,6 +170,7 @@ export default function AgentDetailScreen() {
       });
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [agentId]);
 
@@ -280,9 +288,9 @@ export default function AgentDetailScreen() {
       <SafeAreaView style={styles.container}>
         <View style={styles.centerState}>
           <Text style={styles.emptyTitle}>This operator is unavailable</Text>
-          <Pressable style={({ pressed }) => [styles.primaryButton, pressed && styles.primaryButtonPressed]} onPress={() => router.back()}>
+          <RegentPressable style={styles.primaryButton} onPress={() => router.back()}>
             <Text style={styles.primaryButtonText}>Back</Text>
-          </Pressable>
+          </RegentPressable>
         </View>
       </SafeAreaView>
     );
@@ -291,13 +299,13 @@ export default function AgentDetailScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}>
+        <RegentPressable pressStyle="icon" onPress={() => router.back()} style={styles.iconButton}>
           <Ionicons name="chevron-back" size={22} color={TEXT_PRIMARY} />
-        </Pressable>
+        </RegentPressable>
         <Text style={styles.headerTitle}>{agent.name}</Text>
-        <Pressable onPress={loadAgent} style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}>
-          <Ionicons name="refresh" size={18} color={BLUE} />
-        </Pressable>
+        <RegentPressable pressStyle="icon" onPress={() => loadAgent(true)} disabled={refreshing} style={styles.iconButton}>
+          <SpinningRefreshIcon refreshing={refreshing} size={18} color={BLUE} />
+        </RegentPressable>
       </View>
 
       <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.scrollContent}>
@@ -311,24 +319,24 @@ export default function AgentDetailScreen() {
               label={runtimeCopy(agent.runtimeStatus)}
               color={runtime.accent}
               backgroundColor={runtime.wash}
-              showDot
+              showDot={agent.runtimeStatus === 'online'}
             />
           </View>
           <Text style={styles.heroIntro}>{agent.runtimeHeadline}</Text>
           <Text style={styles.heroMeta}>{agent.mission}</Text>
           <View style={styles.heroActions}>
-            <Pressable
-              style={({ pressed }) => [styles.primaryButton, pressed && styles.primaryButtonPressed]}
+            <RegentPressable
+              style={styles.primaryButton}
               onPress={openTalk}
             >
               <Text style={styles.primaryButtonText}>{openingTalk ? 'Opening…' : 'Open Talk'}</Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [styles.secondaryButton, pressed && styles.secondaryButtonPressed]}
+            </RegentPressable>
+            <RegentPressable
+              style={styles.secondaryButton}
               onPress={openRegentManager}
             >
               <Text style={styles.secondaryButtonText}>Open Regent Manager</Text>
-            </Pressable>
+            </RegentPressable>
           </View>
         </View>
 
@@ -336,16 +344,12 @@ export default function AgentDetailScreen() {
           <Text style={[styles.priorityEyebrow, { color: nextAction.accent }]}>{nextAction.eyebrow}</Text>
           <Text style={styles.priorityTitle}>{nextAction.title}</Text>
           <Text style={styles.priorityBody}>{nextAction.body}</Text>
-          <Pressable
-            style={({ pressed }) => [
-              styles.priorityButton,
-              { backgroundColor: nextAction.accent },
-              pressed && styles.primaryButtonPressed,
-            ]}
+          <RegentPressable
+            style={[styles.priorityButton, { backgroundColor: nextAction.accent }]}
             onPress={nextAction.onPress}
           >
             <Text style={styles.priorityButtonText}>{nextAction.cta}</Text>
-          </Pressable>
+          </RegentPressable>
         </View>
 
         <View style={styles.card}>
@@ -382,9 +386,11 @@ export default function AgentDetailScreen() {
             </View>
             <View style={styles.overviewTile}>
               <Text style={styles.overviewLabel}>Account credit</Text>
-              <Text selectable style={styles.overviewValue}>
-                {agent.platformState.prepaidBalanceUsd ? `$${agent.platformState.prepaidBalanceUsd}` : 'Not listed'}
-              </Text>
+              <LiveValueFlash value={`account-credit-${agent.platformState.prepaidBalanceUsd || 'not-listed'}`}>
+                <Text selectable style={styles.overviewValue}>
+                  {agent.platformState.prepaidBalanceUsd ? `$${agent.platformState.prepaidBalanceUsd}` : 'Not listed'}
+                </Text>
+              </LiveValueFlash>
               <Text style={styles.overviewMeta}>Service credit</Text>
             </View>
             <View style={styles.overviewTile}>
@@ -396,14 +402,18 @@ export default function AgentDetailScreen() {
             </View>
             <View style={styles.overviewTile}>
               <Text style={styles.overviewLabel}>Last active</Text>
-              <Text style={styles.overviewValue}>{formatRelativeTime(agent.lastActiveAt)}</Text>
+              <LiveValueFlash value={`last-active-${formatRelativeTime(agent.lastActiveAt)}`}>
+                <Text style={styles.overviewValue}>{formatRelativeTime(agent.lastActiveAt)}</Text>
+              </LiveValueFlash>
               <Text style={styles.overviewMeta}>Most recent movement</Text>
             </View>
             <View style={styles.overviewTile}>
               <Text style={styles.overviewLabel}>Team ready</Text>
-              <Text style={styles.overviewValue}>
-                {regentManager ? `${teamReady}/${regentManager.roster.length}` : '0/0'}
-              </Text>
+              <LiveValueFlash value={`team-ready-${regentManager ? `${teamReady}/${regentManager.roster.length}` : '0/0'}`}>
+                <Text style={styles.overviewValue}>
+                  {regentManager ? `${teamReady}/${regentManager.roster.length}` : '0/0'}
+                </Text>
+              </LiveValueFlash>
               <Text style={styles.overviewMeta}>Ready to move now</Text>
             </View>
           </View>
@@ -415,9 +425,9 @@ export default function AgentDetailScreen() {
               <Text style={styles.sectionTitle}>Regent Manager</Text>
               <Text style={styles.sectionHint}>The short company brief tied to this operator.</Text>
             </View>
-            <Pressable style={({ pressed }) => [styles.secondaryButton, pressed && styles.secondaryButtonPressed]} onPress={openRegentManager}>
+            <RegentPressable style={styles.secondaryButton} onPress={openRegentManager}>
               <Text style={styles.secondaryButtonText}>Open</Text>
-            </Pressable>
+            </RegentPressable>
           </View>
 
           {regentManager ? (
@@ -429,22 +439,30 @@ export default function AgentDetailScreen() {
               <View style={styles.regentManagerGrid}>
                 <View style={styles.regentManagerSignalCard}>
                   <Text style={styles.regentManagerSignalLabel}>Focus now</Text>
-                  <Text style={styles.regentManagerSignalTitle}>{nextTask?.title || topGoal?.title || 'No open focus yet'}</Text>
+                  <LiveValueFlash value={`focus-${nextTask?.title || topGoal?.title || 'No open focus yet'}`}>
+                    <Text style={styles.regentManagerSignalTitle}>{nextTask?.title || topGoal?.title || 'No open focus yet'}</Text>
+                  </LiveValueFlash>
                   <Text style={styles.regentManagerSignalBody}>{nextTask?.status || topGoal?.status || 'Waiting for the next update'}</Text>
                 </View>
                 <View style={styles.regentManagerSignalCard}>
                   <Text style={styles.regentManagerSignalLabel}>Latest shift</Text>
-                  <Text style={styles.regentManagerSignalTitle}>{latestEvent?.title || 'No recent change yet'}</Text>
+                  <LiveValueFlash value={`latest-${latestEvent?.title || 'No recent change yet'}`}>
+                    <Text style={styles.regentManagerSignalTitle}>{latestEvent?.title || 'No recent change yet'}</Text>
+                  </LiveValueFlash>
                   <Text style={styles.regentManagerSignalBody}>{latestEvent ? formatRelativeTime(latestEvent.at) : 'Waiting for the next update'}</Text>
                 </View>
                 <View style={styles.regentManagerSignalCard}>
                   <Text style={styles.regentManagerSignalLabel}>Top goal</Text>
-                  <Text style={styles.regentManagerSignalTitle}>{topGoal?.title || 'No top goal yet'}</Text>
+                  <LiveValueFlash value={`goal-${topGoal?.title || 'No top goal yet'}`}>
+                    <Text style={styles.regentManagerSignalTitle}>{topGoal?.title || 'No top goal yet'}</Text>
+                  </LiveValueFlash>
                   <Text style={styles.regentManagerSignalBody}>{topGoal?.status || 'No status yet'}</Text>
                 </View>
                 <View style={styles.regentManagerSignalCard}>
                   <Text style={styles.regentManagerSignalLabel}>Team ready</Text>
-                  <Text style={styles.regentManagerSignalTitle}>{teamReady}/{regentManager.roster.length}</Text>
+                  <LiveValueFlash value={`manager-ready-${teamReady}/${regentManager.roster.length}`}>
+                    <Text style={styles.regentManagerSignalTitle}>{teamReady}/{regentManager.roster.length}</Text>
+                  </LiveValueFlash>
                   <Text style={styles.regentManagerSignalBody}>People ready to move</Text>
                 </View>
               </View>
@@ -540,13 +558,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconButtonPressed: {
-    transform: [{ scale: 0.96 }],
-    opacity: 0.92,
-  },
   headerTitle: {
+    flex: 1,
+    minWidth: 0,
     color: TEXT_PRIMARY,
     fontSize: 20,
+    lineHeight: 24,
+    textAlign: 'center',
     fontFamily: FONTS.heading,
   },
   scrollContent: {
@@ -584,10 +602,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
     gap: 12,
   },
   heroTitleBlock: {
     flex: 1,
+    minWidth: 0,
     gap: 4,
   },
   eyebrow: {
@@ -620,6 +640,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   primaryButton: {
+    minWidth: 120,
     backgroundColor: BLUE,
     borderRadius: 16,
     paddingHorizontal: 18,
@@ -627,16 +648,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  primaryButtonPressed: {
-    opacity: 0.92,
-    transform: [{ scale: 0.985 }],
-  },
   primaryButtonText: {
     color: WHITE,
     fontSize: 14,
     fontFamily: FONTS.body,
   },
   secondaryButton: {
+    minWidth: 120,
     backgroundColor: WHITE,
     borderRadius: 16,
     paddingHorizontal: 18,
@@ -645,10 +663,6 @@ const styles = StyleSheet.create({
     borderColor: BORDER,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  secondaryButtonPressed: {
-    opacity: 0.95,
-    transform: [{ scale: 0.99 }],
   },
   secondaryButtonText: {
     color: TEXT_PRIMARY,
@@ -727,7 +741,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   overviewTile: {
-    width: '48%',
+    flexBasis: '47%',
+    flexGrow: 1,
+    minWidth: 142,
     backgroundColor: CARD_ALT,
     borderRadius: 18,
     padding: 16,
@@ -775,7 +791,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   regentManagerSignalCard: {
-    width: '48%',
+    flexBasis: '47%',
+    flexGrow: 1,
+    minWidth: 142,
     backgroundColor: CARD_ALT,
     borderRadius: 18,
     padding: 16,
@@ -834,9 +852,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
     gap: 10,
   },
   timelineTitle: {
+    flex: 1,
+    minWidth: 0,
     color: TEXT_PRIMARY,
     fontSize: 15,
     fontFamily: FONTS.heading,

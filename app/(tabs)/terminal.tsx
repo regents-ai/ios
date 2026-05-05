@@ -1,5 +1,8 @@
 import { MetricChip } from '@/components/agent-surfaces/MetricChip';
+import { LiveValueFlash } from '@/components/motion/LiveValueFlash';
+import { SpinningRefreshIcon } from '@/components/motion/SpinningRefreshIcon';
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
+import { RegentPressable } from '@/components/ui/RegentPressable';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
 import { TerminalSessionStatus, TerminalSessionSummary } from '@/types/terminal';
@@ -12,7 +15,6 @@ import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  Pressable,
   RefreshControl,
   StyleSheet,
   Text,
@@ -109,7 +111,7 @@ function SessionCard({
   const accent = statusColor(item.status);
 
   return (
-    <Pressable style={({ pressed }) => [styles.sessionCard, pressed && styles.cardPressed]} onPress={onPress}>
+    <RegentPressable pressStyle="card" style={styles.sessionCard} onPress={onPress}>
       <View style={[styles.sessionAccent, { backgroundColor: accent }]} />
 
       <View style={styles.sessionTopRow}>
@@ -121,7 +123,9 @@ function SessionCard({
 
         <View style={styles.sessionTimeBlock}>
           <Text style={styles.sessionUpdatedLabel}>Updated</Text>
-          <Text style={styles.sessionUpdatedValue}>{formatRelativeTime(item.lastUpdatedAt)}</Text>
+          <LiveValueFlash value={`${item.id}-updated-${formatRelativeTime(item.lastUpdatedAt)}`}>
+            <Text style={styles.sessionUpdatedValue}>{formatRelativeTime(item.lastUpdatedAt)}</Text>
+          </LiveValueFlash>
         </View>
       </View>
 
@@ -139,7 +143,9 @@ function SessionCard({
 
       <View style={styles.latestNoteBlock}>
         <Text style={styles.latestNoteLabel}>Latest note</Text>
-        <Text style={styles.sessionLatestNote}>{item.latestNote}</Text>
+        <LiveValueFlash value={`${item.id}-note-${item.latestNote}`}>
+          <Text style={styles.sessionLatestNote}>{item.latestNote}</Text>
+        </LiveValueFlash>
       </View>
 
       {item.pendingApproval ? (
@@ -158,7 +164,7 @@ function SessionCard({
         <Text style={styles.openLabel}>Open Talk</Text>
         <Ionicons name="chevron-forward" size={18} color={BLUE} />
       </View>
-    </Pressable>
+    </RegentPressable>
   );
 }
 
@@ -266,13 +272,14 @@ export default function TerminalTab() {
           <Text style={styles.toolbarTitle}>Recent talks</Text>
           <Text style={styles.toolbarSubtitle}>The queue stays ordered so the conversations that need you most rise first.</Text>
         </View>
-        <Pressable
-          style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}
+        <RegentPressable
+          style={styles.primaryButton}
+          disabled={refreshing}
           onPress={() => loadTerminal(true)}
         >
-          <Ionicons name="refresh" size={16} color={WHITE} />
+          <SpinningRefreshIcon refreshing={refreshing} size={16} color={WHITE} />
           <Text style={styles.primaryButtonText}>{refreshing ? 'Refreshing' : 'Refresh'}</Text>
-        </Pressable>
+        </RegentPressable>
       </View>
 
       {loading ? (
@@ -374,11 +381,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
     gap: 12,
     marginBottom: 12,
   },
   toolbarCopy: {
     flex: 1,
+    minWidth: 0,
     gap: 4,
   },
   toolbarTitle: {
@@ -400,15 +409,12 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingHorizontal: 16,
     paddingVertical: 12,
+    minHeight: 46,
   },
   primaryButtonText: {
     color: WHITE,
     fontSize: 14,
     fontFamily: FONTS.body,
-  },
-  buttonPressed: {
-    opacity: 0.92,
-    transform: [{ scale: 0.985 }],
   },
   centerState: {
     flex: 1,
@@ -435,10 +441,6 @@ const styles = StyleSheet.create({
     gap: 14,
     overflow: 'hidden',
   },
-  cardPressed: {
-    opacity: 0.96,
-    transform: [{ scale: 0.985 }],
-  },
   sessionAccent: {
     position: 'absolute',
     left: 0,
@@ -450,10 +452,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    flexWrap: 'wrap',
     gap: 14,
   },
   sessionTitleBlock: {
     flex: 1,
+    minWidth: 0,
     gap: 3,
   },
   sessionEyebrow: {
@@ -473,6 +477,7 @@ const styles = StyleSheet.create({
   },
   sessionTimeBlock: {
     alignItems: 'flex-end',
+    flexShrink: 1,
     gap: 3,
     paddingHorizontal: 10,
     paddingVertical: 8,

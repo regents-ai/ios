@@ -1,5 +1,8 @@
 import { StatusPill } from '@/components/agent-surfaces/StatusPill';
+import { LiveValueFlash } from '@/components/motion/LiveValueFlash';
+import { SpinningRefreshIcon } from '@/components/motion/SpinningRefreshIcon';
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
+import { RegentPressable } from '@/components/ui/RegentPressable';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
 import { RegentManagerDetail } from '@/types/regents';
@@ -10,7 +13,6 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Pressable,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -44,6 +46,11 @@ function statusTone(status: string) {
   return { backgroundColor: BLUE_WASH, color: BLUE };
 }
 
+function isMovingStatus(status: string) {
+  const lower = status.toLowerCase();
+  return lower.includes('track') || lower.includes('online') || lower.includes('ready') || lower.includes('running');
+}
+
 function readyRosterCount(regentManager: RegentManagerDetail | null) {
   if (!regentManager) {
     return 0;
@@ -61,6 +68,7 @@ export default function AgentRegentManagerScreen() {
   const agentId = typeof params.id === 'string' ? params.id : '';
   const [regentManager, setRegentManager] = useState<RegentManagerDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [alertState, setAlertState] = useState<{
     visible: boolean;
     title: string;
@@ -73,13 +81,17 @@ export default function AgentRegentManagerScreen() {
     type: 'info',
   });
 
-  const loadRegentManager = useCallback(async () => {
+  const loadRegentManager = useCallback(async (refresh = false) => {
     if (!agentId) {
       return;
     }
 
     try {
-      setLoading(true);
+      if (refresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
       setRegentManager(await regentApi.getRegentManager(agentId));
     } catch (error) {
       setAlertState({
@@ -90,6 +102,7 @@ export default function AgentRegentManagerScreen() {
       });
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [agentId]);
 
@@ -141,9 +154,9 @@ export default function AgentRegentManagerScreen() {
       <SafeAreaView style={styles.container}>
         <View style={styles.centerState}>
           <Text style={styles.emptyTitle}>Regent Manager is unavailable</Text>
-          <Pressable style={({ pressed }) => [styles.primaryButton, pressed && styles.primaryButtonPressed]} onPress={() => router.back()}>
+          <RegentPressable style={styles.primaryButton} onPress={() => router.back()}>
             <Text style={styles.primaryButtonText}>Back</Text>
-          </Pressable>
+          </RegentPressable>
         </View>
       </SafeAreaView>
     );
@@ -152,13 +165,13 @@ export default function AgentRegentManagerScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}>
+        <RegentPressable pressStyle="icon" onPress={() => router.back()} style={styles.iconButton}>
           <Ionicons name="chevron-back" size={22} color={TEXT_PRIMARY} />
-        </Pressable>
+        </RegentPressable>
         <Text style={styles.headerTitle}>Regent Manager</Text>
-        <Pressable onPress={loadRegentManager} style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}>
-          <Ionicons name="refresh" size={18} color={BLUE} />
-        </Pressable>
+        <RegentPressable pressStyle="icon" onPress={() => loadRegentManager(true)} disabled={refreshing} style={styles.iconButton}>
+          <SpinningRefreshIcon refreshing={refreshing} size={18} color={BLUE} />
+        </RegentPressable>
       </View>
 
       <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.scrollContent}>
@@ -177,24 +190,32 @@ export default function AgentRegentManagerScreen() {
           <View style={styles.briefingGrid}>
             <View style={styles.briefingTile}>
               <Text style={styles.briefingLabel}>Focus now</Text>
-              <Text style={styles.briefingTitle}>{regentManagerSummary.focusTitle}</Text>
+              <LiveValueFlash value={`briefing-focus-${regentManagerSummary.focusTitle}`}>
+                <Text style={styles.briefingTitle}>{regentManagerSummary.focusTitle}</Text>
+              </LiveValueFlash>
               <Text style={styles.briefingMeta}>Immediate read</Text>
             </View>
             <View style={styles.briefingTile}>
               <Text style={styles.briefingLabel}>Latest shift</Text>
-              <Text style={styles.briefingTitle}>{regentManagerSummary.latestEvent?.title || 'No recent change yet'}</Text>
+              <LiveValueFlash value={`briefing-latest-${regentManagerSummary.latestEvent?.title || 'No recent change yet'}`}>
+                <Text style={styles.briefingTitle}>{regentManagerSummary.latestEvent?.title || 'No recent change yet'}</Text>
+              </LiveValueFlash>
               <Text style={styles.briefingMeta}>
                 {regentManagerSummary.latestEvent ? formatRelativeTime(regentManagerSummary.latestEvent.at) : 'Waiting for the next update'}
               </Text>
             </View>
             <View style={styles.briefingTile}>
               <Text style={styles.briefingLabel}>Top goal</Text>
-              <Text style={styles.briefingTitle}>{regentManagerSummary.topGoal?.title || 'No goal listed yet'}</Text>
+              <LiveValueFlash value={`briefing-goal-${regentManagerSummary.topGoal?.title || 'No goal listed yet'}`}>
+                <Text style={styles.briefingTitle}>{regentManagerSummary.topGoal?.title || 'No goal listed yet'}</Text>
+              </LiveValueFlash>
               <Text style={styles.briefingMeta}>{regentManagerSummary.topGoal?.status || 'No status yet'}</Text>
             </View>
             <View style={styles.briefingTile}>
               <Text style={styles.briefingLabel}>Team ready</Text>
-              <Text style={styles.briefingTitle}>{regentManagerSummary.readyCount}/{regentManager.roster.length}</Text>
+              <LiveValueFlash value={`briefing-ready-${regentManagerSummary.readyCount}/${regentManager.roster.length}`}>
+                <Text style={styles.briefingTitle}>{regentManagerSummary.readyCount}/{regentManager.roster.length}</Text>
+              </LiveValueFlash>
               <Text style={styles.briefingMeta}>Ready to move now</Text>
             </View>
           </View>
@@ -219,6 +240,7 @@ export default function AgentRegentManagerScreen() {
                     color={statusTone(regentManagerSummary.topGoal.status).color}
                     backgroundColor={statusTone(regentManagerSummary.topGoal.status).backgroundColor}
                     compact
+                    showDot={isMovingStatus(regentManagerSummary.topGoal.status)}
                   />
                 </View>
                 {regentManagerSummary.topGoal.note ? <Text style={styles.listBody}>{regentManagerSummary.topGoal.note}</Text> : null}
@@ -231,7 +253,7 @@ export default function AgentRegentManagerScreen() {
                 <View key={task.id} style={styles.listCard}>
                   <View style={styles.listHeader}>
                     <Text style={styles.listTitle}>{task.title}</Text>
-                    <StatusPill label={task.status} color={tone.color} backgroundColor={tone.backgroundColor} compact />
+                    <StatusPill label={task.status} color={tone.color} backgroundColor={tone.backgroundColor} compact showDot={isMovingStatus(task.status)} />
                   </View>
                   <Text style={styles.metaText}>{task.owner ? `Owned by ${task.owner}` : 'Owner not listed'}</Text>
                   {task.note ? <Text style={styles.listBody}>{task.note}</Text> : null}
@@ -267,7 +289,7 @@ export default function AgentRegentManagerScreen() {
                     <Text style={styles.memberName}>{member.name}</Text>
                     <Text style={styles.memberRole}>{member.role}</Text>
                   </View>
-                  <StatusPill label={member.status} color={tone.color} backgroundColor={tone.backgroundColor} compact />
+                  <StatusPill label={member.status} color={tone.color} backgroundColor={tone.backgroundColor} compact showDot={isMovingStatus(member.status)} />
                 </View>
               );
             })}
@@ -309,13 +331,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconButtonPressed: {
-    transform: [{ scale: 0.96 }],
-    opacity: 0.92,
-  },
   headerTitle: {
+    flex: 1,
+    minWidth: 0,
     color: TEXT_PRIMARY,
     fontSize: 20,
+    lineHeight: 24,
+    textAlign: 'center',
     fontFamily: FONTS.heading,
   },
   scrollContent: {
@@ -353,6 +375,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
     gap: 12,
   },
   eyebrow: {
@@ -389,7 +412,9 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   briefingTile: {
-    width: '48.5%',
+    flexBasis: '47%',
+    flexGrow: 1,
+    minWidth: 142,
     backgroundColor: WHITE,
     borderRadius: 16,
     padding: 14,
@@ -439,16 +464,13 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.body,
   },
   primaryButton: {
+    minWidth: 120,
     backgroundColor: BLUE,
     borderRadius: 16,
     paddingHorizontal: 18,
     paddingVertical: 13,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  primaryButtonPressed: {
-    opacity: 0.92,
-    transform: [{ scale: 0.985 }],
   },
   primaryButtonText: {
     color: WHITE,
@@ -486,6 +508,7 @@ const styles = StyleSheet.create({
   listHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
     gap: 10,
     alignItems: 'flex-start',
   },
@@ -514,10 +537,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 10,
   },
   memberCopy: {
     flex: 1,
+    minWidth: 0,
     gap: 3,
   },
   memberName: {

@@ -1,4 +1,6 @@
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
+import { RegentPressable } from '@/components/ui/RegentPressable';
+import { runRegentHaptic } from '@/components/ui/haptics';
 import { StaggerGroup } from '@/components/motion/StaggerGroup';
 import { StaggerItem } from '@/components/motion/StaggerItem';
 import { getEaseTransition } from '@/components/motion/easePresets';
@@ -51,7 +53,8 @@ import {
   View,
 } from 'react-native';
 
-const { DARK_BG, CARD_BG, CARD_ALT, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, BORDER, WHITE, DANGER } = COLORS;
+const { DARK_BG, CARD_BG, CARD_ALT, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, BORDER, WHITE, DANGER, SUCCESS } = COLORS;
+const GREEN_WASH = '#E6F0EA';
 
 function SettingsModalSurface({
   children,
@@ -151,6 +154,7 @@ export default function SettingsScreen() {
   const [showExportConfirm, setShowExportConfirm] = useState(false);
   const [exportType, setExportType] = useState<'evm' | 'solana'>('evm');
   const [exporting, setExporting] = useState(false);
+  const [copyNotice, setCopyNotice] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<SettingsSectionKey>('account');
 
   const isExpoGo = process.env.EXPO_PUBLIC_USE_EXPO_CRYPTO === 'true';
@@ -295,6 +299,10 @@ export default function SettingsScreen() {
         : await exportSolanaAccount({ solanaAccount: solanaAddress! });
 
       await Clipboard.setStringAsync(result.privateKey);
+      runRegentHaptic('copy');
+      const copiedLabel = `${isEvmExport ? 'Base and Ethereum' : 'Solana'} wallet key copied.`;
+      setCopyNotice(copiedLabel);
+      setTimeout(() => setCopyNotice((current) => (current === copiedLabel ? null : current)), 2200);
       setAlertState({
         visible: true,
         title: 'Wallet key copied',
@@ -302,6 +310,7 @@ export default function SettingsScreen() {
         type: 'info',
       });
     } catch (error: any) {
+      runRegentHaptic('warning');
       setAlertState({
         visible: true,
         title: 'Export failed',
@@ -359,9 +368,9 @@ export default function SettingsScreen() {
       <ScrollView style={styles.container} contentContainerStyle={styles.content} contentInsetAdjustmentBehavior="automatic">
         <View style={styles.hero}>
           <View style={styles.header}>
-            <Pressable onPress={() => router.back()} style={styles.backButton}>
+            <RegentPressable pressStyle="icon" onPress={() => router.back()} style={styles.backButton}>
               <Ionicons name="chevron-back" size={20} color={TEXT_PRIMARY} />
-            </Pressable>
+            </RegentPressable>
           </View>
           <Text style={styles.heroEyebrow}>Regents</Text>
           <Text style={styles.title}>Settings</Text>
@@ -374,12 +383,10 @@ export default function SettingsScreen() {
 
             return (
               <View key={section.key}>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.menuRow,
-                    selected && styles.menuRowActive,
-                    pressed && styles.menuRowPressed,
-                  ]}
+                <RegentPressable
+                  haptic="selection"
+                  pressStyle="card"
+                  style={[styles.menuRow, selected && styles.menuRowActive]}
                   onPress={() => setActiveSection(section.key)}
                 >
                   <View style={[styles.menuIcon, selected && styles.menuIconActive]}>
@@ -394,7 +401,7 @@ export default function SettingsScreen() {
                     <Text style={styles.menuDetail}>{section.detail}</Text>
                   </View>
                   <Ionicons name="chevron-forward" size={20} color={TEXT_SECONDARY} />
-                </Pressable>
+                </RegentPressable>
                 {index < sectionOptions.length - 1 ? <View style={styles.menuDivider} /> : null}
               </View>
             );
@@ -416,9 +423,9 @@ export default function SettingsScreen() {
                   <Text style={styles.labelText}>Email</Text>
                   <Text style={styles.valueText}>{displayEmail}</Text>
                   {!hasLinkedEmail ? (
-                    <Pressable style={styles.primaryButton} onPress={() => router.push('/email-verify?mode=link')}>
+                    <RegentPressable style={styles.primaryButton} onPress={() => router.push('/email-verify?mode=link')}>
                       <Text style={styles.primaryButtonText}>Add email</Text>
-                    </Pressable>
+                    </RegentPressable>
                   ) : null}
                 </View>
 
@@ -434,22 +441,32 @@ export default function SettingsScreen() {
                           ? 'Your phone is linked. Verify it before you use checkout.'
                           : 'Add a phone number before you use checkout.'}
                   </Text>
-                  <Pressable style={styles.primaryButton} onPress={openPhoneVerify}>
+                  <RegentPressable style={styles.primaryButton} onPress={openPhoneVerify}>
                     <Text style={styles.primaryButtonText}>
                       {!cdpPhone ? 'Add phone' : phoneIsExpired ? 'Verify again' : phoneIsVerified ? 'Check again' : 'Verify phone'}
                     </Text>
-                  </Pressable>
+                  </RegentPressable>
                 </View>
 
-                <Pressable
+                <RegentPressable
+                  haptic="warning"
                   style={[styles.primaryButton, ((!evmWalletAddress && !solanaAddress) || exporting) && styles.disabledButton]}
                   onPress={handleRequestExport}
                   disabled={!evmWalletAddress && !solanaAddress}
                 >
-                  <Text style={styles.primaryButtonText}>
-                    {exporting ? 'Getting wallet key...' : isExpoGo ? 'Export unavailable here' : 'Export wallet key'}
-                  </Text>
-                </Pressable>
+                  <View style={styles.buttonContent}>
+                    {copyNotice ? <Ionicons name="checkmark-circle" size={16} color={WHITE} /> : null}
+                    <Text style={styles.primaryButtonText}>
+                      {copyNotice ? 'Wallet key copied' : exporting ? 'Getting wallet key...' : isExpoGo ? 'Export unavailable here' : 'Export wallet key'}
+                    </Text>
+                  </View>
+                </RegentPressable>
+                {copyNotice ? (
+                  <View style={styles.copySuccessBanner}>
+                    <Ionicons name="checkmark-circle" size={16} color={SUCCESS} />
+                    <Text style={styles.copySuccessText}>{copyNotice}</Text>
+                  </View>
+                ) : null}
               </>
             )}
           </View>
@@ -490,19 +507,19 @@ export default function SettingsScreen() {
               <Text style={styles.helperText}>Support can help with wallet questions, checkout steps, and payment issues.</Text>
             </View>
             <View style={styles.buttonRow}>
-              <Pressable style={styles.primaryButton} onPress={() => router.push('/support')}>
+              <RegentPressable style={styles.primaryButton} onPress={() => router.push('/support')}>
                 <Text style={styles.primaryButtonText}>Open support</Text>
-              </Pressable>
-              <Pressable style={styles.secondaryButton} onPress={openPhoneVerify}>
+              </RegentPressable>
+              <RegentPressable style={styles.secondaryButton} onPress={openPhoneVerify}>
                 <Text style={styles.secondaryButtonText}>Phone help</Text>
-              </Pressable>
+              </RegentPressable>
             </View>
           </View>
         ) : null}
 
-        <Pressable style={styles.signOutCta} onPress={handleSignOut}>
+        <RegentPressable haptic="warning" style={styles.signOutCta} onPress={handleSignOut}>
           <Text style={styles.signOutCtaText}>Sign out</Text>
-        </Pressable>
+        </RegentPressable>
 
         <CoinbaseAlert
           visible={alertState.visible}
@@ -518,7 +535,7 @@ export default function SettingsScreen() {
               <Text style={styles.modalTitle}>Choose a wallet</Text>
             </StaggerItem>
             <StaggerItem order={1}>
-              <Pressable
+              <RegentPressable
                 style={styles.primaryButton}
                 onPress={() => {
                   setExportType('evm');
@@ -527,10 +544,10 @@ export default function SettingsScreen() {
                 }}
               >
                 <Text style={styles.primaryButtonText}>Export Base and Ethereum wallet</Text>
-              </Pressable>
+              </RegentPressable>
             </StaggerItem>
             <StaggerItem order={2}>
-              <Pressable
+              <RegentPressable
                 style={styles.primaryButton}
                 onPress={() => {
                   setExportType('solana');
@@ -539,12 +556,12 @@ export default function SettingsScreen() {
                 }}
               >
                 <Text style={styles.primaryButtonText}>Export Solana wallet</Text>
-              </Pressable>
+              </RegentPressable>
             </StaggerItem>
             <StaggerItem order={3}>
-              <Pressable style={styles.secondaryButton} onPress={() => setShowWalletChoice(false)}>
+              <RegentPressable style={styles.secondaryButton} onPress={() => setShowWalletChoice(false)}>
                 <Text style={styles.secondaryButtonText}>Cancel</Text>
-              </Pressable>
+              </RegentPressable>
             </StaggerItem>
           </StaggerGroup>
         </SettingsModalSurface>
@@ -559,12 +576,12 @@ export default function SettingsScreen() {
             </StaggerItem>
             <StaggerItem order={2}>
               <View style={styles.buttonRow}>
-                <Pressable style={styles.secondaryButton} onPress={() => setShowExportConfirm(false)}>
+                <RegentPressable style={styles.secondaryButton} onPress={() => setShowExportConfirm(false)}>
                   <Text style={styles.secondaryButtonText}>Cancel</Text>
-                </Pressable>
-                <Pressable style={[styles.primaryButton, { flex: 1 }]} onPress={handleConfirmedExport}>
+                </RegentPressable>
+                <RegentPressable haptic="warning" style={[styles.primaryButton, { flex: 1 }]} onPress={handleConfirmedExport}>
                   <Text style={styles.primaryButtonText}>{exporting ? 'Getting key...' : 'Copy key'}</Text>
-                </Pressable>
+                </RegentPressable>
               </View>
             </StaggerItem>
           </StaggerGroup>
@@ -580,12 +597,12 @@ export default function SettingsScreen() {
             </StaggerItem>
             <StaggerItem order={2}>
               <View style={styles.buttonRow}>
-                <Pressable style={styles.secondaryButton} onPress={() => setShowReverifyConfirm(false)}>
+                <RegentPressable style={styles.secondaryButton} onPress={() => setShowReverifyConfirm(false)}>
                   <Text style={styles.secondaryButtonText}>Cancel</Text>
-                </Pressable>
-                <Pressable style={[styles.primaryButton, { flex: 1 }]} onPress={handleReverifyConfirm}>
+                </RegentPressable>
+                <RegentPressable haptic="warning" style={[styles.primaryButton, { flex: 1 }]} onPress={handleReverifyConfirm}>
                   <Text style={styles.primaryButtonText}>Continue</Text>
-                </Pressable>
+                </RegentPressable>
               </View>
             </StaggerItem>
           </StaggerGroup>
@@ -669,9 +686,6 @@ const styles = StyleSheet.create({
   menuRowActive: {
     backgroundColor: CARD_ALT,
   },
-  menuRowPressed: {
-    opacity: 0.84,
-  },
   menuIcon: {
     width: 48,
     height: 48,
@@ -685,6 +699,7 @@ const styles = StyleSheet.create({
   },
   menuCopy: {
     flex: 1,
+    minWidth: 0,
     gap: 4,
   },
   menuTitle: {
@@ -732,6 +747,7 @@ const styles = StyleSheet.create({
   valueText: {
     color: TEXT_PRIMARY,
     fontSize: 18,
+    lineHeight: 24,
     fontFamily: FONTS.body,
   },
   helperText: {
@@ -756,6 +772,13 @@ const styles = StyleSheet.create({
     gap: 12,
     flexWrap: 'wrap',
   },
+  buttonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    minWidth: 0,
+  },
   primaryButton: {
     backgroundColor: BLUE,
     borderRadius: 18,
@@ -764,10 +787,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 56,
+    minWidth: 120,
   },
   primaryButtonText: {
     color: WHITE,
     fontSize: 15,
+    lineHeight: 20,
+    textAlign: 'center',
     fontFamily: FONTS.body,
   },
   secondaryButton: {
@@ -781,10 +807,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 56,
+    minWidth: 120,
   },
   secondaryButtonText: {
     color: TEXT_PRIMARY,
     fontSize: 15,
+    lineHeight: 20,
+    textAlign: 'center',
+    fontFamily: FONTS.body,
+  },
+  copySuccessBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: SUCCESS,
+    backgroundColor: GREEN_WASH,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  copySuccessText: {
+    color: SUCCESS,
+    fontSize: 13,
+    lineHeight: 18,
     fontFamily: FONTS.body,
   },
   disabledButton: {

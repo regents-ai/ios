@@ -1,5 +1,9 @@
 import { StatusPill } from '@/components/agent-surfaces/StatusPill';
+import { LiveValueFlash } from '@/components/motion/LiveValueFlash';
+import { useReducedMotion } from '@/components/motion/useReducedMotion';
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
+import { RegentPressable } from '@/components/ui/RegentPressable';
+import { runRegentHaptic } from '@/components/ui/haptics';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
 import { TerminalEvent, TerminalSessionDetail } from '@/types/terminal';
@@ -10,8 +14,9 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
+  Easing,
   FlatList,
-  Pressable,
   SafeAreaView,
   StyleSheet,
   Text,
@@ -155,6 +160,67 @@ function eventsToMessages(events: TalkEvent[]): MessageRow[] {
   return rows;
 }
 
+function messageIdsFromEvents(events: TalkEvent[]) {
+  return eventsToMessages(events)
+    .filter((row) => row.role !== 'user')
+    .map((row) => row.id);
+}
+
+function MessageBubble({ fresh, item }: { fresh: boolean; item: MessageRow }) {
+  const reducedMotionEnabled = useReducedMotion();
+  const pulse = useRef(new Animated.Value(fresh ? 1 : 0)).current;
+
+  useEffect(() => {
+    if (!fresh || reducedMotionEnabled) {
+      pulse.stopAnimation();
+      pulse.setValue(0);
+      return;
+    }
+
+    pulse.setValue(1);
+    Animated.timing(pulse, {
+      toValue: 0,
+      duration: 820,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [fresh, pulse, reducedMotionEnabled]);
+
+  return (
+    <View style={[styles.messageRow, item.role === 'user' ? styles.messageRowUser : styles.messageRowOther]}>
+      <View
+        style={[
+          styles.messageBubble,
+          item.role === 'user'
+            ? styles.messageBubbleUser
+            : item.role === 'assistant'
+              ? styles.messageBubbleAssistant
+              : styles.messageBubbleSystem,
+          fresh && item.role !== 'user' && styles.messageBubbleFresh,
+        ]}
+      >
+        {fresh && item.role !== 'user' ? (
+          <Animated.View
+            style={[
+              styles.messageFreshRail,
+              !reducedMotionEnabled && {
+                opacity: pulse.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.18, 0.82],
+                }),
+              },
+            ]}
+          />
+        ) : null}
+        <Text style={[styles.messageLabel, item.role === 'user' && styles.messageLabelUser]}>{item.label}</Text>
+        <Text style={[styles.messageText, item.role === 'user' ? styles.messageTextUser : styles.messageTextOther]}>
+          {item.text}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
 function ApprovalSafetySummary({ talk }: { talk: TalkDetail }) {
   if (!talk.pendingApproval) {
     return null;
@@ -188,8 +254,15 @@ export default function TalkDetailScreen() {
   const [replyText, setReplyText] = useState('');
   const [sendingReply, setSendingReply] = useState(false);
   const [resolvingApproval, setResolvingApproval] = useState<'approved' | 'denied' | null>(null);
+  const [resolvedApproval, setResolvedApproval] = useState<{
+    action: string;
+    decision: 'approved' | 'denied';
+  } | null>(null);
+  const [freshMessageIds, setFreshMessageIds] = useState<Set<string>>(() => new Set());
   const latestEventIdRef = useRef('');
   const pollingRef = useRef(false);
+  const resolvedApprovalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const freshMessageTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const [alertState, setAlertState] = useState<{
     visible: boolean;
     title: string;
@@ -201,6 +274,57 @@ export default function TalkDetailScreen() {
     message: '',
     type: 'info',
   });
+
+  useEffect(() => {
+    return () => {
+      if (resolvedApprovalTimerRef.current) {
+        clearTimeout(resolvedApprovalTimerRef.current);
+      }
+      freshMessageTimersRef.current.forEach(clearTimeout);
+      freshMessageTimersRef.current = [];
+    };
+  }, []);
+
+  useEffect(() => {
+    if (talk?.pendingApproval) {
+      setResolvedApproval(null);
+    }
+  }, [talk?.pendingApproval]);
+
+  const showResolvedApproval = useCallback((decision: 'approved' | 'denied', action: string) => {
+    if (resolvedApprovalTimerRef.current) {
+      clearTimeout(resolvedApprovalTimerRef.current);
+    }
+
+    setResolvedApproval({ action, decision });
+    resolvedApprovalTimerRef.current = setTimeout(() => {
+      setResolvedApproval((current) =>
+        current?.action === action && current.decision === decision ? null : current
+      );
+    }, 2600);
+  }, []);
+
+  const markFreshMessages = useCallback((nextEvents: TalkEvent[]) => {
+    const ids = messageIdsFromEvents(nextEvents);
+    if (ids.length === 0) {
+      return;
+    }
+
+    setFreshMessageIds((current) => {
+      const next = new Set(current);
+      ids.forEach((id) => next.add(id));
+      return next;
+    });
+
+    const timer = setTimeout(() => {
+      setFreshMessageIds((current) => {
+        const next = new Set(current);
+        ids.forEach((id) => next.delete(id));
+        return next;
+      });
+    }, 1800);
+    freshMessageTimersRef.current.push(timer);
+  }, []);
 
   const loadTalk = useCallback(async (refresh = false) => {
     if (!talkId) {
@@ -261,6 +385,7 @@ export default function TalkDetailScreen() {
         setTalk(nextTalk);
         if (nextEventsPayload.events.length > 0) {
           setEvents((current) => [...current, ...nextEventsPayload.events]);
+          markFreshMessages(nextEventsPayload.events);
         }
         latestEventIdRef.current = nextEventsPayload.latestEventId;
       } catch (error) {
@@ -272,7 +397,7 @@ export default function TalkDetailScreen() {
 
     const interval = setInterval(poll, 4000);
     return () => clearInterval(interval);
-  }, [loading, talkId]);
+  }, [loading, markFreshMessages, talkId]);
 
   const messageRows = useMemo(() => eventsToMessages(events), [events]);
 
@@ -303,25 +428,24 @@ export default function TalkDetailScreen() {
   }, [replyText, sendingReply, talkId]);
 
   const resolveApproval = useCallback(async (decision: 'approved' | 'denied') => {
-    const requestId = talk?.pendingApproval?.requestId;
-    if (!talkId || !requestId || resolvingApproval) {
+    const pendingApproval = talk?.pendingApproval;
+    const requestId = pendingApproval?.requestId;
+    if (!talkId || !pendingApproval || !requestId || resolvingApproval) {
       return;
     }
 
     try {
       setResolvingApproval(decision);
+      const resolvedAction = pendingApproval.action;
       const nextTalk = await regentApi.resolveTerminalApproval(talkId, requestId, decision);
       const nextEvents = await regentApi.getTerminalEvents(talkId);
       setTalk(nextTalk);
       setEvents(nextEvents.events);
       latestEventIdRef.current = nextEvents.latestEventId;
-      setAlertState({
-        visible: true,
-        title: decision === 'approved' ? 'Approved' : 'Declined',
-        message: decision === 'approved' ? 'The review was approved.' : 'The review was declined.',
-        type: decision === 'approved' ? 'success' : 'info',
-      });
+      showResolvedApproval(decision, resolvedAction);
+      runRegentHaptic(decision === 'approved' ? 'success' : 'selection');
     } catch (error) {
+      runRegentHaptic('warning');
       setAlertState({
         visible: true,
         title: 'Unable to save decision',
@@ -331,7 +455,7 @@ export default function TalkDetailScreen() {
     } finally {
       setResolvingApproval(null);
     }
-  }, [resolvingApproval, talk?.pendingApproval?.requestId, talkId]);
+  }, [resolvingApproval, showResolvedApproval, talk?.pendingApproval, talkId]);
 
   if (loading) {
     return (
@@ -349,9 +473,9 @@ export default function TalkDetailScreen() {
       <SafeAreaView style={styles.container}>
         <View style={styles.centerState}>
           <Text style={styles.emptyTitle}>This talk is unavailable</Text>
-          <Pressable style={styles.primaryButton} onPress={() => router.back()}>
+          <RegentPressable style={styles.primaryButton} onPress={() => router.back()}>
             <Text style={styles.primaryButtonText}>Go back</Text>
-          </Pressable>
+          </RegentPressable>
         </View>
       </SafeAreaView>
     );
@@ -360,9 +484,9 @@ export default function TalkDetailScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={({ pressed }) => [styles.iconButton, pressed && styles.buttonPressed]}>
+        <RegentPressable pressStyle="icon" onPress={() => router.back()} style={styles.iconButton}>
           <Ionicons name="chevron-back" size={22} color={TEXT_PRIMARY} />
-        </Pressable>
+        </RegentPressable>
 
         <View style={styles.headerCopy}>
           <Text style={styles.headerTitle}>{talk.title}</Text>
@@ -374,15 +498,20 @@ export default function TalkDetailScreen() {
           color={statusColor(talk.status)}
           backgroundColor={statusBackground(talk.status)}
           borderColor={statusColor(talk.status)}
+          showDot={talk.status === 'running'}
         />
       </View>
 
       <View style={styles.sessionSummaryCard}>
         <View style={styles.summaryTopRow}>
           <Text style={styles.summaryTitle}>Latest activity</Text>
-          <Text style={styles.summaryMeta}>{refreshing ? 'Refreshing…' : relativeTime(talk.lastUpdatedAt)}</Text>
+          <LiveValueFlash value={refreshing ? 'refreshing' : relativeTime(talk.lastUpdatedAt)} style={styles.summaryMetaFlash}>
+            <Text style={styles.summaryMeta}>{refreshing ? 'Refreshing…' : relativeTime(talk.lastUpdatedAt)}</Text>
+          </LiveValueFlash>
         </View>
-        <Text style={styles.summaryBody}>{talk.latestNote}</Text>
+        <LiveValueFlash value={`latest-note-${talk.latestNote}`}>
+          <Text style={styles.summaryBody}>{talk.latestNote}</Text>
+        </LiveValueFlash>
       </View>
 
       {talk.pendingApproval ? (
@@ -398,22 +527,46 @@ export default function TalkDetailScreen() {
           </View>
           <ApprovalSafetySummary talk={talk} />
           <View style={styles.approvalActions}>
-            <Pressable
-              style={({ pressed }) => [styles.denyButton, pressed && styles.buttonPressed]}
+            <RegentPressable
+              haptic="warning"
+              style={styles.denyButton}
               disabled={!!resolvingApproval}
               onPress={() => resolveApproval('denied')}
             >
               <Text style={styles.denyButtonText}>{resolvingApproval === 'denied' ? 'Declining…' : 'Decline'}</Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [styles.approveButton, pressed && styles.buttonPressed]}
+            </RegentPressable>
+            <RegentPressable
+              style={styles.approveButton}
               disabled={!!resolvingApproval}
               onPress={() => resolveApproval('approved')}
             >
               <Text style={styles.approveButtonText}>{resolvingApproval === 'approved' ? 'Approving…' : 'Approve'}</Text>
-            </Pressable>
+            </RegentPressable>
           </View>
         </View>
+      ) : resolvedApproval ? (
+        <LiveValueFlash value={`${resolvedApproval.decision}-${resolvedApproval.action}`} style={styles.resolvedApprovalFlash}>
+          <View style={styles.resolvedApprovalCard}>
+            <View
+              style={[
+                styles.resolvedApprovalIcon,
+                resolvedApproval.decision === 'approved' ? styles.resolvedApprovalIconApproved : styles.resolvedApprovalIconDenied,
+              ]}
+            >
+              <Ionicons
+                name={resolvedApproval.decision === 'approved' ? 'checkmark' : 'remove'}
+                size={18}
+                color={resolvedApproval.decision === 'approved' ? SUCCESS : TEXT_SECONDARY}
+              />
+            </View>
+            <View style={styles.resolvedApprovalCopy}>
+              <Text style={styles.resolvedApprovalTitle}>
+                {resolvedApproval.decision === 'approved' ? 'Decision saved' : 'Review closed'}
+              </Text>
+              <Text style={styles.resolvedApprovalBody}>{resolvedApproval.action}</Text>
+            </View>
+          </View>
+        </LiveValueFlash>
       ) : null}
 
       <FlatList
@@ -421,23 +574,7 @@ export default function TalkDetailScreen() {
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.chatContent}
         renderItem={({ item }) => (
-          <View style={[styles.messageRow, item.role === 'user' ? styles.messageRowUser : styles.messageRowOther]}>
-            <View
-              style={[
-                styles.messageBubble,
-                item.role === 'user'
-                  ? styles.messageBubbleUser
-                  : item.role === 'assistant'
-                    ? styles.messageBubbleAssistant
-                    : styles.messageBubbleSystem,
-              ]}
-            >
-              <Text style={[styles.messageLabel, item.role === 'user' && styles.messageLabelUser]}>{item.label}</Text>
-              <Text style={[styles.messageText, item.role === 'user' ? styles.messageTextUser : styles.messageTextOther]}>
-                {item.text}
-              </Text>
-            </View>
-          </View>
+          <MessageBubble fresh={freshMessageIds.has(item.id)} item={item} />
         )}
         ListEmptyComponent={
           <View style={styles.emptyTimelineCard}>
@@ -456,17 +593,13 @@ export default function TalkDetailScreen() {
               multiline
               style={styles.composerInput}
             />
-            <Pressable
-              style={({ pressed }) => [
-                styles.primaryButton,
-                (!replyText.trim() || sendingReply) && styles.primaryButtonDisabled,
-                pressed && styles.buttonPressed,
-              ]}
+            <RegentPressable
+              style={[styles.primaryButton, (!replyText.trim() || sendingReply) && styles.primaryButtonDisabled]}
               disabled={!replyText.trim() || sendingReply}
               onPress={submitReply}
             >
               <Text style={styles.primaryButtonText}>{sendingReply ? 'Sending…' : 'Send reply'}</Text>
-            </Pressable>
+            </RegentPressable>
           </View>
         }
       />
@@ -490,6 +623,7 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 12,
     paddingHorizontal: 20,
     paddingTop: 12,
@@ -505,12 +639,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  buttonPressed: {
-    opacity: 0.92,
-    transform: [{ scale: 0.985 }],
-  },
   headerCopy: {
     flex: 1,
+    minWidth: 0,
     gap: 2,
   },
   headerTitle: {
@@ -539,6 +670,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
     gap: 12,
   },
   summaryTitle: {
@@ -550,6 +682,9 @@ const styles = StyleSheet.create({
     color: TEXT_SECONDARY,
     fontSize: 12,
     fontFamily: FONTS.body,
+  },
+  summaryMetaFlash: {
+    alignSelf: 'flex-start',
   },
   summaryBody: {
     color: TEXT_PRIMARY,
@@ -569,6 +704,7 @@ const styles = StyleSheet.create({
   },
   approvalHeader: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
     gap: 12,
   },
   approvalIconWrap: {
@@ -615,6 +751,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     fontFamily: FONTS.body,
+    flexShrink: 1,
   },
   approvalActions: {
     flexDirection: 'row',
@@ -651,6 +788,52 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: FONTS.body,
   },
+  resolvedApprovalFlash: {
+    marginHorizontal: 20,
+    marginBottom: 12,
+  },
+  resolvedApprovalCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: CARD_BG,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: BORDER,
+    padding: 14,
+  },
+  resolvedApprovalIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  resolvedApprovalIconApproved: {
+    backgroundColor: '#E4F1EA',
+  },
+  resolvedApprovalIconDenied: {
+    backgroundColor: WHITE,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  resolvedApprovalCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 3,
+  },
+  resolvedApprovalTitle: {
+    color: TEXT_PRIMARY,
+    fontSize: 15,
+    lineHeight: 19,
+    fontFamily: FONTS.heading,
+  },
+  resolvedApprovalBody: {
+    color: TEXT_SECONDARY,
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: FONTS.body,
+  },
   chatContent: {
     paddingHorizontal: 20,
     paddingBottom: 24,
@@ -671,6 +854,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     gap: 4,
+    overflow: 'hidden',
   },
   messageBubbleUser: {
     backgroundColor: BLUE,
@@ -684,6 +868,18 @@ const styles = StyleSheet.create({
     backgroundColor: BLUE_WASH,
     borderWidth: 1,
     borderColor: BORDER,
+  },
+  messageBubbleFresh: {
+    borderColor: SUCCESS,
+  },
+  messageFreshRail: {
+    position: 'absolute',
+    left: 0,
+    top: 8,
+    bottom: 8,
+    width: 3,
+    borderRadius: 999,
+    backgroundColor: SUCCESS,
   },
   messageLabel: {
     fontSize: 11,
@@ -766,6 +962,8 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingHorizontal: 16,
     paddingVertical: 12,
+    minHeight: 46,
+    justifyContent: 'center',
   },
   primaryButtonDisabled: {
     opacity: 0.55,
