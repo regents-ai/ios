@@ -38,7 +38,7 @@ import {
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Clipboard from 'expo-clipboard';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { EaseView } from 'react-native-ease';
 import {
   ActivityIndicator,
@@ -155,6 +155,7 @@ export default function SettingsScreen() {
   const [exportType, setExportType] = useState<'evm' | 'solana'>('evm');
   const [exporting, setExporting] = useState(false);
   const [copyNotice, setCopyNotice] = useState<string | null>(null);
+  const copyNoticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [activeSection, setActiveSection] = useState<SettingsSectionKey>('account');
 
   const isExpoGo = process.env.EXPO_PUBLIC_USE_EXPO_CRYPTO === 'true';
@@ -195,6 +196,14 @@ export default function SettingsScreen() {
   useEffect(() => {
     setLifetimeTransactionThreshold(lifetimeTxThreshold);
   }, [lifetimeTxThreshold]);
+
+  useEffect(() => {
+    return () => {
+      if (copyNoticeTimerRef.current) {
+        clearTimeout(copyNoticeTimerRef.current);
+      }
+    };
+  }, []);
 
   const openPhoneVerify = useCallback(() => {
     const cdpPhone = linkedPhone;
@@ -302,7 +311,13 @@ export default function SettingsScreen() {
       runRegentHaptic('copy');
       const copiedLabel = `${isEvmExport ? 'Base and Ethereum' : 'Solana'} wallet key copied.`;
       setCopyNotice(copiedLabel);
-      setTimeout(() => setCopyNotice((current) => (current === copiedLabel ? null : current)), 2200);
+      if (copyNoticeTimerRef.current) {
+        clearTimeout(copyNoticeTimerRef.current);
+      }
+      copyNoticeTimerRef.current = setTimeout(() => {
+        setCopyNotice((current) => (current === copiedLabel ? null : current));
+        copyNoticeTimerRef.current = null;
+      }, 2200);
       setAlertState({
         visible: true,
         title: 'Wallet key copied',
