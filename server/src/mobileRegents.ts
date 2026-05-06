@@ -10,7 +10,7 @@ type RegentReturnStatus = 'requested' | 'approved' | 'broadcasting' | 'confirmed
 type PlatformFormationStatus = 'pending' | 'blocked' | 'provisioning' | 'ready';
 type PlatformBillingStatus = 'trial' | 'free-day' | 'prepaid' | 'paused' | 'zero' | 'failed';
 type PlatformRuntimeStatus = 'provisioning' | 'ready' | 'paused' | 'blocked';
-type WalletActionType = 'stake' | 'claim' | 'funding' | 'return';
+type WalletActionType = 'funding' | 'return';
 
 type RegentPlatformState = {
   claimedName: string;
@@ -79,19 +79,6 @@ export type RegentFundingIntent = {
   updatedAt: string;
   txHash?: string;
   blockNumber?: number;
-};
-
-type BaseRegentSnapshot = {
-  regentId: string;
-  chainId: number;
-  blockNumber: number;
-  contractAddress: string;
-  stale: boolean;
-  claimableUsdc: string;
-  stakedRegent: string;
-  revenueLaneUsdc: string;
-  treasuryResidualUsdc: string;
-  subjectStatus: string;
 };
 
 export type PreparedWalletAction = {
@@ -369,7 +356,7 @@ export function getRegentManagerForUserFromPlatformProjection(
         title: 'Review the next operator move',
         status: runtimeStatusForCompany(company) === 'online' ? 'On track' : 'Waiting',
         owner: 'Regent Manager',
-        note: 'Use Talk when a decision needs a human review.',
+        note: 'Talk will show human reviews when it is ready.',
       },
     ],
     recentEvents: [
@@ -382,7 +369,7 @@ export function getRegentManagerForUserFromPlatformProjection(
     ],
     roster: [
       { id: `${id}-roster-manager`, name: 'Regent Manager', role: 'Company brief', status: 'Ready' },
-      { id: `${id}-roster-hermes`, name: 'Hermes', role: 'Operator talk', status: company.runtime.hermes.status },
+      { id: `${id}-roster-hermes`, name: 'Hermes Talk', role: 'Coming soon', status: 'Coming soon' },
       { id: `${id}-roster-workspace`, name: 'Workspace', role: 'Company runtime', status: company.runtime.workspace.status },
     ],
   };
@@ -578,21 +565,6 @@ export function confirmRegentFundingIntentForUser(
   });
 
   return updatedIntent ? { kind: 'ok', fundingIntent: cloneJson(updatedIntent) } : { kind: 'not_found' };
-}
-
-export function getBaseRegentSnapshotForUser(userId: string, regentId: string): BaseRegentSnapshot {
-  return {
-    regentId,
-    chainId: 8453,
-    blockNumber: 0,
-    contractAddress: '0x0000000000000000000000000000000000000000',
-    stale: true,
-    claimableUsdc: '0.00',
-    stakedRegent: '0.00',
-    revenueLaneUsdc: '0.00',
-    treasuryResidualUsdc: '0.00',
-    subjectStatus: 'onchain-read-required',
-  };
 }
 
 export function prepareWalletActionForUser(

@@ -1,18 +1,18 @@
 import { getBaseUrl } from '@/constants/BASE_URL';
 import {
-  BaseRegentSnapshot,
   PreparedWalletAction,
   RegentDetail,
   RegentFundingIntent,
   RegentManagerDetail,
   RegentReturnRequest,
+  RegentStakingActionResponse,
+  RegentStakingState,
   RegentSummary,
 } from '@/types/regents';
-import { TerminalEvent, TerminalSessionDetail, TerminalSessionSummary } from '@/types/terminal';
 import { authenticatedFetch } from '@/utils/authenticatedFetch';
 
 const mobileRegentsPath = '/mobile/regents';
-const mobileTerminalSessionsPath = '/mobile/terminal/sessions';
+const mobileRegentStakingPath = '/mobile/regent/staking';
 
 type MobileRegentPath =
   | typeof mobileRegentsPath
@@ -23,22 +23,22 @@ type MobileRegentPath =
   | `${typeof mobileRegentsPath}/${string}/return-requests/${string}/confirm`
   | `${typeof mobileRegentsPath}/${string}/funding-intents`
   | `${typeof mobileRegentsPath}/${string}/funding-intents/${string}`
-  | `${typeof mobileRegentsPath}/${string}/funding-intents/${string}/confirm`
-  | `${typeof mobileRegentsPath}/${string}/base-snapshot`;
+  | `${typeof mobileRegentsPath}/${string}/funding-intents/${string}/confirm`;
+
+type MobileRegentStakingPath =
+  | typeof mobileRegentStakingPath
+  | `${typeof mobileRegentStakingPath}?walletAddress=${string}`
+  | `${typeof mobileRegentStakingPath}/stake`
+  | `${typeof mobileRegentStakingPath}/unstake`
+  | `${typeof mobileRegentStakingPath}/claim-usdc`
+  | `${typeof mobileRegentStakingPath}/claim-regent`
+  | `${typeof mobileRegentStakingPath}/claim-and-restake-regent`;
 
 type MobileWalletActionPath =
   | `/mobile/wallet-actions/${PreparedWalletAction['action']}/prepare`
   | `/mobile/wallet-actions/${string}/confirm`;
 
-type MobileTerminalPath =
-  | typeof mobileTerminalSessionsPath
-  | `${typeof mobileTerminalSessionsPath}/${string}`
-  | `${typeof mobileTerminalSessionsPath}/${string}/events`
-  | `${typeof mobileTerminalSessionsPath}/${string}/events?since_event_id=${string}`
-  | `${typeof mobileTerminalSessionsPath}/${string}/messages`
-  | `${typeof mobileTerminalSessionsPath}/${string}/approvals/${string}`;
-
-type RegentApiPath = MobileRegentPath | MobileWalletActionPath | MobileTerminalPath;
+type RegentApiPath = MobileRegentPath | MobileRegentStakingPath | MobileWalletActionPath;
 
 async function readErrorMessage(response: Response, defaultMessage: string) {
   const payload = await response.json().catch(() => null);
@@ -96,8 +96,8 @@ const mobileWalletPreparePath = (
 const mobileWalletConfirmPath = (actionId: string): `/mobile/wallet-actions/${string}/confirm` =>
   `/mobile/wallet-actions/${encodeURIComponent(actionId)}/confirm`;
 
-const terminalSessionPath = (sessionId: string): `${typeof mobileTerminalSessionsPath}/${string}` =>
-  `${mobileTerminalSessionsPath}/${encodeURIComponent(sessionId)}`;
+const mobileRegentStakingWithWalletPath = (walletAddress: string): `${typeof mobileRegentStakingPath}?walletAddress=${string}` =>
+  `${mobileRegentStakingPath}?walletAddress=${encodeURIComponent(walletAddress)}`;
 
 export const regentApi = {
   async listRegents(): Promise<RegentSummary[]> {
@@ -279,14 +279,91 @@ export const regentApi = {
     return payload.fundingIntent;
   },
 
-  async getBaseSnapshot(regentId: string): Promise<BaseRegentSnapshot> {
-    const payload = await requestJson<{ snapshot: BaseRegentSnapshot }>(
-      `${regentPath(regentId)}/base-snapshot`,
+  async getRegentStaking(input: { walletAddress: string }): Promise<RegentStakingState> {
+    const payload = await requestJson<{ staking: RegentStakingState }>(
+      mobileRegentStakingWithWalletPath(input.walletAddress),
       undefined,
-      'Unable to load Base records right now.'
+      'Unable to load staking right now.'
     );
 
-    return payload.snapshot;
+    return payload.staking;
+  },
+
+  async stakeRegent(input: {
+    walletAddress: string;
+    amount: string;
+    receiver?: string;
+  }): Promise<RegentStakingActionResponse> {
+    return requestJson<RegentStakingActionResponse>(
+      `${mobileRegentStakingPath}/stake`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(input),
+      },
+      'Unable to prepare staking right now.'
+    );
+  },
+
+  async unstakeRegent(input: {
+    walletAddress: string;
+    amount: string;
+  }): Promise<RegentStakingActionResponse> {
+    return requestJson<RegentStakingActionResponse>(
+      `${mobileRegentStakingPath}/unstake`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(input),
+      },
+      'Unable to prepare unstaking right now.'
+    );
+  },
+
+  async claimRegentStakingUsdc(input: { walletAddress: string }): Promise<RegentStakingActionResponse> {
+    return requestJson<RegentStakingActionResponse>(
+      `${mobileRegentStakingPath}/claim-usdc`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(input),
+      },
+      'Unable to prepare this USDC claim right now.'
+    );
+  },
+
+  async claimRegentStakingRegent(input: { walletAddress: string }): Promise<RegentStakingActionResponse> {
+    return requestJson<RegentStakingActionResponse>(
+      `${mobileRegentStakingPath}/claim-regent`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(input),
+      },
+      'Unable to prepare this REGENT claim right now.'
+    );
+  },
+
+  async claimAndRestakeRegent(input: { walletAddress: string }): Promise<RegentStakingActionResponse> {
+    return requestJson<RegentStakingActionResponse>(
+      `${mobileRegentStakingPath}/claim-and-restake-regent`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(input),
+      },
+      'Unable to prepare claim and restake right now.'
+    );
   },
 
   async prepareWalletAction(input: {
@@ -350,95 +427,5 @@ export const regentApi = {
     );
 
     return payload.wallet_action;
-  },
-
-  async listTerminalSessions(): Promise<TerminalSessionSummary[]> {
-    const payload = await requestJson<{ sessions: TerminalSessionSummary[] }>(
-      mobileTerminalSessionsPath,
-      undefined,
-      'Unable to load conversations right now.'
-    );
-    return payload.sessions;
-  },
-
-  async createTerminalSession(input: {
-    agentId: string;
-    agentName: string;
-  }): Promise<TerminalSessionDetail> {
-    const payload = await requestJson<{ session: TerminalSessionDetail }>(
-      mobileTerminalSessionsPath,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(input),
-      },
-      'Unable to start this conversation right now.'
-    );
-
-    return payload.session;
-  },
-
-  async getTerminalSession(sessionId: string): Promise<TerminalSessionDetail> {
-    const payload = await requestJson<{ session: TerminalSessionDetail }>(
-      terminalSessionPath(sessionId),
-      undefined,
-      'Unable to load this conversation right now.'
-    );
-
-    return payload.session;
-  },
-
-  async getTerminalEvents(sessionId: string, sinceEventId?: string): Promise<{
-    events: TerminalEvent[];
-    latestEventId: string;
-  }> {
-    const path = sinceEventId
-      ? (`${terminalSessionPath(sessionId)}/events?since_event_id=${encodeURIComponent(sinceEventId)}` as const)
-      : (`${terminalSessionPath(sessionId)}/events` as const);
-    const payload = await requestJson<{ events: TerminalEvent[]; latestEventId: string }>(
-      path,
-      undefined,
-      'Unable to load the latest updates right now.'
-    );
-
-    return payload;
-  },
-
-  async sendTerminalMessage(sessionId: string, text: string): Promise<TerminalSessionDetail> {
-    const payload = await requestJson<{ session: TerminalSessionDetail }>(
-      `${terminalSessionPath(sessionId)}/messages`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ text }),
-      },
-      'Unable to send your message right now.'
-    );
-
-    return payload.session;
-  },
-
-  async resolveTerminalApproval(
-    sessionId: string,
-    requestId: string,
-    decision: 'approved' | 'denied'
-  ): Promise<TerminalSessionDetail> {
-    const payload = await requestJson<{ session: TerminalSessionDetail }>(
-      `${terminalSessionPath(sessionId)}/approvals/${encodeURIComponent(requestId)}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ decision }),
-      },
-      'Unable to save your decision right now.'
-    );
-
-    return payload.session;
   },
 };

@@ -9,7 +9,7 @@ test('OpenAPI operations have stable operation IDs', () => {
   const operations = [...contract.matchAll(/^    (get|post|put|patch|delete):$/gm)];
   const operationIds = [...contract.matchAll(/^\s+operationId:\s+([A-Za-z0-9_]+)$/gm)].map((match) => match[1]);
 
-  assert.equal(operations.length, 29);
+  assert.equal(operations.length, 34);
   assert.equal(operationIds.length, operations.length);
   assert.equal(new Set(operationIds).size, operationIds.length);
 });
@@ -28,4 +28,19 @@ test('prepared wallet-action contract and client require idempotency and risk co
   assert.match(regentClient, /riskCopy: string;/);
   assert.match(regentClient, /wallet_action: PreparedWalletAction/);
   assert.match(regentClient, /'Idempotency-Key': input\.idempotencyKey/);
+});
+
+test('Regent staking contract and client use the live staking surface only', () => {
+  assert.match(contract, /\/mobile\/regent\/staking:[\s\S]*operationId: getMobileRegentStaking/);
+  assert.match(contract, /\/mobile\/regent\/staking\/stake:[\s\S]*operationId: stakeMobileRegent/);
+  assert.match(contract, /\/mobile\/regent\/staking\/unstake:[\s\S]*operationId: unstakeMobileRegent/);
+  assert.match(contract, /\/mobile\/regent\/staking\/claim-usdc:[\s\S]*operationId: claimMobileRegentStakingUsdc/);
+  assert.match(contract, /\/mobile\/regent\/staking\/claim-regent:[\s\S]*operationId: claimMobileRegentStakingRegent/);
+  assert.match(contract, /\/mobile\/regent\/staking\/claim-and-restake-regent:[\s\S]*operationId: claimAndRestakeMobileRegentStakingRegent/);
+  assert.match(regentClient, /getRegentStaking\(input:/);
+  assert.match(regentClient, /stakeRegent\(input:/);
+  assert.match(regentClient, /unstakeRegent\(input:/);
+  assert.match(regentClient, /claimRegentStakingUsdc\(input:/);
+  assert.match(regentClient, /claimRegentStakingRegent\(input:/);
+  assert.match(regentClient, /claimAndRestakeRegent\(input:/);
 });

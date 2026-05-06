@@ -694,31 +694,228 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
-  /mobile/regents/{id}/base-snapshot:
+  /mobile/regent/staking:
     get:
-      operationId: getRegentBaseSnapshot
-      summary: Fetch one mobile-ready Base snapshot for a Regent
+      operationId: getMobileRegentStaking
+      summary: Fetch the current mobile REGENT staking snapshot
       security:
         - bearerAuth: []
       parameters:
-        - in: path
-          name: id
+        - in: query
+          name: walletAddress
           required: true
           schema:
             type: string
       responses:
         '200':
-          description: Base snapshot
+          description: Current staking snapshot
           content:
             application/json:
               schema:
                 type: object
-                required: [snapshot]
+                required: [staking]
                 properties:
-                  snapshot:
-                    $ref: '#/components/schemas/BaseRegentSnapshot'
-        '404':
-          description: Regent not found
+                  staking:
+                    $ref: '#/components/schemas/RegentStakingState'
+        '400':
+          description: Wallet address is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '502':
+          description: Platform staking is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: Platform base URL is not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /mobile/regent/staking/stake:
+    post:
+      operationId: stakeMobileRegent
+      summary: Prepare a mobile REGENT stake action
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MobileRegentStakingStakeRequest'
+      responses:
+        '200':
+          description: Staking action prepared
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MobileRegentStakingActionResponse'
+        '400':
+          description: Staking input is invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '502':
+          description: Platform staking is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: Platform base URL is not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /mobile/regent/staking/unstake:
+    post:
+      operationId: unstakeMobileRegent
+      summary: Prepare a mobile REGENT unstake action
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MobileRegentStakingAmountRequest'
+      responses:
+        '200':
+          description: Unstake action prepared
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MobileRegentStakingActionResponse'
+        '400':
+          description: Staking input is invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '502':
+          description: Platform staking is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: Platform base URL is not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /mobile/regent/staking/claim-usdc:
+    post:
+      operationId: claimMobileRegentStakingUsdc
+      summary: Prepare a mobile USDC claim action
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MobileRegentStakingWalletRequest'
+      responses:
+        '200':
+          description: USDC claim action prepared
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MobileRegentStakingActionResponse'
+        '400':
+          description: Staking input is invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '502':
+          description: Platform staking is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: Platform base URL is not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /mobile/regent/staking/claim-regent:
+    post:
+      operationId: claimMobileRegentStakingRegent
+      summary: Prepare a mobile REGENT claim action
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MobileRegentStakingWalletRequest'
+      responses:
+        '200':
+          description: REGENT claim action prepared
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MobileRegentStakingActionResponse'
+        '400':
+          description: Staking input is invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '502':
+          description: Platform staking is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: Platform base URL is not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /mobile/regent/staking/claim-and-restake-regent:
+    post:
+      operationId: claimAndRestakeMobileRegentStakingRegent
+      summary: Prepare a mobile REGENT claim and restake action
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MobileRegentStakingWalletRequest'
+      responses:
+        '200':
+          description: REGENT claim and restake action prepared
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MobileRegentStakingActionResponse'
+        '400':
+          description: Staking input is invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '502':
+          description: Platform staking is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: Platform base URL is not configured
           content:
             application/json:
               schema:
@@ -735,7 +932,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [stake, claim, funding, return]
+            enum: [funding, return]
         - in: header
           name: Idempotency-Key
           required: true
@@ -1300,41 +1497,185 @@ components:
         tokenType:
           type: string
           enum: [native, expo]
-    BaseRegentSnapshot:
+    MobileRegentStakingWalletRequest:
+      type: object
+      additionalProperties: false
+      required: [walletAddress]
+      properties:
+        walletAddress:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
+    MobileRegentStakingAmountRequest:
+      type: object
+      additionalProperties: false
+      required: [walletAddress, amount]
+      properties:
+        walletAddress:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
+        amount:
+          type: string
+    MobileRegentStakingStakeRequest:
+      type: object
+      additionalProperties: false
+      required: [walletAddress, amount]
+      properties:
+        walletAddress:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
+        amount:
+          type: string
+        receiver:
+          type: string
+    RegentStakingState:
       type: object
       required:
-        - regentId
-        - chainId
-        - blockNumber
-        - contractAddress
-        - stale
-        - claimableUsdc
-        - stakedRegent
-        - revenueLaneUsdc
-        - treasuryResidualUsdc
-        - subjectStatus
+        - chain_id
+        - chain_label
+        - contract_address
+        - owner_address
+        - stake_token_address
+        - usdc_address
+        - treasury_recipient
+        - revenue_share_supply_denominator_raw
+        - revenue_share_supply_denominator
+        - paused
+        - total_staked_raw
+        - total_staked
+        - total_usdc_received_raw
+        - total_usdc_received
+        - direct_deposit_usdc_raw
+        - direct_deposit_usdc
+        - treasury_residual_usdc_raw
+        - treasury_residual_usdc
+        - materialized_outstanding_raw
+        - materialized_outstanding
+        - available_reward_inventory_raw
+        - available_reward_inventory
+        - total_claimed_so_far_raw
+        - total_claimed_so_far
       properties:
-        regentId:
+        chain_id: {type: integer}
+        chain_label: {type: string}
+        contract_address: {type: string}
+        owner_address: {type: string}
+        stake_token_address: {type: string}
+        usdc_address: {type: string}
+        treasury_recipient: {type: string}
+        revenue_share_supply_denominator_raw: {type: string}
+        revenue_share_supply_denominator: {type: string}
+        paused: {type: boolean}
+        total_staked_raw: {type: string}
+        total_staked: {type: string}
+        total_usdc_received_raw: {type: string}
+        total_usdc_received: {type: string}
+        direct_deposit_usdc_raw: {type: string}
+        direct_deposit_usdc: {type: string}
+        treasury_residual_usdc_raw: {type: string}
+        treasury_residual_usdc: {type: string}
+        materialized_outstanding_raw: {type: string}
+        materialized_outstanding: {type: string}
+        available_reward_inventory_raw: {type: string}
+        available_reward_inventory: {type: string}
+        total_claimed_so_far_raw: {type: string}
+        total_claimed_so_far: {type: string}
+        wallet_address: {type: [string, 'null']}
+        connected_wallet_address: {type: [string, 'null']}
+        wallet_stake_balance_raw: {type: [string, 'null']}
+        wallet_stake_balance: {type: [string, 'null']}
+        wallet_token_balance_raw: {type: [string, 'null']}
+        wallet_token_balance: {type: [string, 'null']}
+        wallet_claimable_usdc_raw: {type: [string, 'null']}
+        wallet_claimable_usdc: {type: [string, 'null']}
+        wallet_claimable_regent_raw: {type: [string, 'null']}
+        wallet_claimable_regent: {type: [string, 'null']}
+        wallet_funded_claimable_regent_raw: {type: [string, 'null']}
+        wallet_funded_claimable_regent: {type: [string, 'null']}
+    RegentStakingActionState:
+      type: object
+      required: [chain_id, chain_label, contract_address, wallet_address]
+      properties:
+        chain_id: {type: integer}
+        chain_label: {type: string}
+        contract_address: {type: string}
+        wallet_address: {type: string}
+    PlatformWalletAction:
+      type: object
+      additionalProperties: false
+      required: [action_id, owner_product, resource, resource_id, action, chain_id, to, value, data, expected_signer, expires_at, idempotency_key, simulation, risk_copy]
+      properties:
+        action_id:
           type: string
-        chainId:
+        owner_product:
+          type: string
+          enum: [platform]
+        resource:
+          type: string
+          enum: [regent_staking]
+        resource_id:
+          type: string
+        action:
+          type: string
+          enum: [stake, unstake, claim_usdc, claim_regent, claim_and_restake_regent]
+        chain_id:
           type: integer
-        blockNumber:
-          type: integer
-        contractAddress:
+        to:
           type: string
-        stale:
-          type: boolean
-          description: True when the mobile backend did not read a current onchain snapshot.
-        claimableUsdc:
+          pattern: '^0x[a-fA-F0-9]{40}$'
+        value:
           type: string
-        stakedRegent:
+          pattern: '^[0-9]+$'
+        data:
           type: string
-        revenueLaneUsdc:
+          pattern: '^0x[a-fA-F0-9]*$'
+        expected_signer:
           type: string
-        treasuryResidualUsdc:
+          pattern: '^0x[a-fA-F0-9]{40}$'
+        expires_at:
           type: string
-        subjectStatus:
+          format: date-time
+        idempotency_key:
           type: string
+        simulation:
+          type: object
+          additionalProperties: false
+          required: [required, status]
+          properties:
+            required:
+              type: boolean
+            status:
+              type: string
+              enum: [not_required, pending, passed, failed]
+            block_number:
+              type: [integer, 'null']
+        risk_copy:
+          type: string
+        approval:
+          type: object
+          additionalProperties: false
+          required: [token, spender, amount, data]
+          properties:
+            token:
+              type: string
+              pattern: '^0x[a-fA-F0-9]{40}$'
+            spender:
+              type: string
+              pattern: '^0x[a-fA-F0-9]{40}$'
+            amount:
+              type: string
+              pattern: '^[0-9]+$'
+            data:
+              type: string
+              pattern: '^0x[a-fA-F0-9]*$'
+    MobileRegentStakingActionResponse:
+      type: object
+      additionalProperties: false
+      required: [staking, wallet_action]
+      properties:
+        staking:
+          $ref: '#/components/schemas/RegentStakingActionState'
+        wallet_action:
+          $ref: '#/components/schemas/PlatformWalletAction'
     PrepareWalletActionRequest:
       type: object
       required: [regentId, expectedSigner, to, value, data, riskCopy]
@@ -1386,7 +1727,7 @@ components:
           type: string
         action:
           type: string
-          enum: [stake, claim, funding, return]
+          enum: [funding, return]
         chain_id:
           type: integer
         to:

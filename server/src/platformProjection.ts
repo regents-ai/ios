@@ -150,6 +150,88 @@ const rwrApprovalResponseSchema = z.object({
   approval: rwrApprovalSchema,
 });
 
+const nullableStringSchema = z.string().nullable();
+
+const regentStakingStateSchema = z.object({
+  ok: z.literal(true).optional(),
+  chain_id: z.number().int(),
+  chain_label: z.string(),
+  contract_address: z.string(),
+  owner_address: z.string(),
+  stake_token_address: z.string(),
+  usdc_address: z.string(),
+  treasury_recipient: z.string(),
+  revenue_share_supply_denominator_raw: z.string(),
+  revenue_share_supply_denominator: z.string(),
+  paused: z.boolean(),
+  total_staked_raw: z.string(),
+  total_staked: z.string(),
+  total_usdc_received_raw: z.string(),
+  total_usdc_received: z.string(),
+  direct_deposit_usdc_raw: z.string(),
+  direct_deposit_usdc: z.string(),
+  treasury_residual_usdc_raw: z.string(),
+  treasury_residual_usdc: z.string(),
+  materialized_outstanding_raw: z.string(),
+  materialized_outstanding: z.string(),
+  available_reward_inventory_raw: z.string(),
+  available_reward_inventory: z.string(),
+  total_claimed_so_far_raw: z.string(),
+  total_claimed_so_far: z.string(),
+  wallet_address: nullableStringSchema.optional(),
+  connected_wallet_address: nullableStringSchema.optional(),
+  wallet_stake_balance_raw: nullableStringSchema.optional(),
+  wallet_stake_balance: nullableStringSchema.optional(),
+  wallet_token_balance_raw: nullableStringSchema.optional(),
+  wallet_token_balance: nullableStringSchema.optional(),
+  wallet_claimable_usdc_raw: nullableStringSchema.optional(),
+  wallet_claimable_usdc: nullableStringSchema.optional(),
+  wallet_claimable_regent_raw: nullableStringSchema.optional(),
+  wallet_claimable_regent: nullableStringSchema.optional(),
+  wallet_funded_claimable_regent_raw: nullableStringSchema.optional(),
+  wallet_funded_claimable_regent: nullableStringSchema.optional(),
+});
+
+const regentStakingActionStateSchema = z.object({
+  chain_id: z.number().int(),
+  chain_label: z.string(),
+  contract_address: z.string(),
+  wallet_address: z.string(),
+});
+
+const platformWalletActionSchema = z.object({
+  action_id: z.string(),
+  owner_product: z.literal('platform'),
+  resource: z.literal('regent_staking'),
+  resource_id: z.string(),
+  action: z.enum(['stake', 'unstake', 'claim_usdc', 'claim_regent', 'claim_and_restake_regent']),
+  chain_id: z.number().int(),
+  to: z.string(),
+  value: z.string(),
+  data: z.string(),
+  expected_signer: z.string(),
+  expires_at: z.string(),
+  idempotency_key: z.string(),
+  simulation: z.object({
+    required: z.boolean(),
+    status: z.enum(['not_required', 'pending', 'passed', 'failed']),
+    block_number: z.number().int().nullable().optional(),
+  }),
+  risk_copy: z.string(),
+  approval: z.object({
+    token: z.string(),
+    spender: z.string(),
+    amount: z.string(),
+    data: z.string(),
+  }).optional(),
+});
+
+const regentStakingActionResponseSchema = z.object({
+  ok: z.literal(true),
+  staking: regentStakingActionStateSchema,
+  wallet_action: platformWalletActionSchema,
+});
+
 const platformProjectionSchema = z.object({
   ok: z.boolean(),
   projection: z.object({
@@ -182,6 +264,8 @@ export type RwrWorkItem = z.infer<typeof rwrWorkItemSchema>;
 export type RwrRun = z.infer<typeof rwrRunSchema>;
 export type RwrRunEvent = z.infer<typeof rwrRunEventSchema>;
 export type RwrApproval = z.infer<typeof rwrApprovalSchema>;
+export type RegentStakingState = Omit<z.infer<typeof regentStakingStateSchema>, 'ok'>;
+export type RegentStakingActionResponse = Omit<z.infer<typeof regentStakingActionResponseSchema>, 'ok'>;
 
 export type PlatformProjectionClientResult =
   | { kind: 'ok'; projection: PlatformProjection }
@@ -231,6 +315,26 @@ export type PlatformRwrClient = {
     decision: 'approved' | 'denied'
   ): Promise<PlatformRwrClientResult<RwrApproval>>;
 };
+
+export type PlatformStakingClient = {
+  fetchStaking(auth: PlatformRequestAuth, walletAddress: string): Promise<PlatformRwrClientResult<{ staking: RegentStakingState }>>;
+  stake(
+    auth: PlatformRequestAuth,
+    input: { walletAddress: string; amount: string; receiver?: string | undefined }
+  ): Promise<PlatformRwrClientResult<RegentStakingActionResponse>>;
+  unstake(
+    auth: PlatformRequestAuth,
+    input: { walletAddress: string; amount: string }
+  ): Promise<PlatformRwrClientResult<RegentStakingActionResponse>>;
+  claimUsdc(auth: PlatformRequestAuth, walletAddress: string): Promise<PlatformRwrClientResult<RegentStakingActionResponse>>;
+  claimRegent(auth: PlatformRequestAuth, walletAddress: string): Promise<PlatformRwrClientResult<RegentStakingActionResponse>>;
+  claimAndRestakeRegent(auth: PlatformRequestAuth, walletAddress: string): Promise<PlatformRwrClientResult<RegentStakingActionResponse>>;
+};
+
+function withoutOk<T extends { ok?: boolean | undefined }>(value: T): Omit<T, 'ok'> {
+  const { ok: _ok, ...rest } = value;
+  return rest;
+}
 
 function platformBaseUrl() {
   return process.env.PLATFORM_API_BASE_URL?.trim() || '';
@@ -453,6 +557,64 @@ export function createPlatformRwrClient(fetchImpl: typeof fetch = fetch): Platfo
         }
       );
       return result.kind === 'ok' ? { kind: 'ok', data: result.data.approval } : result;
+    },
+  };
+}
+
+export function createPlatformStakingClient(fetchImpl: typeof fetch = fetch): PlatformStakingClient {
+  const actionRequest = (
+    auth: PlatformRequestAuth,
+    path: string,
+    body: Record<string, unknown>
+  ): Promise<PlatformRwrClientResult<RegentStakingActionResponse>> =>
+    requestPlatformJson(fetchImpl, auth, path, regentStakingActionResponseSchema, {
+      method: 'POST',
+      body,
+    }).then((result) => result.kind === 'ok' ? { kind: 'ok', data: withoutOk(result.data) } : result);
+
+  return {
+    async fetchStaking(auth, walletAddress) {
+      const result = await requestPlatformJson(
+        fetchImpl,
+        auth,
+        `/api/agent-platform/mobile/regent/staking?wallet_address=${encodeURIComponent(walletAddress)}`,
+        regentStakingStateSchema
+      );
+
+      return result.kind === 'ok' ? { kind: 'ok', data: { staking: withoutOk(result.data) } } : result;
+    },
+
+    stake(auth, input) {
+      return actionRequest(auth, '/api/agent-platform/mobile/regent/staking/stake', {
+        wallet_address: input.walletAddress,
+        amount: input.amount,
+        ...(input.receiver ? { receiver: input.receiver } : {}),
+      });
+    },
+
+    unstake(auth, input) {
+      return actionRequest(auth, '/api/agent-platform/mobile/regent/staking/unstake', {
+        wallet_address: input.walletAddress,
+        amount: input.amount,
+      });
+    },
+
+    claimUsdc(auth, walletAddress) {
+      return actionRequest(auth, '/api/agent-platform/mobile/regent/staking/claim-usdc', {
+        wallet_address: walletAddress,
+      });
+    },
+
+    claimRegent(auth, walletAddress) {
+      return actionRequest(auth, '/api/agent-platform/mobile/regent/staking/claim-regent', {
+        wallet_address: walletAddress,
+      });
+    },
+
+    claimAndRestakeRegent(auth, walletAddress) {
+      return actionRequest(auth, '/api/agent-platform/mobile/regent/staking/claim-and-restake-regent', {
+        wallet_address: walletAddress,
+      });
     },
   };
 }

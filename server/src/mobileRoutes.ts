@@ -9,7 +9,6 @@ import {
   confirmRegentReturnRequestForUser,
   createRegentFundingIntentForUser,
   createRegentReturnRequestForUser,
-  getBaseRegentSnapshotForUser,
   getRegentFundingIntentForUser,
   getRegentForUserFromPlatformProjection,
   getRegentManagerForUserFromPlatformProjection,
@@ -29,9 +28,12 @@ import {
 import {
   createPlatformProjectionClient,
   createPlatformRwrClient,
+  createPlatformStakingClient,
   type PlatformProjectionClient,
   type PlatformRequestAuth,
   type PlatformRwrClient,
+  type PlatformRwrClientResult,
+  type PlatformStakingClient,
 } from './platformProjection.js';
 
 const currentUserId = (userId?: string) => userId || '';
@@ -82,18 +84,42 @@ const expectedBaseTransactionSchema = z.object({
   data: hexDataSchema,
 });
 
+const stakingWalletBodySchema = z.object({
+  walletAddress: evmAddressSchema,
+});
+
+const stakingAmountBodySchema = stakingWalletBodySchema.extend({
+  amount: z.string().min(1),
+});
+
+const stakingStakeBodySchema = stakingAmountBodySchema.extend({
+  receiver: z.string().min(1).optional(),
+});
+
 export function createMobileRoutes(input?: {
   platformProjectionClient?: PlatformProjectionClient;
   platformRwrClient?: PlatformRwrClient;
+  platformStakingClient?: PlatformStakingClient;
 }) {
   const router = Router();
   const platformProjectionClient = input?.platformProjectionClient || createPlatformProjectionClient();
   const platformRwrClient = input?.platformRwrClient || createPlatformRwrClient();
+  const platformStakingClient = input?.platformStakingClient || createPlatformStakingClient();
 
   function platformAuth(req: Request): PlatformRequestAuth {
     return {
       authorization: req.header('Authorization'),
     };
+  }
+
+  function queryValue(req: Request, name: string) {
+    const rawValue = req.query[name];
+    if (typeof rawValue === 'string') {
+      return rawValue;
+    }
+
+    const requestUrl = req.originalUrl || req.url;
+    return new URL(requestUrl, 'http://localhost').searchParams.get(name) || undefined;
   }
 
   async function readPlatformProjection(req: Request, res: Response) {
@@ -378,27 +404,96 @@ export function createMobileRoutes(input?: {
     return res.json({ fundingIntent: result.fundingIntent });
   });
 
-  router.get('/mobile/regents/:id/base-snapshot', async (req, res) => {
-    const parsed = agentIdParamsSchema.safeParse(req.params);
+  function sendPlatformStakingResult<T>(
+    res: Response,
+    result: PlatformRwrClientResult<T>,
+    render: (data: T) => unknown
+  ) {
+    if (result.kind === 'ok') {
+      return res.json(render(result.data));
+    }
+
+    if (result.kind === 'missing_config') {
+      return sendError(res, 503, 'PlatformStakingMissing', `${result.requiredEnv} is required before staking can be loaded.`);
+    }
+
+    if (result.kind === 'unauthorized') {
+      return sendError(res, 401, 'Unauthorized', 'Sign in again before loading staking.');
+    }
+
+    if (result.kind === 'not_found') {
+      return sendError(res, 404, 'NotFound', 'Staking could not be found.');
+    }
+
+    return sendError(res, 502, 'PlatformStakingUnavailable', result.message);
+  }
+
+  router.get('/mobile/regent/staking', async (req, res) => {
+    const parsed = stakingWalletBodySchema.safeParse({
+      walletAddress: queryValue(req, 'walletAddress'),
+    });
+
     if (!parsed.success) {
-      return sendError(res, 400, 'BadRequest', 'A valid Regent ID is required.');
+      return sendError(res, 400, 'BadRequest', 'A valid wallet address is required.');
     }
 
-    const projection = await readPlatformProjection(req, res);
-    if (!projection) {
-      return;
-    }
-    if (!hasRegentInPlatformProjection(parsed.data.id, projection)) {
-      return sendError(res, 404, 'NotFound', 'That Regent could not be found.');
+    const result = await platformStakingClient.fetchStaking(platformAuth(req), parsed.data.walletAddress);
+    return sendPlatformStakingResult(res, result, (data) => data);
+  });
+
+  router.post('/mobile/regent/staking/stake', async (req, res) => {
+    const parsed = stakingStakeBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return sendError(res, 400, 'BadRequest', 'A wallet address and amount are required.');
     }
 
-    const snapshot = getBaseRegentSnapshotForUser(currentUserId(req.userId), parsed.data.id);
-    return res.json({ snapshot });
+    const result = await platformStakingClient.stake(platformAuth(req), parsed.data);
+    return sendPlatformStakingResult(res, result, (data) => data);
+  });
+
+  router.post('/mobile/regent/staking/unstake', async (req, res) => {
+    const parsed = stakingAmountBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return sendError(res, 400, 'BadRequest', 'A wallet address and amount are required.');
+    }
+
+    const result = await platformStakingClient.unstake(platformAuth(req), parsed.data);
+    return sendPlatformStakingResult(res, result, (data) => data);
+  });
+
+  router.post('/mobile/regent/staking/claim-usdc', async (req, res) => {
+    const parsed = stakingWalletBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return sendError(res, 400, 'BadRequest', 'A valid wallet address is required.');
+    }
+
+    const result = await platformStakingClient.claimUsdc(platformAuth(req), parsed.data.walletAddress);
+    return sendPlatformStakingResult(res, result, (data) => data);
+  });
+
+  router.post('/mobile/regent/staking/claim-regent', async (req, res) => {
+    const parsed = stakingWalletBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return sendError(res, 400, 'BadRequest', 'A valid wallet address is required.');
+    }
+
+    const result = await platformStakingClient.claimRegent(platformAuth(req), parsed.data.walletAddress);
+    return sendPlatformStakingResult(res, result, (data) => data);
+  });
+
+  router.post('/mobile/regent/staking/claim-and-restake-regent', async (req, res) => {
+    const parsed = stakingWalletBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return sendError(res, 400, 'BadRequest', 'A valid wallet address is required.');
+    }
+
+    const result = await platformStakingClient.claimAndRestakeRegent(platformAuth(req), parsed.data.walletAddress);
+    return sendPlatformStakingResult(res, result, (data) => data);
   });
 
   router.post('/mobile/wallet-actions/:type/prepare', async (req, res) => {
     const paramsSchema = z.object({
-      type: z.enum(['stake', 'claim', 'funding', 'return']),
+      type: z.enum(['funding', 'return']),
     });
     const bodySchema = z.object({
       regentId: z.string().min(1),
