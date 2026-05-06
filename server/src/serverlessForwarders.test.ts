@@ -19,7 +19,7 @@ function jsFiles(dir: string): string[] {
   });
 }
 
-test('serverless forwarders import from a clean server build', async () => {
+test('serverless forwarders import from a clean server build', () => {
   const build = spawnSync('npm', ['run', 'build'], {
     cwd: serverDir,
     encoding: 'utf8',
@@ -32,7 +32,32 @@ test('serverless forwarders import from a clean server build', async () => {
 
   for (const file of forwarders) {
     const moduleUrl = `${pathToFileURL(file).href}?test=${Date.now()}`;
-    const imported = await import(moduleUrl);
-    assert.equal(typeof imported.default, 'function', file);
+    const imported = spawnSync(process.execPath, [
+      '--input-type=module',
+      '--eval',
+      `
+        import(${JSON.stringify(moduleUrl)})
+          .then((module) => {
+            if (typeof module.default !== 'function') {
+              console.error('default export is not a function');
+              process.exit(2);
+            }
+            process.exit(0);
+          })
+          .catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
+      `,
+    ], {
+      cwd: serverDir,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        NODE_ENV: 'test',
+      },
+    });
+
+    assert.equal(imported.status, 0, `${file}\n${imported.stdout}\n${imported.stderr}`);
   }
 });
