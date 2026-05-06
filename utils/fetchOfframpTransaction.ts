@@ -1,5 +1,4 @@
-import { getBaseUrl } from "../constants/BASE_URL";
-import { authenticatedFetch } from "./authenticatedFetch";
+import { sendOnrampProxyRequest } from './network/onrampProxy';
 
 interface MonetaryAmount {
   value: string;
@@ -28,22 +27,13 @@ export interface OfframpTransaction {
 export async function fetchOfframpTransaction(
   partnerUserRef: string
 ): Promise<OfframpTransaction | null> {
-  const url = `https://api.developer.coinbase.com/onramp/v1/sell/user/${encodeURIComponent(partnerUserRef)}/transactions`;
-
   console.log('📤 [OFFRAMP TX] Fetching transaction for', partnerUserRef);
 
-  const res = await authenticatedFetch(`${getBaseUrl()}/server/api`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url, method: 'GET' }),
+  const data = await sendOnrampProxyRequest<{ transactions?: OfframpTransaction[] }>({
+    context: 'fetchOfframpTransaction',
+    operation: 'sell_transactions',
+    partnerUserRef,
   });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => null);
-    throw new Error(err?.message || `Failed to fetch offramp transaction: ${res.status}`);
-  }
-
-  const data = await res.json();
   const transactions: OfframpTransaction[] = data.transactions || [];
 
   console.log(`📥 [OFFRAMP TX] ${transactions.length} transaction(s) found`);

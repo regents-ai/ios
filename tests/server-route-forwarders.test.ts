@@ -82,6 +82,20 @@ test('served backend routes stay declared in the mobile API contract', () => {
   }
 });
 
+test('Coinbase proxy contract exposes the operation allowlist only', () => {
+  const contract = readFileSync(resolve(testDir, '../api-contract.openapiv3.yaml'), 'utf8');
+  const schema = contract.slice(
+    contract.indexOf('CoinbaseProxyRequest:'),
+    contract.indexOf('CoinbaseOnrampWebhook:')
+  );
+
+  assert.match(schema, /required: \[operation\]/);
+  assert.match(schema, /- buy_config[\s\S]*- offramp_token/);
+  assert.match(schema, /additionalProperties: false/);
+  assert.doesNotMatch(schema, /required: \[url\]/);
+  assert.doesNotMatch(schema, /format: uri/);
+});
+
 test('implemented backend route methods match the mobile API contract', () => {
   const declared = contractRoutes();
   const implemented = implementedRoutes();

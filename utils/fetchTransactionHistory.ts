@@ -6,15 +6,14 @@ export async function fetchTransactionHistory(
   pageSize: number = 10,
   accessToken?: string
 ) {
-  let url = `https://api.developer.coinbase.com/onramp/v1/buy/user/${encodeURIComponent(userId)}/transactions?pageSize=${pageSize}`;
-  if (pageKey) {
-    url += `&pageKey=${encodeURIComponent(pageKey)}`;
-  }
-
   const responseJson = await sendOnrampProxyRequest<any>({
     context: 'fetchTransactionHistory',
-    method: 'GET',
-    url,
+    operation: 'buy_transactions',
+    partnerUserRef: userId,
+    params: {
+      pageKey,
+      pageSize,
+    },
     authToken: accessToken,
   });
 

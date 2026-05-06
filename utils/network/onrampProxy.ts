@@ -7,8 +7,17 @@ type ProxyRequestInput = {
   body?: unknown;
   context: string;
   idempotencyKey?: string;
-  method: 'GET' | 'POST';
-  url: string;
+  operation:
+    | 'buy_config'
+    | 'buy_options'
+    | 'buy_transactions'
+    | 'sell_transactions'
+    | 'onramp_session'
+    | 'onramp_order'
+    | 'onramp_limits'
+    | 'offramp_token';
+  params?: Record<string, string | number | boolean | undefined>;
+  partnerUserRef?: string;
 };
 
 function buildProxyInit(input: ProxyRequestInput): RequestInit {
@@ -28,10 +37,11 @@ function buildProxyInit(input: ProxyRequestInput): RequestInit {
     method: 'POST',
     headers,
     body: JSON.stringify({
-      url: input.url,
-      method: input.method,
+      operation: input.operation,
       ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}),
       ...(input.body !== undefined ? { body: input.body } : {}),
+      ...(input.params ? { params: Object.fromEntries(Object.entries(input.params).filter(([, value]) => value !== undefined)) } : {}),
+      ...(input.partnerUserRef ? { partnerUserRef: input.partnerUserRef } : {}),
     }),
   };
 }
@@ -63,8 +73,7 @@ export async function sendOnrampProxyRequest<T>(input: ProxyRequestInput): Promi
   if (__DEV__) {
     console.log(`[${input.context}] request`, {
       endpoint,
-      targetMethod: input.method,
-      targetUrl: input.url,
+      operation: input.operation,
       hasExplicitToken: !!input.authToken,
     });
   }

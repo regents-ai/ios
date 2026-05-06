@@ -9,15 +9,16 @@ type CreateOnrampSessionResponse = {
 
 export async function createOnrampSession(
   payload: any,
-  operationId: string
+  operationId: string,
+  partnerUserRef: string
 ): Promise<CreateOnrampSessionResponse> {
   console.log('📤 [API] createOnrampSession');
 
   return sendOnrampProxyRequest<CreateOnrampSessionResponse>({
     context: 'createOnrampSession',
     idempotencyKey: buildOnrampIdempotencyKey('session', payload, operationId),
-    method: 'POST',
-    url: 'https://api.cdp.coinbase.com/platform/v2/onramp/sessions',
+    operation: 'onramp_session',
+    partnerUserRef,
     body: payload,
   });
 }

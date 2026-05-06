@@ -1,8 +1,6 @@
-
-import { getBaseUrl } from '@/constants/BASE_URL';
-import { authenticatedFetch } from './authenticatedFetch';
 import { createGuestCheckoutOrder } from './createGuestCheckoutOrder';
 import { buildGuestCheckoutQuotePayload } from './guestCheckout';
+import { sendOnrampProxyRequest } from './network/onrampProxy';
 import { buildOnrampIdempotencyKey } from './onramp/idempotency';
 import { getCountry, getSubdivision } from './state/locationState';
 import { getWalletAddressForNetwork } from './state/walletRuntimeState';
@@ -81,24 +79,13 @@ export async function fetchBuyQuote(payload: {
     console.log('📤 [API] fetchBuyQuote (Widget)');
 
     // v2 quote for Coinbase Widget (session endpoint)
-    const response = await authenticatedFetch(`${getBaseUrl()}/server/api`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        url: 'https://api.cdp.coinbase.com/platform/v2/onramp/sessions',
-        method: 'POST',
-        idempotencyKey: quoteIdempotencyKey,
-        body: v2Payload,
-      }),
+    const data = await sendOnrampProxyRequest<any>({
+      context: 'fetchBuyQuote',
+      idempotencyKey: quoteIdempotencyKey,
+      operation: 'onramp_session',
+      partnerUserRef: payload.partnerUserRef,
+      body: v2Payload,
     });
-  
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const data = await response.json();
     const quote = data?.quote;
     const fees = quote?.fees || [];
     const coinbaseFee = fees.find((f: any) => f.type === 'FEE_TYPE_EXCHANGE');

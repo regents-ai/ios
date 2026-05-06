@@ -51,12 +51,18 @@ test('Coinbase onramp create requests carry app-owned idempotency keys', () => {
 
   assert.match(proxy, /idempotencyKey/);
   assert.match(proxy, /'Idempotency-Key'/);
+  assert.match(proxy, /operation: input\.operation/);
   assert.match(createOrder, /buildOnrampIdempotencyKey\('order', payload, payload\.agreementAcceptedAt\)/);
+  assert.match(createOrder, /operation: 'onramp_order'/);
+  assert.match(createOrder, /partnerUserRef: payload\.partnerUserRef/);
   assert.match(createSession, /buildOnrampIdempotencyKey\('session', payload, operationId\)/);
+  assert.match(createSession, /operation: 'onramp_session'/);
+  assert.match(createSession, /partnerUserRef/);
   assert.match(quote, /buildOnrampIdempotencyKey\('session', quoteIdempotencyPayload, 'widget-quote'\)/);
   assert.match(quote, /partnerUserRef: payload\.partnerUserRef/);
   assert.match(quote, /isQuote: true/);
   assert.match(quote, /idempotencyKey: quoteIdempotencyKey/);
+  assert.doesNotMatch(`${proxy}\n${createOrder}\n${createSession}\n${quote}`, /url: ['"`]https:\/\/api\./);
 
   const orderPayload = {
     partnerUserRef: 'user-1',
@@ -92,4 +98,43 @@ test('Coinbase onramp create requests carry app-owned idempotency keys', () => {
   assert.equal(buildOnrampIdempotencyKey('session', quotePayload, 'widget-quote'), quoteKey);
   assert.notEqual(buildOnrampIdempotencyKey('session', { ...quotePayload, partnerUserRef: 'user-2' }, 'widget-quote'), quoteKey);
   assert.notEqual(buildOnrampIdempotencyKey('session', { ...quotePayload, isQuote: false }, 'widget-quote'), quoteKey);
+});
+
+test('Coinbase proxy callers use declared operations instead of raw Coinbase URLs', () => {
+  const files = [
+    'utils/createGuestCheckoutOrder.ts',
+    'utils/createOnrampSession.ts',
+    'utils/createOfframpSession.ts',
+    'utils/fetchBuyConfig.ts',
+    'utils/fetchBuyOptions.ts',
+    'utils/fetchBuyQuote.ts',
+    'utils/fetchOfframpTransaction.ts',
+    'utils/fetchTransactionHistory.ts',
+    'utils/fetchUserLimits.ts',
+  ];
+  const combined = files.map(source).join('\n');
+
+  for (const operation of [
+    'buy_config',
+    'buy_options',
+    'buy_transactions',
+    'sell_transactions',
+    'onramp_session',
+    'onramp_order',
+    'onramp_limits',
+    'offramp_token',
+  ]) {
+    assert.match(combined, new RegExp(`operation: '${operation}'`));
+  }
+
+  assert.doesNotMatch(combined, /url: ['"`]https:\/\/api\./);
+  assert.doesNotMatch(combined, /method: ['"`](GET|POST)['"`]/);
+});
+
+test('balance failure logs use Coinbase error summaries instead of raw bodies', () => {
+  const appServer = source('server/src/app.ts');
+
+  assert.match(appServer, /summarizeCoinbaseErrorResponse/);
+  assert.doesNotMatch(appServer, /CDP API error response/);
+  assert.doesNotMatch(appServer, /CDP API error details:', errorData/);
 });

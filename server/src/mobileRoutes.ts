@@ -93,14 +93,12 @@ export function createMobileRoutes(input?: {
   function platformAuth(req: Request): PlatformRequestAuth {
     return {
       authorization: req.header('Authorization'),
-      cookie: req.header('Cookie'),
     };
   }
 
   async function readPlatformProjection(req: Request, res: Response) {
     const projectionResult = await platformProjectionClient.fetchProjection({
       authorization: req.header('Authorization'),
-      cookie: req.header('Cookie'),
     });
 
     if (projectionResult.kind === 'ok') {

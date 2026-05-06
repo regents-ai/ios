@@ -192,7 +192,6 @@ export type PlatformProjectionClientResult =
 export type PlatformProjectionClient = {
   fetchProjection(input: {
     authorization?: string | undefined;
-    cookie?: string | undefined;
   }): Promise<PlatformProjectionClientResult>;
 };
 
@@ -205,7 +204,6 @@ export type PlatformRwrClientResult<T> =
 
 export type PlatformRequestAuth = {
   authorization?: string | undefined;
-  cookie?: string | undefined;
 };
 
 export type PlatformRwrClient = {
@@ -247,9 +245,6 @@ function platformHeaders(input: PlatformRequestAuth, contentType = false) {
   }
   if (input.authorization) {
     headers.Authorization = input.authorization;
-  }
-  if (input.cookie) {
-    headers.Cookie = input.cookie;
   }
 
   return headers;

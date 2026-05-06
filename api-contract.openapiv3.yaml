@@ -1626,14 +1626,30 @@ components:
           type: string
     CoinbaseProxyRequest:
       type: object
-      required: [url]
+      additionalProperties: false
+      required: [operation]
       properties:
-        url:
+        operation:
           type: string
-          format: uri
-        method:
+          enum:
+            - buy_config
+            - buy_options
+            - buy_transactions
+            - sell_transactions
+            - onramp_session
+            - onramp_order
+            - onramp_limits
+            - offramp_token
+        partnerUserRef:
           type: string
-          enum: [GET, POST]
+          description: Required for operations scoped to the signed-in mobile user.
+        params:
+          type: object
+          additionalProperties:
+            oneOf:
+              - type: string
+              - type: number
+              - type: boolean
         body:
           type: object
           additionalProperties: true

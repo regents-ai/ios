@@ -193,7 +193,8 @@ export function useOnrampCheckout({
             subdivision,
             redirectUrl: `${coinbaseWidgetReturnUrl}?partnerUserRef=${encodeURIComponent(partnerUserRef)}`,
           },
-          formData.agreementAcceptedAt
+          formData.agreementAcceptedAt,
+          partnerUserRef
         );
 
         let url = response?.session?.onrampUrl;

@@ -126,7 +126,8 @@ async function requestMobileRoute(
     url: string;
     headers?: Record<string, string>;
     body?: unknown;
-  }
+  },
+  clients?: Parameters<typeof createMobileRoutes>[0]
 ) {
   const router = createMobileRoutes({
     platformProjectionClient: {
@@ -134,6 +135,7 @@ async function requestMobileRoute(
         return { kind: 'ok' as const, projection };
       },
     },
+    ...clients,
   }) as unknown as {
     handle(request: Request, response: Response, next: (error?: unknown) => void): void;
   };
@@ -516,6 +518,67 @@ test('mobile Regent detail includes Platform-owned state', () => {
   assert.equal(body.platformState.formationStatus, 'ready');
   assert.equal(Array.isArray(body.platformState.blockers), true);
   assert.equal(Array.isArray(body.returnRequests), true);
+});
+
+test('mobile Platform projection forwards bearer auth without cookies', async () => {
+  const forwarded: unknown[] = [];
+
+  await requestMobileRoute(
+    platformProjection,
+    {
+      method: 'GET',
+      url: '/mobile/regents',
+      headers: {
+        Authorization: 'Bearer mobile-token',
+        Cookie: 'platform_session=secret',
+      },
+    },
+    {
+      platformProjectionClient: {
+        async fetchProjection(input) {
+          forwarded.push(input);
+          return { kind: 'ok' as const, projection: platformProjection };
+        },
+      },
+    }
+  );
+
+  assert.deepEqual(forwarded, [
+    {
+      authorization: 'Bearer mobile-token',
+    },
+  ]);
+});
+
+test('mobile Platform terminal routes forward bearer auth without cookies', async () => {
+  const forwarded: unknown[] = [];
+  const result = await requestMobileRoute(
+    platformProjection,
+    {
+      method: 'GET',
+      url: '/mobile/terminal/sessions',
+      headers: {
+        Authorization: 'Bearer mobile-token',
+        Cookie: 'platform_session=secret',
+      },
+    },
+    {
+      platformRwrClient: {
+        ...platformRwrClient,
+        async fetchAccount(auth) {
+          forwarded.push(auth);
+          return platformRwrClient.fetchAccount(auth);
+        },
+      },
+    }
+  );
+
+  assert.equal(result.status, 200);
+  assert.deepEqual(forwarded, [
+    {
+      authorization: 'Bearer mobile-token',
+    },
+  ]);
 });
 
 test('mobile Regent state can be sourced from the Platform projection contract', () => {

@@ -1,5 +1,4 @@
-import { getBaseUrl } from "../constants/BASE_URL";
-import { authenticatedFetch } from "./authenticatedFetch";
+import { sendOnrampProxyRequest } from './network/onrampProxy';
 
 // Maps profile balance network name → Coinbase blockchain identifier
 function toBlockchainId(network: string): string {
@@ -45,24 +44,14 @@ export async function createOfframpSession({
   });
 
   // 1. Fetch a single-use session token from the backend proxy
-  const tokenRes = await authenticatedFetch(`${getBaseUrl()}/server/api`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      url: 'https://api.developer.coinbase.com/onramp/v1/token',
-      method: 'POST',
-      body: {
-        addresses: [{ address, blockchains: [blockchain] }],
-      },
-    }),
+  const tokenData = await sendOnrampProxyRequest<{ token?: string }>({
+    context: 'createOfframpSession',
+    operation: 'offramp_token',
+    partnerUserRef: userId,
+    body: {
+      addresses: [{ address, blockchains: [blockchain] }],
+    },
   });
-
-  if (!tokenRes.ok) {
-    const err = await tokenRes.json().catch(() => null);
-    throw new Error(err?.message || `Failed to create offramp session: ${tokenRes.status}`);
-  }
-
-  const tokenData = await tokenRes.json();
   const token = tokenData.token;
   console.log('✅ [OFFRAMP] Session token response:', {
     hasToken: !!token,

@@ -10,6 +10,11 @@ import { resolveClientIp } from './ip.js';
 import { isReleaseRuntime } from './runtime.js';
 import { createMobileRoutes } from './mobileRoutes.js';
 import {
+  createApnsProviderFromEnv,
+  sendPushNotification,
+  type PushTokenRecord,
+} from './pushDelivery.js';
+import {
   hasProcessedOnrampWebhookEvent,
   markOnrampWebhookEventProcessed,
   parseCanonicalOnrampWebhook,
@@ -19,19 +24,21 @@ import {
   canAccessPushTokenDebug,
 } from './pushTokens.js';
 import {
+  buildCoinbaseProxyRequest,
+  COINBASE_PROXY_OPERATIONS,
   requireWebhookSecret,
   requiresCoinbaseProxyIdempotency,
+  summarizeCoinbaseErrorResponse,
   summarizeWebhookLog,
   summarizeProxyRequestLog,
   summarizeProxyResponseLog,
-  validateProxyTarget,
+  validateBuiltProxyTarget,
   CoinbaseConfigurationError,
   requireCoinbaseApiCredentials,
+  type BuiltCoinbaseProxyRequest,
 } from './security.js';
 import { validateAccessToken } from './validateToken.js';
 import { verifyWebhookSignature } from './verifyWebhookSignature.js';
-
-type PushTokenRecord = { token: string; platform: string; tokenType: 'native' | 'expo'; updatedAt: number };
 
 // Redis storage setup - use external Redis for production, in-memory for local dev
 let database: any = null;
@@ -47,36 +54,8 @@ if (useDatabase) {
   console.log('ℹ️ Using in-memory storage for push tokens (local dev)');
 }
 
-// APNs setup for direct iOS push notifications
-let apnProvider: any = null;
-let useAPNs = false;
-if (process.env.APNS_KEY_ID && process.env.APNS_TEAM_ID && process.env.APNS_KEY) {
-  try {
-    const apn = await import('@parse/node-apn');
-
-    // Handle both actual newlines and escaped \n in env var
-    // If the env var contains literal "\n" strings, replace them with actual newlines
-    const apnsKey = process.env.APNS_KEY!.replace(/\\n/g, '\n');
-
-    apnProvider = new apn.Provider({
-      token: {
-        key: apnsKey,
-        keyId: process.env.APNS_KEY_ID!,
-        teamId: process.env.APNS_TEAM_ID!
-      },
-      production: true
-    });
-    useAPNs = true;
-    console.log('✅ Using direct APNs for push notifications (production)');
-  } catch (error) {
-    console.error('❌ Failed to initialize APNs provider:', error instanceof Error ? error.message : error);
-    console.warn('⚠️ Falling back to Expo push service');
-    console.warn('💡 Check APNS_KEY format: must include -----BEGIN PRIVATE KEY----- header/footer');
-    console.warn('💡 In Vercel, paste the key with actual newlines OR use \\n for line breaks');
-  }
-} else {
-  console.log('ℹ️ Using Expo push service for notifications (dev)');
-}
+// APNs setup for direct iOS push notifications. Native iOS tokens never fall back to Expo.
+const apnProvider = await createApnsProviderFromEnv(process.env, isReleaseRuntime());
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
@@ -214,20 +193,8 @@ app.post('/auth/cdp-token', async (req, res) => {
 app.use(createMobileRoutes());
 
 /**
- * Generic proxy server for Coinbase API calls:
- * - Handles JWT authentication and forwards requests to avoid CORS issues
- * - JWT generation requires server-side CDP secrets
- * - Centralizes authentication logic
- *
- * Usage: POST /server/api with { url, method, body }
- * Usage Pattern: Frontend → POST /server/api → Coinbase API → Response
- *
- * Automatically handles:
- * - JWT generation for api.developer.coinbase.com
- * - Method switching (GET for options, POST for orders)
- * - Error forwarding with proper status codes
- *
- * Note: Authentication handled by global middleware above
+ * Coinbase proxy for the mobile wallet operations declared in api-contract.openapiv3.yaml.
+ * The app sends an operation name; the backend owns the Coinbase host, path, method, and signing.
  */
 
 app.post("/server/api", async (req, res) => {
@@ -235,71 +202,74 @@ app.post("/server/api", async (req, res) => {
   try {
     const clientIp = await resolveClientIp(req);
 
-    // Validate the request structure
     const requestSchema = z.object({
-      url: z.string(), // Must be a valid URL
-      method: z.enum(['GET', 'POST']).optional(),
-      body: z.any().optional(), // Any JSON body
+      operation: z.enum(COINBASE_PROXY_OPERATIONS),
+      partnerUserRef: z.string().min(1).optional(),
+      params: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
+      body: z.record(z.string(), z.unknown()).optional(),
       idempotencyKey: z.string().min(1).optional(),
-    });
+    }).strict();
 
     const parsed = requestSchema.safeParse(req.body);
     if (!parsed.success) {
       return sendError(res, 400, 'BadRequest', 'A valid Coinbase proxy request is required.');
     }
 
-    const { url: targetUrl, method: method, body: targetBody, idempotencyKey } = parsed.data;
-    let authToken = null;
-    const validatedTargetUrl = validateProxyTarget({
-      targetUrl,
-      currentUserId: req.userId,
-    });
+    const { idempotencyKey, operation } = parsed.data;
+    let proxyRequest: BuiltCoinbaseProxyRequest;
+    let validatedTargetUrl: URL;
+    try {
+      proxyRequest = buildCoinbaseProxyRequest({
+        operation,
+        body: parsed.data.body,
+        clientIp,
+        currentUserId: req.userId,
+        params: parsed.data.params,
+        partnerUserRef: parsed.data.partnerUserRef,
+      });
+      validatedTargetUrl = validateBuiltProxyTarget(proxyRequest);
+    } catch (error) {
+      return sendError(
+        res,
+        400,
+        'BadRequest',
+        error instanceof Error ? error.message : 'A valid Coinbase proxy request is required.'
+      );
+    }
 
-    if (requiresCoinbaseProxyIdempotency(validatedTargetUrl.toString(), method) && !idempotencyKey) {
+    if (requiresCoinbaseProxyIdempotency(operation) && !idempotencyKey) {
       return sendError(res, 400, 'BadRequest', 'An idempotency key is required for this Coinbase request.');
     }
 
-    console.log('📤 [SERVER] Outgoing request:', summarizeProxyRequestLog(targetUrl, method, targetBody));
+    console.log('📤 [SERVER] Outgoing request:', summarizeProxyRequestLog(proxyRequest));
 
-    const isOnrampRequest = validatedTargetUrl.pathname.includes('/onramp/');
-
-    // Add clientIp to onramp requests
-    let finalBody = isOnrampRequest ? { ...targetBody, clientIp } : targetBody;
-    let finalUrl = validatedTargetUrl.toString();
-    
-    // Auto-generate JWT for Coinbase API calls only
-    // Use finalUrl for JWT generation, but DON'T include query params in JWT signature
-    // Coinbase API expects JWT to only sign the pathname, not query string
-    const finalUrlObj = new URL(finalUrl);
-    if (finalUrlObj.hostname === "api.developer.coinbase.com" || finalUrlObj.hostname === "api.cdp.coinbase.com") {
-      const coinbaseCredentials = requireCoinbaseApiCredentials(process.env);
-      authToken = await generateJwt({
-        apiKeyId: coinbaseCredentials.apiKeyId,
-        apiKeySecret: coinbaseCredentials.apiKeySecret,
-        requestMethod: method || 'POST',
-        requestHost: finalUrlObj.hostname,
-        requestPath: finalUrlObj.pathname, // DO NOT include .search (query params) - Coinbase rejects it
-        expiresIn: 120
-      });
-    }
+    const coinbaseCredentials = requireCoinbaseApiCredentials(process.env);
+    const authToken = await generateJwt({
+      apiKeyId: coinbaseCredentials.apiKeyId,
+      apiKeySecret: coinbaseCredentials.apiKeySecret,
+      requestMethod: proxyRequest.method,
+      requestHost: validatedTargetUrl.hostname,
+      requestPath: validatedTargetUrl.pathname,
+      expiresIn: 120
+    });
 
     // Build headers
     const headers = {
-      ...((method || 'POST') === 'POST' && { "Content-Type": "application/json" }),
-      ...(authToken && { "Authorization": `Bearer ${authToken}` }),
-      ...((method || 'POST') === 'POST' && idempotencyKey && { "Idempotency-Key": idempotencyKey }),
+      ...(proxyRequest.method === 'POST' && { "Content-Type": "application/json" }),
+      "Authorization": `Bearer ${authToken}`,
+      ...(proxyRequest.method === 'POST' && idempotencyKey && { "Idempotency-Key": idempotencyKey }),
     };
 
     console.log('📌 [SERVER] Fetching final URL:', {
-      host: finalUrlObj.host,
-      path: finalUrlObj.pathname,
-      method: method || 'POST',
+      host: validatedTargetUrl.host,
+      path: validatedTargetUrl.pathname,
+      method: proxyRequest.method,
     });
     // Forward request with authentication
-    const response = await fetch(finalUrl, {
-      method: method || 'POST',
+    const response = await fetch(validatedTargetUrl.toString(), {
+      method: proxyRequest.method,
       headers: headers,
-      ...((method || 'POST') === 'POST' && finalBody && { body: JSON.stringify(finalBody) })
+      ...(proxyRequest.method === 'POST' && proxyRequest.body && { body: JSON.stringify(proxyRequest.body) })
     });
 
     // Try to parse as JSON, but handle text responses gracefully
@@ -328,7 +298,7 @@ app.post("/server/api", async (req, res) => {
           res,
           response.ok ? 502 : response.status,
           'UpstreamApiError',
-          textResponse || 'Coinbase returned an unreadable response.'
+          'Coinbase returned an unreadable response.'
         );
       }
     } catch (parseError) {
@@ -410,16 +380,12 @@ app.get('/balances/evm', async (req, res) => {
 
       if (!balancesResponse.ok) {
         const errorText = await balancesResponse.text();
-        console.error('❌ [BALANCES] CDP API error response:', errorText);
-
-        let errorData;
-        try {
-          errorData = JSON.parse(errorText);
-        } catch {
-          errorData = { message: errorText };
-        }
-
-        console.error('❌ [BALANCES] CDP API error details:', errorData);
+        console.error('❌ [BALANCES] CDP API error details:', summarizeCoinbaseErrorResponse({
+          bodyText: errorText,
+          contentType: balancesResponse.headers.get('content-type'),
+          status: balancesResponse.status,
+          statusText: balancesResponse.statusText,
+        }));
         return sendError(res, balancesResponse.status, 'CoinbaseBalanceUnavailable', 'Unable to refresh wallet balances right now.');
       }
 
@@ -473,16 +439,12 @@ app.get('/balances/evm', async (req, res) => {
 
     if (!balancesResponse.ok) {
       const errorText = await balancesResponse.text();
-      console.error('❌ [BALANCES] CDP API error response:', errorText);
-
-      let errorData;
-      try {
-        errorData = JSON.parse(errorText);
-      } catch {
-        errorData = { message: errorText };
-      }
-
-      console.error('❌ [BALANCES] CDP API error details:', errorData);
+      console.error('❌ [BALANCES] CDP API error details:', summarizeCoinbaseErrorResponse({
+        bodyText: errorText,
+        contentType: balancesResponse.headers.get('content-type'),
+        status: balancesResponse.status,
+        statusText: balancesResponse.statusText,
+      }));
       return sendError(res, balancesResponse.status, 'CoinbaseBalanceUnavailable', 'Unable to refresh wallet balances right now.');
     }
 
@@ -612,16 +574,12 @@ app.get('/balances/solana', async (req, res) => {
 
     if (!balancesResponse.ok) {
       const errorText = await balancesResponse.text();
-      console.error('❌ [BALANCES] CDP API error response:', errorText);
-
-      let errorData;
-      try {
-        errorData = JSON.parse(errorText);
-      } catch {
-        errorData = { message: errorText };
-      }
-
-      console.error('❌ [BALANCES] CDP API error details:', errorData);
+      console.error('❌ [BALANCES] CDP API error details:', summarizeCoinbaseErrorResponse({
+        bodyText: errorText,
+        contentType: balancesResponse.headers.get('content-type'),
+        status: balancesResponse.status,
+        statusText: balancesResponse.statusText,
+      }));
       return sendError(res, balancesResponse.status, 'CoinbaseBalanceUnavailable', 'Unable to refresh wallet balances right now.');
     }
 
@@ -726,60 +684,6 @@ async function writePushTokenForUser(userId: string, tokenData: PushTokenRecord)
   pushTokenStore.set(userId, tokenData);
   console.log('✅ [PUSH] Token stored in memory for user:', userId);
   console.log('📊 [PUSH] Total tokens in store:', pushTokenStore.size);
-}
-
-async function sendPushNotification(
-  tokenData: PushTokenRecord,
-  input: { title: string; body: string; data: Record<string, string | undefined> }
-) {
-  if (tokenData.tokenType === 'native' && useAPNs && apnProvider && tokenData.platform === 'ios') {
-    console.log('📤 [WEBHOOK] Sending via direct APNs', {
-      platform: tokenData.platform,
-      tokenType: tokenData.tokenType,
-      tokenLength: tokenData.token.length,
-    });
-
-    const apn = await import('@parse/node-apn');
-    const notification = new apn.Notification({
-      alert: { title: input.title, body: input.body },
-      topic: 'com.regentslabs.mobile',
-      sound: 'default',
-      payload: input.data,
-    });
-
-    const result = await apnProvider.send(notification, tokenData.token);
-    console.log('📊 [WEBHOOK] APNs result:', {
-      sent: result.sent?.length || 0,
-      failed: result.failed?.length || 0,
-    });
-
-    if (result.failed && result.failed.length > 0) {
-      throw new Error('APNs rejected the notification.');
-    }
-    return;
-  }
-
-  console.log('📤 [WEBHOOK] Sending via Expo push service');
-  const pushResponse = await fetch('https://exp.host/--/api/v2/push/send', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      to: tokenData.token,
-      sound: 'default',
-      title: input.title,
-      body: input.body,
-      data: input.data,
-    }),
-  });
-
-  const pushResult = await pushResponse.json().catch(() => null) as { data?: { status?: string; message?: string } } | null;
-  if (!pushResponse.ok || pushResult?.data?.status === 'error') {
-    throw new Error(pushResult?.data?.message || 'Push notification service rejected the notification.');
-  }
-
-  console.log('✅ [WEBHOOK] Push notification sent');
 }
 
 /**
@@ -932,6 +836,8 @@ app.post('/webhooks/onramp', webhookRateLimiter, async (req, res) => {
             type: 'onramp_complete',
             partnerUserRef,
           },
+        }, {
+          apnProvider,
         });
         break;
       }
@@ -954,6 +860,8 @@ app.post('/webhooks/onramp', webhookRateLimiter, async (req, res) => {
             type: 'onramp_failed',
             partnerUserRef,
           },
+        }, {
+          apnProvider,
         });
         break;
       }

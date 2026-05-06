@@ -17,8 +17,7 @@ export async function fetchUserLimits(
 ): Promise<UserLimitsResponse> {
   const responseJson = await sendOnrampProxyRequest<UserLimitsResponse>({
     context: 'fetchUserLimits',
-    method: 'POST',
-    url: 'https://api.cdp.coinbase.com/platform/v2/onramp/limits',
+    operation: 'onramp_limits',
     authToken: accessToken,
     body: {
       paymentMethodType: 'GUEST_CHECKOUT_APPLE_PAY',
