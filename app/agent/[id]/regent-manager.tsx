@@ -191,14 +191,14 @@ export default function AgentRegentManagerScreen() {
             <View style={styles.briefingTile}>
               <Text style={styles.briefingLabel}>Focus now</Text>
               <LiveValueFlash value={`briefing-focus-${regentManagerSummary.focusTitle}`}>
-                <Text style={styles.briefingTitle}>{regentManagerSummary.focusTitle}</Text>
+                <Text style={styles.briefingTitle} numberOfLines={2}>{regentManagerSummary.focusTitle}</Text>
               </LiveValueFlash>
               <Text style={styles.briefingMeta}>Immediate read</Text>
             </View>
             <View style={styles.briefingTile}>
               <Text style={styles.briefingLabel}>Latest shift</Text>
               <LiveValueFlash value={`briefing-latest-${regentManagerSummary.latestEvent?.title || 'No recent change yet'}`}>
-                <Text style={styles.briefingTitle}>{regentManagerSummary.latestEvent?.title || 'No recent change yet'}</Text>
+                <Text style={styles.briefingTitle} numberOfLines={2}>{regentManagerSummary.latestEvent?.title || 'No recent change yet'}</Text>
               </LiveValueFlash>
               <Text style={styles.briefingMeta}>
                 {regentManagerSummary.latestEvent ? formatRelativeTime(regentManagerSummary.latestEvent.at) : 'Waiting for the next update'}
@@ -207,7 +207,7 @@ export default function AgentRegentManagerScreen() {
             <View style={styles.briefingTile}>
               <Text style={styles.briefingLabel}>Top goal</Text>
               <LiveValueFlash value={`briefing-goal-${regentManagerSummary.topGoal?.title || 'No goal listed yet'}`}>
-                <Text style={styles.briefingTitle}>{regentManagerSummary.topGoal?.title || 'No goal listed yet'}</Text>
+                <Text style={styles.briefingTitle} numberOfLines={2}>{regentManagerSummary.topGoal?.title || 'No goal listed yet'}</Text>
               </LiveValueFlash>
               <Text style={styles.briefingMeta}>{regentManagerSummary.topGoal?.status || 'No status yet'}</Text>
             </View>
@@ -224,7 +224,7 @@ export default function AgentRegentManagerScreen() {
         <View style={styles.focusCard}>
           <Text style={styles.focusEyebrow}>What to move next</Text>
           <Text style={styles.focusTitle}>{regentManagerSummary.focusTitle}</Text>
-          <Text style={styles.focusBody}>{regentManagerSummary.focusBody}</Text>
+          <Text style={styles.focusBody} numberOfLines={4}>{regentManagerSummary.focusBody}</Text>
         </View>
 
         <View style={styles.card}>
@@ -234,7 +234,7 @@ export default function AgentRegentManagerScreen() {
             {regentManagerSummary.topGoal ? (
               <View style={styles.listCard}>
                 <View style={styles.listHeader}>
-                  <Text style={styles.listTitle}>{regentManagerSummary.topGoal.title}</Text>
+                  <Text style={styles.listTitle} numberOfLines={2}>{regentManagerSummary.topGoal.title}</Text>
                   <StatusPill
                     label={regentManagerSummary.topGoal.status}
                     color={statusTone(regentManagerSummary.topGoal.status).color}
@@ -243,7 +243,7 @@ export default function AgentRegentManagerScreen() {
                     showDot={isMovingStatus(regentManagerSummary.topGoal.status)}
                   />
                 </View>
-                {regentManagerSummary.topGoal.note ? <Text style={styles.listBody}>{regentManagerSummary.topGoal.note}</Text> : null}
+                {regentManagerSummary.topGoal.note ? <Text style={styles.listBody} numberOfLines={3}>{regentManagerSummary.topGoal.note}</Text> : null}
               </View>
             ) : null}
 
@@ -252,11 +252,11 @@ export default function AgentRegentManagerScreen() {
               return (
                 <View key={task.id} style={styles.listCard}>
                   <View style={styles.listHeader}>
-                    <Text style={styles.listTitle}>{task.title}</Text>
+                    <Text style={styles.listTitle} numberOfLines={2}>{task.title}</Text>
                     <StatusPill label={task.status} color={tone.color} backgroundColor={tone.backgroundColor} compact showDot={isMovingStatus(task.status)} />
                   </View>
                   <Text style={styles.metaText}>{task.owner ? `Owned by ${task.owner}` : 'Owner not listed'}</Text>
-                  {task.note ? <Text style={styles.listBody}>{task.note}</Text> : null}
+                  {task.note ? <Text style={styles.listBody} numberOfLines={3}>{task.note}</Text> : null}
                 </View>
               );
             })}
@@ -269,9 +269,9 @@ export default function AgentRegentManagerScreen() {
           <View style={styles.list}>
             {regentManager.recentEvents.slice(0, 4).map((event) => (
               <View key={event.id} style={styles.listCard}>
-                <Text style={styles.listTitle}>{event.title}</Text>
+                <Text style={styles.listTitle} numberOfLines={2}>{event.title}</Text>
                 <Text style={styles.metaText}>{new Date(event.at).toLocaleString()}</Text>
-                <Text style={styles.listBody}>{event.detail}</Text>
+                <Text style={styles.listBody} numberOfLines={3}>{event.detail}</Text>
               </View>
             ))}
           </View>

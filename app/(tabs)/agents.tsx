@@ -359,7 +359,7 @@ export default function AgentsTab() {
                     </View>
                     <View style={styles.commandCopy}>
                       <Text style={styles.commandTitle}>{item.title}</Text>
-                      <Text style={styles.commandBody}>{item.body}</Text>
+                      <Text style={styles.commandBody} numberOfLines={2}>{item.body}</Text>
                       <Text style={styles.commandMeta}>{item.meta}</Text>
                     </View>
                     <Ionicons name="chevron-forward" size={18} color={TEXT_SECONDARY} />
@@ -379,7 +379,7 @@ export default function AgentsTab() {
                 <View style={styles.focusCopy}>
                   <Text style={styles.focusEyebrow}>Start here</Text>
                   <Text style={styles.focusTitle}>{leadRegent.name}</Text>
-                  <Text style={styles.focusBody}>{regentTone(leadRegent).summary}</Text>
+                  <Text style={styles.focusBody} numberOfLines={3}>{regentTone(leadRegent).summary}</Text>
                 </View>
                 <StatusPill
                   label={regentTone(leadRegent).label}
@@ -434,7 +434,7 @@ export default function AgentsTab() {
                       <View style={styles.regentRowTop}>
                         <View style={styles.regentRowCopy}>
                           <Text style={styles.regentName}>{agent.name}</Text>
-                          <Text style={styles.regentSummary}>{tone.summary}</Text>
+                          <Text style={styles.regentSummary} numberOfLines={2}>{tone.summary}</Text>
                         </View>
                         <StatusPill label={tone.label} color={tone.accent} backgroundColor={tone.wash} showDot={shouldShowRegentDot(agent)} />
                       </View>
@@ -462,7 +462,7 @@ export default function AgentsTab() {
               >
                 <Ionicons name="chatbubble-ellipses-outline" size={18} color={BLUE} />
                 <Text style={styles.quickTitle}>Talk</Text>
-                <Text style={styles.quickBody}>Check what Hermes changed most recently.</Text>
+                <Text style={styles.quickBody} numberOfLines={2}>Check what Hermes changed most recently.</Text>
               </RegentPressable>
 
               <RegentPressable
@@ -472,7 +472,7 @@ export default function AgentsTab() {
               >
                 <Ionicons name="wallet-outline" size={18} color={BLUE} />
                 <Text style={styles.quickTitle}>Wallet</Text>
-                <Text style={styles.quickBody}>Fund a Regent or move money back when the work is done.</Text>
+                <Text style={styles.quickBody} numberOfLines={2}>Fund a Regent or move money back when the work is done.</Text>
               </RegentPressable>
 
               <RegentPressable
@@ -482,7 +482,7 @@ export default function AgentsTab() {
               >
                 <Ionicons name="trending-up-outline" size={18} color={BLUE} />
                 <Text style={styles.quickTitle}>Buy</Text>
-                <Text style={styles.quickBody}>Open Autolaunch when a story is ready for outside support.</Text>
+                <Text style={styles.quickBody} numberOfLines={2}>Open Autolaunch when a story is ready for outside support.</Text>
               </RegentPressable>
             </View>
           </View>
