@@ -121,6 +121,17 @@ function rosterReadyCount(regentManager: RegentManagerDetail | null) {
   }).length;
 }
 
+type NextAction = {
+  eyebrow: string;
+  title: string;
+  body: string;
+  cta: string;
+  onPress?: () => void;
+  disabled?: boolean;
+  accent: string;
+  wash: string;
+};
+
 export default function AgentDetailScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string }>();
@@ -130,7 +141,6 @@ export default function AgentDetailScreen() {
   const [regentManager, setRegentManager] = useState<RegentManagerDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [openingTalk, setOpeningTalk] = useState(false);
   const [alertState, setAlertState] = useState<{
     visible: boolean;
     title: string;
@@ -188,35 +198,6 @@ export default function AgentDetailScreen() {
     router.push(routes.regentManager(agent.id));
   }, [agent, router]);
 
-  const openTalk = useCallback(async () => {
-    if (!agent) {
-      return;
-    }
-
-    try {
-      setOpeningTalk(true);
-      const existingSessions = await regentApi.listTerminalSessions();
-      const existingSession = existingSessions.find((session) => session.agentId === agent.id);
-      const session = existingSession
-        ? existingSession
-        : await regentApi.createTerminalSession({
-            agentId: agent.id,
-            agentName: agent.name,
-          });
-
-      router.push(routes.terminalSession(session.id));
-    } catch (error) {
-      setAlertState({
-        visible: true,
-        title: 'Talk is unavailable right now',
-        message: error instanceof Error ? error.message : 'Try again in a moment.',
-        type: 'error',
-      });
-    } finally {
-      setOpeningTalk(false);
-    }
-  }, [agent, router]);
-
   const runtime = runtimeTone(agent?.runtimeStatus || 'waiting');
   const topGoal = regentManager?.goals[0];
   const nextTask = regentManager?.activeTasks[0];
@@ -224,14 +205,14 @@ export default function AgentDetailScreen() {
   const latestReturn = agent?.returnRequests[0];
   const teamReady = rosterReadyCount(regentManager);
 
-  const nextAction = useMemo(() => {
+  const nextAction = useMemo<NextAction>(() => {
     if (!agent) {
       return {
         eyebrow: 'Next move',
         title: 'Open Regent Manager first',
         body: 'Regent Manager gives the quickest read on what changed and what needs attention.',
         cta: 'Open Regent Manager',
-        onPress: () => {},
+        disabled: true,
         accent: BLUE,
         wash: BLUE_WASH,
       };
@@ -240,8 +221,8 @@ export default function AgentDetailScreen() {
     if (agent.runtimeStatus === 'offline') {
       return {
         eyebrow: 'Next move',
-        title: 'Read Regent Manager before you reopen Talk',
-        body: 'Start with the company brief, then decide whether this operator needs follow-up or a reset.',
+        title: 'Start with Regent Manager',
+        body: 'Review the company brief, then decide whether this operator needs follow-up or a reset.',
         cta: 'Open Regent Manager',
         onPress: openRegentManager,
         accent: DANGER,
@@ -252,10 +233,10 @@ export default function AgentDetailScreen() {
     if (agent.runtimeStatus === 'waiting') {
       return {
         eyebrow: 'Next move',
-        title: 'A decision is waiting in Talk',
-        body: 'Hermes is paused until you clear the open review or respond to the latest request.',
-        cta: 'Open Talk',
-        onPress: openTalk,
+        title: 'Hermes Talk is coming soon',
+        body: 'Messages and review cards will return here soon. Regent Manager is live today.',
+        cta: 'Coming soon',
+        disabled: true,
         accent: AMBER,
         wash: AMBER_WASH,
       };
@@ -263,14 +244,14 @@ export default function AgentDetailScreen() {
 
     return {
       eyebrow: 'Next move',
-      title: 'Talk is the fastest way back in',
-      body: 'Jump into the conversation to see what Hermes finished, what changed, and what comes next.',
-      cta: 'Open Talk',
-      onPress: openTalk,
+      title: 'Hermes Talk is coming soon',
+      body: 'Conversation history will return here soon. Regent Manager is live today.',
+      cta: 'Coming soon',
+      disabled: true,
       accent: SUCCESS,
       wash: GREEN_WASH,
     };
-  }, [agent, openRegentManager, openTalk]);
+  }, [agent, openRegentManager]);
 
   if (loading) {
     return (
@@ -326,10 +307,11 @@ export default function AgentDetailScreen() {
           <Text style={styles.heroMeta}>{agent.mission}</Text>
           <View style={styles.heroActions}>
             <RegentPressable
-              style={styles.primaryButton}
-              onPress={openTalk}
+              disabled
+              accessibilityState={{ disabled: true }}
+              style={[styles.primaryButton, styles.primaryButtonDisabled]}
             >
-              <Text style={styles.primaryButtonText}>{openingTalk ? 'Opening…' : 'Open Talk'}</Text>
+              <Text style={styles.primaryButtonText}>Talk coming soon</Text>
             </RegentPressable>
             <RegentPressable
               style={styles.secondaryButton}
@@ -345,7 +327,13 @@ export default function AgentDetailScreen() {
           <Text style={styles.priorityTitle}>{nextAction.title}</Text>
           <Text style={styles.priorityBody}>{nextAction.body}</Text>
           <RegentPressable
-            style={[styles.priorityButton, { backgroundColor: nextAction.accent }]}
+            disabled={nextAction.disabled}
+            accessibilityState={{ disabled: nextAction.disabled }}
+            style={[
+              styles.priorityButton,
+              { backgroundColor: nextAction.accent },
+              nextAction.disabled && styles.priorityButtonDisabled,
+            ]}
             onPress={nextAction.onPress}
           >
             <Text style={styles.priorityButtonText}>{nextAction.cta}</Text>
@@ -508,7 +496,7 @@ export default function AgentDetailScreen() {
 
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Recent movement</Text>
-          <Text style={styles.sectionHint}>The latest operator updates across Talk, tasks, and money movement.</Text>
+          <Text style={styles.sectionHint}>The latest operator updates across tasks and money movement.</Text>
           <View style={styles.timeline}>
             {agent.recentActivity.map((activity) => (
               <View key={activity.id} style={styles.timelineRow}>
@@ -653,6 +641,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: FONTS.body,
   },
+  primaryButtonDisabled: {
+    backgroundColor: BLUE,
+    opacity: 0.72,
+  },
   secondaryButton: {
     minWidth: 120,
     backgroundColor: WHITE,
@@ -695,6 +687,9 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingHorizontal: 16,
     paddingVertical: 12,
+  },
+  priorityButtonDisabled: {
+    opacity: 0.72,
   },
   priorityButtonText: {
     color: WHITE,

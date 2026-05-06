@@ -62,9 +62,9 @@ export default function AutolaunchTab() {
           <View style={styles.featureCard}>
             <Ionicons name="chatbubble-ellipses-outline" size={18} color={BLUE} />
             <View style={styles.featureCopy}>
-              <Text style={styles.featureTitle}>Talk first, buy second</Text>
+              <Text style={styles.featureTitle}>Regent Manager first</Text>
               <Text style={styles.featureBody}>
-                Use Talk and Regent Manager to understand what a Regents team is building before you buy, then come back to track what you hold.
+                Use Regent Manager to understand what a Regents team is building before you buy, then come back to track what you hold.
               </Text>
             </View>
           </View>

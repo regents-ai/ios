@@ -25,17 +25,27 @@ test('mobile app and backend do not use the old preview route family', () => {
   assert.equal(result.stdout, '');
 });
 
-test('mobile app Regent surfaces use the typed Regent API client', () => {
-  const files = [
+test('mobile Talk surfaces are visible without opening Hermes sessions', () => {
+  const appFiles = [
     '../app/(tabs)/agents.tsx',
     '../app/(tabs)/terminal.tsx',
     '../app/agent/[id].tsx',
-    '../app/agent/[id]/regent-manager.tsx',
     '../app/terminal/[id].tsx',
   ];
+  const helperFiles = [
+    '../utils/regentApi/client.ts',
+    '../utils/navigation/routes.ts',
+  ];
+  const talkMethodPattern =
+    /regentApi\.(listTerminalSessions|createTerminalSession|getTerminalSession|getTerminalEvents|sendTerminalMessage|resolveTerminalApproval)|routes\.terminalSession\(|router\.push\(['"]\/terminal['"]\)/;
 
-  for (const file of files) {
+  assert.match(readFileSync(resolve(testDir, '../app/(tabs)/terminal.tsx'), 'utf8'), /TalkComingSoon/);
+  assert.match(readFileSync(resolve(testDir, '../app/terminal/[id].tsx'), 'utf8'), /TalkComingSoon/);
+  assert.match(readFileSync(resolve(testDir, '../app/(tabs)/agents.tsx'), 'utf8'), /Hermes Talk is coming soon/);
+  assert.match(readFileSync(resolve(testDir, '../app/agent/[id].tsx'), 'utf8'), /Talk coming soon/);
+
+  for (const file of [...appFiles, ...helperFiles]) {
     const contents = readFileSync(resolve(testDir, file), 'utf8');
-    assert.match(contents, /regentApi/, file);
+    assert.doesNotMatch(contents, talkMethodPattern, file);
   }
 });
