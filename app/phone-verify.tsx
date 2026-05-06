@@ -6,8 +6,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import { EaseView } from 'react-native-ease';
-import { AccessibilityInfo, ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { AccessibilityInfo, ActivityIndicator, KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { CoinbaseAlert } from '../components/ui/CoinbaseAlerts';
+import { RegentPressable } from '../components/ui/RegentPressable';
 import { PHONE_COUNTRIES } from '../constants/PhoneCountries';
 
 const { DARK_BG, CARD_BG, TEXT_PRIMARY, TEXT_SECONDARY, BORDER, BLUE, WHITE } = COLORS;
@@ -151,9 +152,9 @@ export default function PhoneVerifyScreen() {
         transition={buildEntryTransition(reduceMotion)}
         style={styles.header}
       >
-        <Pressable onPress={() => router.back()} style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}>
+        <RegentPressable pressStyle="icon" onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={26} color={TEXT_PRIMARY} />
-        </Pressable>
+        </RegentPressable>
       </EaseView>
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.content}>
@@ -188,14 +189,16 @@ export default function PhoneVerifyScreen() {
                 style={styles.fieldShell}
               >
                 <View style={styles.fieldRow}>
-                  <Pressable
-                    style={({ pressed }) => [styles.countryButton, pressed && styles.countryButtonPressed]}
+                  <RegentPressable
+                    haptic="selection"
+                    pressStyle="chip"
+                    style={styles.countryButton}
                     onPress={() => setCountryPickerVisible((current) => !current)}
                   >
                     <Text style={styles.countryFlag}>{selectedCountry.flag}</Text>
                     <Text style={styles.countryCode}>{selectedCountry.code}</Text>
                     <Ionicons name={countryPickerVisible ? 'chevron-up' : 'chevron-down'} size={18} color={TEXT_SECONDARY} />
-                  </Pressable>
+                  </RegentPressable>
 
                   <View style={styles.fieldDivider} />
 
@@ -222,9 +225,11 @@ export default function PhoneVerifyScreen() {
                     style={styles.countryList}
                   >
                     {PHONE_COUNTRIES.map((country) => (
-                      <Pressable
+                      <RegentPressable
                         key={country.code}
-                        style={({ pressed }) => [styles.countryRow, pressed && styles.countryRowPressed]}
+                        haptic="selection"
+                        pressStyle="card"
+                        style={styles.countryRow}
                         onPress={() => {
                           setSelectedCountry(country);
                           setCountryPickerVisible(false);
@@ -235,7 +240,7 @@ export default function PhoneVerifyScreen() {
                           <Text style={styles.countryRowName}>{country.name}</Text>
                           <Text style={styles.countryRowCode}>{country.code}</Text>
                         </View>
-                      </Pressable>
+                      </RegentPressable>
                     ))}
                   </EaseView>
                 ) : null}
@@ -258,17 +263,13 @@ export default function PhoneVerifyScreen() {
               transition={buildEntryTransition(reduceMotion, STAGGER_STEP * 5)}
               style={styles.buttonWrap}
             >
-              <Pressable
-                style={({ pressed }) => [
-                  styles.continueButton,
-                  (!isPhoneValid || sending) && styles.disabledButton,
-                  pressed && isPhoneValid && !sending && styles.buttonPressed,
-                ]}
+              <RegentPressable
+                style={[styles.continueButton, (!isPhoneValid || sending) && styles.disabledButton]}
                 onPress={startSms}
                 disabled={!isPhoneValid || sending}
               >
                 {sending ? <ActivityIndicator color={WHITE} /> : <Text style={styles.continueButtonText}>Continue</Text>}
-              </Pressable>
+              </RegentPressable>
             </EaseView>
           </View>
         </ScrollView>
@@ -304,9 +305,6 @@ const styles = StyleSheet.create({
     backgroundColor: CARD_BG,
     borderWidth: 1,
     borderColor: BORDER,
-  },
-  backButtonPressed: {
-    opacity: 0.6,
   },
   content: {
     flex: 1,
@@ -362,9 +360,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
   },
-  countryButtonPressed: {
-    opacity: 0.75,
-  },
   countryFlag: {
     fontSize: 28,
     lineHeight: 32,
@@ -409,9 +404,6 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     borderBottomWidth: 1,
     borderBottomColor: BORDER,
-  },
-  countryRowPressed: {
-    opacity: 0.8,
   },
   countryRowFlag: {
     fontSize: 24,
@@ -460,9 +452,5 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     opacity: 0.5,
-  },
-  buttonPressed: {
-    opacity: 0.92,
-    transform: [{ scale: 0.985 }],
   },
 });

@@ -1,13 +1,14 @@
 import { FailedTransactionCard } from '@/components/ui/FailedTransactionCard';
 import { getEaseTransition } from '@/components/motion/easePresets';
 import { useReducedMotion } from '@/components/motion/useReducedMotion';
+import { RegentPressable } from '@/components/ui/RegentPressable';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
 import { openSupportEmail, type GuestCheckoutDebugInfo } from '@/utils/supportEmail';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { EaseView } from 'react-native-ease';
 
 const { BLUE, DARK_BG, CARD_BG, CARD_ALT, BORDER, TEXT_PRIMARY, TEXT_SECONDARY, WHITE } = COLORS;
@@ -135,9 +136,9 @@ export default function SupportScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backButton}>
+        <RegentPressable pressStyle="icon" onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={TEXT_PRIMARY} />
-        </Pressable>
+        </RegentPressable>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -162,8 +163,10 @@ export default function SupportScreen() {
           <View style={styles.panel}>
             {helpOptions.map((option, index) => (
               <View key={option.label}>
-                <Pressable
-                  style={({ pressed }) => [styles.rowButton, pressed && styles.rowButtonPressed]}
+                <RegentPressable
+                  haptic="selection"
+                  pressStyle="card"
+                  style={styles.rowButton}
                   onPress={option.onPress}
                 >
                   <View style={styles.rowIcon}>
@@ -174,7 +177,7 @@ export default function SupportScreen() {
                     <Text style={styles.rowDetail}>{option.detail}</Text>
                   </View>
                   <Ionicons name="chevron-forward" size={20} color={TEXT_SECONDARY} />
-                </Pressable>
+                </RegentPressable>
                 {index < helpOptions.length - 1 ? <View style={styles.rowDivider} /> : null}
               </View>
             ))}
@@ -191,13 +194,15 @@ export default function SupportScreen() {
           <View style={styles.panel}>
             {commonQuestions.map((question, index) => (
               <View key={question.label}>
-                <Pressable
-                  style={({ pressed }) => [styles.questionRow, pressed && styles.rowButtonPressed]}
+                <RegentPressable
+                  haptic="selection"
+                  pressStyle="card"
+                  style={styles.questionRow}
                   onPress={question.onPress}
                 >
                   <Text style={styles.questionLabel}>{question.label}</Text>
                   <Ionicons name="chevron-forward" size={20} color={TEXT_SECONDARY} />
-                </Pressable>
+                </RegentPressable>
                 {index < commonQuestions.length - 1 ? <View style={styles.rowDivider} /> : null}
               </View>
             ))}
@@ -210,12 +215,12 @@ export default function SupportScreen() {
           transition={buildTimingTransition(reducedMotionEnabled, STAGGER_STEP * 3)}
           style={styles.buttonWrap}
         >
-          <Pressable
+          <RegentPressable
             style={styles.primaryButton}
             onPress={() => openSupportEmail(SUPPORT_ISSUES.general.debugInfo)}
           >
             <Text style={styles.primaryButtonText}>Email support</Text>
-          </Pressable>
+          </RegentPressable>
         </EaseView>
       </ScrollView>
 
@@ -317,9 +322,6 @@ const styles = StyleSheet.create({
     gap: 14,
     paddingHorizontal: 20,
     paddingVertical: 20,
-  },
-  rowButtonPressed: {
-    opacity: 0.82,
   },
   rowIcon: {
     width: 48,

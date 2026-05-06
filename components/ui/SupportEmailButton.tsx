@@ -6,8 +6,10 @@
 
 import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
 import { COLORS } from '../../constants/Colors';
+import { RegentPressable } from './RegentPressable';
+import { runRegentHaptic } from './haptics';
 import {
   GuestCheckoutDebugInfo,
   openSupportEmail,
@@ -37,17 +39,21 @@ export function SupportEmailButton({
     try {
       const success = await openSupportEmail(debugInfo);
       if (!success) {
+        runRegentHaptic('warning');
         Alert.alert(
-          'Unable to Open Email',
+          'Email is not available',
           `Please email ${SUPPORT_EMAIL} directly and include your transaction details.`,
           [{ text: 'OK' }]
         );
+      } else {
+        runRegentHaptic('success');
       }
     } catch (error) {
       console.error('Failed to open support email:', error);
+      runRegentHaptic('warning');
       Alert.alert(
-        'Error',
-        'Failed to open email client. Please try again.',
+        'Email is not available',
+        'Please try again in a moment.',
         [{ text: 'OK' }]
       );
     } finally {
@@ -70,31 +76,31 @@ export function SupportEmailButton({
 
   if (variant === 'link') {
     return (
-      <Pressable
+      <RegentPressable
         onPress={handlePress}
         disabled={isLoading}
-        style={({ pressed }) => [pressed && { opacity: 0.7 }]}
+        pressStyle="none"
+        style={isLoading && styles.disabled}
       >
         <Text style={[styles.linkText, { fontSize: sizeStyles.fontSize }]}>
-          {isLoading ? 'Opening...' : SUPPORT_EMAIL}
+          {isLoading ? 'Opening…' : SUPPORT_EMAIL}
         </Text>
-      </Pressable>
+      </RegentPressable>
     );
   }
 
   return (
-    <Pressable
+    <RegentPressable
       onPress={handlePress}
       disabled={isLoading}
-      style={({ pressed }) => [
+      style={[
         styles.button,
         variant === 'secondary' && styles.buttonSecondary,
         {
           paddingHorizontal: sizeStyles.paddingHorizontal,
           paddingVertical: sizeStyles.paddingVertical,
         },
-        pressed && styles.buttonPressed,
-        isLoading && { opacity: 0.7 },
+        isLoading && styles.disabled,
       ]}
     >
       {isLoading ? (
@@ -117,7 +123,7 @@ export function SupportEmailButton({
           </Text>
         </View>
       )}
-    </Pressable>
+    </RegentPressable>
   );
 }
 
@@ -134,9 +140,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BORDER,
   },
-  buttonPressed: {
-    opacity: 0.8,
-    transform: [{ scale: 0.98 }],
+  disabled: {
+    opacity: 0.7,
   },
   buttonContent: {
     flexDirection: 'row',

@@ -1,4 +1,5 @@
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
+import { RegentPressable } from '@/components/ui/RegentPressable';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
 import { useRegentsAuth } from '@/hooks/useRegentsAuth';
@@ -12,7 +13,6 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -130,9 +130,9 @@ export default function EmailVerifyScreen() {
             transition={buildEntryTransition(reduceMotion)}
             style={styles.header}
           >
-            <Pressable onPress={() => router.back()} style={styles.backButton}>
+            <RegentPressable pressStyle="icon" onPress={() => router.back()} style={styles.backButton}>
               <Ionicons name="arrow-back" size={24} color={TEXT_PRIMARY} />
-            </Pressable>
+            </RegentPressable>
           </EaseView>
 
           <View style={styles.content}>
@@ -187,13 +187,13 @@ export default function EmailVerifyScreen() {
             transition={buildEntryTransition(reduceMotion, STAGGER_STEP * 5)}
             style={styles.footer}
           >
-            <Pressable
+            <RegentPressable
               style={[styles.primaryButton, (!isEmailValid || sending) && styles.disabledButton]}
               onPress={startEmailVerification}
               disabled={!isEmailValid || sending}
             >
               {sending ? <ActivityIndicator color={WHITE} /> : <Text style={styles.primaryButtonText}>Send code</Text>}
-            </Pressable>
+            </RegentPressable>
           </EaseView>
         </ScrollView>
       </KeyboardAvoidingView>

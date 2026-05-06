@@ -1,3 +1,4 @@
+import { RegentPressable } from '@/components/ui/RegentPressable';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
 import { useRegentsAuth } from '@/hooks/useRegentsAuth';
@@ -8,7 +9,6 @@ import {
   AccessibilityInfo,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -95,9 +95,9 @@ export default function LoginScreen() {
             transition={buildEntryTransition(reduceMotion, STAGGER_STEP * 3)}
             style={styles.actionWrap}
           >
-            <Pressable style={styles.primaryButton} onPress={() => router.push({ pathname: '/email-verify', params: { mode: 'signin' } })}>
+            <RegentPressable style={styles.primaryButton} onPress={() => router.push({ pathname: '/email-verify', params: { mode: 'signin' } })}>
               <Text style={styles.primaryButtonText}>Continue with email</Text>
-            </Pressable>
+            </RegentPressable>
           </EaseView>
 
           <EaseView
@@ -106,9 +106,9 @@ export default function LoginScreen() {
             transition={buildEntryTransition(reduceMotion, STAGGER_STEP * 4)}
             style={styles.actionWrap}
           >
-            <Pressable style={styles.secondaryButton} onPress={() => router.push({ pathname: '/phone-verify', params: { mode: 'signin' } })}>
+            <RegentPressable style={styles.secondaryButton} onPress={() => router.push({ pathname: '/phone-verify', params: { mode: 'signin' } })}>
               <Text style={styles.secondaryButtonText}>Continue with phone</Text>
-            </Pressable>
+            </RegentPressable>
           </EaseView>
 
           <EaseView

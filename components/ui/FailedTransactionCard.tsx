@@ -7,9 +7,11 @@
 
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { COLORS } from '../../constants/Colors';
 import { FONTS } from '../../constants/Typography';
+import { RegentPressable } from './RegentPressable';
+import { runRegentHaptic } from './haptics';
 import {
   createDebugInfoFromTransaction,
   GuestCheckoutDebugInfo,
@@ -57,16 +59,18 @@ export function FailedTransactionCard({
     : undefined);
 
   const handleContactSupport = async () => {
+    let opened = false;
     if (finalDebugInfo) {
-      await openSupportEmail(finalDebugInfo);
+      opened = await openSupportEmail(finalDebugInfo);
     } else {
-      // Fallback - open email with minimal info
-      await openSupportEmail({
+      opened = await openSupportEmail({
         flowType: 'guest',
         partnerName: 'Regents Mobile',
         errorMessage: errorMessage || message,
       } as GuestCheckoutDebugInfo);
     }
+
+    runRegentHaptic(opened ? 'success' : 'warning');
   };
 
   return (
@@ -100,27 +104,21 @@ export function FailedTransactionCard({
 
         {/* Action buttons */}
         <View style={styles.buttonContainer}>
-          <Pressable
+          <RegentPressable
             onPress={handleContactSupport}
-            style={({ pressed }) => [
-              styles.primaryButton,
-              pressed && styles.buttonPressed,
-            ]}
+            style={styles.primaryButton}
           >
             <Ionicons name="mail-outline" size={20} color={WHITE} />
-            <Text style={styles.primaryButtonText}>Email Support</Text>
-          </Pressable>
+            <Text style={styles.primaryButtonText}>Email support</Text>
+          </RegentPressable>
 
           {showDismiss && onDismiss && (
-            <Pressable
+            <RegentPressable
               onPress={onDismiss}
-              style={({ pressed }) => [
-                styles.secondaryButton,
-                pressed && styles.buttonPressed,
-              ]}
+              style={styles.secondaryButton}
             >
               <Text style={styles.secondaryButtonText}>Dismiss</Text>
-            </Pressable>
+            </RegentPressable>
           )}
         </View>
 
@@ -166,16 +164,14 @@ export function FailedTransactionBadge({
   };
 
   return (
-    <Pressable
+    <RegentPressable
       onPress={handlePress}
-      style={({ pressed }) => [
-        styles.badge,
-        pressed && styles.badgePressed,
-      ]}
+      pressStyle="chip"
+      style={styles.badge}
     >
       <Ionicons name="mail-outline" size={14} color={BLUE} />
-      <Text style={styles.badgeText}>Get Help</Text>
-    </Pressable>
+      <Text style={styles.badgeText}>Get help</Text>
+    </RegentPressable>
   );
 }
 
@@ -300,10 +296,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: FONTS.body,
   },
-  buttonPressed: {
-    opacity: 0.88,
-    transform: [{ scale: 0.98 }],
-  },
   footer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -332,9 +324,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BORDER,
     marginTop: 8,
-  },
-  badgePressed: {
-    opacity: 0.84,
   },
   badgeText: {
     fontSize: 12,

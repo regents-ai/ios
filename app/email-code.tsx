@@ -1,4 +1,5 @@
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
+import { RegentPressable } from '@/components/ui/RegentPressable';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
 import { useLinkEmail, useLoginWithEmail } from '@privy-io/expo';
@@ -11,7 +12,6 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -180,9 +180,9 @@ export default function EmailCodeScreen() {
             transition={buildEntryTransition(reduceMotion)}
             style={styles.header}
           >
-            <Pressable onPress={() => router.back()} style={styles.backButton}>
+            <RegentPressable pressStyle="icon" onPress={() => router.back()} style={styles.backButton}>
               <Ionicons name="arrow-back" size={24} color={TEXT_PRIMARY} />
-            </Pressable>
+            </RegentPressable>
           </EaseView>
 
           <View style={styles.content}>
@@ -230,9 +230,9 @@ export default function EmailCodeScreen() {
               {resendSeconds > 0 ? (
                 <Text style={styles.helperText}>You can ask for a new code in {resendSeconds}s.</Text>
               ) : (
-                <Pressable onPress={resendCode} disabled={!canResend}>
+                <RegentPressable pressStyle="none" onPress={resendCode} disabled={!canResend}>
                   <Text style={[styles.linkText, !canResend && styles.disabledText]}>Resend code</Text>
-                </Pressable>
+                </RegentPressable>
               )}
             </EaseView>
           </View>
@@ -243,13 +243,13 @@ export default function EmailCodeScreen() {
             transition={buildEntryTransition(reduceMotion, STAGGER_STEP * 5)}
             style={styles.footer}
           >
-            <Pressable
+            <RegentPressable
               style={[styles.primaryButton, (verifying || otp.length < 4) && styles.disabledButton]}
               onPress={verifyEmail}
               disabled={verifying || otp.length < 4}
             >
               {verifying ? <ActivityIndicator color={WHITE} /> : <Text style={styles.primaryButtonText}>Continue</Text>}
-            </Pressable>
+            </RegentPressable>
           </EaseView>
         </ScrollView>
       </KeyboardAvoidingView>
