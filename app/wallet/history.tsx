@@ -213,13 +213,21 @@ export default function History() {
       </View>
       {transactions.length === 0 ? (
         <View style={styles.emptyState}>
-          <Ionicons name="time-outline" size={64} color={TEXT_SECONDARY} />
+          <View style={styles.emptyIcon}>
+            <Ionicons name="time-outline" size={28} color={BLUE} />
+          </View>
           <Text style={styles.emptyTitle}>No activity yet</Text>
           <Text style={styles.emptyMessage}>
             {regentsUserId
               ? "Your wallet activity will appear here after you buy, send, or cash out."
               : "Sign in to view your wallet activity."}
           </Text>
+          <RegentPressable
+            style={styles.emptyButton}
+            onPress={() => router.replace(regentsUserId ? '/wallet' : '/auth/login')}
+          >
+            <Text style={styles.emptyButtonText}>{regentsUserId ? 'Open Wallet' : 'Sign in'}</Text>
+          </RegentPressable>
         </View>
       ) : (
           <FlatList
@@ -376,7 +384,10 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   transactionMeta: {
-    alignItems: 'flex-end',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     maxWidth: '100%',
     gap: 8,
   },
@@ -425,12 +436,21 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 40,
+    gap: 10,
+  },
+  emptyIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: CARD_BG,
+    borderWidth: 1,
+    borderColor: BORDER,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   emptyTitle: {
     fontSize: 18,
     color: TEXT_PRIMARY,
-    marginTop: 16,
-    marginBottom: 8,
     fontFamily: FONTS.heading,
   },
   emptyMessage: {
@@ -440,87 +460,19 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontFamily: FONTS.body,
   },
-  paginationButton: {
-    backgroundColor: BLUE,            
-    paddingHorizontal: 20,            
-    paddingVertical: 12,
-    borderRadius: 20,               
-    minWidth: 80,
-    alignItems: 'center',
-    
-    // Coinbase shadow
-    shadowColor: BLUE,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  paginationButtonDisabled: {
-    backgroundColor: BORDER,           // Gray when disabled
-    shadowOpacity: 0,                 // No shadow when disabled
-    elevation: 0,
-  },
-  paginationText: {
-    color: WHITE,
-    fontSize: 14,
-    fontWeight: '600',                // Semibold
-    textAlign: 'center',
-  },
-  paginationTextDisabled: {
-    color: TEXT_SECONDARY,
-  },
-  pageNumber: {
-    color: TEXT_PRIMARY,
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  pageIndicator: {
-    color: TEXT_PRIMARY,
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  paginationContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 20,
-    backgroundColor: DARK_BG,
-    gap: 16,
-  },
-  paginationArrow: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: CARD_BG,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: BORDER,
-  },
-  paginationArrowDisabled: {
-    opacity: 0.3,
-  },
-  pageNumbers: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  currentPageNumber: {
-    width: 32,
-    height: 32,
+  emptyButton: {
+    marginTop: 8,
+    minHeight: 50,
+    paddingHorizontal: 22,
     borderRadius: 16,
     backgroundColor: BLUE,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  currentPageText: {
+  emptyButtonText: {
     color: WHITE,
     fontSize: 14,
-    fontWeight: '600',
-  },
-  pageNumbersText: {
-    color: TEXT_SECONDARY,
-    fontSize: 14,
+    fontFamily: FONTS.body,
   },
   footerLoader: {
     paddingVertical: 20,

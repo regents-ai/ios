@@ -27,7 +27,7 @@ import { PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
 import { createTransferInstruction, getAssociatedTokenAddress, createAssociatedTokenAccountInstruction, getAccount } from '@solana/spl-token';
 import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { EaseView } from 'react-native-ease';
 import {
   AccessibilityInfo,
@@ -112,6 +112,7 @@ export default function TransferScreen() {
   const [recipientAddress, setRecipientAddress] = useState('');
   const [amount, setAmount] = useState('');
   const [amountFocused, setAmountFocused] = useState(false);
+  const [lastQuickPercentage, setLastQuickPercentage] = useState<number | null>(null);
   const [selectedToken, setSelectedToken] = useState<any>(null);
   const [network, setNetwork] = useState('base'); // base, ethereum, solana
   const [sending, setSending] = useState(false);
@@ -128,6 +129,7 @@ export default function TransferScreen() {
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [isConfirmationPresented, setIsConfirmationPresented] = useState(false);
   const [reduceMotion, setReduceMotion] = useState(false);
+  const quickAmountTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { sendSolanaTransaction } = useSendSolanaTransaction();
   const { sendUserOperation, status: userOpStatus, data: userOpData, error: userOpError } = useSendUserOperation();
@@ -182,6 +184,14 @@ export default function TransferScreen() {
     return () => {
       mounted = false;
       subscription.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (quickAmountTimer.current) {
+        clearTimeout(quickAmountTimer.current);
+      }
     };
   }, []);
 
@@ -312,6 +322,15 @@ export default function TransferScreen() {
     const calculatedAmount = (actualBalance * percentage) / 100;
 
     setAmount(calculatedAmount.toFixed(6));
+    setLastQuickPercentage(percentage);
+
+    if (quickAmountTimer.current) {
+      clearTimeout(quickAmountTimer.current);
+    }
+
+    quickAmountTimer.current = setTimeout(() => {
+      setLastQuickPercentage(null);
+    }, 900);
   };
 
   const handleSend = async () => {
@@ -695,26 +714,26 @@ export default function TransferScreen() {
               <RegentPressable
                 haptic="selection"
                 pressStyle="chip"
-                style={styles.quickButton}
+                style={[styles.quickButton, lastQuickPercentage === 10 && styles.quickButtonSelected]}
                 onPress={() => handleQuickAmount(10)}
               >
-                <Text style={styles.quickButtonText}>10%</Text>
+                <Text style={[styles.quickButtonText, lastQuickPercentage === 10 && styles.quickButtonTextSelected]}>10%</Text>
               </RegentPressable>
               <RegentPressable
                 haptic="selection"
                 pressStyle="chip"
-                style={styles.quickButton}
+                style={[styles.quickButton, lastQuickPercentage === 50 && styles.quickButtonSelected]}
                 onPress={() => handleQuickAmount(50)}
               >
-                <Text style={styles.quickButtonText}>50%</Text>
+                <Text style={[styles.quickButtonText, lastQuickPercentage === 50 && styles.quickButtonTextSelected]}>50%</Text>
               </RegentPressable>
               <RegentPressable
                 haptic="selection"
                 pressStyle="chip"
-                style={styles.quickButton}
+                style={[styles.quickButton, lastQuickPercentage === 100 && styles.quickButtonSelected]}
                 onPress={() => handleQuickAmount(100)}
               >
-                <Text style={styles.quickButtonText}>Max</Text>
+                <Text style={[styles.quickButtonText, lastQuickPercentage === 100 && styles.quickButtonTextSelected]}>Max</Text>
               </RegentPressable>
             </View>
 
@@ -1127,10 +1146,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     minHeight: 52,
   },
+  quickButtonSelected: {
+    backgroundColor: BLUE,
+    borderColor: BLUE,
+  },
   quickButtonText: {
     fontSize: 14,
     color: TEXT_PRIMARY,
     fontFamily: FONTS.body,
+  },
+  quickButtonTextSelected: {
+    color: WHITE,
   },
   mainSendButton: {
     backgroundColor: BLUE,
