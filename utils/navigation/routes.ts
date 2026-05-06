@@ -5,16 +5,16 @@ export const routes = {
     return '/wallet';
   },
 
+  staking(): Href {
+    return '/staking';
+  },
+
   agent(regentId: string): Href {
     return { pathname: '/agent/[id]', params: { id: regentId } };
   },
 
   regentManager(regentId: string): Href {
     return { pathname: '/agent/[id]/regent-manager', params: { id: regentId } };
-  },
-
-  terminalSession(sessionId: string): Href {
-    return { pathname: '/terminal/[id]', params: { id: sessionId } };
   },
 
   onrampReturn(partnerUserRef?: string | null): Href {

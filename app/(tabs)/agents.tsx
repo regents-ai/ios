@@ -4,11 +4,12 @@ import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { RegentPressable } from '@/components/ui/RegentPressable';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
-import { BaseRegentSnapshot, RegentSummary } from '@/types/regents';
-import { TerminalSessionSummary } from '@/types/terminal';
+import { RegentStakingState, RegentSummary } from '@/types/regents';
 import { formatCurrencyAmount, formatRelativeTime, formatWalletAddress } from '@/utils/agent-surfaces/formatters';
 import { routes } from '@/utils/navigation/routes';
+import { hasPositiveRawAmount } from '@/utils/onchain/stakingWalletAction';
 import { regentApi } from '@/utils/regentApi/client';
+import { useCurrentUser } from '@coinbase/cdp-hooks';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
@@ -49,7 +50,8 @@ type CommandCenterItem = {
   meta: string;
   icon: keyof typeof Ionicons.glyphMap;
   accent: string;
-  onPress: () => void;
+  onPress?: () => void;
+  disabled?: boolean;
 };
 
 function regentPriority(agent: RegentSummary) {
@@ -114,15 +116,21 @@ function hasFundingNeed(agent: RegentSummary) {
   return ['zero', 'failed', 'paused'].includes(agent.platformState.billingStatus) || creditValue(agent) <= 10;
 }
 
-function snapshotMoneyValue(value: string) {
-  return Number.parseFloat(value || '0');
+function smartWalletAddress(value?: string | null) {
+  const trimmed = value?.trim();
+  return trimmed && /^0x[a-fA-F0-9]{40}$/.test(trimmed) ? trimmed : null;
+}
+
+function stakingCommandBody(staking: RegentStakingState) {
+  return `${staking.wallet_claimable_usdc || '0'} USDC ready. ${staking.wallet_stake_balance || '0'} REGENT staked.`;
 }
 
 export default function AgentsTab() {
   const router = useRouter();
+  const { currentUser } = useCurrentUser();
+  const smartAccount = smartWalletAddress(currentUser?.evmSmartAccounts?.[0] as string | undefined);
   const [agents, setAgents] = useState<RegentSummary[]>([]);
-  const [terminalSessions, setTerminalSessions] = useState<TerminalSessionSummary[]>([]);
-  const [baseSnapshots, setBaseSnapshots] = useState<Record<string, BaseRegentSnapshot>>({});
+  const [staking, setStaking] = useState<RegentStakingState | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [alertState, setAlertState] = useState<{
@@ -145,14 +153,12 @@ export default function AgentsTab() {
         setLoading(true);
       }
 
-      const nextAgents = await regentApi.listRegents();
-      const [nextSessions, nextSnapshots] = await Promise.all([
-        regentApi.listTerminalSessions(),
-        Promise.all(nextAgents.map(async (agent) => [agent.id, await regentApi.getBaseSnapshot(agent.id)] as const)),
+      const [nextAgents, nextStaking] = await Promise.all([
+        regentApi.listRegents(),
+        smartAccount ? regentApi.getRegentStaking({ walletAddress: smartAccount }).catch(() => null) : Promise.resolve(null),
       ]);
       setAgents(nextAgents);
-      setTerminalSessions(nextSessions);
-      setBaseSnapshots(Object.fromEntries(nextSnapshots));
+      setStaking(nextStaking);
     } catch (error) {
       setAlertState({
         visible: true,
@@ -164,7 +170,7 @@ export default function AgentsTab() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [smartAccount]);
 
   useFocusEffect(
     useCallback(() => {
@@ -189,32 +195,39 @@ export default function AgentsTab() {
   const supportingRegents = sortedAgents.slice(1);
 
   const commandCenterItems = useMemo<CommandCenterItem[]>(() => {
-    const latestSessionByRegent = new Map<string, TerminalSessionSummary>();
-    for (const session of terminalSessions) {
-      const current = latestSessionByRegent.get(session.agentId);
-      if (!current || new Date(session.lastUpdatedAt).getTime() > new Date(current.lastUpdatedAt).getTime()) {
-        latestSessionByRegent.set(session.agentId, session);
-      }
-    }
+    const stakingItems: CommandCenterItem[] = staking && (
+      hasPositiveRawAmount(staking.wallet_claimable_usdc_raw) ||
+      hasPositiveRawAmount(staking.wallet_claimable_regent_raw) ||
+      hasPositiveRawAmount(staking.wallet_stake_balance_raw)
+    )
+      ? [{
+          id: 'regent-staking',
+          rank: 2,
+          title: 'REGENT staking',
+          body: stakingCommandBody(staking),
+          meta: staking.paused ? 'Paused' : staking.chain_label,
+          icon: 'sparkles-outline',
+          accent: SUCCESS,
+          onPress: () => router.push(routes.staking()),
+        }]
+      : [];
 
-    return agents
-      .flatMap((agent) => {
-        const latestSession = latestSessionByRegent.get(agent.id);
-        const snapshot = baseSnapshots[agent.id];
+    const talkItem: CommandCenterItem = {
+      id: 'hermes-talk-coming-soon',
+      rank: 3,
+      title: 'Hermes Talk is coming soon',
+      body: 'Messages, reviews, and operator notes will appear here when Talk returns.',
+      meta: 'Coming soon',
+      icon: 'chatbubble-ellipses-outline',
+      accent: BLUE,
+      disabled: true,
+    };
+
+    return [
+      ...stakingItems,
+      talkItem,
+      ...agents.flatMap((agent) => {
         const items: CommandCenterItem[] = [];
-
-        if (latestSession?.pendingApproval) {
-          items.push({
-            id: `${agent.id}-review`,
-            rank: 0,
-            title: `${agent.name} needs a decision`,
-            body: latestSession.pendingApproval.riskCopy,
-            meta: formatRelativeTime(latestSession.lastUpdatedAt),
-            icon: 'eye-outline',
-            accent: ORANGE,
-            onPress: () => router.push(routes.terminalSession(latestSession.id)),
-          });
-        }
 
         if (hasFundingNeed(agent)) {
           items.push({
@@ -225,32 +238,6 @@ export default function AgentsTab() {
             meta: agent.platformState.billingStatus,
             icon: 'wallet-outline',
             accent: DANGER,
-            onPress: () => router.push(routes.agent(agent.id)),
-          });
-        }
-
-        if (latestSession) {
-          items.push({
-            id: `${agent.id}-terminal`,
-            rank: 2,
-            title: `${agent.name} latest Talk`,
-            body: latestSession.latestNote,
-            meta: formatRelativeTime(latestSession.lastUpdatedAt),
-            icon: 'chatbubble-ellipses-outline',
-            accent: BLUE,
-            onPress: () => router.push(routes.terminalSession(latestSession.id)),
-          });
-        }
-
-        if (snapshot && (snapshotMoneyValue(snapshot.claimableUsdc) > 0 || snapshotMoneyValue(snapshot.stakedRegent) > 0)) {
-          items.push({
-            id: `${agent.id}-base`,
-            rank: 3,
-            title: `${agent.name} Base records`,
-            body: `${snapshot.claimableUsdc} USDC claimable. ${snapshot.stakedRegent} REGENT staked.`,
-            meta: snapshot.stale ? 'Needs refresh' : 'Current',
-            icon: 'layers-outline',
-            accent: SUCCESS,
             onPress: () => router.push(routes.agent(agent.id)),
           });
         }
@@ -267,10 +254,11 @@ export default function AgentsTab() {
         });
 
         return items;
-      })
+      }),
+    ]
       .sort((left, right) => left.rank - right.rank || left.title.localeCompare(right.title))
       .slice(0, 8);
-  }, [agents, baseSnapshots, router, terminalSessions]);
+  }, [agents, router, staking]);
 
   const summary = useMemo(() => {
     const needsYou = agents.filter((agent) => agent.runtimeStatus === 'offline' || agent.status === 'attention').length;
@@ -296,8 +284,7 @@ export default function AgentsTab() {
             <Text style={styles.eyebrow}>Regents</Text>
             <Text style={styles.heroTitle}>Run the work from one place</Text>
             <Text style={styles.heroBody}>
-              See which Regents are moving, step into the one that needs you next, and keep money and
-              conversations close by.
+              See which Regents are moving, step into the one that needs you next, and keep money close by.
             </Text>
 
             <View style={styles.heroActions}>
@@ -308,10 +295,17 @@ export default function AgentsTab() {
                 <Text style={styles.primaryButtonText}>Open Wallet</Text>
               </RegentPressable>
               <RegentPressable
-                onPress={() => router.push('/terminal')}
+                onPress={() => router.push(routes.staking())}
                 style={styles.secondaryButton}
               >
-                <Text style={styles.secondaryButtonText}>Open Talk</Text>
+                <Text style={styles.secondaryButtonText}>Open Staking</Text>
+              </RegentPressable>
+              <RegentPressable
+                disabled
+                accessibilityState={{ disabled: true }}
+                style={[styles.secondaryButton, styles.secondaryButtonDisabled]}
+              >
+                <Text style={[styles.secondaryButtonText, styles.secondaryButtonTextDisabled]}>Talk coming soon</Text>
               </RegentPressable>
               <RegentPressable
                 onPress={() => router.push('/autolaunch')}
@@ -351,8 +345,10 @@ export default function AgentsTab() {
                   <RegentPressable
                     key={item.id}
                     onPress={item.onPress}
+                    disabled={item.disabled || !item.onPress}
+                    accessibilityState={{ disabled: item.disabled || !item.onPress }}
                     pressStyle="card"
-                    style={styles.commandRow}
+                    style={[styles.commandRow, item.disabled && styles.commandRowDisabled]}
                   >
                     <View style={[styles.commandIcon, { backgroundColor: `${item.accent}1A` }]}>
                       <Ionicons name={item.icon} size={18} color={item.accent} />
@@ -362,7 +358,11 @@ export default function AgentsTab() {
                       <Text style={styles.commandBody} numberOfLines={2}>{item.body}</Text>
                       <Text style={styles.commandMeta}>{item.meta}</Text>
                     </View>
-                    <Ionicons name="chevron-forward" size={18} color={TEXT_SECONDARY} />
+                    {item.disabled ? (
+                      <Text style={styles.commandStatus}>Soon</Text>
+                    ) : (
+                      <Ionicons name="chevron-forward" size={18} color={TEXT_SECONDARY} />
+                    )}
                   </RegentPressable>
                 ))}
               </View>
@@ -456,13 +456,15 @@ export default function AgentsTab() {
             <Text style={styles.sectionTitle}>Keep moving</Text>
             <View style={styles.quickGrid}>
               <RegentPressable
-                onPress={() => router.push('/terminal')}
+                disabled
+                accessibilityState={{ disabled: true }}
                 pressStyle="card"
-                style={styles.quickCard}
+                style={[styles.quickCard, styles.quickCardDisabled]}
               >
                 <Ionicons name="chatbubble-ellipses-outline" size={18} color={BLUE} />
-                <Text style={styles.quickTitle}>Talk</Text>
-                <Text style={styles.quickBody} numberOfLines={2}>Check what Hermes changed most recently.</Text>
+                <Text style={styles.quickTitle}>Hermes Talk</Text>
+                <Text style={styles.quickBody} numberOfLines={2}>Messages and review cards are coming soon.</Text>
+                <Text style={styles.quickMeta}>Coming soon</Text>
               </RegentPressable>
 
               <RegentPressable
@@ -581,6 +583,12 @@ const styles = StyleSheet.create({
     color: TEXT_PRIMARY,
     fontSize: 14,
     fontFamily: FONTS.body,
+  },
+  secondaryButtonDisabled: {
+    backgroundColor: BLUE_WASH,
+  },
+  secondaryButtonTextDisabled: {
+    color: BLUE,
   },
   summaryRow: {
     flexDirection: 'row',
@@ -707,6 +715,9 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 14,
   },
+  commandRowDisabled: {
+    backgroundColor: BLUE_WASH,
+  },
   commandIcon: {
     width: 38,
     height: 38,
@@ -732,6 +743,11 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.body,
   },
   commandMeta: {
+    color: BLUE,
+    fontSize: 12,
+    fontFamily: FONTS.body,
+  },
+  commandStatus: {
     color: BLUE,
     fontSize: 12,
     fontFamily: FONTS.body,
@@ -795,6 +811,9 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 8,
   },
+  quickCardDisabled: {
+    backgroundColor: BLUE_WASH,
+  },
   quickTitle: {
     color: TEXT_PRIMARY,
     fontSize: 18,
@@ -804,6 +823,11 @@ const styles = StyleSheet.create({
     color: TEXT_SECONDARY,
     fontSize: 13,
     lineHeight: 19,
+    fontFamily: FONTS.body,
+  },
+  quickMeta: {
+    color: BLUE,
+    fontSize: 12,
     fontFamily: FONTS.body,
   },
   emptyCard: {

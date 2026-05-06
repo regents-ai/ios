@@ -11,7 +11,10 @@ test('wallet screen owns the page scroll instead of nesting the buy form scroll'
   const onrampForm = readFileSync(resolve(testDir, '../components/onramp/OnrampForm.tsx'), 'utf8');
 
   assert.match(walletScreen, /<ScrollView/);
+  assert.match(walletScreen, /<RefreshControl/);
+  assert.match(walletScreen, /onRefresh=\{\(\) => void walletDetails\.refreshWalletSnapshot\(\)\}/);
   assert.match(walletScreen, /scrollEnabled=\{!isSwipeActive\}/);
+  assert.match(walletScreen, /<WalletDetailsSection walletDetails=\{walletDetails\} \/>/);
   assert.match(walletScreen, /onSwipeActiveChange=\{setIsSwipeActive\}/);
   assert.doesNotMatch(onrampForm, /<ScrollView/);
   assert.match(onrampForm, /onSwipeStart=\{handleSwipeStart\}/);

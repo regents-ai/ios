@@ -12,6 +12,7 @@ import { BalanceRecord, useWalletDetailsState } from '@/hooks/wallet/useWalletDe
 
 const { CARD_BG, CARD_ALT, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, BORDER, WHITE, DANGER, BLUE_WASH, SUCCESS } = COLORS;
 const GREEN_WASH = '#E6F0EA';
+export type WalletDetailsState = ReturnType<typeof useWalletDetailsState>;
 
 function formatAddress(address: string) {
   if (address.length <= 14) return address;
@@ -47,7 +48,7 @@ function formatUsdValue(usdValue?: number) {
   });
 }
 
-export function WalletDetailsSection() {
+export function WalletDetailsSection({ walletDetails }: { walletDetails: WalletDetailsState }) {
   const {
     primaryAddress,
     solanaAddress,
@@ -75,7 +76,7 @@ export function WalletDetailsSection() {
     handlePrimaryCashOut,
     fetchBalances,
     fetchTestnetBalances,
-  } = useWalletDetailsState();
+  } = walletDetails;
   const refreshingWallet = loadingBalances || loadingTestnetBalances;
 
   const renderBalanceRow = (balance: BalanceRecord, network: string, cashOutEnabled: boolean) => {

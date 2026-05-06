@@ -2,7 +2,7 @@ import { useCurrentUser, useEvmAddress, useSignOut, useSolanaAddress } from '@co
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { APIGuestCheckoutWidget, OnrampForm, useOnramp } from '@/components';
 import { LiveValueFlash } from '@/components/motion/LiveValueFlash';
@@ -19,6 +19,8 @@ import { useRegentsAuth } from '@/hooks/useRegentsAuth';
 import { usePendingOnrampResume } from '@/hooks/onramp/use-pending-onramp-resume';
 import { useWalletAddresses } from '@/hooks/onramp/use-wallet-addresses';
 import { useWalletOnrampSubmit } from '@/hooks/onramp/use-wallet-onramp-submit';
+import { useWalletDetailsState } from '@/hooks/wallet/useWalletDetailsState';
+import { routes } from '@/utils/navigation/routes';
 import {
   clearPhoneVerifyWasCanceled,
   getPhoneVerifyWasCanceled,
@@ -44,6 +46,8 @@ export default function WalletScreen() {
   const { solanaAddress } = useSolanaAddress();
   const { signOut: signOutWallet } = useSignOut();
   const effectiveIsSignedIn = isAuthenticated;
+  const walletDetails = useWalletDetailsState();
+  const refreshingWallet = walletDetails.loadingBalances || walletDetails.loadingTestnetBalances;
 
   const { address, onNetworkChange, setAddress } = useWalletAddresses({
     currentUser,
@@ -148,6 +152,12 @@ export default function WalletScreen() {
       onPress: () => router.push('/wallet/send'),
     },
     {
+      label: 'Staking',
+      detail: 'Stake REGENT and claim rewards',
+      icon: 'sparkles-outline',
+      onPress: () => router.push(routes.staking()),
+    },
+    {
       label: 'Settings',
       detail: 'Update wallet and account details',
       icon: 'settings-outline',
@@ -170,6 +180,13 @@ export default function WalletScreen() {
           contentInsetAdjustmentBehavior="automatic"
           keyboardShouldPersistTaps="handled"
           removeClippedSubviews={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshingWallet}
+              onRefresh={() => void walletDetails.refreshWalletSnapshot()}
+              tintColor={BLUE}
+            />
+          }
           scrollEnabled={!isSwipeActive}
         >
           <StaggerGroup>
@@ -278,7 +295,7 @@ export default function WalletScreen() {
             </StaggerItem>
 
             <StaggerItem order={6}>
-              <WalletDetailsSection />
+              <WalletDetailsSection walletDetails={walletDetails} />
             </StaggerItem>
           </StaggerGroup>
         </ScrollView>
