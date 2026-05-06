@@ -120,3 +120,33 @@ test('mobile terminal routes use the live mobile prefix only', () => {
 
   assert.match(contents, /\/mobile\//);
 });
+
+test('serverless route forwarders load the built server app', () => {
+  const files = [
+    '../server/api/health.js',
+    '../server/api/push-tokens.js',
+    '../server/api/push-tokens/ping.js',
+    '../server/api/auth/me.js',
+    '../server/api/auth/cdp-token.js',
+    '../server/api/server/api.js',
+    '../server/api/mobile/[...slug].js',
+    '../server/api/balances/evm.js',
+    '../server/api/balances/solana.js',
+    '../server/api/webhooks/onramp.js',
+  ];
+
+  for (const file of files) {
+    const contents = readFileSync(resolve(testDir, file), 'utf8');
+    assert.match(contents, /dist\/app\.js/, file);
+    assert.doesNotMatch(contents, /src\/app\.js/, file);
+  }
+});
+
+test('root package scripts do not point at ignored local scripts', () => {
+  const pkg = JSON.parse(readFileSync(resolve(testDir, '../package.json'), 'utf8'));
+
+  assert.equal(pkg.scripts['reset-project'], undefined);
+  for (const script of Object.values(pkg.scripts) as string[]) {
+    assert.doesNotMatch(script, /node \.\/scripts\//);
+  }
+});

@@ -1,5 +1,5 @@
-import app from '../../src/app.js';
+import app from '../../dist/app.js';
 export default function handler(req, res) {
-  req.url = '/server/api';           // your Express route
+  req.url = '/server/api';
   return app(req, res);
 }
