@@ -15,7 +15,7 @@ import {
 import { useCurrentUser, useSendUserOperation } from '@coinbase/cdp-hooks';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -117,6 +117,14 @@ export default function RegentStakingScreen() {
     message: '',
     type: 'info' as 'success' | 'error' | 'info',
   });
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearScheduledRefresh = useCallback(() => {
+    if (refreshTimerRef.current) {
+      clearTimeout(refreshTimerRef.current);
+      refreshTimerRef.current = null;
+    }
+  }, []);
 
   const loadStaking = useCallback(async (refresh = false) => {
     if (!smartAccount) {
@@ -150,7 +158,8 @@ export default function RegentStakingScreen() {
   useFocusEffect(
     useCallback(() => {
       void loadStaking();
-    }, [loadStaking])
+      return clearScheduledRefresh;
+    }, [clearScheduledRefresh, loadStaking])
   );
 
   const canStake = !!smartAccount && !!staking && !staking.paused && positiveDecimal(amount);
@@ -226,7 +235,11 @@ export default function RegentStakingScreen() {
         type: 'success',
       });
       setAmount('');
-      setTimeout(() => void loadStaking(true), 2200);
+      clearScheduledRefresh();
+      refreshTimerRef.current = setTimeout(() => {
+        refreshTimerRef.current = null;
+        void loadStaking(true);
+      }, 2200);
     } catch (error) {
       setAlertState({
         visible: true,
@@ -238,7 +251,7 @@ export default function RegentStakingScreen() {
       setPendingAction(null);
       setApprovalStep(false);
     }
-  }, [amount, loadStaking, receiver, sendUserOperation, smartAccount, stakeForDifferentWallet]);
+  }, [amount, clearScheduledRefresh, loadStaking, receiver, sendUserOperation, smartAccount, stakeForDifferentWallet]);
 
   return (
     <View style={styles.container}>

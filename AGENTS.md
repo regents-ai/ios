@@ -18,12 +18,16 @@ The Regent dependency skills are installed in `/Users/sean/Documents/regent/.age
 - `api-contract.openapiv3.yaml` is the source of truth for the mobile backend surface.
 - `regent-services-contract.openapiv3.yaml` records shared mobile service routes.
 - `README.md` explains local setup and the current product reality.
+- `/Users/sean/Documents/regent/docs/dependency-surfaces/mobile-wallet-stack.md` is the shared internal guide for the mobile wallet dependency surface.
+- `/Users/sean/Documents/regent/docs/shared-agent-dependency-map.md` is the cross-repo dependency map.
 
 ## Core Rules
 
 - The app may hold only public mobile configuration.
 - Backend secrets stay in `server/` runtime configuration and must not move into the app bundle.
 - Live wallet state, Platform state, product state, and chain state outrank preview Regent data.
+- Push tokens, wallet tokens, access tokens, signing keys, and webhook secrets must stay out of logs and app bundles.
+- Passkey work must account for native platform entitlement and domain requirements.
 - Use `uv` for Python work if any is added.
 - Never read `.env` files. `.env.example` is allowed.
 

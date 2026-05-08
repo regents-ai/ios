@@ -14,6 +14,10 @@ test('OpenAPI operations have stable operation IDs', () => {
   assert.equal(new Set(operationIds).size, operationIds.length);
 });
 
+test('OpenAPI 3.0 schemas use nullable instead of array-typed nulls', () => {
+  assert.doesNotMatch(contract, /type:\s*\[[^\]]*['"]null['"][^\]]*\]/);
+});
+
 test('Regent app client covers declared return request lookup route', () => {
   assert.match(contract, /\/mobile\/regents\/\{id\}\/return-requests\/\{return_request_id\}:[\s\S]*operationId: getRegentReturnRequest/);
   assert.match(regentClient, /getReturnRequest\(input:/);
@@ -28,6 +32,27 @@ test('prepared wallet-action contract and client require idempotency and risk co
   assert.match(regentClient, /riskCopy: string;/);
   assert.match(regentClient, /wallet_action: PreparedWalletAction/);
   assert.match(regentClient, /'Idempotency-Key': input\.idempotencyKey/);
+});
+
+test('money-action contract declares current Base address and calldata constraints', () => {
+  const section = (name: string, nextName: string) =>
+    contract.slice(contract.indexOf(`    ${name}:`), contract.indexOf(`    ${nextName}:`));
+  const contractSlices = [
+    section('CreateRegentReturnRequest', 'TerminalSessionStatus'),
+    section('CreateRegentFundingIntent', 'RegentFundingIntent'),
+    section('PrepareWalletActionRequest', 'PreparedWalletAction'),
+    section('PreparedWalletAction', 'RegentDetail'),
+  ];
+
+  for (const slice of contractSlices) {
+    assert.match(slice, /pattern: '\^0x\[a-fA-F0-9\]\{40\}\$'/);
+    assert.match(slice, /pattern: '\^\[0-9\]\+\$'/);
+    assert.match(slice, /pattern: '\^0x\(\[a-fA-F0-9\]\{2\}\)\*\$'/);
+  }
+
+  assert.match(contractSlices[0]!, /chainId:[\s\S]*enum: \[8453\]/);
+  assert.match(contractSlices[1]!, /chainId:[\s\S]*enum: \[8453\]/);
+  assert.match(contractSlices[3]!, /chain_id:[\s\S]*enum: \[8453\]/);
 });
 
 test('Regent staking contract and client use the live staking surface only', () => {

@@ -50,7 +50,9 @@ test('server route forwarders exist for auth, live Regent, and terminal endpoint
   const files = [
     '../server/api/auth/me.js',
     '../server/api/auth/cdp-token.js',
+    '../server/api/.well-known/jwks.json.js',
     '../server/api/mobile/[...slug].js',
+    '../server/api/push-tokens/debug/[user_id].js',
   ];
 
   for (const file of files) {
@@ -128,8 +130,10 @@ test('serverless route forwarders load the built server app', () => {
     '../server/api/push-tokens/ping.js',
     '../server/api/auth/me.js',
     '../server/api/auth/cdp-token.js',
+    '../server/api/.well-known/jwks.json.js',
     '../server/api/server/api.js',
     '../server/api/mobile/[...slug].js',
+    '../server/api/push-tokens/debug/[user_id].js',
     '../server/api/balances/evm.js',
     '../server/api/balances/solana.js',
     '../server/api/webhooks/onramp.js',

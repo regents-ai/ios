@@ -1341,14 +1341,19 @@ components:
           type: string
         chainId:
           type: integer
+          enum: [8453]
         expectedSigner:
           type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
         to:
           type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
         value:
           type: string
+          pattern: '^[0-9]+$'
         data:
           type: string
+          pattern: '^0x([a-fA-F0-9]{2})*$'
         status:
           type: string
           enum: [requested, approved, broadcasting, confirmed, failed]
@@ -1383,20 +1388,28 @@ components:
           type: string
         sourceWalletAddress:
           type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
         destinationWalletAddress:
           type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
         chainId:
           type: integer
+          enum: [8453]
         tokenAddress:
           type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
         expectedSigner:
           type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
         to:
           type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
         value:
           type: string
+          pattern: '^[0-9]+$'
         data:
           type: string
+          pattern: '^0x([a-fA-F0-9]{2})*$'
     RegentFundingIntent:
       type: object
       required:
@@ -1426,20 +1439,28 @@ components:
           type: string
         sourceWalletAddress:
           type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
         destinationWalletAddress:
           type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
         chainId:
           type: integer
+          enum: [8453]
         tokenAddress:
           type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
         expectedSigner:
           type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
         to:
           type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
         value:
           type: string
+          pattern: '^[0-9]+$'
         data:
           type: string
+          pattern: '^0x([a-fA-F0-9]{2})*$'
         status:
           type: string
           enum: [created, signed, confirmed, failed]
@@ -1579,18 +1600,18 @@ components:
         available_reward_inventory: {type: string}
         total_claimed_so_far_raw: {type: string}
         total_claimed_so_far: {type: string}
-        wallet_address: {type: [string, 'null']}
-        connected_wallet_address: {type: [string, 'null']}
-        wallet_stake_balance_raw: {type: [string, 'null']}
-        wallet_stake_balance: {type: [string, 'null']}
-        wallet_token_balance_raw: {type: [string, 'null']}
-        wallet_token_balance: {type: [string, 'null']}
-        wallet_claimable_usdc_raw: {type: [string, 'null']}
-        wallet_claimable_usdc: {type: [string, 'null']}
-        wallet_claimable_regent_raw: {type: [string, 'null']}
-        wallet_claimable_regent: {type: [string, 'null']}
-        wallet_funded_claimable_regent_raw: {type: [string, 'null']}
-        wallet_funded_claimable_regent: {type: [string, 'null']}
+        wallet_address: {type: string, nullable: true}
+        connected_wallet_address: {type: string, nullable: true}
+        wallet_stake_balance_raw: {type: string, nullable: true}
+        wallet_stake_balance: {type: string, nullable: true}
+        wallet_token_balance_raw: {type: string, nullable: true}
+        wallet_token_balance: {type: string, nullable: true}
+        wallet_claimable_usdc_raw: {type: string, nullable: true}
+        wallet_claimable_usdc: {type: string, nullable: true}
+        wallet_claimable_regent_raw: {type: string, nullable: true}
+        wallet_claimable_regent: {type: string, nullable: true}
+        wallet_funded_claimable_regent_raw: {type: string, nullable: true}
+        wallet_funded_claimable_regent: {type: string, nullable: true}
     RegentStakingActionState:
       type: object
       required: [chain_id, chain_label, contract_address, wallet_address]
@@ -1647,7 +1668,8 @@ components:
               type: string
               enum: [not_required, pending, passed, failed]
             block_number:
-              type: [integer, 'null']
+              type: integer
+              nullable: true
         risk_copy:
           type: string
         approval:
@@ -1684,12 +1706,16 @@ components:
           type: string
         expectedSigner:
           type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
         to:
           type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
         value:
           type: string
+          pattern: '^[0-9]+$'
         data:
           type: string
+          pattern: '^0x([a-fA-F0-9]{2})*$'
         riskCopy:
           type: string
         amount:
@@ -1730,14 +1756,19 @@ components:
           enum: [funding, return]
         chain_id:
           type: integer
+          enum: [8453]
         to:
           type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
         value:
           type: string
+          pattern: '^[0-9]+$'
         data:
           type: string
+          pattern: '^0x([a-fA-F0-9]{2})*$'
         expected_signer:
           type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
         expires_at:
           type: string
           format: date-time
@@ -1755,7 +1786,8 @@ components:
               type: string
               enum: [not_required, pending, passed, failed]
             block_number:
-              type: [integer, 'null']
+              type: integer
+              nullable: true
         risk_copy:
           type: string
         status:
@@ -1887,14 +1919,19 @@ components:
           type: string
         chainId:
           type: integer
+          enum: [8453]
         expectedSigner:
           type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
         to:
           type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
         value:
           type: string
+          pattern: '^[0-9]+$'
         data:
           type: string
+          pattern: '^0x([a-fA-F0-9]{2})*$'
     TerminalSessionStatus:
       type: string
       enum: [idle, running, waiting, failed]
