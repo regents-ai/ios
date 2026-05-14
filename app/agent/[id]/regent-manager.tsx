@@ -96,7 +96,7 @@ export default function AgentRegentManagerScreen() {
     } catch (error) {
       setAlertState({
         visible: true,
-        title: 'Regent Manager is unavailable right now',
+        title: 'Agent Brief is unavailable right now',
         message: error instanceof Error ? error.message : 'Try again in a moment.',
         type: 'error',
       });
@@ -143,7 +143,7 @@ export default function AgentRegentManagerScreen() {
       <SafeAreaView style={styles.container}>
         <View style={styles.centerState}>
           <ActivityIndicator size="large" color={BLUE} />
-          <Text style={styles.loadingText}>Loading Regent Manager…</Text>
+          <Text style={styles.loadingText}>Loading Agent Brief...</Text>
         </View>
       </SafeAreaView>
     );
@@ -153,7 +153,7 @@ export default function AgentRegentManagerScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.centerState}>
-          <Text style={styles.emptyTitle}>Regent Manager is unavailable</Text>
+          <Text style={styles.emptyTitle}>Agent Brief is unavailable</Text>
           <RegentPressable style={styles.primaryButton} onPress={() => router.back()}>
             <Text style={styles.primaryButtonText}>Back</Text>
           </RegentPressable>
@@ -168,7 +168,7 @@ export default function AgentRegentManagerScreen() {
         <RegentPressable pressStyle="icon" onPress={() => router.back()} style={styles.iconButton}>
           <Ionicons name="chevron-back" size={22} color={TEXT_PRIMARY} />
         </RegentPressable>
-        <Text style={styles.headerTitle}>Regent Manager</Text>
+        <Text style={styles.headerTitle}>Agent Brief</Text>
         <RegentPressable pressStyle="icon" onPress={() => loadRegentManager(true)} disabled={refreshing} style={styles.iconButton}>
           <SpinningRefreshIcon refreshing={refreshing} size={18} color={BLUE} />
         </RegentPressable>
@@ -177,7 +177,7 @@ export default function AgentRegentManagerScreen() {
       <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.scrollContent}>
         <View style={styles.heroCard}>
           <View style={styles.heroTop}>
-            <Text style={styles.eyebrow}>Regents brief</Text>
+            <Text style={styles.eyebrow}>Agent brief</Text>
             <View style={[styles.heroPill, { backgroundColor: regentManagerSummary.briefingTone.wash }]}>
               <Text style={[styles.heroPillText, { color: regentManagerSummary.briefingTone.accent }]}>
                 {regentManagerSummary.briefingLabel}
@@ -222,14 +222,14 @@ export default function AgentRegentManagerScreen() {
         </View>
 
         <View style={styles.focusCard}>
-          <Text style={styles.focusEyebrow}>What to move next</Text>
+          <Text style={styles.focusEyebrow}>What needs attention</Text>
           <Text style={styles.focusTitle}>{regentManagerSummary.focusTitle}</Text>
           <Text style={styles.focusBody} numberOfLines={4}>{regentManagerSummary.focusBody}</Text>
         </View>
 
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Current work</Text>
-          <Text style={styles.sectionHint}>The goal and task that should frame the next operator decision.</Text>
+          <Text style={styles.sectionHint}>The goal and task that should frame the next decision.</Text>
           <View style={styles.list}>
             {regentManagerSummary.topGoal ? (
               <View style={styles.listCard}>
@@ -255,7 +255,7 @@ export default function AgentRegentManagerScreen() {
                     <Text style={styles.listTitle} numberOfLines={2}>{task.title}</Text>
                     <StatusPill label={task.status} color={tone.color} backgroundColor={tone.backgroundColor} compact showDot={isMovingStatus(task.status)} />
                   </View>
-                  <Text style={styles.metaText}>{task.owner ? `Owned by ${task.owner}` : 'Owner not listed'}</Text>
+                  <Text style={styles.metaText}>{task.owner ? `Led by ${task.owner}` : 'Lead not listed'}</Text>
                   {task.note ? <Text style={styles.listBody} numberOfLines={3}>{task.note}</Text> : null}
                 </View>
               );
@@ -278,7 +278,7 @@ export default function AgentRegentManagerScreen() {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Operators</Text>
+          <Text style={styles.sectionTitle}>Team</Text>
           <Text style={styles.sectionHint}>Who is carrying the work right now.</Text>
           <View style={styles.list}>
             {regentManager.roster.map((member) => {

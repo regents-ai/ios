@@ -147,13 +147,13 @@ export default function WalletScreen() {
   const quickActions = [
     {
       label: 'Send',
-      detail: 'Move money from your wallet',
+      detail: 'Pay an agent or another wallet',
       icon: 'arrow-up-outline',
       onPress: () => router.push('/wallet/send'),
     },
     {
-      label: 'Staking',
-      detail: 'Stake REGENT and claim rewards',
+      label: 'Rewards',
+      detail: 'Track REGENT and claim rewards',
       icon: 'sparkles-outline',
       onPress: () => router.push(routes.staking()),
     },
@@ -194,10 +194,10 @@ export default function WalletScreen() {
               <View style={styles.summaryCard}>
                 <View style={styles.summaryTopRow}>
                   <View style={styles.summaryCopy}>
-                    <Text style={styles.summaryEyebrow}>Regents wallet</Text>
-                    <Text style={styles.summaryTitle}>Keep money movement simple.</Text>
+                    <Text style={styles.summaryEyebrow}>Agent funding</Text>
+                    <Text style={styles.summaryTitle}>Add funds for agent work.</Text>
                     <Text style={styles.summaryBody}>
-                      Add cash below, then use the rest of the wallet tools when you need them.
+                      Use Apple Pay to add USDC on Base, then send it to an agent working balance.
                     </Text>
                   </View>
                   <View style={styles.statusPill}>
@@ -209,7 +209,7 @@ export default function WalletScreen() {
                 <View style={styles.summaryStats}>
                   <View style={styles.summaryStat}>
                     <Text style={styles.summaryStatLabel}>Best path</Text>
-                    <Text style={styles.summaryStatValue}>Base and USDC</Text>
+                    <Text style={styles.summaryStatValue}>Apple Pay to USDC on Base</Text>
                   </View>
                   <View style={styles.summaryStat}>
                     <Text style={styles.summaryStatLabel}>Wallet address</Text>
@@ -255,9 +255,9 @@ export default function WalletScreen() {
 
             <StaggerItem order={3}>
               <View style={styles.sectionIntro}>
-                <Text style={styles.sectionTitle}>Add cash</Text>
+                <Text style={styles.sectionTitle}>Add USDC</Text>
                 <Text style={styles.sectionBody}>
-                  Pick an amount, choose how you want to pay, and review before you continue.
+                  Pick an amount, choose Apple Pay when available, and review before USDC is added.
                 </Text>
               </View>
             </StaggerItem>
@@ -289,7 +289,7 @@ export default function WalletScreen() {
               <View style={styles.sectionIntro}>
                 <Text style={styles.sectionTitle}>Wallet details</Text>
                 <Text style={styles.sectionBody}>
-                  See your balances, copy your address, and take the next step without digging around.
+                  See your funds, copy your address, and send USDC when an agent needs a budget.
                 </Text>
               </View>
             </StaggerItem>

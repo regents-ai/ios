@@ -174,7 +174,7 @@ export default function AgentDetailScreen() {
     } catch (error) {
       setAlertState({
         visible: true,
-        title: 'This operator is unavailable right now',
+        title: 'This agent is unavailable right now',
         message: error instanceof Error ? error.message : 'Try again in a moment.',
         type: 'error',
       });
@@ -202,6 +202,19 @@ export default function AgentDetailScreen() {
     router.push(routes.terminal());
   }, [router]);
 
+  const openFundAgent = useCallback(() => {
+    if (!agent) {
+      return;
+    }
+
+    router.push(routes.walletSend({
+      flow: 'agent-funding',
+      regentId: agent.id,
+      recipientAddress: agent.walletAddress,
+      recipientLabel: agent.name,
+    }));
+  }, [agent, router]);
+
   const runtime = runtimeTone(agent?.runtimeStatus || 'waiting');
   const topGoal = regentManager?.goals[0];
   const nextTask = regentManager?.activeTasks[0];
@@ -213,9 +226,9 @@ export default function AgentDetailScreen() {
     if (!agent) {
       return {
         eyebrow: 'Next move',
-        title: 'Open Regent Manager first',
-        body: 'Regent Manager gives the quickest read on what changed and what needs attention.',
-        cta: 'Open Regent Manager',
+        title: 'Check this agent first',
+        body: 'The agent brief gives the quickest read on what changed and what needs attention.',
+        cta: 'Open Agent Brief',
         disabled: true,
         accent: BLUE,
         wash: BLUE_WASH,
@@ -225,9 +238,9 @@ export default function AgentDetailScreen() {
     if (agent.runtimeStatus === 'offline') {
       return {
         eyebrow: 'Next move',
-        title: 'Start with Regent Manager',
-        body: 'Review the company brief, then decide whether this operator needs follow-up or a reset.',
-        cta: 'Open Regent Manager',
+        title: 'Start with the agent brief',
+        body: 'Review the brief, then decide whether this agent needs follow-up.',
+        cta: 'Open Agent Brief',
         onPress: openRegentManager,
         accent: DANGER,
         wash: RED_WASH,
@@ -237,9 +250,9 @@ export default function AgentDetailScreen() {
     if (agent.runtimeStatus === 'waiting') {
       return {
         eyebrow: 'Next move',
-        title: 'Open Talk',
-        body: 'Review messages and decision cards for this Regent.',
-        cta: 'Open Talk',
+        title: 'Review approvals',
+        body: 'Review messages, payment requests, and decisions for this agent.',
+        cta: 'Review',
         onPress: openTalk,
         accent: AMBER,
         wash: AMBER_WASH,
@@ -248,21 +261,21 @@ export default function AgentDetailScreen() {
 
     return {
       eyebrow: 'Next move',
-      title: 'Open Talk',
-      body: 'Read messages and review cards from your Regents.',
-      cta: 'Open Talk',
-      onPress: openTalk,
+      title: 'Fund this agent',
+      body: 'Add USDC to the working balance so this agent can pay for tools, services, and work.',
+      cta: 'Fund Agent',
+      onPress: openFundAgent,
       accent: SUCCESS,
       wash: GREEN_WASH,
     };
-  }, [agent, openRegentManager, openTalk]);
+  }, [agent, openFundAgent, openRegentManager, openTalk]);
 
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.centerState}>
           <ActivityIndicator size="large" color={BLUE} />
-          <Text style={styles.loadingText}>Loading operator view…</Text>
+          <Text style={styles.loadingText}>Loading agent view...</Text>
         </View>
       </SafeAreaView>
     );
@@ -272,7 +285,7 @@ export default function AgentDetailScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.centerState}>
-          <Text style={styles.emptyTitle}>This operator is unavailable</Text>
+          <Text style={styles.emptyTitle}>This agent is unavailable</Text>
           <RegentPressable style={styles.primaryButton} onPress={() => router.back()}>
             <Text style={styles.primaryButtonText}>Back</Text>
           </RegentPressable>
@@ -297,7 +310,7 @@ export default function AgentDetailScreen() {
         <View style={styles.heroCard}>
           <View style={styles.heroTop}>
             <View style={styles.heroTitleBlock}>
-              <Text style={styles.eyebrow}>Regents operator</Text>
+              <Text style={styles.eyebrow}>Agent</Text>
               <Text style={styles.heroTitle}>{agent.name}</Text>
             </View>
             <StatusPill
@@ -312,15 +325,15 @@ export default function AgentDetailScreen() {
           <View style={styles.heroActions}>
             <RegentPressable
               style={styles.primaryButton}
-              onPress={openTalk}
+              onPress={openFundAgent}
             >
-              <Text style={styles.primaryButtonText}>Open Talk</Text>
+              <Text style={styles.primaryButtonText}>Fund Agent</Text>
             </RegentPressable>
             <RegentPressable
               style={styles.secondaryButton}
-              onPress={openRegentManager}
+              onPress={openTalk}
             >
-              <Text style={styles.secondaryButtonText}>Open Regent Manager</Text>
+              <Text style={styles.secondaryButtonText}>Review Approvals</Text>
             </RegentPressable>
           </View>
         </View>
@@ -344,8 +357,8 @@ export default function AgentDetailScreen() {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Regent state</Text>
-          <Text style={styles.sectionHint}>Name, setup, plan, and service status for this Regent.</Text>
+          <Text style={styles.sectionTitle}>Agent status</Text>
+          <Text style={styles.sectionHint}>Name, setup, plan, and current status for this agent.</Text>
           <View style={styles.overviewGrid}>
             <View style={styles.overviewTile}>
               <Text style={styles.overviewLabel}>Name</Text>
@@ -365,38 +378,38 @@ export default function AgentDetailScreen() {
               <Text style={styles.overviewLabel}>Plan</Text>
               <Text style={styles.overviewValue}>{platformStatusCopy(agent.platformState.billingStatus)}</Text>
               <Text style={styles.overviewMeta}>
-                {agent.platformState.prepaidBalanceUsd ? `$${agent.platformState.prepaidBalanceUsd} service credit` : 'Credit not listed'}
+                {agent.platformState.prepaidBalanceUsd ? `$${agent.platformState.prepaidBalanceUsd} working balance` : 'Balance not listed'}
               </Text>
             </View>
             <View style={styles.overviewTile}>
-              <Text style={styles.overviewLabel}>Service</Text>
+              <Text style={styles.overviewLabel}>Status</Text>
               <Text style={styles.overviewValue}>{platformStatusCopy(agent.platformState.runtimeStatus)}</Text>
               <Text style={styles.overviewMeta}>
                 {agent.platformState.nextPauseAt ? `Next review ${formatDateShort(agent.platformState.nextPauseAt)}` : 'No pause scheduled'}
               </Text>
             </View>
             <View style={styles.overviewTile}>
-              <Text style={styles.overviewLabel}>Account credit</Text>
+              <Text style={styles.overviewLabel}>Working balance</Text>
               <LiveValueFlash value={`account-credit-${agent.platformState.prepaidBalanceUsd || 'not-listed'}`}>
                 <Text selectable style={styles.overviewValue}>
                   {agent.platformState.prepaidBalanceUsd ? `$${agent.platformState.prepaidBalanceUsd}` : 'Not listed'}
                 </Text>
               </LiveValueFlash>
-              <Text style={styles.overviewMeta}>Service credit</Text>
+              <Text style={styles.overviewMeta}>USDC available for work</Text>
             </View>
             <View style={styles.overviewTile}>
-              <Text style={styles.overviewLabel}>Wallet</Text>
+              <Text style={styles.overviewLabel}>Agent wallet</Text>
               <Text selectable style={styles.overviewValue}>
                 {formatAddress(agent.walletAddress)}
               </Text>
-              <Text style={styles.overviewMeta}>Operator address</Text>
+              <Text style={styles.overviewMeta}>Payment destination</Text>
             </View>
             <View style={styles.overviewTile}>
               <Text style={styles.overviewLabel}>Last active</Text>
               <LiveValueFlash value={`last-active-${formatRelativeTime(agent.lastActiveAt)}`}>
                 <Text style={styles.overviewValue}>{formatRelativeTime(agent.lastActiveAt)}</Text>
               </LiveValueFlash>
-              <Text style={styles.overviewMeta}>Most recent movement</Text>
+              <Text style={styles.overviewMeta}>Most recent update</Text>
             </View>
             <View style={styles.overviewTile}>
               <Text style={styles.overviewLabel}>Team ready</Text>
@@ -413,8 +426,8 @@ export default function AgentDetailScreen() {
         <View style={styles.card}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleBlock}>
-              <Text style={styles.sectionTitle}>Regent Manager</Text>
-              <Text style={styles.sectionHint}>The short company brief tied to this operator.</Text>
+              <Text style={styles.sectionTitle}>Agent Brief</Text>
+              <Text style={styles.sectionHint}>The short company brief tied to this agent.</Text>
             </View>
             <RegentPressable style={styles.secondaryButton} onPress={openRegentManager}>
               <Text style={styles.secondaryButtonText}>Open</Text>
@@ -460,7 +473,7 @@ export default function AgentDetailScreen() {
             </>
           ) : (
             <View style={styles.emptyPanel}>
-              <Text style={styles.emptyPanelText}>Regent Manager is empty right now.</Text>
+              <Text style={styles.emptyPanelText}>Agent Brief is empty right now.</Text>
             </View>
           )}
         </View>
@@ -499,7 +512,7 @@ export default function AgentDetailScreen() {
 
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Recent movement</Text>
-          <Text style={styles.sectionHint}>The latest operator updates across tasks and money movement.</Text>
+          <Text style={styles.sectionHint}>The latest agent updates across tasks and payments.</Text>
           <View style={styles.timeline}>
             {agent.recentActivity.map((activity) => (
               <View key={activity.id} style={styles.timelineRow}>

@@ -19,8 +19,12 @@ import { runRegentHaptic } from '@/components/ui/haptics';
 import { LiveValueFlash } from '@/components/motion/LiveValueFlash';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
+import { fetchWalletFundingChoices } from '@/utils/fetchWalletFundingChoices';
 import { buildEvmTransferCall, isNativeEvmToken } from '@/utils/onchain/buildTransferCall';
 import { parseSolanaAmountToBaseUnits } from '@/utils/onchain/solanaAmount';
+import { regentApi } from '@/utils/regentApi/client';
+import { routes } from '@/utils/navigation/routes';
+import type { WalletFundingChoice } from '@/types/walletFunding';
 import { useCurrentUser, useSendSolanaTransaction, useSendUserOperation, useSolanaAddress } from '@coinbase/cdp-hooks';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
@@ -48,6 +52,7 @@ const { DARK_BG, CARD_BG, CARD_ALT, BLUE_WASH, TEXT_PRIMARY, TEXT_SECONDARY, BLU
 const SCREEN_OFFSET = 12;
 const CARD_OFFSET = 8;
 const STAGGER_STEP = 50;
+const AGENT_FUNDING_FLOW = 'agent-funding';
 
 function buildTimingTransition(reduceMotion: boolean, delay = 0, duration = 220) {
   return reduceMotion
@@ -104,10 +109,40 @@ function formatAddressPreview(address?: string | null) {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
+function isBaseUsdcBalance(balance: WalletFundingChoice) {
+  return balance.network === 'Base' && balance.token?.symbol?.toUpperCase() === 'USDC';
+}
+
+function fundingIdempotencySegment(value?: string | null) {
+  const normalized = value?.trim().toLowerCase();
+  return normalized ? encodeURIComponent(normalized).slice(0, 80) : 'missing';
+}
+
+function buildFundingIdempotencyKey(input: {
+  amount: string;
+  expectedSigner: string;
+  regentId: string;
+  recipientAddress: string;
+  tokenAddress?: string | null;
+}) {
+  return [
+    'regents-mobile',
+    'fund-agent',
+    fundingIdempotencySegment(input.regentId),
+    fundingIdempotencySegment(input.expectedSigner),
+    fundingIdempotencySegment(input.recipientAddress),
+    fundingIdempotencySegment(input.tokenAddress),
+    fundingIdempotencySegment(input.amount),
+    Date.now().toString(36),
+  ].join(':');
+}
+
 export default function TransferScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const recipientLabel = typeof params.recipientLabel === 'string' ? params.recipientLabel : null;
+  const regentId = typeof params.regentId === 'string' ? params.regentId : null;
+  const isAgentFundingFlow = params.flow === AGENT_FUNDING_FLOW;
 
   const [recipientAddress, setRecipientAddress] = useState('');
   const [amount, setAmount] = useState('');
@@ -115,6 +150,8 @@ export default function TransferScreen() {
   const [lastQuickPercentage, setLastQuickPercentage] = useState<number | null>(null);
   const [selectedToken, setSelectedToken] = useState<any>(null);
   const [network, setNetwork] = useState('base'); // base, ethereum, solana
+  const [loadingFundingBalance, setLoadingFundingBalance] = useState(false);
+  const [fundingBalanceError, setFundingBalanceError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [addressError, setAddressError] = useState<string | null>(null);
   // Alert states
@@ -130,6 +167,7 @@ export default function TransferScreen() {
   const [isConfirmationPresented, setIsConfirmationPresented] = useState(false);
   const [reduceMotion, setReduceMotion] = useState(false);
   const quickAmountTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingFundingActionRef = useRef<{ actionId: string; txHash?: string } | null>(null);
 
   const { sendSolanaTransaction } = useSendSolanaTransaction();
   const { sendUserOperation, status: userOpStatus, data: userOpData, error: userOpError } = useSendUserOperation();
@@ -198,8 +236,10 @@ export default function TransferScreen() {
   useEffect(() => {
     if (userOpStatus === 'pending' && userOpData?.userOpHash) {
       showAlert(
-        'Sending funds',
-        'Your transfer is on the way. This can take a few moments.',
+        isAgentFundingFlow ? 'Sending payment' : 'Sending funds',
+        isAgentFundingFlow
+          ? 'Your agent payment is on the way. This can take a few moments.'
+          : 'Your transfer is on the way. This can take a few moments.',
         'info',
         undefined,
         true
@@ -219,6 +259,50 @@ export default function TransferScreen() {
         explorerUrl = `https://sepolia.etherscan.io/tx/${txHash}`;
       } else {
         explorerUrl = `Transaction Hash: ${txHash}`;
+      }
+
+      if (isAgentFundingFlow) {
+        const pendingAction = pendingFundingActionRef.current;
+        if (pendingAction && pendingAction.txHash !== txHash) {
+          pendingAction.txHash = txHash;
+          void (async () => {
+            try {
+              await regentApi.confirmWalletAction({
+                actionId: pendingAction.actionId,
+                txHash,
+                chainId: 8453,
+              });
+
+              const successInfo = [
+                `You sent ${amount} ${selectedToken?.token?.symbol || 'USDC'} to ${recipientLabel || 'this agent'}.`,
+                '',
+                `Network: ${getNetworkLabel(network)}`,
+                `Agent wallet: ${formatAddressPreview(recipientAddress)}`,
+              ].join('\n');
+
+              showAlert('Payment complete', successInfo, 'success', explorerUrl);
+            } catch {
+              const successInfo = [
+                `You sent ${amount} ${selectedToken?.token?.symbol || 'USDC'} to ${recipientLabel || 'this agent'}.`,
+                '',
+                'The payment is on its way. The receipt may take a moment to update.',
+              ].join('\n');
+
+              showAlert('Payment sent', successInfo, 'success', explorerUrl);
+            }
+          })();
+          return;
+        }
+
+        const successInfo = [
+          `You sent ${amount} ${selectedToken?.token?.symbol || 'USDC'} to ${recipientLabel || 'this agent'}.`,
+          '',
+          `Network: ${getNetworkLabel(network)}`,
+          `Agent wallet: ${formatAddressPreview(recipientAddress)}`,
+        ].join('\n');
+
+        showAlert('Payment complete', successInfo, 'success', explorerUrl);
+        return;
       }
 
       const successInfo = [
@@ -241,7 +325,7 @@ export default function TransferScreen() {
         'error'
       );
     }
-  }, [amount, network, selectedToken?.token?.symbol, smartAccountAddress, userOpStatus, userOpData, userOpError]);
+  }, [amount, isAgentFundingFlow, network, recipientAddress, recipientLabel, selectedToken?.token?.symbol, smartAccountAddress, userOpStatus, userOpData, userOpError]);
 
   // Load token data from params (only on mount)
   useEffect(() => {
@@ -260,6 +344,43 @@ export default function TransferScreen() {
       setRecipientAddress(params.recipientAddress);
     }
   }, [params.network, params.recipientAddress, params.token]);
+
+  useEffect(() => {
+    if (!isAgentFundingFlow || params.token || !smartAccountAddress) {
+      return;
+    }
+
+    let active = true;
+    setLoadingFundingBalance(true);
+    setFundingBalanceError(null);
+
+    fetchWalletFundingChoices({ evmAddress: smartAccountAddress, solanaAddress: null })
+      .then((choices) => {
+        if (!active) {
+          return;
+        }
+
+        const baseUsdc = choices.find(isBaseUsdcBalance) || null;
+        setSelectedToken(baseUsdc);
+        setNetwork('base');
+      })
+      .catch(() => {
+        if (!active) {
+          return;
+        }
+        setSelectedToken(null);
+        setFundingBalanceError('We could not check your Base USDC balance. Try again in a moment.');
+      })
+      .finally(() => {
+        if (active) {
+          setLoadingFundingBalance(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isAgentFundingFlow, params.token, smartAccountAddress]);
 
   // Validate address format
   const validateAddress = (address: string) => {
@@ -389,6 +510,36 @@ export default function TransferScreen() {
     });
 
     try {
+      if (isAgentFundingFlow) {
+        if (!regentId) {
+          throw new Error('Choose an agent before sending funds.');
+        }
+
+        if (network !== 'base' || tokenSymbol !== 'USDC' || isNativeTransfer) {
+          throw new Error('Add USDC on Base first, then fund this agent.');
+        }
+
+        const preparedAction = await regentApi.prepareWalletAction({
+          type: 'funding',
+          regentId,
+          expectedSigner: smartAccountAddress,
+          to: call.to,
+          value: call.value.toString(),
+          data: call.data,
+          amount,
+          currency: tokenSymbol,
+          riskCopy: `You are sending ${amount} ${tokenSymbol} to ${recipientLabel || 'this agent'}.`,
+          idempotencyKey: buildFundingIdempotencyKey({
+            amount,
+            expectedSigner: smartAccountAddress,
+            recipientAddress,
+            regentId,
+            tokenAddress,
+          }),
+        });
+        pendingFundingActionRef.current = { actionId: preparedAction.action_id };
+      }
+
       if (isNativeTransfer) {
         await sendUserOperation({
           evmSmartAccount: smartAccountAddress as `0x${string}`,
@@ -580,7 +731,18 @@ export default function TransferScreen() {
   const networkDisplayName = getNetworkLabel(network);
   const tokenBalance = getTokenBalance(selectedToken);
   const usdEstimate = getUsdEstimate(selectedToken, amount);
-  const canContinue = !!recipientAddress && !!amount && !sending;
+  const fundingTarget = recipientLabel || 'this agent';
+  const canContinue =
+    !!recipientAddress &&
+    !!amount &&
+    !sending &&
+    !loadingFundingBalance &&
+    (!isAgentFundingFlow || !!selectedToken);
+  const noBaseUsdcForFunding = isAgentFundingFlow && !loadingFundingBalance && !selectedToken && !fundingBalanceError;
+  let alertConfirmText = 'Got it';
+  if (explorerUrl && !explorerUrl.startsWith('Transaction Hash:')) {
+    alertConfirmText = isAgentFundingFlow ? 'View payment' : 'View transfer';
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -599,7 +761,7 @@ export default function TransferScreen() {
           animate={{ opacity: 1, translateY: 0 }}
           transition={buildTimingTransition(reduceMotion, STAGGER_STEP)}
         >
-          <Text style={styles.headerTitle}>Send</Text>
+          <Text style={styles.headerTitle}>{isAgentFundingFlow ? 'Fund agent' : 'Send'}</Text>
         </EaseView>
         <View style={{ width: 40 }} />
       </View>
@@ -620,8 +782,14 @@ export default function TransferScreen() {
             transition={buildTimingTransition(reduceMotion, STAGGER_STEP * 2)}
             style={styles.introBlock}
           >
-            <Text style={styles.screenTitle}>Who are you sending to?</Text>
-            <Text style={styles.screenSubtitle}>Enter the wallet details first. You will review everything before you send.</Text>
+            <Text style={styles.screenTitle}>
+              {isAgentFundingFlow ? `Fund ${fundingTarget}` : 'Who are you sending to?'}
+            </Text>
+            <Text style={styles.screenSubtitle}>
+              {isAgentFundingFlow
+                ? 'Send Base USDC to this agent so it has a working balance for tools, services, and work.'
+                : 'Enter the wallet details first. You will review everything before you send.'}
+            </Text>
           </EaseView>
 
           <EaseView
@@ -630,10 +798,12 @@ export default function TransferScreen() {
             transition={buildTimingTransition(reduceMotion, STAGGER_STEP * 3)}
             style={styles.card}
           >
-            <Text style={styles.label}>Recipient</Text>
+            <Text style={styles.label}>{isAgentFundingFlow ? 'Agent' : 'Recipient'}</Text>
             {recipientLabel ? (
               <View style={styles.recipientPill}>
-                <Text style={styles.recipientPillText}>Sending to {recipientLabel}</Text>
+                <Text style={styles.recipientPillText}>
+                  {isAgentFundingFlow ? `Funding ${recipientLabel}` : `Sending to ${recipientLabel}`}
+                </Text>
               </View>
             ) : null}
             <View style={styles.inputContainer}>
@@ -648,8 +818,9 @@ export default function TransferScreen() {
                 placeholderTextColor={TEXT_SECONDARY}
                 autoCapitalize="none"
                 autoCorrect={false}
+                editable={!isAgentFundingFlow}
               />
-              {recipientAddress ? (
+              {isAgentFundingFlow ? null : recipientAddress ? (
                 <RegentPressable
                   haptic="selection"
                   pressStyle="icon"
@@ -706,6 +877,8 @@ export default function TransferScreen() {
 
             {usdEstimate ? (
               <Text style={styles.helper}>About ${usdEstimate} USD</Text>
+            ) : isAgentFundingFlow ? (
+              <Text style={styles.helper}>Choose how much USDC this agent can use.</Text>
             ) : (
               <Text style={styles.helper}>Choose how much you want to send.</Text>
             )}
@@ -739,7 +912,9 @@ export default function TransferScreen() {
 
             <LiveValueFlash value={`available-${tokenBalance}-${selectedToken?.token?.symbol || ''}`} style={styles.availableFlash}>
               <Text style={styles.helper}>
-                Available: {tokenBalance} {selectedToken?.token?.symbol || ''}
+                {loadingFundingBalance
+                  ? 'Checking Base USDC...'
+                  : `Available: ${tokenBalance} ${selectedToken?.token?.symbol || ''}`}
               </Text>
             </LiveValueFlash>
 
@@ -750,6 +925,35 @@ export default function TransferScreen() {
             )}
           </EaseView>
 
+          {fundingBalanceError ? (
+            <EaseView
+              initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
+              animate={{ opacity: 1, translateY: 0 }}
+              transition={buildTimingTransition(reduceMotion, STAGGER_STEP * 5)}
+              style={[styles.card, styles.noticeCard]}
+            >
+              <Text style={styles.noticeTitle}>Base USDC is not ready</Text>
+              <Text style={styles.noticeText}>{fundingBalanceError}</Text>
+            </EaseView>
+          ) : null}
+
+          {noBaseUsdcForFunding ? (
+            <EaseView
+              initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
+              animate={{ opacity: 1, translateY: 0 }}
+              transition={buildTimingTransition(reduceMotion, STAGGER_STEP * 5)}
+              style={[styles.card, styles.noticeCard]}
+            >
+              <Text style={styles.noticeTitle}>Add USDC first</Text>
+              <Text style={styles.noticeText}>
+                This agent funding path uses Base USDC. Add USDC, then come back to send it to {fundingTarget}.
+              </Text>
+              <RegentPressable style={styles.inlinePrimaryButton} onPress={() => router.push(routes.wallet())}>
+                <Text style={styles.inlinePrimaryButtonText}>Add USDC</Text>
+              </RegentPressable>
+            </EaseView>
+          ) : null}
+
           <EaseView
             initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
             animate={{ opacity: 1, translateY: 0 }}
@@ -758,8 +962,12 @@ export default function TransferScreen() {
           >
             <Ionicons name="shield-checkmark-outline" size={24} color={TEXT_SECONDARY} />
             <View style={styles.reviewCopy}>
-              <Text style={styles.reviewTitle}>Review transfer</Text>
-              <Text style={styles.reviewText}>You will have a chance to check the details before you send.</Text>
+              <Text style={styles.reviewTitle}>{isAgentFundingFlow ? 'Review payment' : 'Review transfer'}</Text>
+              <Text style={styles.reviewText}>
+                {isAgentFundingFlow
+                  ? 'Check the agent, amount, and destination before money moves.'
+                  : 'You will have a chance to check the details before you send.'}
+              </Text>
             </View>
           </EaseView>
 
@@ -769,7 +977,7 @@ export default function TransferScreen() {
             transition={buildTimingTransition(reduceMotion, STAGGER_STEP * 6)}
             style={styles.card}
           >
-            <Text style={styles.label}>From wallet</Text>
+            <Text style={styles.label}>{isAgentFundingFlow ? 'From your wallet' : 'From wallet'}</Text>
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Wallet</Text>
               <Text style={styles.detailValue} numberOfLines={1}>
@@ -783,7 +991,7 @@ export default function TransferScreen() {
               <Text style={styles.detailValue}>{networkDisplayName}</Text>
             </View>
             <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Asset</Text>
+              <Text style={styles.detailLabel}>{isAgentFundingFlow ? 'Funds' : 'Asset'}</Text>
               <Text style={styles.detailValue}>{selectedToken?.token?.symbol || 'Choose from your wallet'}</Text>
             </View>
             <View style={styles.detailRow}>
@@ -833,7 +1041,7 @@ export default function TransferScreen() {
               {sending ? (
                 <ActivityIndicator color={WHITE} />
               ) : (
-                <Text style={styles.mainSendButtonText}>Continue</Text>
+                <Text style={styles.mainSendButtonText}>{isAgentFundingFlow ? 'Review payment' : 'Continue'}</Text>
               )}
             </RegentPressable>
           </EaseView>
@@ -870,7 +1078,7 @@ export default function TransferScreen() {
               style={styles.confirmationHeader}
             >
               <Ionicons name="shield-checkmark" size={48} color={BLUE} />
-              <Text style={styles.confirmationTitle}>Review transfer</Text>
+              <Text style={styles.confirmationTitle}>{isAgentFundingFlow ? 'Review payment' : 'Review transfer'}</Text>
             </EaseView>
 
             <EaseView
@@ -889,11 +1097,20 @@ export default function TransferScreen() {
               </View>
 
               <View style={styles.confirmRow}>
-                <Text style={styles.confirmLabel}>To</Text>
+                <Text style={styles.confirmLabel}>{isAgentFundingFlow ? 'Agent' : 'To'}</Text>
                 <Text style={styles.confirmValue} numberOfLines={1}>
-                  {recipientAddress.slice(0, 6)}...{recipientAddress.slice(-4)}
+                  {isAgentFundingFlow ? fundingTarget : `${recipientAddress.slice(0, 6)}...${recipientAddress.slice(-4)}`}
                 </Text>
               </View>
+
+              {isAgentFundingFlow ? (
+                <View style={styles.confirmRow}>
+                  <Text style={styles.confirmLabel}>Agent wallet</Text>
+                  <Text style={styles.confirmValue} numberOfLines={1}>
+                    {recipientAddress.slice(0, 6)}...{recipientAddress.slice(-4)}
+                  </Text>
+                </View>
+              ) : null}
 
               <View style={styles.confirmRow}>
                 <Text style={styles.confirmLabel}>Network</Text>
@@ -903,7 +1120,7 @@ export default function TransferScreen() {
               </View>
 
               <View style={styles.confirmRow}>
-                <Text style={styles.confirmLabel}>Token</Text>
+                <Text style={styles.confirmLabel}>{isAgentFundingFlow ? 'Funds' : 'Token'}</Text>
                 <Text style={styles.confirmValue}>
                   {selectedToken?.token?.symbol || 'Unknown'}
                 </Text>
@@ -940,7 +1157,7 @@ export default function TransferScreen() {
                 style={[styles.confirmButton, styles.sendButton]}
                 onPress={handleConfirmedSend}
               >
-                <Text style={styles.sendButtonText}>Send now</Text>
+                <Text style={styles.sendButtonText}>{isAgentFundingFlow ? 'Send to agent' : 'Send now'}</Text>
               </RegentPressable>
             </EaseView>
           </EaseView>
@@ -958,7 +1175,7 @@ export default function TransferScreen() {
           }
           handleAlertDismiss();
         }}
-        confirmText={explorerUrl && !explorerUrl.startsWith('Transaction Hash:') ? "View transfer" : "Got it"}
+        confirmText={alertConfirmText}
         hideButton={isPendingAlert}
       />
     </SafeAreaView>
@@ -1250,6 +1467,19 @@ const styles = StyleSheet.create({
     color: TEXT_SECONDARY,
     fontSize: 14,
     lineHeight: 20,
+    fontFamily: FONTS.body,
+  },
+  inlinePrimaryButton: {
+    alignSelf: 'flex-start',
+    backgroundColor: BLUE,
+    borderRadius: 16,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    marginTop: 4,
+  },
+  inlinePrimaryButtonText: {
+    color: WHITE,
+    fontSize: 14,
     fontFamily: FONTS.body,
   },
   inputError: {

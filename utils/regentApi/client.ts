@@ -439,7 +439,7 @@ export const regentApi = {
     actionId: string;
     txHash: string;
     chainId: number;
-    blockNumber: number;
+    blockNumber?: number;
   }): Promise<PreparedWalletAction> {
     const payload = await requestJson<{ wallet_action: PreparedWalletAction }>(
       mobileWalletConfirmPath(input.actionId),

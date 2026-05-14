@@ -47,24 +47,24 @@ export default function TabLayout() {
       >
         <Tabs.Screen name="index" options={{ href: null }} />
         <Tabs.Screen
-          name="wallet"
+          name="agents"
           options={{
-            title: 'Wallet',
-            tabBarIcon: ({ color, size }) => <Ionicons name="wallet-outline" size={size} color={color} />,
+            title: 'Agents',
+            tabBarIcon: ({ color, size }) => <Ionicons name="people-outline" size={size} color={color} />,
           }}
         />
         <Tabs.Screen
-          name="agents"
+          name="wallet"
           options={{
-            title: 'Regents',
-            tabBarIcon: ({ color, size }) => <Ionicons name="people-outline" size={size} color={color} />,
+            title: 'Fund',
+            tabBarIcon: ({ color, size }) => <Ionicons name="wallet-outline" size={size} color={color} />,
           }}
         />
         <Tabs.Screen
           name="terminal"
           options={{
-            title: 'Talk',
-            tabBarIcon: ({ color, size }) => <Ionicons name="chatbubbles-outline" size={size} color={color} />,
+            title: 'Review',
+            tabBarIcon: ({ color, size }) => <Ionicons name="checkmark-circle-outline" size={size} color={color} />,
           }}
         />
         <Tabs.Screen

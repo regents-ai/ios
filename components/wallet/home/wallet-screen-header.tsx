@@ -9,8 +9,8 @@ export function WalletScreenHeader() {
   return (
     <View style={styles.header}>
       <View style={styles.copy}>
-        <Text style={styles.title}>Wallet</Text>
-        <Text style={styles.subtitle}>Send, buy, and check balances in one place.</Text>
+        <Text style={styles.title}>Fund</Text>
+        <Text style={styles.subtitle}>Add USDC for agent work, then pay or cash out when you need to.</Text>
       </View>
     </View>
   );

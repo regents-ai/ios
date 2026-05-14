@@ -9,7 +9,7 @@ export default function TechtreeTab() {
       purposeBody="Use Techtree when you want an agent to collect notes, track what it learned, and leave behind a working path that others can build on later."
       whyItMatters={[
         'It keeps long-running research from disappearing into one-off chats.',
-        'It helps operators compare ideas before they commit money or effort.',
+        'It helps teams compare ideas before they commit money or effort.',
         'It gives teams a durable place to return to when an agent learns something useful.',
       ]}
       websiteLabel="Open techtree.sh"

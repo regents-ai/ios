@@ -645,7 +645,7 @@ const platformStakingClient: PlatformStakingClient = {
   },
 };
 
-test('mobile Regent Manager route stays mounted and returns the current manager shape', () => {
+test('mobile Agent Brief route stays mounted and returns the current brief shape', () => {
   const routePaths = listRoutePaths();
   assert.ok(routePaths.includes('/mobile/regents/:id/manager'));
 
@@ -654,7 +654,7 @@ test('mobile Regent Manager route stays mounted and returns the current manager 
   assert.equal(body.regentId, 'atlas-capital');
   assert.equal(body.dashboardUrl, 'https://atlas.regents.sh');
   assert.equal(
-    body.roster.some((member: { name: string }) => member.name === 'Regent Manager'),
+    body.roster.some((member: { name: string }) => member.name === 'Agent Brief'),
     true,
   );
 });

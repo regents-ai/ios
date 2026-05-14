@@ -62,9 +62,9 @@ export default function AutolaunchTab() {
           <View style={styles.featureCard}>
             <Ionicons name="chatbubble-ellipses-outline" size={18} color={BLUE} />
             <View style={styles.featureCopy}>
-              <Text style={styles.featureTitle}>Regent Manager first</Text>
+              <Text style={styles.featureTitle}>Agent Brief first</Text>
               <Text style={styles.featureBody}>
-                Use Regent Manager to understand what a Regents team is building before you buy, then come back to track what you hold.
+                Use Agent Brief to understand what an agent team is building before you buy, then come back to track what you hold.
               </Text>
             </View>
           </View>
@@ -74,7 +74,7 @@ export default function AutolaunchTab() {
             <View style={styles.featureCopy}>
               <Text style={styles.featureTitle}>Wallet stays close</Text>
               <Text style={styles.featureBody}>
-                Funding and money movement stay nearby, so you can move quickly without a crowded app.
+                Funding and payments stay nearby, so you can move quickly without a crowded app.
               </Text>
             </View>
           </View>

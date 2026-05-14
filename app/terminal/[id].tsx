@@ -64,12 +64,13 @@ function eventCopy(event: TerminalEvent) {
 }
 
 function eventTitle(event: TerminalEvent) {
+  if (event.type === 'tool.request' && event.amount && event.currency) return 'Payment requested';
   if (event.type === 'tool.request') return 'Review requested';
   if (event.type === 'tool.resolved') return 'Review updated';
   if (event.type === 'session.error') return 'Needs attention';
   if (event.role === 'user') return 'You';
   if (event.role === 'assistant') return 'Regent';
-  return 'Talk';
+  return 'Review';
 }
 
 function approvalMeta(approval: PendingTerminalApproval) {
@@ -79,6 +80,16 @@ function approvalMeta(approval: PendingTerminalApproval) {
   ].filter(Boolean);
 
   return parts.join(' · ');
+}
+
+function approvalTitle(approval: PendingTerminalApproval) {
+  return approval.amount && approval.currency
+    ? `Agent requests ${approval.amount} ${approval.currency}`
+    : approval.action;
+}
+
+function approvalPurpose(approval: PendingTerminalApproval) {
+  return approval.amount && approval.currency ? approval.action : null;
 }
 
 export default function TalkDetailScreen() {
@@ -127,7 +138,7 @@ export default function TalkDetailScreen() {
     } catch (error) {
       setAlertState({
         visible: true,
-        title: 'Could not load Talk',
+        title: 'Could not load reviews',
         message: error instanceof Error ? error.message : 'Try again in a moment.',
         type: 'error',
       });
@@ -216,6 +227,9 @@ export default function TalkDetailScreen() {
     }
   }, [loadSession, resolvingDecision, session, sessionId]);
 
+  const pendingApproval = session?.pendingApproval;
+  const isPaymentApproval = !!pendingApproval?.amount && !!pendingApproval.currency;
+
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
@@ -227,7 +241,7 @@ export default function TalkDetailScreen() {
             <Ionicons name="chevron-back" size={22} color={TEXT_PRIMARY} />
           </RegentPressable>
           <View style={styles.headerTitleGroup}>
-            <Text style={styles.headerEyebrow}>Talk</Text>
+            <Text style={styles.headerEyebrow}>Review</Text>
             <Text style={styles.headerTitle} numberOfLines={1}>{session?.agentName || 'Session'}</Text>
           </View>
           <RegentPressable
@@ -256,7 +270,7 @@ export default function TalkDetailScreen() {
           {loading ? (
             <View style={styles.emptyState}>
               <ActivityIndicator color={BLUE} />
-              <Text style={styles.emptyTitle}>Loading Talk</Text>
+              <Text style={styles.emptyTitle}>Loading reviews</Text>
             </View>
           ) : session ? (
             <>
@@ -270,20 +284,23 @@ export default function TalkDetailScreen() {
                 </View>
               </View>
 
-              {session.pendingApproval && !session.pendingApproval.resolved ? (
+              {pendingApproval && !pendingApproval.resolved ? (
                 <View style={styles.approvalCard}>
                   <View style={styles.approvalHeader}>
                     <View style={styles.approvalIcon}>
                       <Ionicons name="eye-outline" size={18} color={AMBER} />
                     </View>
                     <View style={styles.approvalTitleGroup}>
-                      <Text style={styles.approvalTitle}>{session.pendingApproval.action}</Text>
-                      <Text style={styles.approvalAgent}>{session.pendingApproval.regentName}</Text>
+                      <Text style={styles.approvalTitle}>{approvalTitle(pendingApproval)}</Text>
+                      <Text style={styles.approvalAgent}>{pendingApproval.regentName}</Text>
                     </View>
                   </View>
-                  <Text style={styles.approvalBody}>{session.pendingApproval.riskCopy}</Text>
-                  {approvalMeta(session.pendingApproval) ? (
-                    <Text style={styles.approvalMeta}>{approvalMeta(session.pendingApproval)}</Text>
+                  {approvalPurpose(pendingApproval) ? (
+                    <Text style={styles.approvalPurpose}>Purpose: {approvalPurpose(pendingApproval)}</Text>
+                  ) : null}
+                  <Text style={styles.approvalBody}>{pendingApproval.riskCopy}</Text>
+                  {approvalMeta(pendingApproval) ? (
+                    <Text style={styles.approvalMeta}>{approvalMeta(pendingApproval)}</Text>
                   ) : null}
                   <View style={styles.approvalActions}>
                     <RegentPressable
@@ -301,7 +318,7 @@ export default function TalkDetailScreen() {
                       onPress={() => resolveApproval('approved')}
                     >
                       <Text style={styles.primaryButtonText}>
-                        {resolvingDecision === 'approved' ? 'Saving...' : 'Approve'}
+                        {resolvingDecision === 'approved' ? 'Saving...' : isPaymentApproval ? 'Approve payment' : 'Approve'}
                       </Text>
                     </RegentPressable>
                   </View>
@@ -312,7 +329,7 @@ export default function TalkDetailScreen() {
                 {visibleEvents.length === 0 ? (
                   <View style={styles.emptyEventState}>
                     <Text style={styles.emptyTitle}>No messages yet</Text>
-                    <Text style={styles.emptyBody}>Send a note to start the thread.</Text>
+                    <Text style={styles.emptyBody}>Send a note to start the review.</Text>
                   </View>
                 ) : (
                   visibleEvents.map((event) => (
@@ -339,8 +356,8 @@ export default function TalkDetailScreen() {
             </>
           ) : (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyTitle}>Talk session not found</Text>
-              <Text style={styles.emptyBody}>Go back and choose another Talk session.</Text>
+              <Text style={styles.emptyTitle}>Review not found</Text>
+              <Text style={styles.emptyBody}>Go back and choose another review.</Text>
             </View>
           )}
         </ScrollView>
@@ -350,7 +367,7 @@ export default function TalkDetailScreen() {
             <TextInput
               value={draft}
               onChangeText={setDraft}
-              placeholder={session.composerPlaceholder || 'Reply...'}
+              placeholder={session.composerPlaceholder || 'Message this agent...'}
               placeholderTextColor={TEXT_SECONDARY}
               multiline
               style={styles.composerInput}
@@ -499,6 +516,12 @@ const styles = StyleSheet.create({
   approvalAgent: {
     color: AMBER,
     fontSize: 12,
+    fontFamily: FONTS.body,
+  },
+  approvalPurpose: {
+    color: TEXT_PRIMARY,
+    fontSize: 13,
+    lineHeight: 19,
     fontFamily: FONTS.body,
   },
   approvalBody: {

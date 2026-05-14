@@ -5,6 +5,19 @@ export const routes = {
     return '/wallet';
   },
 
+  walletSend(params?: {
+    flow?: 'agent-funding';
+    regentId?: string;
+    recipientAddress?: string;
+    recipientLabel?: string;
+    network?: string;
+    token?: string;
+  }): Href {
+    return params
+      ? { pathname: '/wallet/send', params }
+      : '/wallet/send';
+  },
+
   staking(): Href {
     return '/staking';
   },

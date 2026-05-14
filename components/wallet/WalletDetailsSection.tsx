@@ -144,8 +144,8 @@ export function WalletDetailsSection({ walletDetails }: { walletDetails: WalletD
       <View style={styles.card}>
         <View style={styles.cardHeader}>
           <View style={styles.cardHeaderCopy}>
-            <Text style={styles.cardTitle}>Wallet actions</Text>
-            <Text style={styles.cardHint}>Keep your main address, recent activity, and everyday actions in one place.</Text>
+            <Text style={styles.cardTitle}>Funding actions</Text>
+            <Text style={styles.cardHint}>Keep your funds, recent activity, and agent payment actions in one place.</Text>
           </View>
           <RegentPressable pressStyle="icon" onPress={refreshWalletSnapshot} disabled={refreshingWallet} style={styles.iconButton}>
             <SpinningRefreshIcon refreshing={refreshingWallet} size={18} color={TEXT_PRIMARY} />
@@ -155,15 +155,15 @@ export function WalletDetailsSection({ walletDetails }: { walletDetails: WalletD
         <View style={styles.featuredCard}>
           <View style={styles.featuredTopRow}>
             <View style={styles.featuredCopy}>
-              <Text style={styles.featuredEyebrow}>Base first</Text>
-              <Text style={styles.featuredTitle}>USDC stays front and center.</Text>
+              <Text style={styles.featuredEyebrow}>Agent funding</Text>
+              <Text style={styles.featuredTitle}>Base USDC is ready for agent work.</Text>
             </View>
             <View style={styles.featuredBadge}>
               <Text style={styles.featuredBadgeText}>Primary route</Text>
             </View>
           </View>
           <Text style={styles.featuredBody}>
-            Use Base for the quickest Regents path, then keep Ethereum and Solana nearby when you need them.
+            Use Base USDC to fund agents quickly, then keep other balances nearby when you need them.
           </Text>
           <View style={styles.featuredStats}>
             <View style={styles.featuredStat}>
@@ -177,7 +177,7 @@ export function WalletDetailsSection({ walletDetails }: { walletDetails: WalletD
               </LiveValueFlash>
             </View>
             <View style={styles.featuredStat}>
-              <Text style={styles.featuredStatLabel}>Wallet total</Text>
+              <Text style={styles.featuredStatLabel}>Total funds</Text>
               <LiveValueFlash value={loadingBalances && !hasAnyWalletBalance ? 'updating-total' : formatUsdValue(walletUsdTotal)}>
                 <Text style={styles.featuredStatValue}>
                   {loadingBalances && !hasAnyWalletBalance ? 'Updating…' : formatUsdValue(walletUsdTotal)}
@@ -272,7 +272,7 @@ export function WalletDetailsSection({ walletDetails }: { walletDetails: WalletD
                   <View key={group.network} style={styles.networkSection}>
                     <Text style={styles.networkTitle}>{group.network}</Text>
                     {group.balances.length === 0 ? (
-                      <Text style={styles.emptyText}>No tokens yet.</Text>
+                    <Text style={styles.emptyText}>No funds yet.</Text>
                     ) : (
                       group.balances.map((balance) => renderBalanceRow(balance, group.network, true))
                     )}
@@ -310,7 +310,7 @@ export function WalletDetailsSection({ walletDetails }: { walletDetails: WalletD
                   <View key={group.network} style={styles.networkSection}>
                     <Text style={styles.networkTitle}>{group.network}</Text>
                     {group.balances.length === 0 ? (
-                      <Text style={styles.emptyText}>No tokens yet.</Text>
+                    <Text style={styles.emptyText}>No funds yet.</Text>
                     ) : (
                       group.balances.map((balance) => renderBalanceRow(balance, group.network, false))
                     )}

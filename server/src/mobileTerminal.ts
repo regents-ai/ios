@@ -154,7 +154,7 @@ function pendingApprovalFromRwr(approval: RwrApproval, regentName: string): Pend
     requestId: String(approval.id),
     action: approval.approval_type || 'Review request',
     regentName,
-    riskCopy: approval.risk_summary || 'Review the requested work before it continues.',
+    riskCopy: approval.risk_summary || 'Review the requested payment or action before this agent continues.',
     ...approvalMoneyFields(approval),
     expiresAt: approval.expires_at || approval.updated_at,
     resolved: approval.status !== 'pending',
@@ -180,7 +180,7 @@ function detailFromWorkItem(item: RwrWorkItem, companies: RwrCompany[]): Termina
 
   return {
     ...summary,
-    composerPlaceholder: `Reply to ${summary.agentName}...`,
+    composerPlaceholder: `Message ${summary.agentName}...`,
   };
 }
 
@@ -193,7 +193,7 @@ function detailFromRun(run: RwrRun, workItem: RwrWorkItem, companies: RwrCompany
     status: pendingApproval ? 'waiting' : statusFromRun(run),
     latestNote: run.summary || run.failure_reason || summary.latestNote,
     lastUpdatedAt: run.updated_at,
-    composerPlaceholder: `Reply to ${summary.agentName}...`,
+    composerPlaceholder: `Message ${summary.agentName}...`,
   };
 
   if (pendingApproval) {
@@ -256,7 +256,7 @@ function approvalRequestEvent(approval: RwrApproval, sessionId: string, regentNa
     requestId: String(approval.id),
     action: approval.approval_type || 'Review request',
     regentName,
-    riskCopy: approval.risk_summary || 'Review the requested work before it continues.',
+    riskCopy: approval.risk_summary || 'Review the requested payment or action before this agent continues.',
     ...approvalMoneyFields(approval),
   };
 }
@@ -335,7 +335,7 @@ export async function createTerminalSession(
   }
 
   const created = await client.createWorkItem(auth, company.id, {
-    title: `${input.agentName} mobile conversation`,
+    title: `${input.agentName} mobile review`,
     description: 'Started from mobile.',
     visibility: 'operator',
     metadata: { source: 'regents-mobile' },
@@ -345,7 +345,7 @@ export async function createTerminalSession(
   }
 
   const run = await client.startRun(auth, company.id, created.data.id, {
-    instructions: `Start a mobile conversation with ${input.agentName}.`,
+    instructions: `Start a mobile review with ${input.agentName}.`,
     metadata: { source: 'regents-mobile' },
   });
   if (run.kind !== 'ok') {

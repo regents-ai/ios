@@ -344,15 +344,15 @@ export function getRegentForUserFromPlatformProjection(
   const summary = summaryFromCompany(userId, projection, company);
   return {
     ...summary,
-    runtimeHeadline: `${summary.name} is ${summary.runtimeStatus === 'online' ? 'ready' : 'waiting for review'}.`,
+    runtimeHeadline: `${summary.name} is ${summary.runtimeStatus === 'online' ? 'ready for work' : 'waiting for review'}.`,
     mission:
       company.company.public_summary ||
-      `${summary.name} keeps company work, wallet context, and operator review together.`,
+      `${summary.name} keeps work, payments, and reviews together.`,
     recentActivity: [
       {
         id: `${summary.id}-platform-state`,
-        title: 'Company state loaded',
-        detail: `${summary.name} is connected to the current mobile Regent record.`,
+        title: 'Agent status loaded',
+        detail: `${summary.name} is ready to show work, payments, and reviews on mobile.`,
         at: summary.lastActiveAt,
       },
     ],
@@ -376,50 +376,50 @@ export function getRegentManagerForUserFromPlatformProjection(
     headline: `${company.company.name} is ready for a mobile brief.`,
     companySummary:
       company.company.public_summary ||
-      `${company.company.name} keeps operator work, wallet review, and company status visible from mobile.`,
+      `${company.company.name} keeps agent work, payment review, and company status visible from mobile.`,
     dashboardUrl,
     goals: [
       {
         id: `${id}-goal-runtime`,
-        title: 'Keep the company runtime ready',
+        title: 'Keep the agent ready for work',
         status: company.company.runtime_status,
-        note: `Workspace is ${company.runtime.workspace.status}; Hermes is ${company.runtime.hermes.status}.`,
+        note: `Current work status is ${company.runtime.workspace.status}. Review status is ${company.runtime.hermes.status}.`,
       },
     ],
     activeTasks: [
       {
         id: `${id}-task-review`,
-        title: 'Review the next operator move',
+        title: 'Review the next agent move',
         status: runtimeStatusForCompany(company) === 'online' ? 'On track' : 'Waiting',
-        owner: 'Regent Manager',
-        note: 'Talk will show human reviews when it is ready.',
+        owner: 'Agent Brief',
+        note: 'Reviews will appear when this agent needs a decision.',
       },
     ],
     recentEvents: [
       {
         id: `${id}-event-projection`,
-        title: 'Company record refreshed',
-        detail: `${company.company.name} was loaded from the current company record.`,
+        title: 'Agent record refreshed',
+        detail: `${company.company.name} was loaded from the current agent record.`,
         at: nowIso(),
       },
     ],
     roster: [
       {
         id: `${id}-roster-manager`,
-        name: 'Regent Manager',
-        role: 'Company brief',
+        name: 'Agent Brief',
+        role: 'Agent brief',
         status: 'Ready',
       },
       {
         id: `${id}-roster-talk`,
-        name: 'Talk',
-        role: 'Messages and reviews',
+        name: 'Review',
+        role: 'Payment requests and reviews',
         status: 'Open',
       },
       {
         id: `${id}-roster-workspace`,
-        name: 'Workspace',
-        role: 'Company runtime',
+        name: 'Work status',
+        role: 'Agent readiness',
         status: company.runtime.workspace.status,
       },
     ],

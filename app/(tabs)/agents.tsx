@@ -68,7 +68,7 @@ function regentTone(agent: RegentSummary) {
       label: 'Needs you',
       accent: DANGER,
       wash: RED_WASH,
-      summary: agent.treasuryNote || 'This Regent has gone quiet and needs a closer look.',
+      summary: agent.treasuryNote || 'This agent has gone quiet and needs a closer look.',
     };
   }
 
@@ -77,7 +77,7 @@ function regentTone(agent: RegentSummary) {
       label: 'Review',
       accent: AMBER,
       wash: AMBER_WASH,
-      summary: agent.treasuryNote || 'A decision is waiting before this Regent can keep moving.',
+      summary: agent.treasuryNote || 'A decision is waiting before this agent can keep moving.',
     };
   }
 
@@ -94,7 +94,7 @@ function regentTone(agent: RegentSummary) {
     label: 'Steady',
     accent: SUCCESS,
     wash: GREEN_WASH,
-    summary: agent.treasuryNote || 'This Regent is moving without needing much from you right now.',
+    summary: agent.treasuryNote || 'This agent is moving without needing much from you right now.',
   };
 }
 
@@ -102,7 +102,7 @@ function shouldShowRegentDot(agent: RegentSummary) {
   return agent.runtimeStatus === 'online' && agent.status === 'active';
 }
 
-function accountCreditCopy(agent: RegentSummary) {
+function workingBalanceCopy(agent: RegentSummary) {
   return agent.platformState.prepaidBalanceUsd
     ? `$${formatCurrencyAmount(agent.platformState.prepaidBalanceUsd)}`
     : 'Not listed';
@@ -162,7 +162,7 @@ export default function AgentsTab() {
     } catch (error) {
       setAlertState({
         visible: true,
-        title: 'Could not load Regents',
+        title: 'Could not load agents',
         message: error instanceof Error ? error.message : 'Please try again in a moment.',
         type: 'error',
       });
@@ -203,7 +203,7 @@ export default function AgentsTab() {
       ? [{
           id: 'regent-staking',
           rank: 2,
-          title: 'REGENT staking',
+          title: 'Track rewards',
           body: stakingCommandBody(staking),
           meta: staking.paused ? 'Paused' : staking.chain_label,
           icon: 'sparkles-outline',
@@ -215,10 +215,10 @@ export default function AgentsTab() {
     const talkItem: CommandCenterItem = {
       id: 'talk',
       rank: 3,
-      title: 'Talk messages',
-      body: 'Read messages and review cards from your Regents.',
-      meta: 'Open',
-      icon: 'chatbubble-ellipses-outline',
+      title: 'Review approvals',
+      body: 'Approve agent payments and decisions before work continues.',
+      meta: 'Review',
+      icon: 'checkmark-circle-outline',
       accent: BLUE,
       onPress: () => router.push(routes.terminal()),
     };
@@ -233,9 +233,9 @@ export default function AgentsTab() {
           items.push({
             id: `${agent.id}-funding`,
             rank: 1,
-            title: `${agent.name} needs more runway`,
-            body: `Account credit is ${accountCreditCopy(agent)}.`,
-            meta: agent.platformState.billingStatus,
+            title: `${agent.name} needs a working balance`,
+            body: `Working balance is ${workingBalanceCopy(agent)}.`,
+            meta: 'Fund agent',
             icon: 'wallet-outline',
             accent: DANGER,
             onPress: () => router.push(routes.agent(agent.id)),
@@ -245,8 +245,8 @@ export default function AgentsTab() {
         items.push({
           id: `${agent.id}-runway`,
           rank: 4,
-          title: `${agent.name} wallet runway`,
-          body: `Account credit is ${accountCreditCopy(agent)}.`,
+          title: `${agent.name} runway`,
+          body: `Working balance is ${workingBalanceCopy(agent)}.`,
           meta: formatWalletAddress(agent.walletAddress),
           icon: 'speedometer-outline',
           accent: creditValue(agent) <= 10 ? ORANGE : SUCCESS,
@@ -281,36 +281,36 @@ export default function AgentsTab() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadAgents(true)} tintColor={BLUE} />}
         >
           <View style={styles.heroCard}>
-            <Text style={styles.eyebrow}>Regents</Text>
-            <Text style={styles.heroTitle}>Run the work from one place</Text>
+            <Text style={styles.eyebrow}>Agents</Text>
+            <Text style={styles.heroTitle}>Fund an AI agent in seconds</Text>
             <Text style={styles.heroBody}>
-              See which Regents are moving, step into the one that needs you next, and keep money close by.
+              Add USDC, send it to an agent working balance, approve what it spends, and track every result.
             </Text>
 
             <View style={styles.heroActions}>
               <RegentPressable
-                onPress={() => router.push('/wallet')}
+                onPress={() => router.push(leadRegent ? routes.agent(leadRegent.id) : routes.wallet())}
                 style={styles.primaryButton}
               >
-                <Text style={styles.primaryButtonText}>Open Wallet</Text>
+                <Text style={styles.primaryButtonText}>Fund Agent</Text>
               </RegentPressable>
               <RegentPressable
-                onPress={() => router.push(routes.staking())}
+                onPress={() => router.push(routes.wallet())}
                 style={styles.secondaryButton}
               >
-                <Text style={styles.secondaryButtonText}>Open Staking</Text>
+                <Text style={styles.secondaryButtonText}>Add USDC</Text>
               </RegentPressable>
               <RegentPressable
                 onPress={() => router.push(routes.terminal())}
                 style={styles.secondaryButton}
               >
-                <Text style={styles.secondaryButtonText}>Open Talk</Text>
+                <Text style={styles.secondaryButtonText}>Review Approvals</Text>
               </RegentPressable>
               <RegentPressable
-                onPress={() => router.push('/autolaunch')}
+                onPress={() => router.push(routes.staking())}
                 style={styles.secondaryButton}
               >
-                <Text style={styles.secondaryButtonText}>Open Buy</Text>
+                <Text style={styles.secondaryButtonText}>Track Rewards</Text>
               </RegentPressable>
             </View>
           </View>
@@ -390,9 +390,9 @@ export default function AgentsTab() {
 
               <View style={styles.focusMetaRow}>
                 <View style={styles.focusMetaTile}>
-                  <Text style={styles.metaLabel}>Account credit</Text>
-                  <LiveValueFlash value={`lead-credit-${accountCreditCopy(leadRegent)}`}>
-                    <Text style={styles.metaValue}>{accountCreditCopy(leadRegent)}</Text>
+                  <Text style={styles.metaLabel}>Working balance</Text>
+                  <LiveValueFlash value={`lead-credit-${workingBalanceCopy(leadRegent)}`}>
+                    <Text style={styles.metaValue}>{workingBalanceCopy(leadRegent)}</Text>
                   </LiveValueFlash>
                 </View>
                 <View style={styles.focusMetaTile}>
@@ -404,21 +404,21 @@ export default function AgentsTab() {
               </View>
 
               <View style={styles.focusFooter}>
-                <Text style={styles.footerLink}>Open Regent</Text>
+                <Text style={styles.footerLink}>Open Agent</Text>
                 <Ionicons name="arrow-forward" size={18} color={BLUE} />
               </View>
             </RegentPressable>
           ) : (
             <View style={styles.emptyCard}>
               <Ionicons name="sparkles-outline" size={28} color={BLUE} />
-              <Text style={styles.emptyTitle}>No Regents yet</Text>
-              <Text style={styles.emptyText}>Your Regents will show up here once they are ready to follow.</Text>
+              <Text style={styles.emptyTitle}>No agents yet</Text>
+              <Text style={styles.emptyText}>Your agents will show up here when they are ready to fund, pay, and track.</Text>
             </View>
           )}
 
           {supportingRegents.length > 0 ? (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>All Regents</Text>
+              <Text style={styles.sectionTitle}>All Agents</Text>
               <View style={styles.regentList}>
                 {supportingRegents.map((agent) => {
                   const tone = regentTone(agent);
@@ -440,8 +440,8 @@ export default function AgentsTab() {
 
                       <View style={styles.regentRowBottom}>
                         <Text style={styles.regentMeta}>{formatWalletAddress(agent.walletAddress)}</Text>
-                        <LiveValueFlash value={`${agent.id}-credit-${accountCreditCopy(agent)}`} style={styles.regentMetaFlash}>
-                          <Text style={styles.regentMeta}>Credit {accountCreditCopy(agent)}</Text>
+                        <LiveValueFlash value={`${agent.id}-credit-${workingBalanceCopy(agent)}`} style={styles.regentMetaFlash}>
+                          <Text style={styles.regentMeta}>Balance {workingBalanceCopy(agent)}</Text>
                         </LiveValueFlash>
                       </View>
                     </RegentPressable>
@@ -460,9 +460,9 @@ export default function AgentsTab() {
                 onPress={() => router.push(routes.terminal())}
               >
                 <Ionicons name="chatbubble-ellipses-outline" size={18} color={BLUE} />
-                <Text style={styles.quickTitle}>Talk</Text>
-                <Text style={styles.quickBody} numberOfLines={2}>Messages and review cards stay together.</Text>
-                <Text style={styles.quickMeta}>Open</Text>
+                <Text style={styles.quickTitle}>Review</Text>
+                <Text style={styles.quickBody} numberOfLines={2}>Payment requests and approvals stay together.</Text>
+                <Text style={styles.quickMeta}>Review</Text>
               </RegentPressable>
 
               <RegentPressable
@@ -471,8 +471,8 @@ export default function AgentsTab() {
                 style={styles.quickCard}
               >
                 <Ionicons name="wallet-outline" size={18} color={BLUE} />
-                <Text style={styles.quickTitle}>Wallet</Text>
-                <Text style={styles.quickBody} numberOfLines={2}>Fund a Regent or move money back when the work is done.</Text>
+                <Text style={styles.quickTitle}>Fund</Text>
+                <Text style={styles.quickBody} numberOfLines={2}>Add USDC for agent work or move money back when work is done.</Text>
               </RegentPressable>
 
               <RegentPressable

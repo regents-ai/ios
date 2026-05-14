@@ -21,8 +21,8 @@ export function FocusPathSection({
     <RegentPressable haptic="selection" pressStyle="card" style={[styles.focusCard, isBaseUsdcPath && styles.focusCardActive]} onPress={onPress}>
       <View style={styles.focusHeader}>
         <View style={styles.focusCopy}>
-          <Text style={styles.eyebrow}>Base + USDC</Text>
-          <Text style={styles.focusTitle}>Keep the quickest Regents path in view.</Text>
+          <Text style={styles.eyebrow}>Apple Pay to USDC on Base</Text>
+          <Text style={styles.focusTitle}>Fund an agent working balance.</Text>
         </View>
         <View style={[styles.badge, isBaseUsdcPath && styles.badgeActive]}>
           <Text style={[styles.badgeText, isBaseUsdcPath && styles.badgeTextActive]}>
@@ -30,9 +30,9 @@ export function FocusPathSection({
           </Text>
         </View>
       </View>
-      <Text style={styles.bodyText}>Buy on Base, move USDC faster, and keep cash-out paths easier to reach.</Text>
+      <Text style={styles.bodyText}>Add USDC, then send it to an agent for tools, services, and work.</Text>
       <View style={styles.tagRow}>
-        {['Base first', 'USDC default', 'Fewer steps'].map(tag => (
+        {['Apple Pay', 'USDC on Base', 'Agent budget'].map(tag => (
           <View key={tag} style={styles.tag}>
             <Text style={styles.tagText}>{tag}</Text>
           </View>
@@ -79,7 +79,7 @@ export function AmountQuoteSection({
   return (
     <>
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Buy</Text>
+        <Text style={styles.sectionTitle}>Add funds</Text>
         <View style={[styles.inputRow, amountFocused && styles.inputRowFocused]}>
           <TextInput
             value={amount}
@@ -115,7 +115,7 @@ export function AmountQuoteSection({
             {isLoadingLimits ? (
               <Text style={[styles.helper, { fontStyle: 'italic' }]}>Loading your limits...</Text>
             ) : null}
-            {limits ? <Text style={[styles.helper, styles.helperTight]}>Test purchases are capped at $5 per transaction.</Text> : null}
+            {limits ? <Text style={[styles.helper, styles.helperTight]}>Purchases must stay within the limit shown above.</Text> : null}
           </View>
         )}
       </View>
@@ -206,8 +206,8 @@ export function AssetNetworkSection({
       </RegentPressable>
       <Text style={styles.helper}>
         {isBaseUsdcPath
-          ? 'This keeps your default buy path on Base with USDC.'
-          : 'Base + USDC is the quickest path for most Regents wallet tasks.'}
+          ? 'This keeps your agent funding path on Base with USDC.'
+          : 'Base USDC is the quickest path for most agent payments.'}
       </Text>
       <View style={[styles.rowBetween, styles.dividerTop]}>
         <Text style={styles.label}>Network</Text>
@@ -332,7 +332,7 @@ export function ConfirmationSection({
   return (
     <>
       <SwipeToConfirm
-        label={isBaseUsdcPath ? 'Swipe to buy USDC' : 'Swipe to buy'}
+        label={isBaseUsdcPath ? 'Swipe to add USDC' : 'Swipe to add funds'}
         disabled={disabled}
         onConfirm={onSwipeConfirm}
         isLoading={isLoading}

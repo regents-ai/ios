@@ -78,7 +78,7 @@ export default function LoginScreen() {
             animate={{ opacity: 1, translateY: 0 }}
             transition={buildEntryTransition(reduceMotion, STAGGER_STEP)}
           >
-            <Text style={styles.title}>Set up your Regents</Text>
+            <Text style={styles.title}>Fund an AI agent in seconds</Text>
           </EaseView>
 
           <EaseView
@@ -86,7 +86,7 @@ export default function LoginScreen() {
             animate={{ opacity: 1, translateY: 0 }}
             transition={buildEntryTransition(reduceMotion, STAGGER_STEP * 2)}
           >
-            <Text style={styles.subtitle}>Sign in to continue.</Text>
+            <Text style={styles.subtitle}>Sign in to add USDC, pay agents, and review what they spend.</Text>
           </EaseView>
 
           <EaseView
@@ -116,7 +116,7 @@ export default function LoginScreen() {
             animate={{ opacity: 1, translateY: 0 }}
             transition={buildEntryTransition(reduceMotion, STAGGER_STEP * 5)}
           >
-            <Text style={styles.helperText}>You can choose Apple Pay with Coinbase after you sign in.</Text>
+            <Text style={styles.helperText}>Apple Pay is available after sign-in where supported.</Text>
           </EaseView>
         </ScrollView>
       </KeyboardAvoidingView>

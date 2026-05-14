@@ -89,7 +89,7 @@ export default function TerminalTab() {
     } catch (error) {
       setAlertState({
         visible: true,
-        title: 'Could not load Talk',
+        title: 'Could not load reviews',
         message: error instanceof Error ? error.message : 'Try again in a moment.',
         type: 'error',
       });
@@ -133,8 +133,8 @@ export default function TerminalTab() {
       >
         <View style={styles.header}>
           <View style={styles.titleGroup}>
-            <Text style={styles.eyebrow}>Talk</Text>
-            <Text style={styles.title}>Messages and reviews</Text>
+            <Text style={styles.eyebrow}>Review</Text>
+            <Text style={styles.title}>Approvals and payments</Text>
           </View>
           <RegentPressable
             pressStyle="icon"
@@ -160,15 +160,15 @@ export default function TerminalTab() {
         {loading ? (
           <View style={styles.emptyState}>
             <ActivityIndicator color={BLUE} />
-            <Text style={styles.emptyTitle}>Loading Talk</Text>
+            <Text style={styles.emptyTitle}>Loading reviews</Text>
           </View>
         ) : sortedSessions.length === 0 ? (
           <View style={styles.emptyState}>
             <View style={styles.emptyIcon}>
               <Ionicons name="chatbubble-ellipses-outline" size={24} color={BLUE} />
             </View>
-            <Text style={styles.emptyTitle}>No Talk sessions yet</Text>
-            <Text style={styles.emptyBody}>Messages and review cards will appear here when a Regent has work for you.</Text>
+            <Text style={styles.emptyTitle}>No reviews yet</Text>
+            <Text style={styles.emptyBody}>Payment requests and approval cards will appear here when an agent needs you.</Text>
           </View>
         ) : (
           <View style={styles.sessionList}>
@@ -196,7 +196,9 @@ export default function TerminalTab() {
                     {session.pendingApproval && !session.pendingApproval.resolved ? (
                       <View style={styles.reviewChip}>
                         <Ionicons name="eye-outline" size={14} color={AMBER} />
-                        <Text style={styles.reviewText}>Review waiting</Text>
+                        <Text style={styles.reviewText}>
+                          {session.pendingApproval.amount && session.pendingApproval.currency ? 'Payment review' : 'Review waiting'}
+                        </Text>
                       </View>
                     ) : null}
                     <Ionicons name="chevron-forward" size={18} color={TEXT_SECONDARY} />

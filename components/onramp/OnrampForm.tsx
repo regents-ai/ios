@@ -477,7 +477,7 @@ export function OnrampForm({
       });
     } else if (isAuthenticated) {
       nextNotices.push({
-        title: 'Live mode',
+        title: 'Real money',
         message: address
           ? `Successful purchases will move real money.\n\nBuying to: ${address}`
           : 'Successful purchases will move real money.',
