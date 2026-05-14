@@ -48,6 +48,7 @@ test('mobile Talk surfaces use the contracted terminal routes', () => {
   assert.match(terminalDetail, /regentApi\.getTerminalSession/);
   assert.match(terminalDetail, /regentApi\.getTerminalEvents/);
   assert.match(terminalDetail, /regentApi\.sendTerminalMessage/);
+  assert.match(terminalDetail, /nextSession\.id !== sessionId[\s\S]*router\.replace\(routes\.terminalSession\(nextSession\.id\)\)/);
   assert.match(terminalDetail, /regentApi\.resolveTerminalApproval/);
   assert.match(agentsTab, /router\.push\(routes\.terminal\(\)\)/);
   assert.match(agentDetail, /router\.push\(routes\.terminal\(\)\)/);

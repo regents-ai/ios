@@ -10,6 +10,7 @@ import {
   TerminalSessionDetail,
   TerminalSessionStatus,
 } from '@/types/regents';
+import { routes } from '@/utils/navigation/routes';
 import { regentApi } from '@/utils/regentApi/client';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -174,6 +175,11 @@ export default function TalkDetailScreen() {
       const nextSession = await regentApi.sendTerminalMessage({ sessionId, text });
       setSession(nextSession);
       setDraft('');
+      if (nextSession.id !== sessionId) {
+        router.replace(routes.terminalSession(nextSession.id));
+        return;
+      }
+
       await loadSession(true);
     } catch (error) {
       setAlertState({
@@ -185,7 +191,7 @@ export default function TalkDetailScreen() {
     } finally {
       setSending(false);
     }
-  }, [draft, loadSession, sending, sessionId]);
+  }, [draft, loadSession, router, sending, sessionId]);
 
   const resolveApproval = useCallback(async (decision: 'approved' | 'denied') => {
     const requestId = session?.pendingApproval?.requestId;
