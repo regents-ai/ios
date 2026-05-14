@@ -1,4 +1,5 @@
 import { Router, type Request, type Response } from 'express';
+import { decodeFunctionData, parseUnits, type Hex } from 'viem';
 import { z } from 'zod';
 
 import { verifyBaseReceipt } from './baseReceiptVerification.js';
@@ -9,6 +10,7 @@ import {
   confirmRegentReturnRequestForUser,
   createRegentFundingIntentForUser,
   createRegentReturnRequestForUser,
+  getRegentBaseSnapshotForUserFromPlatformProjection,
   getRegentFundingIntentForUser,
   getRegentForUserFromPlatformProjection,
   getRegentManagerForUserFromPlatformProjection,
@@ -44,12 +46,12 @@ const agentIdParamsSchema = z.object({
 
 const returnRequestParamsSchema = z.object({
   id: z.string().min(1),
-  returnRequestId: z.string().min(1),
+  return_request_id: z.string().min(1),
 });
 
 const fundingIntentParamsSchema = z.object({
   id: z.string().min(1),
-  fundingIntentId: z.string().min(1),
+  funding_intent_id: z.string().min(1),
 });
 
 const terminalSessionParamsSchema = z.object({
@@ -62,7 +64,7 @@ const terminalEventsQuerySchema = z.object({
 
 const terminalApprovalParamsSchema = z.object({
   id: z.string().min(1),
-  requestId: z.string().min(1),
+  request_id: z.string().min(1),
 });
 
 const receiptSchema = z.object({
@@ -75,6 +77,18 @@ const receiptSchema = z.object({
 const evmAddressSchema = z.string().regex(/^0x[a-fA-F0-9]{40}$/);
 const decimalValueSchema = z.string().regex(/^\d+$/);
 const hexDataSchema = z.string().regex(/^0x([a-fA-F0-9]{2})*$/);
+const erc20TransferAbi = [
+  {
+    type: 'function',
+    name: 'transfer',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'to', type: 'address' },
+      { name: 'amount', type: 'uint256' },
+    ],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+] as const;
 
 const expectedBaseTransactionSchema = z.object({
   chainId: z.literal(8453),
@@ -87,6 +101,35 @@ const expectedBaseTransactionSchema = z.object({
 const stakingWalletBodySchema = z.object({
   walletAddress: evmAddressSchema,
 });
+
+function sameAddress(first: string, second: string) {
+  return first.toLowerCase() === second.toLowerCase();
+}
+
+function fundingTransferMatchesIntent(input: {
+  amount: string;
+  destinationWalletAddress: string;
+  value: string;
+  data: string;
+}) {
+  try {
+    const decoded = decodeFunctionData({
+      abi: erc20TransferAbi,
+      data: input.data as Hex,
+    });
+
+    const [recipient, amount] = decoded.args;
+
+    return (
+      decoded.functionName === 'transfer' &&
+      sameAddress(recipient, input.destinationWalletAddress) &&
+      amount === parseUnits(input.amount, 6) &&
+      input.value === '0'
+    );
+  } catch {
+    return false;
+  }
+}
 
 const stakingAmountBodySchema = stakingWalletBodySchema.extend({
   amount: z.string().min(1),
@@ -136,7 +179,7 @@ export function createMobileRoutes(input?: {
         res,
         503,
         'PlatformProjectionMissing',
-        `${projectionResult.requiredEnv} is required before mobile Regent state can be loaded from Platform.`
+        `${projectionResult.requiredEnv} is required before mobile Regent state can be loaded from Platform.`,
       );
       return null;
     }
@@ -199,12 +242,40 @@ export function createMobileRoutes(input?: {
     return res.json(regentManager);
   });
 
+  router.get('/mobile/regents/:id/base-snapshot', async (req, res) => {
+    const parsed = agentIdParamsSchema.safeParse(req.params);
+    if (!parsed.success) {
+      return sendError(res, 400, 'BadRequest', 'A valid Regent ID is required.');
+    }
+
+    const projection = await readPlatformProjection(req, res);
+    if (!projection) {
+      return;
+    }
+
+    const snapshot = getRegentBaseSnapshotForUserFromPlatformProjection(
+      currentUserId(req.userId),
+      parsed.data.id,
+      projection,
+    );
+    if (!snapshot) {
+      return sendError(res, 404, 'NotFound', 'That Regent could not be found.');
+    }
+
+    return res.json(snapshot);
+  });
+
   router.post('/mobile/regents/:id/return-requests', async (req, res) => {
-    const bodySchema = z.object({
-      amount: z.string().min(1),
-      currency: z.string().min(1),
-      destinationWalletAddress: z.string().min(1),
-    }).merge(expectedBaseTransactionSchema);
+    const bodySchema = z
+      .object({
+        amount: z.string().min(1),
+        currency: z.string().min(1),
+        destinationWalletAddress: evmAddressSchema,
+      })
+      .merge(expectedBaseTransactionSchema)
+      .refine((body) => body.destinationWalletAddress.toLowerCase() === body.to.toLowerCase(), {
+        path: ['destinationWalletAddress'],
+      });
     const idempotencyKey = req.header('Idempotency-Key')?.trim();
 
     const parsedParams = agentIdParamsSchema.safeParse(req.params);
@@ -233,7 +304,7 @@ export function createMobileRoutes(input?: {
       currentUserId(req.userId),
       parsedParams.data.id,
       parsedBody.data,
-      idempotencyKey
+      idempotencyKey,
     );
     if (!returnRequest) {
       return sendError(res, 404, 'NotFound', 'That Regent could not be found.');
@@ -242,7 +313,7 @@ export function createMobileRoutes(input?: {
     return res.status(201).json({ returnRequest });
   });
 
-  router.get('/mobile/regents/:id/return-requests/:returnRequestId', (req, res) => {
+  router.get('/mobile/regents/:id/return-requests/:return_request_id', (req, res) => {
     const parsed = returnRequestParamsSchema.safeParse(req.params);
     if (!parsed.success) {
       return sendError(res, 400, 'BadRequest', 'A valid Regent ID and return request ID are required.');
@@ -251,7 +322,7 @@ export function createMobileRoutes(input?: {
     const returnRequest = getRegentReturnRequestForUser(
       currentUserId(req.userId),
       parsed.data.id,
-      parsed.data.returnRequestId
+      parsed.data.return_request_id,
     );
     if (!returnRequest) {
       return sendError(res, 404, 'NotFound', 'That return request could not be found.');
@@ -260,7 +331,7 @@ export function createMobileRoutes(input?: {
     return res.json({ returnRequest });
   });
 
-  router.post('/mobile/regents/:id/return-requests/:returnRequestId/confirm', async (req, res) => {
+  router.post('/mobile/regents/:id/return-requests/:return_request_id/confirm', async (req, res) => {
     const parsedParams = returnRequestParamsSchema.safeParse(req.params);
     const parsedBody = receiptSchema.safeParse(req.body);
 
@@ -270,7 +341,12 @@ export function createMobileRoutes(input?: {
 
     const verification = await verifyBaseReceipt(parsedBody.data.txHash);
     if (verification.kind === 'missing_rpc') {
-      return sendError(res, 503, 'BaseRpcMissing', `${verification.requiredEnv} is required before this receipt can be checked.`);
+      return sendError(
+        res,
+        503,
+        'BaseRpcMissing',
+        `${verification.requiredEnv} is required before this receipt can be checked.`,
+      );
     }
     if (verification.kind === 'rpc_error') {
       return sendError(res, 502, 'BaseRpcError', verification.message);
@@ -285,8 +361,8 @@ export function createMobileRoutes(input?: {
     const result = confirmRegentReturnRequestForUser(
       currentUserId(req.userId),
       parsedParams.data.id,
-      parsedParams.data.returnRequestId,
-      verification.receipt
+      parsedParams.data.return_request_id,
+      verification.receipt,
     );
 
     if (result.kind === 'not_found') {
@@ -301,28 +377,35 @@ export function createMobileRoutes(input?: {
   });
 
   router.post('/mobile/regents/:id/funding-intents', async (req, res) => {
-    const bodySchema = z.object({
-      amount: z.string().min(1),
-      currency: z.string().min(1),
-      sourceWalletAddress: evmAddressSchema,
-      destinationWalletAddress: evmAddressSchema,
-      chainId: z.literal(8453),
-      tokenAddress: evmAddressSchema,
-      expectedSigner: evmAddressSchema,
-      to: evmAddressSchema,
-      value: decimalValueSchema,
-      data: hexDataSchema,
-    }).refine((input) => input.sourceWalletAddress.toLowerCase() === input.expectedSigner.toLowerCase(), {
-      path: ['expectedSigner'],
-    }).refine((input) => input.tokenAddress.toLowerCase() === input.to.toLowerCase(), {
-      path: ['to'],
-    });
+    const bodySchema = z
+      .object({
+        amount: z.string().min(1),
+        currency: z.string().min(1),
+        sourceWalletAddress: evmAddressSchema,
+        destinationWalletAddress: evmAddressSchema,
+        chainId: z.literal(8453),
+        tokenAddress: evmAddressSchema,
+        expectedSigner: evmAddressSchema,
+        to: evmAddressSchema,
+        value: decimalValueSchema,
+        data: hexDataSchema,
+      })
+      .refine((input) => input.sourceWalletAddress.toLowerCase() === input.expectedSigner.toLowerCase(), {
+        path: ['expectedSigner'],
+      })
+      .refine((input) => input.tokenAddress.toLowerCase() === input.to.toLowerCase(), {
+        path: ['to'],
+      });
     const idempotencyKey = req.header('Idempotency-Key')?.trim();
     const parsedParams = agentIdParamsSchema.safeParse(req.params);
     const parsedBody = bodySchema.safeParse(req.body);
 
     if (!parsedParams.success || !parsedBody.success || !idempotencyKey) {
       return sendError(res, 400, 'BadRequest', 'Funding details and an idempotency key are required.');
+    }
+
+    if (!fundingTransferMatchesIntent(parsedBody.data)) {
+      return sendError(res, 400, 'BadRequest', 'Funding transaction details must match the recipient and amount.');
     }
 
     const projection = await readPlatformProjection(req, res);
@@ -337,7 +420,7 @@ export function createMobileRoutes(input?: {
       currentUserId(req.userId),
       parsedParams.data.id,
       parsedBody.data,
-      idempotencyKey
+      idempotencyKey,
     );
     if (!fundingIntent) {
       return sendError(res, 404, 'NotFound', 'That Regent could not be found.');
@@ -346,7 +429,7 @@ export function createMobileRoutes(input?: {
     return res.status(201).json({ fundingIntent });
   });
 
-  router.get('/mobile/regents/:id/funding-intents/:fundingIntentId', (req, res) => {
+  router.get('/mobile/regents/:id/funding-intents/:funding_intent_id', (req, res) => {
     const parsed = fundingIntentParamsSchema.safeParse(req.params);
     if (!parsed.success) {
       return sendError(res, 400, 'BadRequest', 'A valid Regent ID and funding intent ID are required.');
@@ -355,7 +438,7 @@ export function createMobileRoutes(input?: {
     const fundingIntent = getRegentFundingIntentForUser(
       currentUserId(req.userId),
       parsed.data.id,
-      parsed.data.fundingIntentId
+      parsed.data.funding_intent_id,
     );
     if (!fundingIntent) {
       return sendError(res, 404, 'NotFound', 'That funding intent could not be found.');
@@ -364,7 +447,7 @@ export function createMobileRoutes(input?: {
     return res.json({ fundingIntent });
   });
 
-  router.post('/mobile/regents/:id/funding-intents/:fundingIntentId/confirm', async (req, res) => {
+  router.post('/mobile/regents/:id/funding-intents/:funding_intent_id/confirm', async (req, res) => {
     const parsedParams = fundingIntentParamsSchema.safeParse(req.params);
     const parsedBody = receiptSchema.safeParse(req.body);
 
@@ -374,7 +457,12 @@ export function createMobileRoutes(input?: {
 
     const verification = await verifyBaseReceipt(parsedBody.data.txHash);
     if (verification.kind === 'missing_rpc') {
-      return sendError(res, 503, 'BaseRpcMissing', `${verification.requiredEnv} is required before this receipt can be checked.`);
+      return sendError(
+        res,
+        503,
+        'BaseRpcMissing',
+        `${verification.requiredEnv} is required before this receipt can be checked.`,
+      );
     }
     if (verification.kind === 'rpc_error') {
       return sendError(res, 502, 'BaseRpcError', verification.message);
@@ -389,8 +477,8 @@ export function createMobileRoutes(input?: {
     const result = confirmRegentFundingIntentForUser(
       currentUserId(req.userId),
       parsedParams.data.id,
-      parsedParams.data.fundingIntentId,
-      verification.receipt
+      parsedParams.data.funding_intent_id,
+      verification.receipt,
     );
 
     if (result.kind === 'not_found') {
@@ -407,14 +495,19 @@ export function createMobileRoutes(input?: {
   function sendPlatformStakingResult<T>(
     res: Response,
     result: PlatformRwrClientResult<T>,
-    render: (data: T) => unknown
+    render: (data: T) => unknown,
   ) {
     if (result.kind === 'ok') {
       return res.json(render(result.data));
     }
 
     if (result.kind === 'missing_config') {
-      return sendError(res, 503, 'PlatformStakingMissing', `${result.requiredEnv} is required before staking can be loaded.`);
+      return sendError(
+        res,
+        503,
+        'PlatformStakingMissing',
+        `${result.requiredEnv} is required before staking can be loaded.`,
+      );
     }
 
     if (result.kind === 'unauthorized') {
@@ -495,12 +588,14 @@ export function createMobileRoutes(input?: {
     const paramsSchema = z.object({
       type: z.enum(['funding', 'return']),
     });
-    const bodySchema = z.object({
-      regentId: z.string().min(1),
-      amount: z.string().optional(),
-      currency: z.string().optional(),
-      riskCopy: z.string().min(1),
-    }).merge(expectedBaseTransactionSchema.omit({ chainId: true }));
+    const bodySchema = z
+      .object({
+        regentId: z.string().min(1),
+        amount: z.string().optional(),
+        currency: z.string().optional(),
+        riskCopy: z.string().min(1),
+      })
+      .merge(expectedBaseTransactionSchema.omit({ chainId: true }));
     const parsedParams = paramsSchema.safeParse(req.params);
     const parsedBody = bodySchema.safeParse(req.body);
     const idempotencyKey = req.header('Idempotency-Key')?.trim();
@@ -528,8 +623,8 @@ export function createMobileRoutes(input?: {
     return res.status(201).json({ wallet_action: action });
   });
 
-  router.post('/mobile/wallet-actions/:actionId/confirm', async (req, res) => {
-    const paramsSchema = z.object({ actionId: z.string().min(1) });
+  router.post('/mobile/wallet-actions/:action_id/confirm', async (req, res) => {
+    const paramsSchema = z.object({ action_id: z.string().min(1) });
     const parsedParams = paramsSchema.safeParse(req.params);
     const parsedBody = receiptSchema.safeParse(req.body);
 
@@ -539,7 +634,12 @@ export function createMobileRoutes(input?: {
 
     const verification = await verifyBaseReceipt(parsedBody.data.txHash);
     if (verification.kind === 'missing_rpc') {
-      return sendError(res, 503, 'BaseRpcMissing', `${verification.requiredEnv} is required before this receipt can be checked.`);
+      return sendError(
+        res,
+        503,
+        'BaseRpcMissing',
+        `${verification.requiredEnv} is required before this receipt can be checked.`,
+      );
     }
     if (verification.kind === 'rpc_error') {
       return sendError(res, 502, 'BaseRpcError', verification.message);
@@ -551,7 +651,7 @@ export function createMobileRoutes(input?: {
       return sendError(res, 409, 'ReceiptMismatch', 'The chain receipt does not match this action.');
     }
 
-    const result = confirmPreparedWalletActionForUser(parsedParams.data.actionId, verification.receipt);
+    const result = confirmPreparedWalletActionForUser(parsedParams.data.action_id, verification.receipt);
     if (result.kind === 'not_found') {
       return sendError(res, 404, 'NotFound', 'That wallet action could not be found.');
     }
@@ -561,19 +661,40 @@ export function createMobileRoutes(input?: {
     }
 
     if (result.kind === 'expired') {
-      return sendError(res, 410, 'WalletActionExpired', 'This wallet action has expired. Start it again before signing.');
+      return sendError(
+        res,
+        410,
+        'WalletActionExpired',
+        'This wallet action has expired. Start it again before signing.',
+      );
     }
 
     return res.json({ wallet_action: result.action });
   });
 
-  function sendPlatformResult<T>(res: Response, result: Awaited<ReturnType<PlatformRwrClient['fetchAccount']>> | { kind: 'ok'; data: T } | { kind: 'missing_config'; requiredEnv: 'PLATFORM_API_BASE_URL' } | { kind: 'unauthorized' } | { kind: 'not_found' } | { kind: 'conflict' } | { kind: 'upstream_error'; message: string }, render: (data: T) => unknown) {
+  function sendPlatformResult<T>(
+    res: Response,
+    result:
+      | Awaited<ReturnType<PlatformRwrClient['fetchAccount']>>
+      | { kind: 'ok'; data: T }
+      | { kind: 'missing_config'; requiredEnv: 'PLATFORM_API_BASE_URL' }
+      | { kind: 'unauthorized' }
+      | { kind: 'not_found' }
+      | { kind: 'conflict' }
+      | { kind: 'upstream_error'; message: string },
+    render: (data: T) => unknown,
+  ) {
     if (result.kind === 'ok') {
       return res.json(render(result.data as T));
     }
 
     if (result.kind === 'missing_config') {
-      return sendError(res, 503, 'PlatformRwrMissing', `${result.requiredEnv} is required before Talk records can be loaded from Platform.`);
+      return sendError(
+        res,
+        503,
+        'PlatformRwrMissing',
+        `${result.requiredEnv} is required before Talk records can be loaded from Platform.`,
+      );
     }
 
     if (result.kind === 'unauthorized') {
@@ -639,7 +760,7 @@ export function createMobileRoutes(input?: {
       platformRwrClient,
       platformAuth(req),
       parsed.data.id,
-      parsedQuery.data.since_event_id
+      parsedQuery.data.since_event_id,
     );
     return sendPlatformResult(res, result, (events) => ({
       events,
@@ -658,7 +779,12 @@ export function createMobileRoutes(input?: {
       return sendError(res, 400, 'BadRequest', 'A valid session ID and message are required.');
     }
 
-    const result = await postTerminalMessage(platformRwrClient, platformAuth(req), parsedParams.data.id, parsedBody.data.text);
+    const result = await postTerminalMessage(
+      platformRwrClient,
+      platformAuth(req),
+      parsedParams.data.id,
+      parsedBody.data.text,
+    );
     if (result.kind === 'ok') {
       return res.status(202).json({ session: result.data });
     }
@@ -666,7 +792,7 @@ export function createMobileRoutes(input?: {
     return sendPlatformResult(res, result, (session) => ({ session }));
   });
 
-  router.post('/mobile/terminal/sessions/:id/approvals/:requestId', async (req, res) => {
+  router.post('/mobile/terminal/sessions/:id/approvals/:request_id', async (req, res) => {
     const bodySchema = z.object({
       decision: z.enum(['approved', 'denied']),
     });
@@ -681,8 +807,8 @@ export function createMobileRoutes(input?: {
       platformRwrClient,
       platformAuth(req),
       parsedParams.data.id,
-      parsedParams.data.requestId,
-      parsedBody.data.decision
+      parsedParams.data.request_id,
+      parsedBody.data.decision,
     );
     return sendPlatformResult(res, result, (session) => ({ session }));
   });

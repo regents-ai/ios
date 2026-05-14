@@ -9,6 +9,14 @@ export const routes = {
     return '/staking';
   },
 
+  terminal(): Href {
+    return '/terminal';
+  },
+
+  terminalSession(sessionId: string): Href {
+    return { pathname: '/terminal/[id]', params: { id: sessionId } };
+  },
+
   agent(regentId: string): Href {
     return { pathname: '/agent/[id]', params: { id: regentId } };
   },

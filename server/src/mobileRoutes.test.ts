@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import test, { beforeEach } from 'node:test';
 import type { Request, Response } from 'express';
+import { encodeFunctionData, parseUnits } from 'viem';
 
 import {
   confirmPreparedWalletActionForUser,
@@ -25,7 +26,12 @@ import {
   postTerminalMessage,
   resolveTerminalApproval,
 } from './mobileTerminal.js';
-import type { PlatformProjection, PlatformRwrClient, PlatformStakingClient } from './platformProjection.js';
+import {
+  createPlatformStakingClient,
+  type PlatformProjection,
+  type PlatformRwrClient,
+  type PlatformStakingClient,
+} from './platformProjection.js';
 
 beforeEach(() => {
   resetMobileRegentStateForTests();
@@ -34,9 +40,7 @@ beforeEach(() => {
 function listRoutePaths() {
   const router = createMobileRoutes();
 
-  return router.stack
-    .map((layer) => layer.route?.path)
-    .filter((path): path is string => typeof path === 'string');
+  return router.stack.map((layer) => layer.route?.path).filter((path): path is string => typeof path === 'string');
 }
 
 const platformProjection: PlatformProjection = {
@@ -126,7 +130,7 @@ async function requestMobileRoute(
     headers?: Record<string, string>;
     body?: unknown;
   },
-  clients?: Parameters<typeof createMobileRoutes>[0]
+  clients?: Parameters<typeof createMobileRoutes>[0],
 ) {
   const router = createMobileRoutes({
     platformProjectionClient: {
@@ -140,7 +144,7 @@ async function requestMobileRoute(
   };
 
   const headers = Object.fromEntries(
-    Object.entries(input.headers || {}).map(([name, value]) => [name.toLowerCase(), value])
+    Object.entries(input.headers || {}).map(([name, value]) => [name.toLowerCase(), value]),
   );
 
   return new Promise<{ status: number; body: any }>((resolve, reject) => {
@@ -159,6 +163,7 @@ async function requestMobileRoute(
       method: input.method,
       url: input.url,
       originalUrl: input.url,
+      path: input.url.split('?')[0],
       headers,
       body: input.body,
       query: {},
@@ -196,6 +201,7 @@ async function requestMobileRoute(
       getHeader(name: string) {
         return responseHeaders[name.toLowerCase()];
       },
+      req: request,
     } as unknown as Response;
 
     router.handle(request, response, (error?: unknown) => {
@@ -210,8 +216,29 @@ async function requestMobileRoute(
 
 const expectedSigner = '0x1111111111111111111111111111111111111111';
 const expectedRecipient = '0x2222222222222222222222222222222222222222';
+const expectedFundingToken = '0x3333333333333333333333333333333333333333';
 const expectedData = '0x';
 const stakingContract = '0x9999999999999999999999999999999999999999';
+const erc20TransferAbi = [
+  {
+    type: 'function',
+    name: 'transfer',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'to', type: 'address' },
+      { name: 'amount', type: 'uint256' },
+    ],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+] as const;
+
+function fundingTransferData(input?: { recipient?: `0x${string}`; amount?: string }) {
+  return encodeFunctionData({
+    abi: erc20TransferAbi,
+    functionName: 'transfer',
+    args: [input?.recipient ?? expectedRecipient, parseUnits(input?.amount ?? '25', 6)],
+  });
+}
 
 const stakingState = {
   chain_id: 8453,
@@ -273,7 +300,11 @@ function stakingAction(action: 'stake' | 'unstake' | 'claim_usdc' | 'claim_regen
       expected_signer: expectedSigner,
       expires_at: '2026-05-06T18:00:00.000Z',
       idempotency_key: `${action}-action`,
-      simulation: { required: false, status: 'not_required' as const, block_number: null },
+      simulation: {
+        required: false,
+        status: 'not_required' as const,
+        block_number: null,
+      },
       risk_copy: 'Review this staking action before signing.',
       ...(action === 'stake'
         ? {
@@ -289,16 +320,18 @@ function stakingAction(action: 'stake' | 'unstake' | 'claim_usdc' | 'claim_regen
   };
 }
 
-function expectedReturnInput(input?: Partial<{
-  amount: string;
-  currency: string;
-  destinationWalletAddress: string;
-  chainId: number;
-  expectedSigner: string;
-  to: string;
-  value: string;
-  data: string;
-}>) {
+function expectedReturnInput(
+  input?: Partial<{
+    amount: string;
+    currency: string;
+    destinationWalletAddress: string;
+    chainId: number;
+    expectedSigner: string;
+    to: string;
+    value: string;
+    data: string;
+  }>,
+) {
   return {
     amount: '10',
     currency: 'USDC',
@@ -312,17 +345,19 @@ function expectedReturnInput(input?: Partial<{
   };
 }
 
-function expectedWalletActionInput(input?: Partial<{
-  regentId: string;
-  expectedSigner: string;
-  to: string;
-  value: string;
-  data: string;
-  riskCopy: string;
-  idempotencyKey: string;
-  amount: string;
-  currency: string;
-}>) {
+function expectedWalletActionInput(
+  input?: Partial<{
+    regentId: string;
+    expectedSigner: string;
+    to: string;
+    value: string;
+    data: string;
+    riskCopy: string;
+    idempotencyKey: string;
+    amount: string;
+    currency: string;
+  }>,
+) {
   return {
     regentId: 'atlas-capital',
     expectedSigner,
@@ -337,16 +372,18 @@ function expectedWalletActionInput(input?: Partial<{
   };
 }
 
-function confirmedReceipt(input?: Partial<{
-  txHash: string;
-  chainId: number;
-  blockNumber: number;
-  status: 'confirmed';
-  from: string;
-  to: string;
-  value: string;
-  data: string;
-}>) {
+function confirmedReceipt(
+  input?: Partial<{
+    txHash: string;
+    chainId: number;
+    blockNumber: number;
+    status: 'confirmed';
+    from: string;
+    to: string;
+    value: string;
+    data: string;
+  }>,
+) {
   return {
     txHash: `0x${'1'.repeat(64)}`,
     chainId: 8453,
@@ -366,7 +403,14 @@ const platformRwrClient: PlatformRwrClient = {
       kind: 'ok',
       data: {
         authenticated: true,
-        companies: [{ id: 101, name: 'Atlas Capital', slug: 'atlas-capital', status: 'active' }],
+        companies: [
+          {
+            id: 101,
+            name: 'Atlas Capital',
+            slug: 'atlas-capital',
+            status: 'active',
+          },
+        ],
       },
     };
   },
@@ -498,9 +542,9 @@ const platformRwrClient: PlatformRwrClient = {
           run_id: 301,
           approval_type: 'transfer',
           status: 'pending',
-        requested_by_actor_kind: 'agent',
-        requested_by_actor_id: null,
-        risk_summary: 'Approve the treasury transfer.',
+          requested_by_actor_kind: 'agent',
+          requested_by_actor_id: null,
+          risk_summary: 'Approve the treasury transfer.',
           payload: {
             amount: '500',
             currency: 'USDC',
@@ -609,7 +653,10 @@ test('mobile Regent Manager route stays mounted and returns the current manager 
   assert.ok(body);
   assert.equal(body.regentId, 'atlas-capital');
   assert.equal(body.dashboardUrl, 'https://atlas.regents.sh');
-  assert.equal(body.roster.some((member: { name: string }) => member.name === 'Regent Manager'), true);
+  assert.equal(
+    body.roster.some((member: { name: string }) => member.name === 'Regent Manager'),
+    true,
+  );
 });
 
 test('mobile Regent detail includes Platform-owned state', () => {
@@ -644,7 +691,7 @@ test('mobile Platform projection forwards bearer auth without cookies', async ()
           return { kind: 'ok' as const, projection: platformProjection };
         },
       },
-    }
+    },
   );
 
   assert.deepEqual(forwarded, [
@@ -674,7 +721,7 @@ test('mobile Platform terminal routes forward bearer auth without cookies', asyn
           return platformRwrClient.fetchAccount(auth);
         },
       },
-    }
+    },
   );
 
   assert.equal(result.status, 200);
@@ -709,7 +756,7 @@ test('mobile staking routes forward bearer auth and preserve Platform wallet act
         Cookie: 'platform_session=secret',
       },
     },
-    { platformStakingClient: stakingClient }
+    { platformStakingClient: stakingClient },
   );
   assert.equal(readResponse.status, 200);
   assert.equal(readResponse.body.staking.wallet_address, expectedSigner);
@@ -728,7 +775,7 @@ test('mobile staking routes forward bearer auth and preserve Platform wallet act
         amount: '25',
       },
     },
-    { platformStakingClient: stakingClient }
+    { platformStakingClient: stakingClient },
   );
   assert.equal(stakeResponse.status, 200);
   assert.equal(stakeResponse.body.wallet_action.owner_product, 'platform');
@@ -760,16 +807,52 @@ test('mobile staking routes cover unstake and all claim actions', async () => {
       {
         method: 'POST',
         url,
-        body: expectedAction === 'unstake'
-          ? { walletAddress: expectedSigner, amount: '25' }
-          : { walletAddress: expectedSigner },
+        body:
+          expectedAction === 'unstake'
+            ? { walletAddress: expectedSigner, amount: '25' }
+            : { walletAddress: expectedSigner },
       },
-      { platformStakingClient }
+      { platformStakingClient },
     );
 
     assert.equal(response.status, 200);
     assert.equal(response.body.wallet_action.action, expectedAction);
     assert.equal(response.body.wallet_action.owner_product, 'platform');
+  }
+});
+
+test('Platform staking responses reject malformed transaction data before mobile signing', async () => {
+  const previousPlatformUrl = process.env.PLATFORM_API_BASE_URL;
+  process.env.PLATFORM_API_BASE_URL = 'https://platform.example';
+
+  try {
+    const malformedAction = {
+      ok: true,
+      ...stakingAction('stake'),
+      wallet_action: {
+        ...stakingAction('stake').wallet_action,
+        data: '0xabc',
+      },
+    };
+    const fetchImpl: typeof fetch = async () =>
+      new Response(JSON.stringify(malformedAction), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    const client = createPlatformStakingClient(fetchImpl);
+
+    const result = await client.stake({}, { walletAddress: expectedSigner, amount: '25' });
+
+    assert.equal(result.kind, 'upstream_error');
+    if (result.kind === 'upstream_error') {
+      assert.equal(result.message, 'Platform response did not match the current contract.');
+    }
+  } finally {
+    if (previousPlatformUrl === undefined) {
+      delete process.env.PLATFORM_API_BASE_URL;
+    } else {
+      process.env.PLATFORM_API_BASE_URL = previousPlatformUrl;
+    }
   }
 });
 
@@ -783,6 +866,21 @@ test('mobile Regent state can be sourced from the Platform projection contract',
   assert.equal(detail.platformState.billingStatus, 'prepaid');
   assert.equal(detail.platformState.runtimeStatus, 'ready');
   assert.equal(detail.platformState.prepaidBalanceUsd, '50.25');
+});
+
+test('mobile Regent Base snapshot is served from the Platform projection', async () => {
+  const response = await requestMobileRoute(platformProjection, {
+    method: 'GET',
+    url: '/mobile/regents/atlas-capital/base-snapshot',
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.chainId, 8453);
+  assert.equal(response.body.blockNumber, null);
+  assert.equal(response.body.contractAddress, null);
+  assert.equal(response.body.stale, false);
+  assert.equal(response.body.snapshot.regentId, 'atlas-capital');
+  assert.equal(response.body.snapshot.platformState.billingStatus, 'prepaid');
 });
 
 test('mobile money routes accept the listed Regent ID when Platform slugs differ', async () => {
@@ -812,11 +910,11 @@ test('mobile money routes accept the listed Regent ID when Platform slugs differ
       sourceWalletAddress: expectedSigner,
       destinationWalletAddress: expectedRecipient,
       chainId: 8453,
-      tokenAddress: expectedRecipient,
+      tokenAddress: expectedFundingToken,
       expectedSigner,
-      to: expectedRecipient,
+      to: expectedFundingToken,
       value: '0',
-      data: expectedData,
+      data: fundingTransferData(),
     },
   });
   assert.equal(fundingResponse.status, 201);
@@ -844,12 +942,74 @@ test('mobile money routes accept the listed Regent ID when Platform slugs differ
   assert.equal(walletActionResponse.body.wallet_action.resource_id, 'atlas-public');
 });
 
+test('funding intents reject transfer details for a different recipient or amount', async () => {
+  const projection = publicSlugProjection();
+  const baseBody = {
+    amount: '25',
+    currency: 'USDC',
+    sourceWalletAddress: expectedSigner,
+    destinationWalletAddress: expectedRecipient,
+    chainId: 8453,
+    tokenAddress: expectedFundingToken,
+    expectedSigner,
+    to: expectedFundingToken,
+    value: '0',
+    data: fundingTransferData(),
+  };
+
+  const wrongRecipient = await requestMobileRoute(projection, {
+    method: 'POST',
+    url: '/mobile/regents/atlas-public/funding-intents',
+    headers: {
+      'Content-Type': 'application/json',
+      'Idempotency-Key': 'wrong-recipient',
+    },
+    body: {
+      ...baseBody,
+      data: fundingTransferData({ recipient: '0x4444444444444444444444444444444444444444' }),
+    },
+  });
+  assert.equal(wrongRecipient.status, 400);
+
+  const wrongAmount = await requestMobileRoute(projection, {
+    method: 'POST',
+    url: '/mobile/regents/atlas-public/funding-intents',
+    headers: {
+      'Content-Type': 'application/json',
+      'Idempotency-Key': 'wrong-amount',
+    },
+    body: {
+      ...baseBody,
+      data: fundingTransferData({ amount: '26' }),
+    },
+  });
+  assert.equal(wrongAmount.status, 400);
+});
+
+test('return requests require the displayed destination to match the transaction target', async () => {
+  const response = await requestMobileRoute(platformProjection, {
+    method: 'POST',
+    url: '/mobile/regents/atlas-capital/return-requests',
+    headers: {
+      'Content-Type': 'application/json',
+      'Idempotency-Key': 'destination-target-mismatch',
+    },
+    body: expectedReturnInput({
+      destinationWalletAddress: '0x3333333333333333333333333333333333333333',
+      to: expectedRecipient,
+    }),
+  });
+
+  assert.equal(response.status, 400);
+});
+
 test('mobile terminal and money routes remain mounted through the extracted router', async () => {
   const routePaths = listRoutePaths();
   assert.ok(routePaths.includes('/mobile/terminal/sessions'));
+  assert.ok(routePaths.includes('/mobile/regents/:id/base-snapshot'));
   assert.ok(routePaths.includes('/mobile/regents/:id/funding-intents'));
-  assert.ok(routePaths.includes('/mobile/regents/:id/funding-intents/:fundingIntentId'));
-  assert.ok(routePaths.includes('/mobile/regents/:id/funding-intents/:fundingIntentId/confirm'));
+  assert.ok(routePaths.includes('/mobile/regents/:id/funding-intents/:funding_intent_id'));
+  assert.ok(routePaths.includes('/mobile/regents/:id/funding-intents/:funding_intent_id/confirm'));
   assert.ok(routePaths.includes('/mobile/regent/staking'));
   assert.ok(routePaths.includes('/mobile/regent/staking/stake'));
   assert.ok(routePaths.includes('/mobile/regent/staking/unstake'));
@@ -857,7 +1017,7 @@ test('mobile terminal and money routes remain mounted through the extracted rout
   assert.ok(routePaths.includes('/mobile/regent/staking/claim-regent'));
   assert.ok(routePaths.includes('/mobile/regent/staking/claim-and-restake-regent'));
   assert.ok(routePaths.includes('/mobile/wallet-actions/:type/prepare'));
-  assert.ok(routePaths.includes('/mobile/wallet-actions/:actionId/confirm'));
+  assert.ok(routePaths.includes('/mobile/wallet-actions/:action_id/confirm'));
 
   const sessions = await listTerminalSessions(platformRwrClient, {});
   assert.equal(sessions.kind, 'ok');
@@ -871,7 +1031,7 @@ test('mobile Regent wallet intent state is written to durable backend storage', 
     'durable-user',
     'atlas-capital',
     expectedReturnInput({ amount: '12' }),
-    'durable-return'
+    'durable-return',
   );
 
   assert.ok(created);
@@ -934,7 +1094,10 @@ test('mobile terminal event polling returns only the approval decision after app
   const next = await getTerminalEvents(resolvedApprovalClient, {}, '101~202~301', requestEvent.eventId);
   assert.equal(next.kind, 'ok');
   if (next.kind === 'ok') {
-    assert.deepEqual(next.data.map((event) => event.type), ['tool.resolved']);
+    assert.deepEqual(
+      next.data.map((event) => event.type),
+      ['tool.resolved'],
+    );
     assert.equal(next.data[0]?.eventId, 'approval:501:resolved');
     assert.equal(next.data[0]?.result, 'approved');
   }
@@ -945,7 +1108,7 @@ test('return requests require a confirmed Base receipt before completion', () =>
     'receipt-user',
     'atlas-capital',
     expectedReturnInput(),
-    'return-receipt-test'
+    'return-receipt-test',
   );
   assert.ok(created);
 
@@ -973,7 +1136,7 @@ test('return request confirmation rejects receipts for the wrong transaction det
     'return-mismatch-user',
     'atlas-capital',
     expectedReturnInput(),
-    'return-mismatch-test'
+    'return-mismatch-test',
   );
   assert.ok(created);
 
@@ -982,36 +1145,36 @@ test('return request confirmation rejects receipts for the wrong transaction det
       'return-mismatch-user',
       'atlas-capital',
       created.id,
-      confirmedReceipt({ from: '0x3333333333333333333333333333333333333333' })
+      confirmedReceipt({ from: '0x3333333333333333333333333333333333333333' }),
     ).kind,
-    'conflict'
+    'conflict',
   );
   assert.equal(
     confirmRegentReturnRequestForUser(
       'return-mismatch-user',
       'atlas-capital',
       created.id,
-      confirmedReceipt({ to: '0x3333333333333333333333333333333333333333' })
+      confirmedReceipt({ to: '0x3333333333333333333333333333333333333333' }),
     ).kind,
-    'conflict'
+    'conflict',
   );
   assert.equal(
     confirmRegentReturnRequestForUser(
       'return-mismatch-user',
       'atlas-capital',
       created.id,
-      confirmedReceipt({ value: '1' })
+      confirmedReceipt({ value: '1' }),
     ).kind,
-    'conflict'
+    'conflict',
   );
   assert.equal(
     confirmRegentReturnRequestForUser(
       'return-mismatch-user',
       'atlas-capital',
       created.id,
-      confirmedReceipt({ data: '0x1234' })
+      confirmedReceipt({ data: '0x1234' }),
     ).kind,
-    'conflict'
+    'conflict',
   );
 });
 
@@ -1024,9 +1187,9 @@ test('funding intents are idempotent and keep expected Base funding details', ()
     chainId: 8453,
     tokenAddress: '0x3333333333333333333333333333333333333333',
     expectedSigner,
-    to: expectedRecipient,
+    to: '0x3333333333333333333333333333333333333333',
     value: '0',
-    data: expectedData,
+    data: fundingTransferData(),
   };
   const first = createRegentFundingIntentForUser('funding-user', 'atlas-capital', input, 'fund-once');
   const second = createRegentFundingIntentForUser('funding-user', 'atlas-capital', input, 'fund-once');
@@ -1036,9 +1199,9 @@ test('funding intents are idempotent and keep expected Base funding details', ()
   assert.equal(first.chainId, 8453);
   assert.equal(first.currency, 'USDC');
   assert.equal(first.expectedSigner, expectedSigner);
-  assert.equal(first.to, expectedRecipient);
+  assert.equal(first.to, '0x3333333333333333333333333333333333333333');
   assert.equal(first.value, '0');
-  assert.equal(first.data, expectedData);
+  assert.equal(first.data, fundingTransferData());
 });
 
 test('funding intents can be fetched and confirmed from matching Base receipts', () => {
@@ -1051,13 +1214,13 @@ test('funding intents can be fetched and confirmed from matching Base receipts',
       sourceWalletAddress: expectedSigner,
       destinationWalletAddress: expectedRecipient,
       chainId: 8453,
-      tokenAddress: expectedRecipient,
+      tokenAddress: expectedFundingToken,
       expectedSigner,
-      to: expectedRecipient,
+      to: expectedFundingToken,
       value: '0',
-      data: expectedData,
+      data: fundingTransferData(),
     },
-    'fund-confirm'
+    'fund-confirm',
   );
   assert.ok(created);
 
@@ -1068,7 +1231,7 @@ test('funding intents can be fetched and confirmed from matching Base receipts',
     'funding-confirm-user',
     'atlas-capital',
     created.id,
-    confirmedReceipt({ to: '0x3333333333333333333333333333333333333333' })
+    confirmedReceipt({ to: '0x4444444444444444444444444444444444444444', data: fundingTransferData() }),
   );
   assert.equal(rejected.kind, 'conflict');
 
@@ -1076,7 +1239,7 @@ test('funding intents can be fetched and confirmed from matching Base receipts',
     'funding-confirm-user',
     'atlas-capital',
     created.id,
-    confirmedReceipt()
+    confirmedReceipt({ to: expectedFundingToken, data: fundingTransferData() }),
   );
   assert.equal(confirmed.kind, 'ok');
   if (confirmed.kind === 'ok') {
@@ -1105,7 +1268,9 @@ test('prepared wallet actions support funding and returns with the same required
     const action = prepareWalletActionForUser(
       `wallet-action-${type}-user`,
       type,
-      expectedWalletActionInput({ idempotencyKey: `${type}-wallet-action-key` })
+      expectedWalletActionInput({
+        idempotencyKey: `${type}-wallet-action-key`,
+      }),
     );
 
     assert.ok(action);
@@ -1117,14 +1282,20 @@ test('prepared wallet actions support funding and returns with the same required
     assert.equal(action.to, expectedRecipient);
     assert.equal(action.value, '0');
     assert.equal(action.data, expectedData);
-    assert.deepEqual(action.simulation, { required: false, status: 'not_required', block_number: null });
+    assert.deepEqual(action.simulation, {
+      required: false,
+      status: 'not_required',
+      block_number: null,
+    });
     assert.equal(action.risk_copy, 'You are preparing a wallet action for review before signing.');
     assert.equal(action.idempotency_key, `${type}-wallet-action-key`);
   }
 });
 
 test('prepared wallet actions reuse the same idempotency key for duplicate prepares', () => {
-  const input = expectedWalletActionInput({ idempotencyKey: 'duplicate-wallet-action-key' });
+  const input = expectedWalletActionInput({
+    idempotencyKey: 'duplicate-wallet-action-key',
+  });
   const first = prepareWalletActionForUser('duplicate-wallet-action-user', 'funding', input);
   const second = prepareWalletActionForUser('duplicate-wallet-action-user', 'funding', input);
 
@@ -1147,14 +1318,29 @@ test('prepared wallet actions reject receipts for the wrong transaction details'
   const action = prepareWalletActionForUser(
     'wallet-action-user',
     'funding',
-    expectedWalletActionInput({ idempotencyKey: 'wallet-action-conflict-key' })
+    expectedWalletActionInput({ idempotencyKey: 'wallet-action-conflict-key' }),
   );
   assert.ok(action);
 
-  assert.equal(confirmPreparedWalletActionForUser(action.action_id, confirmedReceipt({ from: '0x3333333333333333333333333333333333333333' })).kind, 'conflict');
-  assert.equal(confirmPreparedWalletActionForUser(action.action_id, confirmedReceipt({ to: '0x3333333333333333333333333333333333333333' })).kind, 'conflict');
+  assert.equal(
+    confirmPreparedWalletActionForUser(
+      action.action_id,
+      confirmedReceipt({ from: '0x3333333333333333333333333333333333333333' }),
+    ).kind,
+    'conflict',
+  );
+  assert.equal(
+    confirmPreparedWalletActionForUser(
+      action.action_id,
+      confirmedReceipt({ to: '0x3333333333333333333333333333333333333333' }),
+    ).kind,
+    'conflict',
+  );
   assert.equal(confirmPreparedWalletActionForUser(action.action_id, confirmedReceipt({ value: '1' })).kind, 'conflict');
-  assert.equal(confirmPreparedWalletActionForUser(action.action_id, confirmedReceipt({ data: '0x1234' })).kind, 'conflict');
+  assert.equal(
+    confirmPreparedWalletActionForUser(action.action_id, confirmedReceipt({ data: '0x1234' })).kind,
+    'conflict',
+  );
   assert.equal(confirmPreparedWalletActionForUser(action.action_id, confirmedReceipt()).kind, 'ok');
 });
 
@@ -1162,14 +1348,14 @@ test('prepared wallet actions cannot be confirmed after their expiry time', () =
   const action = prepareWalletActionForUser(
     'expired-wallet-action-user',
     'funding',
-    expectedWalletActionInput({ idempotencyKey: 'expired-wallet-action-key' })
+    expectedWalletActionInput({ idempotencyKey: 'expired-wallet-action-key' }),
   );
   assert.ok(action);
 
   const result = confirmPreparedWalletActionForUser(
     action.action_id,
     confirmedReceipt(),
-    new Date(Date.parse(action.expires_at))
+    new Date(Date.parse(action.expires_at)),
   );
 
   assert.equal(result.kind, 'expired');
@@ -1182,14 +1368,16 @@ test('expired prepared wallet actions report expiry before receipt mismatches', 
   const action = prepareWalletActionForUser(
     'expired-wallet-action-mismatch-user',
     'funding',
-    expectedWalletActionInput({ idempotencyKey: 'expired-wallet-action-mismatch-key' })
+    expectedWalletActionInput({
+      idempotencyKey: 'expired-wallet-action-mismatch-key',
+    }),
   );
   assert.ok(action);
 
   const result = confirmPreparedWalletActionForUser(
     action.action_id,
     confirmedReceipt({ from: '0x3333333333333333333333333333333333333333' }),
-    new Date(Date.parse(action.expires_at))
+    new Date(Date.parse(action.expires_at)),
   );
 
   assert.equal(result.kind, 'expired');

@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from 'express';
 
 import { sendError } from './httpResponses.js';
 import { verifyPrivyAccessToken } from './identity.js';
+import { summarizeErrorLog } from './security.js';
 
 const tokenCache = new Map<string, { userId: string; sessionId: string; expiresAt: number }>();
 const CACHE_TTL = 5 * 60 * 1000;
@@ -45,7 +46,7 @@ export async function validateAccessToken(
 
     next();
   } catch (error) {
-    console.error('❌ [AUTH] Token validation error:', error);
+    console.error('❌ [AUTH] Token validation error:', summarizeErrorLog(error));
     return sendError(res, 401, 'Unauthorized', 'Your session is no longer valid. Please sign in again.');
   }
 }

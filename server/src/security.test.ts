@@ -8,6 +8,10 @@ import {
   requiresCoinbaseProxyIdempotency,
   requireWebhookSecret,
   summarizeCoinbaseErrorResponse,
+  summarizeErrorLog,
+  summarizePushRegistrationAttemptLog,
+  summarizePushTokenRegistrationLog,
+  summarizePushTokenUserLog,
   summarizeWebhookLog,
   summarizeProxyRequestLog,
   summarizeProxyResponseLog,
@@ -201,4 +205,51 @@ test('Coinbase error summaries do not include raw upstream body values', () => {
   });
   assert.equal(JSON.stringify(summary).includes('0xabc'), false);
   assert.equal(JSON.stringify(summary).includes('secret-token'), false);
+});
+
+test('push registration attempt logs expose shape without raw token or user values', () => {
+  const summary = summarizePushRegistrationAttemptLog({
+    pushToken: 'ExponentPushToken[secret]',
+    tokenType: 'expo',
+    userId: 'user-1',
+  });
+
+  assert.deepEqual(summary, {
+    kind: 'object',
+    keyCount: 3,
+    keys: ['pushToken', 'tokenType', 'userId'],
+    hasPushToken: true,
+    hasUserId: true,
+  });
+  assert.equal(JSON.stringify(summary).includes('ExponentPushToken[secret]'), false);
+  assert.equal(JSON.stringify(summary).includes('user-1'), false);
+});
+
+test('push token registration logs hash users and omit raw tokens', () => {
+  const summary = summarizePushTokenRegistrationLog({
+    currentUserId: 'user-1',
+    requestedUserId: 'user-1',
+    platform: 'ios',
+    tokenType: 'native',
+    pushToken: 'native-push-token-secret',
+  });
+
+  assert.deepEqual(summary, {
+    currentUserIdHash: summarizePushTokenUserLog('user-1').userIdHash,
+    requestedUserIdHash: summarizePushTokenUserLog('user-1').userIdHash,
+    sameUser: true,
+    platform: 'ios',
+    tokenType: 'native',
+    hasToken: true,
+    tokenLength: 24,
+  });
+  assert.equal(JSON.stringify(summary).includes('user-1'), false);
+  assert.equal(JSON.stringify(summary).includes('native-push-token-secret'), false);
+});
+
+test('error log summaries omit raw messages and stacks', () => {
+  const summary = summarizeErrorLog(new Error('token secret appeared in a parser failure'));
+
+  assert.deepEqual(summary, { name: 'Error' });
+  assert.equal(JSON.stringify(summary).includes('token secret'), false);
 });

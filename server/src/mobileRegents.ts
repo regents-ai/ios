@@ -43,6 +43,21 @@ type RegentActivity = {
   at: string;
 };
 
+export type MobileRegentBaseSnapshot = {
+  chainId: 8453;
+  blockNumber: number | null;
+  contractAddress: string | null;
+  observedAt: string;
+  stale: boolean;
+  snapshot: {
+    regentId: string;
+    name: string;
+    walletAddress: string;
+    runtimeStatus: RegentRuntimeStatus;
+    platformState: RegentPlatformState;
+  };
+};
+
 export type RegentReturnRequest = {
   id: string;
   regentId: string;
@@ -118,7 +133,13 @@ type RegentManagerDetail = {
   companySummary: string;
   dashboardUrl: string;
   goals: { id: string; title: string; status: string; note?: string }[];
-  activeTasks: { id: string; title: string; status: string; owner?: string; note?: string }[];
+  activeTasks: {
+    id: string;
+    title: string;
+    status: string;
+    owner?: string;
+    note?: string;
+  }[];
   recentEvents: { id: string; title: string; detail: string; at: string }[];
   roster: { id: string; name: string; role: string; status: string }[];
 };
@@ -174,7 +195,7 @@ function receiptMatchesExpected(
     to: string;
     value: string;
     data: string;
-  }
+  },
 ) {
   try {
     return (
@@ -217,11 +238,15 @@ function companyBlockers(projection: PlatformProjection, company: PlatformCompan
   return companyFormationError ? [...formationBlockers, companyFormationError] : formationBlockers;
 }
 
-function platformStateForCompany(projection: PlatformProjection, company: PlatformCompanyProjection): RegentPlatformState {
+function platformStateForCompany(
+  projection: PlatformProjection,
+  company: PlatformCompanyProjection,
+): RegentPlatformState {
   const state: RegentPlatformState = {
     claimedName: company.company.claimed_label,
     slug: company.public_profile.slug,
-    formationStatus: (company.formation?.status || projection.formation.formation_state.state) as PlatformFormationStatus,
+    formationStatus: (company.formation?.status ||
+      projection.formation.formation_state.state) as PlatformFormationStatus,
     billingStatus: projection.billing_account.status as PlatformBillingStatus,
     runtimeStatus: company.company.runtime_status as PlatformRuntimeStatus,
     blockers: companyBlockers(projection, company),
@@ -263,7 +288,11 @@ function returnRequestsForUser(userId: string, regentId: string) {
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
 
-function summaryFromCompany(userId: string, projection: PlatformProjection, company: PlatformCompanyProjection): RegentSummary {
+function summaryFromCompany(
+  userId: string,
+  projection: PlatformProjection,
+  company: PlatformCompanyProjection,
+): RegentSummary {
   const id = companyId(company);
   const runtimeStatus = runtimeStatusForCompany(company);
   const summary: RegentSummary = {
@@ -286,21 +315,26 @@ function summaryFromCompany(userId: string, projection: PlatformProjection, comp
 }
 
 function findCompany(projection: PlatformProjection, regentId: string) {
-  return projection.companies.find((company) => companyId(company) === regentId || String(company.company.id) === regentId);
+  return projection.companies.find(
+    (company) => companyId(company) === regentId || String(company.company.id) === regentId,
+  );
 }
 
 export function hasRegentInPlatformProjection(regentId: string, projection: PlatformProjection) {
   return !!findCompany(projection, regentId);
 }
 
-export function listRegentsForUserFromPlatformProjection(userId: string, projection: PlatformProjection): RegentSummary[] {
+export function listRegentsForUserFromPlatformProjection(
+  userId: string,
+  projection: PlatformProjection,
+): RegentSummary[] {
   return projection.companies.map((company) => summaryFromCompany(userId, projection, company));
 }
 
 export function getRegentForUserFromPlatformProjection(
   userId: string,
   regentId: string,
-  projection: PlatformProjection
+  projection: PlatformProjection,
 ): RegentDetail | null {
   const company = findCompany(projection, regentId);
   if (!company) {
@@ -311,7 +345,9 @@ export function getRegentForUserFromPlatformProjection(
   return {
     ...summary,
     runtimeHeadline: `${summary.name} is ${summary.runtimeStatus === 'online' ? 'ready' : 'waiting for review'}.`,
-    mission: company.company.public_summary || `${summary.name} keeps company work, wallet context, and operator review together.`,
+    mission:
+      company.company.public_summary ||
+      `${summary.name} keeps company work, wallet context, and operator review together.`,
     recentActivity: [
       {
         id: `${summary.id}-platform-state`,
@@ -326,7 +362,7 @@ export function getRegentForUserFromPlatformProjection(
 
 export function getRegentManagerForUserFromPlatformProjection(
   regentId: string,
-  projection: PlatformProjection
+  projection: PlatformProjection,
 ): RegentManagerDetail | null {
   const company = findCompany(projection, regentId);
   if (!company) {
@@ -368,13 +404,55 @@ export function getRegentManagerForUserFromPlatformProjection(
       },
     ],
     roster: [
-      { id: `${id}-roster-manager`, name: 'Regent Manager', role: 'Company brief', status: 'Ready' },
-      { id: `${id}-roster-hermes`, name: 'Hermes Talk', role: 'Coming soon', status: 'Coming soon' },
-      { id: `${id}-roster-workspace`, name: 'Workspace', role: 'Company runtime', status: company.runtime.workspace.status },
+      {
+        id: `${id}-roster-manager`,
+        name: 'Regent Manager',
+        role: 'Company brief',
+        status: 'Ready',
+      },
+      {
+        id: `${id}-roster-talk`,
+        name: 'Talk',
+        role: 'Messages and reviews',
+        status: 'Open',
+      },
+      {
+        id: `${id}-roster-workspace`,
+        name: 'Workspace',
+        role: 'Company runtime',
+        status: company.runtime.workspace.status,
+      },
     ],
   };
 
   return cloneJson(manager);
+}
+
+export function getRegentBaseSnapshotForUserFromPlatformProjection(
+  userId: string,
+  regentId: string,
+  projection: PlatformProjection,
+): MobileRegentBaseSnapshot | null {
+  const company = findCompany(projection, regentId);
+  if (!company) {
+    return null;
+  }
+
+  const summary = summaryFromCompany(userId, projection, company);
+  return cloneJson({
+    chainId: 8453,
+    blockNumber: null,
+    contractAddress: null,
+    observedAt: summary.lastActiveAt,
+    stale: false,
+    snapshot: {
+      regentId: summary.id,
+      name: summary.name,
+      walletAddress: summary.walletAddress,
+      runtimeStatus: summary.runtimeStatus,
+      platformState: summary.platformState,
+    },
+  });
 }
 
 export function createRegentReturnRequestForUser(
@@ -390,7 +468,7 @@ export function createRegentReturnRequestForUser(
     value: string;
     data: string;
   },
-  idempotencyKey: string
+  idempotencyKey: string,
 ): RegentReturnRequest | null {
   const key = `${userId}:${regentId}:return:${idempotencyKey}`;
   const existing = mobileRegentStore.read().returnRequestIntents[key];
@@ -426,7 +504,9 @@ export function getRegentReturnRequestForUser(userId: string, regentId: string, 
   return (
     Object.entries(mobileRegentStore.read().returnRequestIntents).find(
       ([key, request]) =>
-        key.startsWith(`${userId}:${regentId}:return:`) && request.id === returnRequestId && request.regentId === regentId
+        key.startsWith(`${userId}:${regentId}:return:`) &&
+        request.id === returnRequestId &&
+        request.regentId === regentId,
     )?.[1] || null
   );
 }
@@ -435,13 +515,10 @@ export function confirmRegentReturnRequestForUser(
   userId: string,
   regentId: string,
   returnRequestId: string,
-  receipt: ConfirmedBaseReceipt
-):
-  | { kind: 'ok'; returnRequest: RegentReturnRequest }
-  | { kind: 'not_found' }
-  | { kind: 'conflict' } {
+  receipt: ConfirmedBaseReceipt,
+): { kind: 'ok'; returnRequest: RegentReturnRequest } | { kind: 'not_found' } | { kind: 'conflict' } {
   const matchingEntry = Object.entries(mobileRegentStore.read().returnRequestIntents).find(
-    ([key, request]) => key.startsWith(`${userId}:${regentId}:return:`) && request.id === returnRequestId
+    ([key, request]) => key.startsWith(`${userId}:${regentId}:return:`) && request.id === returnRequestId,
   );
   if (!matchingEntry) {
     return { kind: 'not_found' };
@@ -485,7 +562,7 @@ export function createRegentFundingIntentForUser(
     value: string;
     data: string;
   },
-  idempotencyKey: string
+  idempotencyKey: string,
 ): RegentFundingIntent | null {
   const key = `${userId}:${regentId}:funding:${idempotencyKey}`;
   const existing = mobileRegentStore.read().fundingIntentIntents[key];
@@ -523,7 +600,9 @@ export function getRegentFundingIntentForUser(userId: string, regentId: string, 
   return (
     Object.entries(mobileRegentStore.read().fundingIntentIntents).find(
       ([key, intent]) =>
-        key.startsWith(`${userId}:${regentId}:funding:`) && intent.id === fundingIntentId && intent.regentId === regentId
+        key.startsWith(`${userId}:${regentId}:funding:`) &&
+        intent.id === fundingIntentId &&
+        intent.regentId === regentId,
     )?.[1] || null
   );
 }
@@ -532,13 +611,10 @@ export function confirmRegentFundingIntentForUser(
   userId: string,
   regentId: string,
   fundingIntentId: string,
-  receipt: ConfirmedBaseReceipt
-):
-  | { kind: 'ok'; fundingIntent: RegentFundingIntent }
-  | { kind: 'not_found' }
-  | { kind: 'conflict' } {
+  receipt: ConfirmedBaseReceipt,
+): { kind: 'ok'; fundingIntent: RegentFundingIntent } | { kind: 'not_found' } | { kind: 'conflict' } {
   const matchingEntry = Object.entries(mobileRegentStore.read().fundingIntentIntents).find(
-    ([key, intent]) => key.startsWith(`${userId}:${regentId}:funding:`) && intent.id === fundingIntentId
+    ([key, intent]) => key.startsWith(`${userId}:${regentId}:funding:`) && intent.id === fundingIntentId,
   );
   if (!matchingEntry) {
     return { kind: 'not_found' };
@@ -580,7 +656,7 @@ export function prepareWalletActionForUser(
     idempotencyKey: string;
     amount?: string | undefined;
     currency?: string | undefined;
-  }
+  },
 ): PreparedWalletAction | null {
   const createdAt = Date.now();
   const key = `${userId}:${input.regentId}:${type}:${input.idempotencyKey}`;
@@ -619,7 +695,7 @@ export function prepareWalletActionForUser(
 export function confirmPreparedWalletActionForUser(
   actionId: string,
   receipt: ConfirmedBaseReceipt,
-  confirmedAt = new Date()
+  confirmedAt = new Date(),
 ):
   | { kind: 'ok'; action: PreparedWalletAction }
   | { kind: 'not_found' }
@@ -629,7 +705,10 @@ export function confirmPreparedWalletActionForUser(
   if (!action) {
     return { kind: 'not_found' };
   }
-  if (action.status !== 'confirmed' && (action.status === 'expired' || confirmedAt.getTime() >= Date.parse(action.expires_at))) {
+  if (
+    action.status !== 'confirmed' &&
+    (action.status === 'expired' || confirmedAt.getTime() >= Date.parse(action.expires_at))
+  ) {
     let expiredAction: PreparedWalletAction | null = null;
     mobileRegentStore.update((state) => {
       for (const stored of Object.values(state.preparedWalletActions)) {

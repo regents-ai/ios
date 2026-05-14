@@ -75,6 +75,8 @@ The local backend needs:
 - `REGENTS_CDP_JWT_PRIVATE_KEY`
 - `WEBHOOK_SECRET`
 
+Release mode is enabled when `NODE_ENV=production`, `VERCEL_ENV=production`, or `REGENTS_RELEASE=true`. In release mode the backend requires durable Redis storage, a backend-owned mobile state directory, and production push delivery settings.
+
 Keep database secrets on the backend. A Neon Postgres URL must not be placed in the mobile app environment. This app currently uses `REDIS_URL` on the backend for push-token storage. Production push delivery also uses the backend APNs settings in `server/.env.example`. Regent records come from Platform’s `/api/agent-platform/projection` endpoint, and Talk records come from Platform Regent Work Runtime routes. The mobile backend stores only wallet intent and receipt state under `.regents-mobile-state` unless `REGENTS_MOBILE_STATE_DIR` points to another backend-owned directory.
 
 ## Run Locally
@@ -96,8 +98,8 @@ For an installed iPhone build from a clean checkout, generate the native project
 
 ```bash
 npx expo prebuild --platform ios
-flowdeck context --project /Users/sean/Documents/regent/ios --json
-flowdeck build --project /Users/sean/Documents/regent/ios --scheme RegentsMobile
+flowdeck context --project "$PWD" --json
+flowdeck build --project "$PWD" --scheme RegentsMobile
 ```
 
 ## App Checks

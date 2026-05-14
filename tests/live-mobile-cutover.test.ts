@@ -25,7 +25,7 @@ test('mobile app and backend do not use the old preview route family', () => {
   assert.equal(result.stdout, '');
 });
 
-test('mobile Talk surfaces are visible without opening Hermes sessions', () => {
+test('mobile Talk surfaces use the contracted terminal routes', () => {
   const appFiles = [
     '../app/(tabs)/agents.tsx',
     '../app/(tabs)/terminal.tsx',
@@ -36,16 +36,31 @@ test('mobile Talk surfaces are visible without opening Hermes sessions', () => {
     '../utils/regentApi/client.ts',
     '../utils/navigation/routes.ts',
   ];
-  const talkMethodPattern =
-    /regentApi\.(listTerminalSessions|createTerminalSession|getTerminalSession|getTerminalEvents|sendTerminalMessage|resolveTerminalApproval)|routes\.terminalSession\(|router\.push\(['"]\/terminal['"]\)/;
+  const terminalTab = readFileSync(resolve(testDir, '../app/(tabs)/terminal.tsx'), 'utf8');
+  const terminalDetail = readFileSync(resolve(testDir, '../app/terminal/[id].tsx'), 'utf8');
+  const agentsTab = readFileSync(resolve(testDir, '../app/(tabs)/agents.tsx'), 'utf8');
+  const agentDetail = readFileSync(resolve(testDir, '../app/agent/[id].tsx'), 'utf8');
+  const regentClient = readFileSync(resolve(testDir, '../utils/regentApi/client.ts'), 'utf8');
+  const navigationRoutes = readFileSync(resolve(testDir, '../utils/navigation/routes.ts'), 'utf8');
 
-  assert.match(readFileSync(resolve(testDir, '../app/(tabs)/terminal.tsx'), 'utf8'), /TalkComingSoon/);
-  assert.match(readFileSync(resolve(testDir, '../app/terminal/[id].tsx'), 'utf8'), /TalkComingSoon/);
-  assert.match(readFileSync(resolve(testDir, '../app/(tabs)/agents.tsx'), 'utf8'), /Hermes Talk is coming soon/);
-  assert.match(readFileSync(resolve(testDir, '../app/agent/[id].tsx'), 'utf8'), /Talk coming soon/);
+  assert.match(terminalTab, /regentApi\.listTerminalSessions/);
+  assert.match(terminalTab, /routes\.terminalSession\(session\.id\)/);
+  assert.match(terminalDetail, /regentApi\.getTerminalSession/);
+  assert.match(terminalDetail, /regentApi\.getTerminalEvents/);
+  assert.match(terminalDetail, /regentApi\.sendTerminalMessage/);
+  assert.match(terminalDetail, /regentApi\.resolveTerminalApproval/);
+  assert.match(agentsTab, /router\.push\(routes\.terminal\(\)\)/);
+  assert.match(agentDetail, /router\.push\(routes\.terminal\(\)\)/);
+  assert.match(regentClient, /listTerminalSessions\(\)/);
+  assert.match(regentClient, /createTerminalSession\(input:/);
+  assert.match(regentClient, /getTerminalSession\(sessionId: string\)/);
+  assert.match(regentClient, /getTerminalEvents\(input:/);
+  assert.match(regentClient, /sendTerminalMessage\(input:/);
+  assert.match(regentClient, /resolveTerminalApproval\(input:/);
+  assert.match(navigationRoutes, /terminalSession\(sessionId: string\)/);
 
   for (const file of [...appFiles, ...helperFiles]) {
     const contents = readFileSync(resolve(testDir, file), 'utf8');
-    assert.doesNotMatch(contents, talkMethodPattern, file);
+    assert.doesNotMatch(contents, /TalkComingSoon|Hermes Talk is coming soon|Talk coming soon/, file);
   }
 });

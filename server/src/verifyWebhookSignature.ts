@@ -9,6 +9,8 @@
 
 import crypto from 'crypto';
 
+import { summarizeErrorLog } from './security.js';
+
 interface SignatureComponents {
   timestamp: string;
   headerNames: string[];
@@ -46,7 +48,7 @@ function parseSignatureHeader(signatureHeader: string): SignatureComponents | nu
 
     return components as SignatureComponents;
   } catch (error) {
-    console.error('❌ [WEBHOOK] Error parsing signature header:', error);
+    console.error('❌ [WEBHOOK] Error parsing signature header:', summarizeErrorLog(error));
     return null;
   }
 }
@@ -166,7 +168,7 @@ export function verifyWebhookSignature(
 
     return isValid;
   } catch (error) {
-    console.error('❌ [WEBHOOK] Signature verification error:', error);
+    console.error('❌ [WEBHOOK] Signature verification error:', summarizeErrorLog(error));
     return false;
   }
 }

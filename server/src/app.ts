@@ -15,9 +15,10 @@ import {
   type PushTokenRecord,
 } from './pushDelivery.js';
 import {
-  hasProcessedOnrampWebhookEvent,
+  claimOnrampWebhookEvent,
   markOnrampWebhookEventProcessed,
   parseCanonicalOnrampWebhook,
+  releaseOnrampWebhookEventClaim,
 } from './onrampWebhook.js';
 import {
   buildPushTokenDebugResponse,
@@ -29,6 +30,10 @@ import {
   requireWebhookSecret,
   requiresCoinbaseProxyIdempotency,
   summarizeCoinbaseErrorResponse,
+  summarizeErrorLog,
+  summarizePushRegistrationAttemptLog,
+  summarizePushTokenRegistrationLog,
+  summarizePushTokenUserLog,
   summarizeWebhookLog,
   summarizeProxyRequestLog,
   summarizeProxyResponseLog,
@@ -180,7 +185,7 @@ app.post('/auth/cdp-token', async (req, res) => {
     const token = await createCdpCustomAuthToken(req.userId);
     return res.json({ token });
   } catch (error) {
-    console.error('❌ [AUTH] Unable to create Coinbase custom sign-in token:', error);
+    console.error('❌ [AUTH] Unable to create Coinbase custom sign-in token:', summarizeErrorLog(error));
     return sendError(
       res,
       500,
@@ -302,7 +307,7 @@ app.post("/server/api", async (req, res) => {
         );
       }
     } catch (parseError) {
-      console.error('Failed to parse response:', parseError);
+      console.error('Failed to parse response:', summarizeErrorLog(parseError));
       return sendError(res, response.ok ? 502 : response.status, 'UpstreamResponseInvalid', 'Unable to read Coinbase response right now.');
     }
 
@@ -314,7 +319,7 @@ app.post("/server/api", async (req, res) => {
       return sendError(res, error.statusCode, error.code, error.message);
     }
 
-    console.error('Proxy error:', error);
+    console.error('Proxy error:', summarizeErrorLog(error));
     sendError(res, 500, 'ProxyRequestFailed', 'Unable to reach Coinbase right now.');
   }
 });
@@ -506,7 +511,7 @@ app.get('/balances/evm', async (req, res) => {
       return sendError(res, error.statusCode, error.code, 'Wallet balances are not available for this build yet.');
     }
 
-    console.error('❌ [BALANCES] Error:', error);
+    console.error('❌ [BALANCES] Error:', summarizeErrorLog(error));
     sendError(res, 500, 'BalanceRefreshFailed', 'Unable to refresh wallet balances right now.');
   }
 });
@@ -641,7 +646,7 @@ app.get('/balances/solana', async (req, res) => {
       return sendError(res, error.statusCode, error.code, 'Wallet balances are not available for this build yet.');
     }
 
-    console.error('❌ [BALANCES] Error:', error);
+    console.error('❌ [BALANCES] Error:', summarizeErrorLog(error));
     sendError(res, 500, 'BalanceRefreshFailed', 'Unable to refresh wallet balances right now.');
   }
 });
@@ -677,12 +682,12 @@ async function readPushTokenForUser(userId: string): Promise<PushTokenRecord | n
 async function writePushTokenForUser(userId: string, tokenData: PushTokenRecord) {
   if (useDatabase && database) {
     await database.set(`pushtoken:${userId}`, JSON.stringify(tokenData));
-    console.log('✅ [PUSH] Token stored in database for user:', userId);
+    console.log('✅ [PUSH] Token stored in database for user:', summarizePushTokenUserLog(userId));
     return;
   }
 
   pushTokenStore.set(userId, tokenData);
-  console.log('✅ [PUSH] Token stored in memory for user:', userId);
+  console.log('✅ [PUSH] Token stored in memory for user:', summarizePushTokenUserLog(userId));
   console.log('📊 [PUSH] Total tokens in store:', pushTokenStore.size);
 }
 
@@ -692,7 +697,7 @@ async function writePushTokenForUser(userId: string, tokenData: PushTokenRecord)
  */
 app.post('/push-tokens/ping', async (req, res) => {
   console.log('🔔 [PUSH DEBUG] Registration attempt detected from client:', {
-    ...req.body,
+    ...summarizePushRegistrationAttemptLog(req.body),
     timestamp: new Date().toISOString()
   });
   res.json({ received: true });
@@ -709,18 +714,24 @@ app.post('/push-tokens', async (req, res) => {
     const { userId, pushToken, platform, tokenType } = parsedBody.data;
 
     console.log('📥 [PUSH] Registration request received:', {
-      userId,
-      platform,
-      tokenType,
-      reqUserId: req.userId,
-      hasToken: !!pushToken,
-      tokenLength: pushToken?.length
+      ...summarizePushTokenRegistrationLog({
+        currentUserId: req.userId,
+        platform,
+        pushToken,
+        requestedUserId: userId,
+        tokenType,
+      }),
     });
 
     if (req.userId !== userId) {
       console.error('❌ [PUSH] Unauthorized token registration attempt:', {
-        tokenUserId: req.userId,
-        requestUserId: userId,
+        ...summarizePushTokenRegistrationLog({
+          currentUserId: req.userId,
+          platform,
+          pushToken,
+          requestedUserId: userId,
+          tokenType,
+        }),
       });
       return sendError(res, 403, 'Forbidden', 'Cannot register a push token for another user.');
     }
@@ -735,13 +746,17 @@ app.post('/push-tokens', async (req, res) => {
     await writePushTokenForUser(userId, tokenData);
 
     console.log('✅ [PUSH] Token registered successfully:', {
-      userId,
-      tokenType: tokenData.tokenType,
-      platform: tokenData.platform
+      ...summarizePushTokenRegistrationLog({
+        currentUserId: req.userId,
+        platform: tokenData.platform,
+        pushToken: tokenData.token,
+        requestedUserId: userId,
+        tokenType: tokenData.tokenType,
+      }),
     });
     res.json({ success: true });
   } catch (error) {
-    console.error('❌ [PUSH] Error:', error);
+    console.error('❌ [PUSH] Error:', summarizeErrorLog(error));
     sendError(res, 500, 'PushTokenStoreFailed', 'Unable to register this device for notifications right now.');
   }
 });
@@ -791,7 +806,7 @@ app.post('/webhooks/onramp', webhookRateLimiter, async (req, res) => {
       return sendError(res, 401, 'InvalidSignature', 'Webhook signature is invalid.');
     }
   } catch (error) {
-    console.error('❌ [WEBHOOK] Webhook verification is not configured:', error);
+    console.error('❌ [WEBHOOK] Webhook verification is not configured:', summarizeErrorLog(error));
     return sendError(res, 500, 'WebhookVerificationUnavailable', 'Webhook verification is not configured.');
   }
 
@@ -804,7 +819,8 @@ app.post('/webhooks/onramp', webhookRateLimiter, async (req, res) => {
   console.log('🔔 [WEBHOOK] Received:', webhook.eventType);
   console.log('📦 [WEBHOOK] Summary:', summarizeWebhookLog(webhook));
 
-  if (await hasProcessedOnrampWebhookEvent(webhook, useDatabase ? database : null)) {
+  const webhookClaimed = await claimOnrampWebhookEvent(webhook, useDatabase ? database : null);
+  if (!webhookClaimed) {
     return res.status(200).json({ received: true, duplicate: true });
   }
 
@@ -870,7 +886,8 @@ app.post('/webhooks/onramp', webhookRateLimiter, async (req, res) => {
     await markOnrampWebhookEventProcessed(webhook, useDatabase ? database : null);
     return res.status(200).json({ received: true });
   } catch (error) {
-    console.error('❌ [WEBHOOK] Error processing webhook:', error);
+    await releaseOnrampWebhookEventClaim(webhook, useDatabase ? database : null).catch(() => undefined);
+    console.error('❌ [WEBHOOK] Error processing webhook:', summarizeErrorLog(error));
     return sendError(res, 502, 'WebhookProcessingFailed', 'Unable to process this webhook right now.');
   }
 });

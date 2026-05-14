@@ -78,7 +78,7 @@ Regents Mobile is the iPhone entry path for Regent. It owns the iOS app, the mob
 ## Boundary Lines
 
 - This repo owns the mobile wallet experience and the mobile presentation of Regent work
-- This repo does not own live Regent agent, Regent Manager, or Talk business logic. The next slice should connect the current mobile routes to the owning product records
+- This repo does not own live Regent agent, Regent Manager, or Talk business logic. The current mobile routes read the owning product records and keep mobile wallet intent and receipt state here.
 - Mobile Talk uses Platform Regent Work Runtime records through mobile routes. It does not create or own XMTP room ids today.
 - `api-contract.openapiv3.yaml` is the current formal mobile product contract and covers the mobile Regent routes that the app exposes today
 - `regent-services-contract.openapiv3.yaml` is empty on purpose for Phase 0 because this repo does not yet ship any shared mobile service routes

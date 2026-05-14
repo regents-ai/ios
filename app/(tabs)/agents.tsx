@@ -213,14 +213,14 @@ export default function AgentsTab() {
       : [];
 
     const talkItem: CommandCenterItem = {
-      id: 'hermes-talk-coming-soon',
+      id: 'talk',
       rank: 3,
-      title: 'Hermes Talk is coming soon',
-      body: 'Messages, reviews, and operator notes will appear here when Talk returns.',
-      meta: 'Coming soon',
+      title: 'Talk messages',
+      body: 'Read messages and review cards from your Regents.',
+      meta: 'Open',
       icon: 'chatbubble-ellipses-outline',
       accent: BLUE,
-      disabled: true,
+      onPress: () => router.push(routes.terminal()),
     };
 
     return [
@@ -301,11 +301,10 @@ export default function AgentsTab() {
                 <Text style={styles.secondaryButtonText}>Open Staking</Text>
               </RegentPressable>
               <RegentPressable
-                disabled
-                accessibilityState={{ disabled: true }}
-                style={[styles.secondaryButton, styles.secondaryButtonDisabled]}
+                onPress={() => router.push(routes.terminal())}
+                style={styles.secondaryButton}
               >
-                <Text style={[styles.secondaryButtonText, styles.secondaryButtonTextDisabled]}>Talk coming soon</Text>
+                <Text style={styles.secondaryButtonText}>Open Talk</Text>
               </RegentPressable>
               <RegentPressable
                 onPress={() => router.push('/autolaunch')}
@@ -456,15 +455,14 @@ export default function AgentsTab() {
             <Text style={styles.sectionTitle}>Keep moving</Text>
             <View style={styles.quickGrid}>
               <RegentPressable
-                disabled
-                accessibilityState={{ disabled: true }}
                 pressStyle="card"
-                style={[styles.quickCard, styles.quickCardDisabled]}
+                style={styles.quickCard}
+                onPress={() => router.push(routes.terminal())}
               >
                 <Ionicons name="chatbubble-ellipses-outline" size={18} color={BLUE} />
-                <Text style={styles.quickTitle}>Hermes Talk</Text>
-                <Text style={styles.quickBody} numberOfLines={2}>Messages and review cards are coming soon.</Text>
-                <Text style={styles.quickMeta}>Coming soon</Text>
+                <Text style={styles.quickTitle}>Talk</Text>
+                <Text style={styles.quickBody} numberOfLines={2}>Messages and review cards stay together.</Text>
+                <Text style={styles.quickMeta}>Open</Text>
               </RegentPressable>
 
               <RegentPressable
@@ -583,12 +581,6 @@ const styles = StyleSheet.create({
     color: TEXT_PRIMARY,
     fontSize: 14,
     fontFamily: FONTS.body,
-  },
-  secondaryButtonDisabled: {
-    backgroundColor: BLUE_WASH,
-  },
-  secondaryButtonTextDisabled: {
-    color: BLUE,
   },
   summaryRow: {
     flexDirection: 'row',
@@ -810,9 +802,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 16,
     gap: 8,
-  },
-  quickCardDisabled: {
-    backgroundColor: BLUE_WASH,
   },
   quickTitle: {
     color: TEXT_PRIMARY,

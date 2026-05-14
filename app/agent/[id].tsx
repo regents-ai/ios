@@ -198,6 +198,10 @@ export default function AgentDetailScreen() {
     router.push(routes.regentManager(agent.id));
   }, [agent, router]);
 
+  const openTalk = useCallback(() => {
+    router.push(routes.terminal());
+  }, [router]);
+
   const runtime = runtimeTone(agent?.runtimeStatus || 'waiting');
   const topGoal = regentManager?.goals[0];
   const nextTask = regentManager?.activeTasks[0];
@@ -233,10 +237,10 @@ export default function AgentDetailScreen() {
     if (agent.runtimeStatus === 'waiting') {
       return {
         eyebrow: 'Next move',
-        title: 'Hermes Talk is coming soon',
-        body: 'Messages and review cards will return here soon. Regent Manager is live today.',
-        cta: 'Coming soon',
-        disabled: true,
+        title: 'Open Talk',
+        body: 'Review messages and decision cards for this Regent.',
+        cta: 'Open Talk',
+        onPress: openTalk,
         accent: AMBER,
         wash: AMBER_WASH,
       };
@@ -244,14 +248,14 @@ export default function AgentDetailScreen() {
 
     return {
       eyebrow: 'Next move',
-      title: 'Hermes Talk is coming soon',
-      body: 'Conversation history will return here soon. Regent Manager is live today.',
-      cta: 'Coming soon',
-      disabled: true,
+      title: 'Open Talk',
+      body: 'Read messages and review cards from your Regents.',
+      cta: 'Open Talk',
+      onPress: openTalk,
       accent: SUCCESS,
       wash: GREEN_WASH,
     };
-  }, [agent, openRegentManager]);
+  }, [agent, openRegentManager, openTalk]);
 
   if (loading) {
     return (
@@ -307,11 +311,10 @@ export default function AgentDetailScreen() {
           <Text style={styles.heroMeta}>{agent.mission}</Text>
           <View style={styles.heroActions}>
             <RegentPressable
-              disabled
-              accessibilityState={{ disabled: true }}
-              style={[styles.primaryButton, styles.primaryButtonDisabled]}
+              style={styles.primaryButton}
+              onPress={openTalk}
             >
-              <Text style={styles.primaryButtonText}>Talk coming soon</Text>
+              <Text style={styles.primaryButtonText}>Open Talk</Text>
             </RegentPressable>
             <RegentPressable
               style={styles.secondaryButton}
@@ -640,10 +643,6 @@ const styles = StyleSheet.create({
     color: WHITE,
     fontSize: 14,
     fontFamily: FONTS.body,
-  },
-  primaryButtonDisabled: {
-    backgroundColor: BLUE,
-    opacity: 0.72,
   },
   secondaryButton: {
     minWidth: 120,

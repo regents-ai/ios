@@ -151,6 +151,9 @@ const rwrApprovalResponseSchema = z.object({
 });
 
 const nullableStringSchema = z.string().nullable();
+const evmAddressSchema = z.string().regex(/^0x[a-fA-F0-9]{40}$/);
+const decimalValueSchema = z.string().regex(/^\d+$/);
+const hexDataSchema = z.string().regex(/^0x([a-fA-F0-9]{2})*$/);
 
 const regentStakingStateSchema = z.object({
   ok: z.literal(true).optional(),
@@ -195,8 +198,8 @@ const regentStakingStateSchema = z.object({
 const regentStakingActionStateSchema = z.object({
   chain_id: z.number().int(),
   chain_label: z.string(),
-  contract_address: z.string(),
-  wallet_address: z.string(),
+  contract_address: evmAddressSchema,
+  wallet_address: evmAddressSchema,
 });
 
 const platformWalletActionSchema = z.object({
@@ -206,10 +209,10 @@ const platformWalletActionSchema = z.object({
   resource_id: z.string(),
   action: z.enum(['stake', 'unstake', 'claim_usdc', 'claim_regent', 'claim_and_restake_regent']),
   chain_id: z.number().int(),
-  to: z.string(),
-  value: z.string(),
-  data: z.string(),
-  expected_signer: z.string(),
+  to: evmAddressSchema,
+  value: decimalValueSchema,
+  data: hexDataSchema,
+  expected_signer: evmAddressSchema,
   expires_at: z.string(),
   idempotency_key: z.string(),
   simulation: z.object({
@@ -219,10 +222,10 @@ const platformWalletActionSchema = z.object({
   }),
   risk_copy: z.string(),
   approval: z.object({
-    token: z.string(),
-    spender: z.string(),
-    amount: z.string(),
-    data: z.string(),
+    token: evmAddressSchema,
+    spender: evmAddressSchema,
+    amount: decimalValueSchema,
+    data: hexDataSchema,
   }).optional(),
 });
 

@@ -9,7 +9,7 @@ test('OpenAPI operations have stable operation IDs', () => {
   const operations = [...contract.matchAll(/^    (get|post|put|patch|delete):$/gm)];
   const operationIds = [...contract.matchAll(/^\s+operationId:\s+([A-Za-z0-9_]+)$/gm)].map((match) => match[1]);
 
-  assert.equal(operations.length, 34);
+  assert.equal(operations.length, 35);
   assert.equal(operationIds.length, operations.length);
   assert.equal(new Set(operationIds).size, operationIds.length);
 });
@@ -51,6 +51,7 @@ test('money-action contract declares current Base address and calldata constrain
   }
 
   assert.match(contractSlices[0]!, /chainId:[\s\S]*enum: \[8453\]/);
+  assert.match(contractSlices[0]!, /destinationWalletAddress:[\s\S]*Must match the transaction `to` address/);
   assert.match(contractSlices[1]!, /chainId:[\s\S]*enum: \[8453\]/);
   assert.match(contractSlices[3]!, /chain_id:[\s\S]*enum: \[8453\]/);
 });
@@ -68,4 +69,15 @@ test('Regent staking contract and client use the live staking surface only', () 
   assert.match(regentClient, /claimRegentStakingUsdc\(input:/);
   assert.match(regentClient, /claimRegentStakingRegent\(input:/);
   assert.match(regentClient, /claimAndRestakeRegent\(input:/);
+});
+
+test('Platform staking wallet-action contract uses even-byte calldata constraints', () => {
+  const platformAction = contract.slice(
+    contract.indexOf('    PlatformWalletAction:'),
+    contract.indexOf('    MobileRegentStakingActionResponse:')
+  );
+  const approval = platformAction.slice(platformAction.indexOf('        approval:'));
+
+  assert.match(platformAction, /data:[\s\S]*pattern: '\^0x\(\[a-fA-F0-9\]\{2\}\)\*\$'/);
+  assert.match(approval, /data:[\s\S]*pattern: '\^0x\(\[a-fA-F0-9\]\{2\}\)\*\$'/);
 });

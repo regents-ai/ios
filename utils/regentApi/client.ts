@@ -8,11 +8,15 @@ import {
   RegentStakingActionResponse,
   RegentStakingState,
   RegentSummary,
+  TerminalEvent,
+  TerminalSessionDetail,
+  TerminalSessionSummary,
 } from '@/types/regents';
 import { authenticatedFetch } from '@/utils/authenticatedFetch';
 
 const mobileRegentsPath = '/mobile/regents';
 const mobileRegentStakingPath = '/mobile/regent/staking';
+const mobileTerminalSessionsPath = '/mobile/terminal/sessions';
 
 type MobileRegentPath =
   | typeof mobileRegentsPath
@@ -38,7 +42,15 @@ type MobileWalletActionPath =
   | `/mobile/wallet-actions/${PreparedWalletAction['action']}/prepare`
   | `/mobile/wallet-actions/${string}/confirm`;
 
-type RegentApiPath = MobileRegentPath | MobileRegentStakingPath | MobileWalletActionPath;
+type MobileTerminalPath =
+  | typeof mobileTerminalSessionsPath
+  | `${typeof mobileTerminalSessionsPath}/${string}`
+  | `${typeof mobileTerminalSessionsPath}/${string}/events`
+  | `${typeof mobileTerminalSessionsPath}/${string}/events?since_event_id=${string}`
+  | `${typeof mobileTerminalSessionsPath}/${string}/messages`
+  | `${typeof mobileTerminalSessionsPath}/${string}/approvals/${string}`;
+
+type RegentApiPath = MobileRegentPath | MobileRegentStakingPath | MobileWalletActionPath | MobileTerminalPath;
 
 async function readErrorMessage(response: Response, defaultMessage: string) {
   const payload = await response.json().catch(() => null);
@@ -98,6 +110,26 @@ const mobileWalletConfirmPath = (actionId: string): `/mobile/wallet-actions/${st
 
 const mobileRegentStakingWithWalletPath = (walletAddress: string): `${typeof mobileRegentStakingPath}?walletAddress=${string}` =>
   `${mobileRegentStakingPath}?walletAddress=${encodeURIComponent(walletAddress)}`;
+
+const terminalSessionPath = (sessionId: string): `${typeof mobileTerminalSessionsPath}/${string}` =>
+  `${mobileTerminalSessionsPath}/${encodeURIComponent(sessionId)}`;
+
+const terminalEventsPath = (
+  sessionId: string,
+  sinceEventId?: string
+): `${typeof mobileTerminalSessionsPath}/${string}/events` | `${typeof mobileTerminalSessionsPath}/${string}/events?since_event_id=${string}` => {
+  const basePath = `${terminalSessionPath(sessionId)}/events` as const;
+  return sinceEventId ? `${basePath}?since_event_id=${encodeURIComponent(sinceEventId)}` : basePath;
+};
+
+const terminalMessagesPath = (sessionId: string): `${typeof mobileTerminalSessionsPath}/${string}/messages` =>
+  `${terminalSessionPath(sessionId)}/messages`;
+
+const terminalApprovalPath = (
+  sessionId: string,
+  requestId: string
+): `${typeof mobileTerminalSessionsPath}/${string}/approvals/${string}` =>
+  `${terminalSessionPath(sessionId)}/approvals/${encodeURIComponent(requestId)}`;
 
 export const regentApi = {
   async listRegents(): Promise<RegentSummary[]> {
@@ -427,5 +459,88 @@ export const regentApi = {
     );
 
     return payload.wallet_action;
+  },
+
+  async listTerminalSessions(): Promise<TerminalSessionSummary[]> {
+    const payload = await requestJson<{ sessions: TerminalSessionSummary[] }>(
+      mobileTerminalSessionsPath,
+      undefined,
+      'Unable to load Talk right now.'
+    );
+
+    return payload.sessions;
+  },
+
+  async createTerminalSession(input: { agentId: string; agentName: string }): Promise<TerminalSessionDetail> {
+    const payload = await requestJson<{ session: TerminalSessionDetail }>(
+      mobileTerminalSessionsPath,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(input),
+      },
+      'Unable to start Talk right now.'
+    );
+
+    return payload.session;
+  },
+
+  async getTerminalSession(sessionId: string): Promise<TerminalSessionDetail> {
+    const payload = await requestJson<{ session: TerminalSessionDetail }>(
+      terminalSessionPath(sessionId),
+      undefined,
+      'Unable to load this Talk session right now.'
+    );
+
+    return payload.session;
+  },
+
+  async getTerminalEvents(input: { sessionId: string; sinceEventId?: string }): Promise<{
+    events: TerminalEvent[];
+    latestEventId: string;
+  }> {
+    return requestJson<{ events: TerminalEvent[]; latestEventId: string }>(
+      terminalEventsPath(input.sessionId, input.sinceEventId),
+      undefined,
+      'Unable to load Talk messages right now.'
+    );
+  },
+
+  async sendTerminalMessage(input: { sessionId: string; text: string }): Promise<TerminalSessionDetail> {
+    const payload = await requestJson<{ session: TerminalSessionDetail }>(
+      terminalMessagesPath(input.sessionId),
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text: input.text }),
+      },
+      'Unable to send this message right now.'
+    );
+
+    return payload.session;
+  },
+
+  async resolveTerminalApproval(input: {
+    sessionId: string;
+    requestId: string;
+    decision: 'approved' | 'denied';
+  }): Promise<TerminalSessionDetail> {
+    const payload = await requestJson<{ session: TerminalSessionDetail }>(
+      terminalApprovalPath(input.sessionId, input.requestId),
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ decision: input.decision }),
+      },
+      'Unable to update this review right now.'
+    );
+
+    return payload.session;
   },
 };

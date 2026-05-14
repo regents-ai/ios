@@ -373,6 +373,61 @@ export function summarizeWebhookLog(data: Record<string, unknown>) {
   };
 }
 
+export function summarizePushRegistrationAttemptLog(data: unknown) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return {
+      kind: typeof data,
+    };
+  }
+
+  const record = data as Record<string, unknown>;
+  const keys = Object.keys(record).sort();
+
+  return {
+    kind: 'object',
+    keyCount: keys.length,
+    keys,
+    hasPushToken: typeof record.pushToken === 'string' && record.pushToken.length > 0,
+    hasUserId: typeof record.userId === 'string' && record.userId.length > 0,
+  };
+}
+
+export function summarizePushTokenUserLog(userId: string | undefined) {
+  return {
+    userIdHash: typeof userId === 'string' && userId.length > 0 ? hashLogIdentifier(userId) : null,
+  };
+}
+
+export function summarizePushTokenRegistrationLog(input: {
+  currentUserId?: string | undefined;
+  platform?: string | undefined;
+  pushToken?: string | undefined;
+  requestedUserId?: string | undefined;
+  tokenType?: string | undefined;
+}) {
+  return {
+    currentUserIdHash: summarizePushTokenUserLog(input.currentUserId).userIdHash,
+    requestedUserIdHash: summarizePushTokenUserLog(input.requestedUserId).userIdHash,
+    sameUser: !!input.currentUserId && !!input.requestedUserId && input.currentUserId === input.requestedUserId,
+    platform: input.platform,
+    tokenType: input.tokenType,
+    hasToken: typeof input.pushToken === 'string' && input.pushToken.length > 0,
+    tokenLength: input.pushToken?.length || 0,
+  };
+}
+
+export function summarizeErrorLog(error: unknown) {
+  if (error instanceof Error) {
+    return {
+      name: error.name || 'Error',
+    };
+  }
+
+  return {
+    name: typeof error,
+  };
+}
+
 function hashLogIdentifier(value: string) {
   return createHash('sha256').update(value).digest('hex').slice(0, 16);
 }
