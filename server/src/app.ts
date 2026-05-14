@@ -1,6 +1,5 @@
 import cors from 'cors';
 import express from 'express';
-import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { z } from 'zod';
 
 import { generateJwt } from '@coinbase/cdp-sdk/auth';
@@ -44,6 +43,12 @@ import {
 } from './security.js';
 import { validateAccessToken } from './validateToken.js';
 import { verifyWebhookSignature } from './verifyWebhookSignature.js';
+import {
+  createAuthenticatedApiRateLimiter,
+  createPublicReadRateLimiter,
+  createPublicWriteRateLimiter,
+  createWebhookRateLimiter,
+} from './rateLimits.js';
 
 // Redis storage setup - use external Redis for production, in-memory for local dev
 let database: any = null;
@@ -68,24 +73,10 @@ const PORT = Number(process.env.PORT || 3000);
 // On Vercel, trust proxy to read x-forwarded-for
 app.set('trust proxy', true);
 
-// Rate limiter for webhook endpoint (DoS protection)
-// Limits expensive operations (DB lookups, external API calls)
-// Note: Rate limiting applies to ALL requests. Signature verification happens
-// inside the route handler AFTER rate limiting to prevent bypass attacks.
-const webhookRateLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute window
-  max: 100, // Limit each IP to 100 requests per minute
-  handler: (_req, res) =>
-    sendError(res, 429, 'TooManyWebhookRequests', 'Too many webhook requests. Please try again later.'),
-  standardHeaders: true, // Return rate limit info in `RateLimit-*` headers
-  legacyHeaders: false, // Disable `X-RateLimit-*` headers
-  // Use IP address as the key
-  keyGenerator: (req) => {
-    const forwarded = req.headers['x-forwarded-for'];
-    const forwardedIp = Array.isArray(forwarded) ? forwarded[0] : forwarded?.split(',')[0]?.trim();
-    return ipKeyGenerator(forwardedIp || req.ip || 'unknown');
-  }
-});
+const webhookRateLimiter = createWebhookRateLimiter();
+const publicReadRateLimiter = createPublicReadRateLimiter();
+const publicWriteRateLimiter = createPublicWriteRateLimiter();
+const authenticatedApiRateLimiter = createAuthenticatedApiRateLimiter();
 
 // CORS Configuration - Prevent random websites from calling your API
 // Note: This does NOT affect:
@@ -140,7 +131,7 @@ app.get("/health", (_req, res) => {
   res.json({ ok: true, message: 'Server is running' });
 });
 
-app.get('/.well-known/jwks.json', (_req, res) => {
+app.get('/.well-known/jwks.json', publicReadRateLimiter, (_req, res) => {
   try {
     res.json(getCdpJwks());
   } catch (error) {
@@ -169,6 +160,8 @@ app.use((req, res, next) => {
   // Apply authentication to all other routes (including /push-tokens)
   return validateAccessToken(req, res, next);
 });
+
+app.use(authenticatedApiRateLimiter);
 
 app.get('/auth/me', (req, res) => {
   res.json({
@@ -695,7 +688,7 @@ async function writePushTokenForUser(userId: string, tokenData: PushTokenRecord)
  * Debug endpoint: Log when push token registration is attempted
  * No auth required - used to confirm that the app attempted registration.
  */
-app.post('/push-tokens/ping', async (req, res) => {
+app.post('/push-tokens/ping', publicWriteRateLimiter, async (req, res) => {
   console.log('🔔 [PUSH DEBUG] Registration attempt detected from client:', {
     ...summarizePushRegistrationAttemptLog(req.body),
     timestamp: new Date().toISOString()

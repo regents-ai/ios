@@ -14,6 +14,14 @@ x-regent-capability:
   money_path: true
   cli_surface: false
   mobile_surface: true
+x-regent-rate-limits:
+  retry_after_header: Retry-After
+  tiers:
+    public_unauthenticated: IP and route based
+    authenticated_browser_mobile: verified mobile user based
+    verified_cli_signed_agent: not exposed in this contract
+    internal_service: not exposed in this contract
+  cli_allowance_requires_verified_siwa: false
 x-regent-chat-room-contract:
   owner: ios
   xmtp_room_routes: []
@@ -61,6 +69,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
   /auth/me:
     get:
       operationId: getCurrentMobileUser
@@ -78,6 +88,8 @@ paths:
                 properties:
                   userId:
                     type: string
+        '429':
+          $ref: '#/components/responses/RateLimitError'
   /auth/cdp-token:
     post:
       operationId: createCdpToken
@@ -107,6 +119,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
   /server/api:
     post:
       operationId: proxyCoinbaseRequest
@@ -139,6 +153,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
   /balances/evm:
     get:
       operationId: getEvmBalances
@@ -176,6 +192,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
   /balances/solana:
     get:
       operationId: getSolanaBalances
@@ -213,6 +231,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
   /push-tokens/ping:
     post:
       operationId: recordPushTokenPing
@@ -228,6 +248,8 @@ paths:
                 properties:
                   received:
                     type: boolean
+        '429':
+          $ref: '#/components/responses/RateLimitError'
   /push-tokens:
     post:
       operationId: registerPushToken
@@ -263,6 +285,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
   /push-tokens/debug/{user_id}:
     get:
       operationId: getPushTokenDebug
@@ -289,6 +313,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
   /webhooks/onramp:
     post:
       operationId: receiveOnrampWebhook
@@ -336,6 +362,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
   /mobile/regents:
     get:
       operationId: listMobileRegents
@@ -367,6 +395,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
   /mobile/regents/{id}:
     get:
       operationId: getMobileRegent
@@ -404,6 +434,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
   /mobile/regents/{id}/manager:
     get:
       operationId: getMobileRegentManager
@@ -429,6 +461,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
   /mobile/regents/{id}/base-snapshot:
     get:
       operationId: getMobileRegentBaseSnapshot
@@ -466,6 +500,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
   /mobile/regents/{id}/return-requests:
     post:
       operationId: createRegentReturnRequest
@@ -507,6 +543,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
   /mobile/regents/{id}/funding-intents:
     post:
       operationId: createRegentFundingIntent
@@ -547,6 +585,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
   /mobile/regents/{id}/funding-intents/{funding_intent_id}:
     get:
       operationId: getRegentFundingIntent
@@ -581,6 +621,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
   /mobile/regents/{id}/funding-intents/{funding_intent_id}/confirm:
     post:
       operationId: confirmRegentFundingIntent
@@ -639,6 +681,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
   /mobile/regents/{id}/return-requests/{return_request_id}:
     get:
       operationId: getRegentReturnRequest
@@ -673,6 +717,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
   /mobile/regents/{id}/return-requests/{return_request_id}/confirm:
     post:
       operationId: confirmRegentReturnRequest
@@ -731,6 +777,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
   /mobile/regent/staking:
     get:
       operationId: getMobileRegentStaking
@@ -772,6 +820,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
   /mobile/regent/staking/stake:
     post:
       operationId: stakeMobileRegent
@@ -809,6 +859,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
   /mobile/regent/staking/unstake:
     post:
       operationId: unstakeMobileRegent
@@ -846,6 +898,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
   /mobile/regent/staking/claim-usdc:
     post:
       operationId: claimMobileRegentStakingUsdc
@@ -883,6 +937,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
   /mobile/regent/staking/claim-regent:
     post:
       operationId: claimMobileRegentStakingRegent
@@ -920,6 +976,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
   /mobile/regent/staking/claim-and-restake-regent:
     post:
       operationId: claimAndRestakeMobileRegentStakingRegent
@@ -957,6 +1015,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
   /mobile/wallet-actions/{type}/prepare:
     post:
       operationId: prepareMobileWalletAction
@@ -993,6 +1053,8 @@ paths:
                 properties:
                   wallet_action:
                     $ref: '#/components/schemas/PreparedWalletAction'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
   /mobile/wallet-actions/{action_id}/confirm:
     post:
       operationId: confirmMobileWalletAction
@@ -1052,6 +1114,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
   /mobile/terminal/sessions:
     get:
       operationId: listMobileTerminalSessions
@@ -1071,6 +1135,8 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/TerminalSessionSummary'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
     post:
       operationId: createMobileTerminalSession
       summary: Create one mobile Talk session as a Platform RWR work item and run
@@ -1093,6 +1159,8 @@ paths:
                 properties:
                   session:
                     $ref: '#/components/schemas/TerminalSessionDetail'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
   /mobile/terminal/sessions/{id}:
     get:
       operationId: getMobileTerminalSession
@@ -1122,6 +1190,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
   /mobile/terminal/sessions/{id}/events:
     get:
       operationId: getMobileTerminalEvents
@@ -1160,6 +1230,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
   /mobile/terminal/sessions/{id}/messages:
     post:
       operationId: postMobileTerminalMessage
@@ -1199,6 +1271,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
   /mobile/terminal/sessions/{id}/approvals/{request_id}:
     post:
       operationId: resolveMobileTerminalApproval
@@ -1250,12 +1324,27 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
+  responses:
+    RateLimitError:
+      description: Too many requests
+      headers:
+        Retry-After:
+          description: Seconds to wait before retrying.
+          schema:
+            type: integer
+            minimum: 1
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
   schemas:
     RegentStatus:
       type: string
