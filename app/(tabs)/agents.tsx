@@ -74,7 +74,7 @@ function regentTone(agent: RegentSummary) {
 
   if (agent.status === 'attention') {
     return {
-      label: 'Review',
+      label: 'Approval',
       accent: AMBER,
       wash: AMBER_WASH,
       summary: agent.treasuryNote || 'A decision is waiting before this agent can keep moving.',
@@ -215,10 +215,10 @@ export default function AgentsTab() {
     const talkItem: CommandCenterItem = {
       id: 'talk',
       rank: 3,
-      title: 'Review approvals',
-      body: 'Approve agent payments and decisions before work continues.',
-      meta: 'Review',
-      icon: 'checkmark-circle-outline',
+      title: 'Message agents',
+      body: 'Reply to messages, payment requests, and decisions before work continues.',
+      meta: 'Message',
+      icon: 'chatbubble-ellipses-outline',
       accent: BLUE,
       onPress: () => router.push(routes.terminal()),
     };
@@ -304,7 +304,7 @@ export default function AgentsTab() {
                 onPress={() => router.push(routes.terminal())}
                 style={styles.secondaryButton}
               >
-                <Text style={styles.secondaryButtonText}>Review Approvals</Text>
+                <Text style={styles.secondaryButtonText}>Message Agent</Text>
               </RegentPressable>
               <RegentPressable
                 onPress={() => router.push(routes.staking())}
@@ -460,9 +460,9 @@ export default function AgentsTab() {
                 onPress={() => router.push(routes.terminal())}
               >
                 <Ionicons name="chatbubble-ellipses-outline" size={18} color={BLUE} />
-                <Text style={styles.quickTitle}>Review</Text>
-                <Text style={styles.quickBody} numberOfLines={2}>Payment requests and approvals stay together.</Text>
-                <Text style={styles.quickMeta}>Review</Text>
+                <Text style={styles.quickTitle}>Message</Text>
+                <Text style={styles.quickBody} numberOfLines={2}>Messages, payment requests, and approvals stay together.</Text>
+                <Text style={styles.quickMeta}>Message</Text>
               </RegentPressable>
 
               <RegentPressable

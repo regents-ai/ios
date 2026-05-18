@@ -6,13 +6,21 @@ function read(path: string) {
   return readFileSync(path, 'utf8');
 }
 
-test('main mobile tabs lead with agents, funding, review, and buy', () => {
+test('main mobile tabs lead with fund, pay, earn, and message', () => {
   const layout = read('app/(tabs)/_layout.tsx');
+  const sendTab = read('app/(tabs)/send.tsx');
+  const earnTab = read('app/(tabs)/earn.tsx');
+  const profileButton = read('components/navigation/ProfileButton.tsx');
 
-  assert.match(layout, /name="agents"[\s\S]*title: 'Agents'/);
   assert.match(layout, /name="wallet"[\s\S]*title: 'Fund'/);
-  assert.match(layout, /name="terminal"[\s\S]*title: 'Review'/);
-  assert.match(layout, /name="autolaunch"[\s\S]*title: 'Buy'/);
+  assert.match(layout, /name="send"[\s\S]*title: 'Pay'/);
+  assert.match(layout, /name="earn"[\s\S]*title: 'Earn'/);
+  assert.match(layout, /name="terminal"[\s\S]*title: 'Message'/);
+  assert.match(layout, /name="agents"[\s\S]*href: null/);
+  assert.match(layout, /name="autolaunch"[\s\S]*href: null/);
+  assert.match(sendTab, /export \{ default \} from '\.\.\/wallet\/send'/);
+  assert.match(earnTab, /Bring people into Regents/);
+  assert.match(profileButton, /accessibilityLabel="Open profile"/);
 });
 
 test('agents and wallet screens use the agent money story', () => {
@@ -23,11 +31,12 @@ test('agents and wallet screens use the agent money story', () => {
   assert.match(agents, /Fund an AI agent in seconds/);
   assert.match(agents, /Fund Agent/);
   assert.match(agents, /Add USDC/);
-  assert.match(agents, /Review Approvals/);
+  assert.match(agents, /Message Agent/);
   assert.match(agents, /Track Rewards/);
   assert.match(agents, /Working balance/);
 
   assert.match(wallet, /Add funds for agent work/);
+  assert.match(wallet, /label: 'Pay'/);
   assert.match(wallet, /Apple Pay to USDC on Base/);
   assert.match(onramp, /Fund an agent working balance/);
   assert.match(onramp, /Swipe to add USDC/);
@@ -48,26 +57,66 @@ test('agent detail starts the tracked fund-agent send flow', () => {
 
 test('agent funding mode prefers Base USDC and records wallet actions', () => {
   const send = read('app/wallet/send.tsx');
+  const fundingChoices = read('utils/fetchWalletFundingChoices.ts');
 
   assert.match(send, /const AGENT_FUNDING_FLOW = 'agent-funding'/);
-  assert.match(send, /fetchWalletFundingChoices\(\{ evmAddress: smartAccountAddress, solanaAddress: null \}\)/);
+  assert.match(send, /const SEND_FLOW = 'send'/);
+  assert.match(send, /fetchWalletFundingChoices\(\{ evmAddress: smartAccountAddress \}\)/);
   assert.match(send, /choices\.find\(isBaseUsdcBalance\)/);
   assert.match(send, /setNetwork\('base'\)/);
   assert.match(send, /Add USDC first/);
+  assert.match(send, /noBaseUsdcForSend/);
   assert.match(send, /regentApi\.prepareWalletAction/);
   assert.match(send, /type: 'funding'/);
   assert.match(send, /regentApi\.confirmWalletAction/);
   assert.match(send, /Review payment/);
+  assert.match(send, /Pay now/);
   assert.match(send, /Send to agent/);
   assert.match(send, /You sent \$\{amount\} \$\{selectedToken\?\.token\?\.symbol \|\| 'USDC'\} to/);
+  assert.match(fundingChoices, /network=base/);
+  assert.doesNotMatch(fundingChoices, /network=ethereum|balances\/solana|Promise\.all/);
 });
 
-test('review screens present payment approvals plainly', () => {
+test('pay flow accepts Ethereum addresses, ENS names, paste, and QR photos', () => {
+  const send = read('app/wallet/send.tsx');
+  const routes = read('utils/navigation/routes.ts');
+
+  assert.match(routes, /flow\?: 'agent-funding' \| 'send'/);
+  assert.match(send, /const payTitle = isDefaultSendFlow \? 'Pay' : 'Send'/);
+  assert.match(send, /placeholder=\{isSolanaNetwork\(network\) \? 'Solana address' : 'Ethereum address or ENS name'\}/);
+  assert.match(send, /getEthereumRecipientAddress/);
+  assert.match(send, /isAddress\(candidate\) \? getAddress\(candidate\)/);
+  assert.match(send, /resolveEnsRecipient/);
+  assert.match(send, /ensClient\.getEnsAddress/);
+  assert.match(send, /ensClient\.getEnsName/);
+  assert.doesNotMatch(send, /\+eth\\b/);
+  assert.match(send, /candidate\.includes\('\.'\)/);
+  assert.match(send, /Checking ENS name/);
+  assert.match(send, /Wallet name confirmed/);
+  assert.match(send, /handlePasteRecipient/);
+  assert.match(send, /Clipboard\.getStringAsync/);
+  assert.match(send, /QR photo/);
+  assert.match(send, /ImagePicker\.launchImageLibraryAsync/);
+  assert.match(send, /scanFromURLAsync/);
+});
+
+test('message screens present agent messages and payment approvals plainly', () => {
   const terminal = read('app/(tabs)/terminal.tsx');
   const detail = read('app/terminal/[id].tsx');
 
-  assert.match(terminal, /Approvals and payments/);
-  assert.match(terminal, /Payment review/);
+  assert.match(terminal, /Message your agent/);
+  assert.match(terminal, /secure agent chats/);
+  assert.match(terminal, /New message/);
+  assert.match(terminal, /ENS or Ethereum address/);
+  assert.match(terminal, /Lookup Recent Addresses/);
+  assert.match(terminal, /Lookup Regent Users/);
+  assert.match(terminal, /lookupRecentMessageContacts/);
+  assert.match(terminal, /listRegentMessageContacts/);
+  assert.match(terminal, /connectWalletChannel/);
+  assert.match(terminal, /No recent ENS names found for this address/);
+  assert.match(terminal, /listMessageThreads/);
+  assert.match(terminal, /Secure channel/);
+  assert.match(terminal, /Payment approval/);
   assert.match(detail, /Payment requested/);
   assert.match(detail, /Agent requests \$\{approval\.amount\} \$\{approval\.currency\}/);
   assert.match(detail, /Approve payment/);

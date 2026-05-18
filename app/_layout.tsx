@@ -4,11 +4,14 @@ import { PrivyProvider } from "@privy-io/expo";
 
 import { AuthGate } from "@/components/AuthGate";
 import { AuthInitializer } from "@/components/AuthInitializer";
+import { RegentsXmtpProvider } from "@/components/xmtp/RegentsXmtpProvider";
 import { COLORS } from "@/constants/Colors";
 import { FONTS } from "@/constants/Typography";
 import { useAppBootstrap } from "@/hooks/useAppBootstrap";
 import { useRegentsAuth } from "@/hooks/useRegentsAuth";
 import { fetchCdpAuthToken } from "@/utils/fetchCdpAuthToken";
+import { parseXmtpEnvironment } from "@/utils/xmtp/secureMessagingConfig";
+import type { XmtpEnvironment } from "@/types/regents";
 import { useMemo } from "react";
 import 'react-native-get-random-values';
 import 'react-native-url-polyfill/auto';
@@ -21,9 +24,11 @@ const cardSlideBottom = { presentation: 'card', animation: 'slide_from_bottom' }
 function WalletProviders({
   children,
   cdpProjectId,
+  xmtpEnvironment,
 }: {
   children: React.ReactNode;
   cdpProjectId: string;
+  xmtpEnvironment: XmtpEnvironment;
 }) {
   const { getAccessToken } = useRegentsAuth();
 
@@ -54,7 +59,9 @@ function WalletProviders({
     <CDPHooksProvider config={cdpConfig}>
       <AuthInitializer>
         <AuthGate>
-          {children}
+          <RegentsXmtpProvider environment={xmtpEnvironment}>
+            {children}
+          </RegentsXmtpProvider>
         </AuthGate>
       </AuthInitializer>
     </CDPHooksProvider>
@@ -66,11 +73,19 @@ export default function RootLayout() {
   const privyAppId = process.env.EXPO_PUBLIC_PRIVY_APP_ID;
   const privyClientId = process.env.EXPO_PUBLIC_PRIVY_CLIENT_ID;
   const cdpProjectId = process.env.EXPO_PUBLIC_CDP_PROJECT_ID;
+  const xmtpEnv = process.env.EXPO_PUBLIC_XMTP_ENV;
   const resolvedPrivyAppId = privyAppId;
   const resolvedPrivyClientId = privyClientId;
   const resolvedCdpProjectId = cdpProjectId;
+  const resolvedXmtpEnvironment = (() => {
+    try {
+      return parseXmtpEnvironment(xmtpEnv);
+    } catch {
+      return null;
+    }
+  })();
 
-  if (!resolvedPrivyAppId || !resolvedPrivyClientId || !resolvedCdpProjectId) {
+  if (!resolvedPrivyAppId || !resolvedPrivyClientId || !resolvedCdpProjectId || !resolvedXmtpEnvironment) {
     return (
       <View style={styles.missingConfigContainer}>
         <View style={styles.missingConfigCard}>
@@ -92,6 +107,10 @@ export default function RootLayout() {
             </View>
             <View style={styles.missingConfigRow}>
               <View style={styles.missingConfigDot} />
+              <Text style={styles.missingConfigItem}>Choose the message network for this build.</Text>
+            </View>
+            <View style={styles.missingConfigRow}>
+              <View style={styles.missingConfigDot} />
               <Text style={styles.missingConfigItem}>Reopen the app after saving those details.</Text>
             </View>
           </View>
@@ -102,7 +121,7 @@ export default function RootLayout() {
 
   return (
     <PrivyProvider appId={resolvedPrivyAppId} clientId={resolvedPrivyClientId}>
-      <WalletProviders cdpProjectId={resolvedCdpProjectId}>
+      <WalletProviders cdpProjectId={resolvedCdpProjectId} xmtpEnvironment={resolvedXmtpEnvironment}>
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen
             name="auth/login"
@@ -121,6 +140,7 @@ export default function RootLayout() {
           <Stack.Screen name="staking" options={cardSlideRight} />
           <Stack.Screen name="agent/[id]" options={cardSlideRight} />
           <Stack.Screen name="agent/[id]/regent-manager" options={cardSlideRight} />
+          <Stack.Screen name="agent/[id]/voice" options={cardSlideBottom} />
           <Stack.Screen name="terminal/[id]" options={cardSlideRight} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         </Stack>

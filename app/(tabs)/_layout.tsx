@@ -47,13 +47,6 @@ export default function TabLayout() {
       >
         <Tabs.Screen name="index" options={{ href: null }} />
         <Tabs.Screen
-          name="agents"
-          options={{
-            title: 'Agents',
-            tabBarIcon: ({ color, size }) => <Ionicons name="people-outline" size={size} color={color} />,
-          }}
-        />
-        <Tabs.Screen
           name="wallet"
           options={{
             title: 'Fund',
@@ -61,10 +54,32 @@ export default function TabLayout() {
           }}
         />
         <Tabs.Screen
+          name="send"
+          options={{
+            title: 'Pay',
+            tabBarIcon: ({ color, size }) => <Ionicons name="card-outline" size={size} color={color} />,
+          }}
+        />
+        <Tabs.Screen
+          name="earn"
+          options={{
+            title: 'Earn',
+            tabBarIcon: ({ color, size }) => <Ionicons name="sparkles-outline" size={size} color={color} />,
+          }}
+        />
+        <Tabs.Screen
           name="terminal"
           options={{
-            title: 'Review',
-            tabBarIcon: ({ color, size }) => <Ionicons name="checkmark-circle-outline" size={size} color={color} />,
+            title: 'Message',
+            tabBarIcon: ({ color, size }) => <Ionicons name="chatbubble-ellipses-outline" size={size} color={color} />,
+          }}
+        />
+        <Tabs.Screen
+          name="agents"
+          options={{
+            href: null,
+            title: 'Agents',
+            tabBarIcon: ({ color, size }) => <Ionicons name="people-outline" size={size} color={color} />,
           }}
         />
         <Tabs.Screen
@@ -78,6 +93,7 @@ export default function TabLayout() {
         <Tabs.Screen
           name="autolaunch"
           options={{
+            href: null,
             title: 'Buy',
             tabBarIcon: ({ color, size }) => <Ionicons name="swap-horizontal-outline" size={size} color={color} />,
           }}

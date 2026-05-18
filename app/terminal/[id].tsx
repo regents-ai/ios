@@ -2,9 +2,11 @@ import { StatusPill } from '@/components/agent-surfaces/StatusPill';
 import { SpinningRefreshIcon } from '@/components/motion/SpinningRefreshIcon';
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { RegentPressable } from '@/components/ui/RegentPressable';
+import { useRegentsXmtp } from '@/components/xmtp/RegentsXmtpProvider';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
 import {
+  MessageThread,
   PendingTerminalApproval,
   TerminalEvent,
   TerminalSessionDetail,
@@ -51,7 +53,7 @@ function statusTone(status: TerminalSessionStatus) {
     case 'running':
       return { label: 'Working', accent: BLUE, wash: BLUE_WASH };
     case 'waiting':
-      return { label: 'Review', accent: AMBER, wash: AMBER_WASH };
+      return { label: 'Approval', accent: AMBER, wash: AMBER_WASH };
     case 'failed':
       return { label: 'Needs help', accent: DANGER, wash: RED_WASH };
     case 'idle':
@@ -65,12 +67,12 @@ function eventCopy(event: TerminalEvent) {
 
 function eventTitle(event: TerminalEvent) {
   if (event.type === 'tool.request' && event.amount && event.currency) return 'Payment requested';
-  if (event.type === 'tool.request') return 'Review requested';
-  if (event.type === 'tool.resolved') return 'Review updated';
+  if (event.type === 'tool.request') return 'Approval requested';
+  if (event.type === 'tool.resolved') return 'Approval updated';
   if (event.type === 'session.error') return 'Needs attention';
   if (event.role === 'user') return 'You';
   if (event.role === 'assistant') return 'Regent';
-  return 'Review';
+  return 'Message';
 }
 
 function approvalMeta(approval: PendingTerminalApproval) {
@@ -94,15 +96,18 @@ function approvalPurpose(approval: PendingTerminalApproval) {
 
 export default function TalkDetailScreen() {
   const router = useRouter();
+  const { connectAgentChannel, environment: secureMessageEnvironment } = useRegentsXmtp();
   const params = useLocalSearchParams<{ id?: string }>();
   const sessionId = typeof params.id === 'string' ? params.id : '';
   const [session, setSession] = useState<TerminalSessionDetail | null>(null);
+  const [messageThread, setMessageThread] = useState<MessageThread | null>(null);
   const [events, setEvents] = useState<TerminalEvent[]>([]);
   const [latestEventId, setLatestEventId] = useState('');
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [sending, setSending] = useState(false);
+  const [connectingSecureChannel, setConnectingSecureChannel] = useState(false);
   const [resolvingDecision, setResolvingDecision] = useState<'approved' | 'denied' | null>(null);
   const [alertState, setAlertState] = useState<{
     visible: boolean;
@@ -128,17 +133,19 @@ export default function TalkDetailScreen() {
         setLoading(true);
       }
 
-      const [nextSession, nextEvents] = await Promise.all([
+      const [nextSession, nextEvents, nextThreads] = await Promise.all([
         regentApi.getTerminalSession(sessionId),
         regentApi.getTerminalEvents({ sessionId }),
+        regentApi.listMessageThreads(),
       ]);
       setSession(nextSession);
+      setMessageThread(nextThreads.find((thread) => thread.platformThreadId === nextSession.id) || null);
       setEvents(nextEvents.events);
       setLatestEventId(nextEvents.latestEventId);
     } catch (error) {
       setAlertState({
         visible: true,
-        title: 'Could not load reviews',
+        title: 'Could not load messages',
         message: error instanceof Error ? error.message : 'Try again in a moment.',
         type: 'error',
       });
@@ -218,7 +225,7 @@ export default function TalkDetailScreen() {
     } catch (error) {
       setAlertState({
         visible: true,
-        title: 'Could not update review',
+        title: 'Could not update approval',
         message: error instanceof Error ? error.message : 'Try again in a moment.',
         type: 'error',
       });
@@ -227,8 +234,40 @@ export default function TalkDetailScreen() {
     }
   }, [loadSession, resolvingDecision, session, sessionId]);
 
+  const connectSecureChannel = useCallback(async () => {
+    if (!session || connectingSecureChannel) {
+      return;
+    }
+
+    try {
+      setConnectingSecureChannel(true);
+      const linkedThread = await connectAgentChannel({
+        threadId: session.id,
+        agentId: session.agentId,
+      });
+      setMessageThread(linkedThread);
+      setAlertState({
+        visible: true,
+        title: 'Secure channel connected',
+        message: 'You can message this agent securely.',
+        type: 'success',
+      });
+    } catch (error) {
+      setAlertState({
+        visible: true,
+        title: 'Could not connect secure channel',
+        message: error instanceof Error ? error.message : 'This agent is not ready for secure messages yet.',
+        type: 'error',
+      });
+    } finally {
+      setConnectingSecureChannel(false);
+    }
+  }, [connectAgentChannel, connectingSecureChannel, session]);
+
   const pendingApproval = session?.pendingApproval;
   const isPaymentApproval = !!pendingApproval?.amount && !!pendingApproval.currency;
+  const secureChannelConnected =
+    messageThread?.xmtpLinks.some((link) => link.environment === secureMessageEnvironment) || false;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -241,8 +280,8 @@ export default function TalkDetailScreen() {
             <Ionicons name="chevron-back" size={22} color={TEXT_PRIMARY} />
           </RegentPressable>
           <View style={styles.headerTitleGroup}>
-            <Text style={styles.headerEyebrow}>Review</Text>
-            <Text style={styles.headerTitle} numberOfLines={1}>{session?.agentName || 'Session'}</Text>
+            <Text style={styles.headerEyebrow}>Message</Text>
+            <Text style={styles.headerTitle} numberOfLines={1}>{session?.agentName || 'Agent'}</Text>
           </View>
           <RegentPressable
             pressStyle="icon"
@@ -270,7 +309,7 @@ export default function TalkDetailScreen() {
           {loading ? (
             <View style={styles.emptyState}>
               <ActivityIndicator color={BLUE} />
-              <Text style={styles.emptyTitle}>Loading reviews</Text>
+              <Text style={styles.emptyTitle}>Loading messages</Text>
             </View>
           ) : session ? (
             <>
@@ -282,6 +321,41 @@ export default function TalkDetailScreen() {
                   </View>
                   <StatusPill label={tone.label} color={tone.accent} backgroundColor={tone.wash} compact />
                 </View>
+              </View>
+
+              <View style={[styles.secureChannelCard, secureChannelConnected && styles.secureChannelConnectedCard]}>
+                <View style={styles.secureChannelHeader}>
+                  <View style={styles.secureChannelIcon}>
+                    <Ionicons
+                      name={secureChannelConnected ? 'lock-closed' : 'lock-closed-outline'}
+                      size={18}
+                      color={secureChannelConnected ? SUCCESS : BLUE}
+                    />
+                  </View>
+                  <View style={styles.secureChannelTitleGroup}>
+                    <Text style={styles.secureChannelTitle}>
+                      {secureChannelConnected ? 'Secure channel connected' : 'Connect secure channel'}
+                    </Text>
+                    <Text style={styles.secureChannelText}>
+                      {secureChannelConnected
+                        ? 'This conversation can use private agent messages when the agent supports them.'
+                        : 'Open a private channel with this agent for messages outside work updates.'}
+                    </Text>
+                  </View>
+                </View>
+                {!secureChannelConnected ? (
+                  <RegentPressable
+                    style={[styles.secureChannelButton, connectingSecureChannel && styles.secureChannelButtonDisabled]}
+                    disabled={connectingSecureChannel}
+                    onPress={connectSecureChannel}
+                  >
+                    {connectingSecureChannel ? (
+                      <ActivityIndicator color={WHITE} size="small" />
+                    ) : (
+                      <Text style={styles.secureChannelButtonText}>Connect secure channel</Text>
+                    )}
+                  </RegentPressable>
+                ) : null}
               </View>
 
               {pendingApproval && !pendingApproval.resolved ? (
@@ -329,7 +403,7 @@ export default function TalkDetailScreen() {
                 {visibleEvents.length === 0 ? (
                   <View style={styles.emptyEventState}>
                     <Text style={styles.emptyTitle}>No messages yet</Text>
-                    <Text style={styles.emptyBody}>Send a note to start the review.</Text>
+                    <Text style={styles.emptyBody}>Send a note to start the conversation.</Text>
                   </View>
                 ) : (
                   visibleEvents.map((event) => (
@@ -356,8 +430,8 @@ export default function TalkDetailScreen() {
             </>
           ) : (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyTitle}>Review not found</Text>
-              <Text style={styles.emptyBody}>Go back and choose another review.</Text>
+              <Text style={styles.emptyTitle}>Message not found</Text>
+              <Text style={styles.emptyBody}>Go back and choose another conversation.</Text>
             </View>
           )}
         </ScrollView>
@@ -481,6 +555,63 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     fontFamily: FONTS.body,
+  },
+  secureChannelCard: {
+    backgroundColor: CARD_BG,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 20,
+    padding: 16,
+    gap: 14,
+  },
+  secureChannelConnectedCard: {
+    backgroundColor: GREEN_WASH,
+    borderColor: '#C7D9CF',
+  },
+  secureChannelHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  secureChannelIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: WHITE,
+  },
+  secureChannelTitleGroup: {
+    flex: 1,
+    minWidth: 0,
+    gap: 4,
+  },
+  secureChannelTitle: {
+    color: TEXT_PRIMARY,
+    fontSize: 18,
+    lineHeight: 22,
+    fontFamily: FONTS.heading,
+  },
+  secureChannelText: {
+    color: TEXT_SECONDARY,
+    fontSize: 13,
+    lineHeight: 19,
+    fontFamily: FONTS.body,
+  },
+  secureChannelButton: {
+    minHeight: 44,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: BLUE,
+  },
+  secureChannelButtonDisabled: {
+    opacity: 0.72,
+  },
+  secureChannelButtonText: {
+    color: WHITE,
+    fontSize: 14,
+    fontFamily: FONTS.heading,
   },
   approvalCard: {
     backgroundColor: AMBER_WASH,

@@ -14,6 +14,7 @@
  */
 
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
+import { ProfileButton } from '@/components/navigation/ProfileButton';
 import { RegentPressable } from '@/components/ui/RegentPressable';
 import { runRegentHaptic } from '@/components/ui/haptics';
 import { LiveValueFlash } from '@/components/motion/LiveValueFlash';
@@ -29,10 +30,15 @@ import { useCurrentUser, useSendSolanaTransaction, useSendUserOperation, useSola
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
 import { createTransferInstruction, getAssociatedTokenAddress, createAssociatedTokenAccountInstruction, getAccount } from '@solana/spl-token';
+import { scanFromURLAsync } from 'expo-camera';
 import * as Clipboard from 'expo-clipboard';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
+import { useLocalSearchParams, usePathname, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { EaseView } from 'react-native-ease';
+import { createPublicClient, getAddress, http, isAddress } from 'viem';
+import { mainnet } from 'viem/chains';
+import { normalize } from 'viem/ens';
 import {
   AccessibilityInfo,
   ActivityIndicator,
@@ -53,6 +59,21 @@ const SCREEN_OFFSET = 12;
 const CARD_OFFSET = 8;
 const STAGGER_STEP = 50;
 const AGENT_FUNDING_FLOW = 'agent-funding';
+const SEND_FLOW = 'send';
+const ETHEREUM_ADDRESS_PATTERN = /0x[a-fA-F0-9]{40}/;
+const ENS_NAME_PATTERN = /(?:[a-z0-9-]+\.)+[a-z0-9-]+\b/i;
+
+type EnsResolution = {
+  address: string;
+  name: string;
+  reverseName: string | null;
+  reverseMatches: boolean;
+};
+
+const ensClient = createPublicClient({
+  chain: mainnet,
+  transport: http(),
+});
 
 function buildTimingTransition(reduceMotion: boolean, delay = 0, duration = 220) {
   return reduceMotion
@@ -113,6 +134,106 @@ function isBaseUsdcBalance(balance: WalletFundingChoice) {
   return balance.network === 'Base' && balance.token?.symbol?.toUpperCase() === 'USDC';
 }
 
+function isSolanaNetwork(network: string) {
+  return network?.toLowerCase().includes('solana');
+}
+
+function isLikelyEnsName(value: string) {
+  const candidate = extractRecipientCandidate(value);
+  if (!candidate.includes('.')) return false;
+
+  try {
+    normalize(candidate);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function readRecipientFromQuery(value: string) {
+  const queryIndex = value.indexOf('?');
+  if (queryIndex === -1) return null;
+
+  const query = value.slice(queryIndex + 1);
+  const params = new URLSearchParams(query);
+
+  for (const key of ['address', 'to', 'recipient']) {
+    const candidate = params.get(key);
+    if (candidate) return candidate;
+  }
+
+  return null;
+}
+
+function extractRecipientCandidate(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+
+  const queryRecipient = readRecipientFromQuery(trimmed);
+  if (queryRecipient) return queryRecipient.trim();
+
+  const addressMatch = trimmed.match(ETHEREUM_ADDRESS_PATTERN);
+  if (addressMatch) return addressMatch[0];
+
+  const ensMatch = trimmed.match(ENS_NAME_PATTERN);
+  if (ensMatch) return ensMatch[0];
+
+  let candidate = trimmed;
+  if (candidate.toLowerCase().startsWith('ethereum:')) {
+    candidate = candidate.slice('ethereum:'.length);
+  }
+  if (candidate.toLowerCase().startsWith('pay-')) {
+    candidate = candidate.slice('pay-'.length);
+  }
+
+  candidate = candidate.split('?')[0]?.split('@')[0]?.split('/')[0] || candidate;
+  return candidate.trim();
+}
+
+function getEthereumRecipientAddress(value: string) {
+  const candidate = extractRecipientCandidate(value);
+  return isAddress(candidate) ? getAddress(candidate) : null;
+}
+
+async function resolveEnsRecipient(value: string): Promise<EnsResolution> {
+  const name = normalize(extractRecipientCandidate(value));
+  const address = await ensClient.getEnsAddress({ name });
+
+  if (!address) {
+    throw new Error('That ENS name does not point to an Ethereum wallet.');
+  }
+
+  const checksummedAddress = getAddress(address);
+  let reverseName: string | null = null;
+
+  try {
+    reverseName = await ensClient.getEnsName({ address: checksummedAddress });
+  } catch {
+    reverseName = null;
+  }
+
+  const normalizedReverseName = reverseName ? normalize(reverseName) : null;
+
+  return {
+    address: checksummedAddress,
+    name,
+    reverseName: normalizedReverseName,
+    reverseMatches: normalizedReverseName?.toLowerCase() === name.toLowerCase(),
+  };
+}
+
+function getEnsResolutionCopy(resolution: EnsResolution) {
+  if (resolution.reverseMatches && resolution.reverseName) {
+    return `Wallet name confirmed: ${resolution.reverseName}`;
+  }
+
+  if (resolution.reverseName) {
+    return `Wallet name: ${resolution.reverseName}`;
+  }
+
+  return 'No wallet name found. Check the address before you send.';
+}
+
 function fundingIdempotencySegment(value?: string | null) {
   const normalized = value?.trim().toLowerCase();
   return normalized ? encodeURIComponent(normalized).slice(0, 80) : 'missing';
@@ -139,12 +260,19 @@ function buildFundingIdempotencyKey(input: {
 
 export default function TransferScreen() {
   const router = useRouter();
+  const pathname = usePathname();
   const params = useLocalSearchParams();
   const recipientLabel = typeof params.recipientLabel === 'string' ? params.recipientLabel : null;
   const regentId = typeof params.regentId === 'string' ? params.regentId : null;
   const isAgentFundingFlow = params.flow === AGENT_FUNDING_FLOW;
+  const isSendTab = pathname === '/send';
+  const isDefaultSendFlow = !isAgentFundingFlow && !params.token && (params.flow === SEND_FLOW || isSendTab);
 
+  const [recipientInput, setRecipientInput] = useState('');
   const [recipientAddress, setRecipientAddress] = useState('');
+  const [ensResolution, setEnsResolution] = useState<EnsResolution | null>(null);
+  const [resolvingRecipient, setResolvingRecipient] = useState(false);
+  const [scanningQrPhoto, setScanningQrPhoto] = useState(false);
   const [amount, setAmount] = useState('');
   const [amountFocused, setAmountFocused] = useState(false);
   const [lastQuickPercentage, setLastQuickPercentage] = useState<number | null>(null);
@@ -236,9 +364,11 @@ export default function TransferScreen() {
   useEffect(() => {
     if (userOpStatus === 'pending' && userOpData?.userOpHash) {
       showAlert(
-        isAgentFundingFlow ? 'Sending payment' : 'Sending funds',
+        isAgentFundingFlow || isDefaultSendFlow ? 'Sending payment' : 'Sending funds',
         isAgentFundingFlow
           ? 'Your agent payment is on the way. This can take a few moments.'
+          : isDefaultSendFlow
+            ? 'Your payment is on the way. This can take a few moments.'
           : 'Your transfer is on the way. This can take a few moments.',
         'info',
         undefined,
@@ -306,26 +436,27 @@ export default function TransferScreen() {
       }
 
       const successInfo = [
-        `${amount} ${selectedToken?.token?.symbol || ''} sent successfully.`,
+        `You sent ${amount} ${selectedToken?.token?.symbol || ''}.`,
         '',
-        `Network: ${network.charAt(0).toUpperCase() + network.slice(1)}`,
+        `Network: ${getNetworkLabel(network)}`,
         `From: ${smartAccountAddress?.slice(0, 6)}...${smartAccountAddress?.slice(-4)}`,
+        `To: ${formatAddressPreview(recipientAddress)}`,
       ].join('\n');
 
       showAlert(
-        'Transfer complete',
+        isDefaultSendFlow ? 'Payment complete' : 'Send complete',
         successInfo,
         'success',
         explorerUrl
       );
     } else if (userOpStatus === 'error' && userOpError) {
       showAlert(
-        'Transfer failed',
+        'Send failed',
         userOpError.message || 'Please try again.',
         'error'
       );
     }
-  }, [amount, isAgentFundingFlow, network, recipientAddress, recipientLabel, selectedToken?.token?.symbol, smartAccountAddress, userOpStatus, userOpData, userOpError]);
+  }, [amount, isAgentFundingFlow, isDefaultSendFlow, network, recipientAddress, recipientLabel, selectedToken?.token?.symbol, smartAccountAddress, userOpStatus, userOpData, userOpError]);
 
   // Load token data from params (only on mount)
   useEffect(() => {
@@ -341,12 +472,15 @@ export default function TransferScreen() {
       setNetwork(params.network as string);
     }
     if (typeof params.recipientAddress === 'string') {
-      setRecipientAddress(params.recipientAddress);
+      const candidate = extractRecipientCandidate(params.recipientAddress);
+      const ethereumAddress = getEthereumRecipientAddress(candidate);
+      setRecipientInput(ethereumAddress || candidate);
+      setRecipientAddress(ethereumAddress || candidate);
     }
   }, [params.network, params.recipientAddress, params.token]);
 
   useEffect(() => {
-    if (!isAgentFundingFlow || params.token || !smartAccountAddress) {
+    if ((!isAgentFundingFlow && !isDefaultSendFlow) || params.token || !smartAccountAddress) {
       return;
     }
 
@@ -354,7 +488,7 @@ export default function TransferScreen() {
     setLoadingFundingBalance(true);
     setFundingBalanceError(null);
 
-    fetchWalletFundingChoices({ evmAddress: smartAccountAddress, solanaAddress: null })
+    fetchWalletFundingChoices({ evmAddress: smartAccountAddress })
       .then((choices) => {
         if (!active) {
           return;
@@ -380,27 +514,29 @@ export default function TransferScreen() {
     return () => {
       active = false;
     };
-  }, [isAgentFundingFlow, params.token, smartAccountAddress]);
+  }, [isAgentFundingFlow, isDefaultSendFlow, params.token, smartAccountAddress]);
 
   // Validate address format
   const validateAddress = (address: string) => {
-    if (!address) {
+    const candidate = extractRecipientCandidate(address);
+
+    if (!candidate) {
       setAddressError(null);
       return false;
     }
 
-    const isSolanaNetwork = network?.toLowerCase().includes('solana');
-
-    if (isSolanaNetwork) {
-      if (!address.match(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/)) {
+    if (isSolanaNetwork(network)) {
+      if (!candidate.match(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/)) {
         setAddressError('Enter a valid Solana address.');
         return false;
       }
     } else {
-      if (!address.match(/^0x[a-fA-F0-9]{40}$/)) {
-        setAddressError('Enter a valid Base or Ethereum address.');
+      const ethereumAddress = getEthereumRecipientAddress(candidate);
+      if (!ethereumAddress) {
+        setAddressError('Enter a valid Ethereum address or ENS name.');
         return false;
       }
+      setRecipientAddress(ethereumAddress);
     }
 
     setAddressError(null);
@@ -409,11 +545,128 @@ export default function TransferScreen() {
 
   // Update address and validate
   const handleAddressChange = (address: string) => {
-    setRecipientAddress(address);
-    if (address) {
-      validateAddress(address);
-    } else {
+    setRecipientInput(address);
+    setEnsResolution(null);
+
+    const candidate = extractRecipientCandidate(address);
+    if (!candidate) {
+      setRecipientAddress('');
       setAddressError(null);
+      return;
+    }
+
+    if (isSolanaNetwork(network)) {
+      setRecipientAddress(candidate);
+      validateAddress(candidate);
+      return;
+    }
+
+    const ethereumAddress = getEthereumRecipientAddress(candidate);
+    if (ethereumAddress) {
+      setRecipientAddress(ethereumAddress);
+      setAddressError(null);
+    } else if (isLikelyEnsName(candidate)) {
+      setRecipientAddress('');
+      setAddressError(null);
+    } else {
+      setRecipientAddress('');
+      setAddressError('Enter a valid Ethereum address or ENS name.');
+    }
+  };
+
+  const resolveRecipientInput = async () => {
+    const candidate = extractRecipientCandidate(recipientInput || recipientAddress);
+
+    if (!candidate) {
+      return { ok: false, error: 'Add the wallet or ENS name you want to use.' };
+    }
+
+    if (isSolanaNetwork(network)) {
+      return validateAddress(candidate)
+        ? { ok: true }
+        : { ok: false, error: 'Enter a valid Solana address.' };
+    }
+
+    const ethereumAddress = getEthereumRecipientAddress(candidate);
+    if (ethereumAddress) {
+      setRecipientAddress(ethereumAddress);
+      setAddressError(null);
+      return { ok: true };
+    }
+
+    if (!isLikelyEnsName(candidate)) {
+      const error = 'Enter a valid Ethereum address or ENS name.';
+      setAddressError(error);
+      return { ok: false, error };
+    }
+
+    setResolvingRecipient(true);
+    try {
+      const resolution = await resolveEnsRecipient(candidate);
+      setEnsResolution(resolution);
+      setRecipientAddress(resolution.address);
+      setRecipientInput(resolution.name);
+      setAddressError(null);
+      return { ok: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'We could not find that ENS name.';
+      setEnsResolution(null);
+      setRecipientAddress('');
+      setAddressError(message);
+      return { ok: false, error: message };
+    } finally {
+      setResolvingRecipient(false);
+    }
+  };
+
+  const handlePasteRecipient = async () => {
+    const text = await Clipboard.getStringAsync();
+    if (text) {
+      handleAddressChange(extractRecipientCandidate(text));
+    }
+  };
+
+  const handleQrPhoto = async () => {
+    setScanningQrPhoto(true);
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        showAlert('Photo access needed', 'Allow photo access to scan a QR code.', 'error');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 1,
+        allowsEditing: false,
+      });
+
+      if (result.canceled) {
+        return;
+      }
+
+      const uri = result.assets?.[0]?.uri;
+      if (!uri) {
+        throw new Error('Choose a clear photo of the QR code.');
+      }
+
+      const scans = await scanFromURLAsync(uri, ['qr']);
+      const qrData = scans.find((scan) => scan.data)?.data;
+      if (!qrData) {
+        showAlert('No QR code found', 'Choose a clear photo of the QR code.', 'error');
+        return;
+      }
+
+      const candidate = extractRecipientCandidate(qrData);
+      handleAddressChange(candidate);
+    } catch (error) {
+      showAlert(
+        'Could not read QR code',
+        error instanceof Error ? error.message : 'Choose a clearer photo and try again.',
+        'error'
+      );
+    } finally {
+      setScanningQrPhoto(false);
     }
   };
 
@@ -455,8 +708,9 @@ export default function TransferScreen() {
   };
 
   const handleSend = async () => {
-    if (!validateAddress(recipientAddress)) {
-      showAlert('Enter a valid address', addressError || 'Add the wallet address you want to use.', 'error');
+    const recipientReady = await resolveRecipientInput();
+    if (!recipientReady.ok) {
+      showAlert('Check recipient', recipientReady.error || addressError || 'Add the wallet or ENS name you want to use.', 'error');
       return;
     }
 
@@ -466,7 +720,7 @@ export default function TransferScreen() {
     }
 
     if (!selectedToken) {
-      showAlert('Choose something to send', 'Go back and pick the asset you want to send.', 'error');
+      showAlert('Add USDC first', 'Add Base USDC, then come back to send it.', 'error');
       return;
     }
 
@@ -477,16 +731,14 @@ export default function TransferScreen() {
     setShowConfirmation(false);
     setSending(true);
     try {
-      const isSolanaNetwork = network?.toLowerCase().includes('solana');
-
-      if (isSolanaNetwork) {
+      if (isSolanaNetwork(network)) {
         await handleSolanaTransfer();
       } else {
         await handleEvmTransfer();
       }
     } catch (error) {
       console.error('Transfer error:', error);
-      showAlert('Transfer failed', error instanceof Error ? error.message : 'Something went wrong. Please try again.', 'error');
+      showAlert('Send failed', error instanceof Error ? error.message : 'Something went wrong. Please try again.', 'error');
     } finally {
       setSending(false);
     }
@@ -702,7 +954,7 @@ export default function TransferScreen() {
         : `https://solscan.io/tx/${result.transactionSignature}`;
 
       const successInfo = [
-        `${amount} ${tokenSymbol} sent successfully.`,
+        `You sent ${amount} ${tokenSymbol}.`,
         '',
         `Network: Solana ${isDevnet ? 'test network' : 'mainnet'}`,
         `From: ${solanaAddress.slice(0, 6)}...${solanaAddress.slice(-4)}`,
@@ -710,7 +962,7 @@ export default function TransferScreen() {
       ].join('\n');
 
       showAlert(
-        'Transfer complete',
+        'Send complete',
         successInfo,
         'success',
         explorerUrl
@@ -724,6 +976,15 @@ export default function TransferScreen() {
   const handleAlertDismiss = () => {
     setAlertVisible(false);
     if (alertType === 'success') {
+      if (isSendTab) {
+        setAmount('');
+        setRecipientInput('');
+        setRecipientAddress('');
+        setEnsResolution(null);
+        setAddressError(null);
+        return;
+      }
+
       router.back();
     }
   };
@@ -732,16 +993,20 @@ export default function TransferScreen() {
   const tokenBalance = getTokenBalance(selectedToken);
   const usdEstimate = getUsdEstimate(selectedToken, amount);
   const fundingTarget = recipientLabel || 'this agent';
+  const payTitle = isDefaultSendFlow ? 'Pay' : 'Send';
   const canContinue =
-    !!recipientAddress &&
+    !!recipientInput &&
     !!amount &&
+    !!selectedToken &&
     !sending &&
+    !resolvingRecipient &&
     !loadingFundingBalance &&
-    (!isAgentFundingFlow || !!selectedToken);
+    (!isAgentFundingFlow || !!recipientAddress);
   const noBaseUsdcForFunding = isAgentFundingFlow && !loadingFundingBalance && !selectedToken && !fundingBalanceError;
+  const noBaseUsdcForSend = isDefaultSendFlow && !loadingFundingBalance && !selectedToken && !fundingBalanceError;
   let alertConfirmText = 'Got it';
   if (explorerUrl && !explorerUrl.startsWith('Transaction Hash:')) {
-    alertConfirmText = isAgentFundingFlow ? 'View payment' : 'View transfer';
+    alertConfirmText = isAgentFundingFlow || isDefaultSendFlow ? 'View payment' : 'View send';
   }
 
   return (
@@ -752,18 +1017,22 @@ export default function TransferScreen() {
           animate={{ opacity: 1, translateY: 0 }}
           transition={buildTimingTransition(reduceMotion)}
         >
-          <RegentPressable pressStyle="icon" onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="chevron-back" size={24} color={TEXT_PRIMARY} />
-          </RegentPressable>
+          {isSendTab ? (
+            <View style={styles.backButtonSpacer} />
+          ) : (
+            <RegentPressable pressStyle="icon" onPress={() => router.back()} style={styles.backButton}>
+              <Ionicons name="chevron-back" size={24} color={TEXT_PRIMARY} />
+            </RegentPressable>
+          )}
         </EaseView>
         <EaseView
           initialAnimate={{ opacity: 0, translateY: SCREEN_OFFSET }}
           animate={{ opacity: 1, translateY: 0 }}
           transition={buildTimingTransition(reduceMotion, STAGGER_STEP)}
         >
-          <Text style={styles.headerTitle}>{isAgentFundingFlow ? 'Fund agent' : 'Send'}</Text>
+          <Text style={styles.headerTitle}>{isAgentFundingFlow ? 'Fund agent' : payTitle}</Text>
         </EaseView>
-        <View style={{ width: 40 }} />
+        {isDefaultSendFlow ? <ProfileButton /> : <View style={{ width: 40 }} />}
       </View>
 
       <KeyboardAvoidingView
@@ -783,12 +1052,12 @@ export default function TransferScreen() {
             style={styles.introBlock}
           >
             <Text style={styles.screenTitle}>
-              {isAgentFundingFlow ? `Fund ${fundingTarget}` : 'Who are you sending to?'}
+              {isAgentFundingFlow ? `Fund ${fundingTarget}` : isDefaultSendFlow ? 'Who are you paying?' : 'Who are you sending to?'}
             </Text>
             <Text style={styles.screenSubtitle}>
               {isAgentFundingFlow
                 ? 'Send Base USDC to this agent so it has a working balance for tools, services, and work.'
-                : 'Enter the wallet details first. You will review everything before you send.'}
+                : 'Paste an Ethereum address, use an ENS name, or choose a QR photo. You will review before you pay.'}
             </Text>
           </EaseView>
 
@@ -802,7 +1071,7 @@ export default function TransferScreen() {
             {recipientLabel ? (
               <View style={styles.recipientPill}>
                 <Text style={styles.recipientPillText}>
-                  {isAgentFundingFlow ? `Funding ${recipientLabel}` : `Sending to ${recipientLabel}`}
+                  {isAgentFundingFlow ? `Funding ${recipientLabel}` : `${isDefaultSendFlow ? 'Paying' : 'Sending to'} ${recipientLabel}`}
                 </Text>
               </View>
             ) : null}
@@ -812,39 +1081,74 @@ export default function TransferScreen() {
               </View>
               <TextInput
                 style={[styles.input, styles.recipientInput, { flex: 1 }, addressError && styles.inputError]}
-                value={recipientAddress}
+                value={recipientInput}
                 onChangeText={handleAddressChange}
-                placeholder={network.toLowerCase().includes('solana') ? 'Solana address' : 'Wallet address'}
+                placeholder={isSolanaNetwork(network) ? 'Solana address' : 'Ethereum address or ENS name'}
                 placeholderTextColor={TEXT_SECONDARY}
                 autoCapitalize="none"
                 autoCorrect={false}
                 editable={!isAgentFundingFlow}
               />
-              {isAgentFundingFlow ? null : recipientAddress ? (
+              {isAgentFundingFlow ? null : recipientInput ? (
                 <RegentPressable
                   haptic="selection"
                   pressStyle="icon"
                   style={styles.pasteButton}
                   onPress={() => {
+                    setRecipientInput('');
                     setRecipientAddress('');
+                    setEnsResolution(null);
                     setAddressError(null);
                   }}
                 >
                   <Ionicons name="close-circle" size={20} color={TEXT_SECONDARY} />
                 </RegentPressable>
               ) : (
-                <RegentPressable
-                  pressStyle="icon"
-                  style={styles.pasteButton}
-                  onPress={async () => {
-                    const text = await Clipboard.getStringAsync();
-                    if (text) handleAddressChange(text);
-                  }}
-                >
-                  <Ionicons name="clipboard-outline" size={20} color={BLUE} />
-                </RegentPressable>
+                <View style={styles.pasteButtonSpacer} />
               )}
             </View>
+
+            {!isAgentFundingFlow ? (
+              <View style={styles.recipientActions}>
+                <RegentPressable
+                  haptic="selection"
+                  pressStyle="chip"
+                  style={styles.recipientActionButton}
+                  onPress={handlePasteRecipient}
+                >
+                  <Ionicons name="clipboard-outline" size={18} color={BLUE} />
+                  <Text style={styles.recipientActionText}>Paste</Text>
+                </RegentPressable>
+                <RegentPressable
+                  haptic="selection"
+                  pressStyle="chip"
+                  style={styles.recipientActionButton}
+                  onPress={handleQrPhoto}
+                  disabled={scanningQrPhoto}
+                >
+                  {scanningQrPhoto ? (
+                    <ActivityIndicator color={BLUE} size="small" />
+                  ) : (
+                    <Ionicons name="qr-code-outline" size={18} color={BLUE} />
+                  )}
+                  <Text style={styles.recipientActionText}>QR photo</Text>
+                </RegentPressable>
+              </View>
+            ) : null}
+
+            {resolvingRecipient ? (
+              <Text style={styles.helper}>Checking ENS name...</Text>
+            ) : ensResolution ? (
+              <View style={styles.resolvedRecipientCard}>
+                <Text style={styles.resolvedRecipientTitle}>ENS name found</Text>
+                <Text style={styles.resolvedRecipientText}>
+                  {ensResolution.name} sends to {formatAddressPreview(ensResolution.address)}.
+                </Text>
+                <Text style={styles.resolvedRecipientText}>
+                  {getEnsResolutionCopy(ensResolution)}
+                </Text>
+              </View>
+            ) : null}
 
             {addressError && (
               <Text style={[styles.helper, styles.errorText]}>{addressError}</Text>
@@ -946,7 +1250,24 @@ export default function TransferScreen() {
             >
               <Text style={styles.noticeTitle}>Add USDC first</Text>
               <Text style={styles.noticeText}>
-                This agent funding path uses Base USDC. Add USDC, then come back to send it to {fundingTarget}.
+                This agent accepts Base USDC. Add USDC, then come back to send it to {fundingTarget}.
+              </Text>
+              <RegentPressable style={styles.inlinePrimaryButton} onPress={() => router.push(routes.wallet())}>
+                <Text style={styles.inlinePrimaryButtonText}>Add USDC</Text>
+              </RegentPressable>
+            </EaseView>
+          ) : null}
+
+          {noBaseUsdcForSend ? (
+            <EaseView
+              initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
+              animate={{ opacity: 1, translateY: 0 }}
+              transition={buildTimingTransition(reduceMotion, STAGGER_STEP * 5)}
+              style={[styles.card, styles.noticeCard]}
+            >
+              <Text style={styles.noticeTitle}>Add USDC first</Text>
+              <Text style={styles.noticeText}>
+                Pay uses Base USDC. Add funds, then come back to pay.
               </Text>
               <RegentPressable style={styles.inlinePrimaryButton} onPress={() => router.push(routes.wallet())}>
                 <Text style={styles.inlinePrimaryButtonText}>Add USDC</Text>
@@ -962,11 +1283,11 @@ export default function TransferScreen() {
           >
             <Ionicons name="shield-checkmark-outline" size={24} color={TEXT_SECONDARY} />
             <View style={styles.reviewCopy}>
-              <Text style={styles.reviewTitle}>{isAgentFundingFlow ? 'Review payment' : 'Review transfer'}</Text>
+              <Text style={styles.reviewTitle}>{isAgentFundingFlow || isDefaultSendFlow ? 'Review payment' : 'Review send'}</Text>
               <Text style={styles.reviewText}>
                 {isAgentFundingFlow
                   ? 'Check the agent, amount, and destination before money moves.'
-                  : 'You will have a chance to check the details before you send.'}
+                  : 'Check the recipient, amount, and network before money moves.'}
               </Text>
             </View>
           </EaseView>
@@ -1003,7 +1324,7 @@ export default function TransferScreen() {
               </LiveValueFlash>
             </View>
             {isPaymasterSupported ? (
-              <Text style={styles.helper}>No network fee will be charged for this send.</Text>
+              <Text style={styles.helper}>No network fee will be charged for this {isDefaultSendFlow ? 'payment' : 'send'}.</Text>
             ) : (
               <Text style={[styles.helper, styles.warningText]}>
                 Network fees in {isNativeToken ? selectedToken?.token?.symbol : 'ETH'} will apply.
@@ -1041,7 +1362,7 @@ export default function TransferScreen() {
               {sending ? (
                 <ActivityIndicator color={WHITE} />
               ) : (
-                <Text style={styles.mainSendButtonText}>{isAgentFundingFlow ? 'Review payment' : 'Continue'}</Text>
+                <Text style={styles.mainSendButtonText}>{isAgentFundingFlow || isDefaultSendFlow ? 'Review payment' : 'Review send'}</Text>
               )}
             </RegentPressable>
           </EaseView>
@@ -1078,7 +1399,7 @@ export default function TransferScreen() {
               style={styles.confirmationHeader}
             >
               <Ionicons name="shield-checkmark" size={48} color={BLUE} />
-              <Text style={styles.confirmationTitle}>{isAgentFundingFlow ? 'Review payment' : 'Review transfer'}</Text>
+              <Text style={styles.confirmationTitle}>{isAgentFundingFlow || isDefaultSendFlow ? 'Review payment' : 'Review send'}</Text>
             </EaseView>
 
             <EaseView
@@ -1157,7 +1478,7 @@ export default function TransferScreen() {
                 style={[styles.confirmButton, styles.sendButton]}
                 onPress={handleConfirmedSend}
               >
-                <Text style={styles.sendButtonText}>{isAgentFundingFlow ? 'Send to agent' : 'Send now'}</Text>
+                <Text style={styles.sendButtonText}>{isAgentFundingFlow ? 'Send to agent' : isDefaultSendFlow ? 'Pay now' : 'Send now'}</Text>
               </RegentPressable>
             </EaseView>
           </EaseView>
@@ -1206,6 +1527,52 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  pasteButtonSpacer: {
+    width: 44,
+    height: 44,
+  },
+  recipientActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  recipientActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    minHeight: 44,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
+    backgroundColor: WHITE,
+  },
+  recipientActionText: {
+    color: TEXT_PRIMARY,
+    fontSize: 14,
+    fontFamily: FONTS.body,
+  },
+  resolvedRecipientCard: {
+    gap: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
+    backgroundColor: BLUE_WASH,
+    padding: 12,
+  },
+  resolvedRecipientTitle: {
+    color: TEXT_PRIMARY,
+    fontSize: 14,
+    lineHeight: 18,
+    fontFamily: FONTS.heading,
+  },
+  resolvedRecipientText: {
+    color: TEXT_SECONDARY,
+    fontSize: 12,
+    lineHeight: 18,
+    fontFamily: FONTS.body,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1216,6 +1583,10 @@ const styles = StyleSheet.create({
   },
   backButton: {
     padding: 8,
+  },
+  backButtonSpacer: {
+    width: 40,
+    height: 40,
   },
   headerTitle: {
     fontSize: 20,

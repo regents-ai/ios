@@ -34,7 +34,7 @@ function contractRoutes() {
 
 function implementedRoutes() {
   const routes = new Set<string>();
-  const files = ['server/src/app.ts', 'server/src/mobileRoutes.ts'];
+  const files = ['server/src/app.ts', 'server/src/mobileRoutes.ts', 'server/src/routes/mobileVoice.ts'];
 
   for (const file of files) {
     const contents = readFileSync(resolve(rootDir, file), 'utf8');

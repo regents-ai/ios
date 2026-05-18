@@ -58,6 +58,7 @@ The mobile app needs:
 - `EXPO_PUBLIC_PRIVY_APP_ID`
 - `EXPO_PUBLIC_PRIVY_CLIENT_ID`
 - `EXPO_PUBLIC_BASE_URL`
+- `EXPO_PUBLIC_XMTP_ENV` (`dev` locally, `production` for release builds)
 - `EXPO_PUBLIC_USE_EXPO_CRYPTO`
 
 The local backend needs:
@@ -65,7 +66,10 @@ The local backend needs:
 - `CDP_API_KEY_ID`
 - `CDP_API_KEY_SECRET`
 - `BASE_RPC_URL`
+- `ETHEREUM_RPC_URL`
+- `ETHERSCAN_API_KEY`
 - `PLATFORM_API_BASE_URL`
+- `HERMES_VOICE_GATEWAY_TOKEN`
 - `PRIVY_APP_ID`
 - `PRIVY_VERIFICATION_KEY`
 - `REGENTS_CDP_JWT_ISSUER`

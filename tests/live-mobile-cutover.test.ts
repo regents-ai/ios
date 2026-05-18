@@ -12,7 +12,9 @@ test('mobile Regent contract exposes the current route family', () => {
 
   assert.match(contract, /\/mobile\/regents/);
   assert.match(contract, /\/mobile\/terminal\/sessions/);
+  assert.match(contract, /\/mobile\/agents\/\{agent_id\}\/voice\/session/);
   assert.match(contract, /RegentReturnRequest/);
+  assert.match(contract, /HermesVoiceAccount/);
 });
 
 test('mobile app and backend do not use the old preview route family', () => {
@@ -64,4 +66,21 @@ test('mobile Talk surfaces use the contracted terminal routes', () => {
     const contents = readFileSync(resolve(testDir, file), 'utf8');
     assert.doesNotMatch(contents, /TalkComingSoon|Hermes Talk is coming soon|Talk coming soon/, file);
   }
+});
+
+test('mobile voice surfaces use ChatGPT account gate and short-lived sessions', () => {
+  const contract = readFileSync(resolve(testDir, '../api-contract.openapiv3.yaml'), 'utf8');
+  const agentDetail = readFileSync(resolve(testDir, '../app/agent/[id].tsx'), 'utf8');
+  const voiceButton = readFileSync(resolve(testDir, '../components/voice/HermesVoiceButton.tsx'), 'utf8');
+  const voiceSheet = readFileSync(resolve(testDir, '../components/voice/HermesVoiceSheet.tsx'), 'utf8');
+  const voiceHook = readFileSync(resolve(testDir, '../hooks/useHermesVoiceSession.ts'), 'utf8');
+  const appConfig = readFileSync(resolve(testDir, '../app.config.ts'), 'utf8');
+
+  assert.match(agentDetail, /HermesVoiceButton/);
+  assert.match(voiceButton, /Connect ChatGPT/);
+  assert.match(voiceSheet, /Connect ChatGPT/);
+  assert.match(voiceHook, /createHermesVoiceSession/);
+  assert.match(voiceHook, /disconnectHermesVoice/);
+  assert.match(contract, /ChatGptAccountRequired/);
+  assert.doesNotMatch(`${appConfig}\n${voiceHook}\n${voiceSheet}`, /OPENAI_API_KEY|HERMES_VOICE_GATEWAY_TOKEN|SPRITES_[A-Z_]*SECRET|sk-[A-Za-z0-9]/);
 });

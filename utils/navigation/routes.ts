@@ -5,8 +5,12 @@ export const routes = {
     return '/wallet';
   },
 
+  pay(): Href {
+    return { pathname: '/wallet/send', params: { flow: 'send' } };
+  },
+
   walletSend(params?: {
-    flow?: 'agent-funding';
+    flow?: 'agent-funding' | 'send';
     regentId?: string;
     recipientAddress?: string;
     recipientLabel?: string;
@@ -20,6 +24,10 @@ export const routes = {
 
   staking(): Href {
     return '/staking';
+  },
+
+  settings(): Href {
+    return '/settings';
   },
 
   terminal(): Href {
@@ -36,6 +44,10 @@ export const routes = {
 
   regentManager(regentId: string): Href {
     return { pathname: '/agent/[id]/regent-manager', params: { id: regentId } };
+  },
+
+  agentVoice(regentId: string, name?: string): Href {
+    return { pathname: '/agent/[id]/voice', params: { id: regentId, ...(name ? { name } : {}) } } as unknown as Href;
   },
 
   onrampReturn(partnerUserRef?: string | null): Href {

@@ -146,10 +146,10 @@ export default function WalletScreen() {
 
   const quickActions = [
     {
-      label: 'Send',
+      label: 'Pay',
       detail: 'Pay an agent or another wallet',
       icon: 'arrow-up-outline',
-      onPress: () => router.push('/wallet/send'),
+      onPress: () => router.push(routes.pay()),
     },
     {
       label: 'Rewards',

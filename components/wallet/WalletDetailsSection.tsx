@@ -106,7 +106,7 @@ export function WalletDetailsSection({ walletDetails }: { walletDetails: WalletD
 
         <View style={styles.balanceActions}>
           <RegentPressable pressStyle="chip" style={styles.actionChip} onPress={() => handleTransfer(balance, network)}>
-            <Text style={styles.actionChipText}>Send</Text>
+            <Text style={styles.actionChipText}>Pay</Text>
           </RegentPressable>
           {cashOutEnabled ? (
             <RegentPressable
@@ -192,8 +192,8 @@ export function WalletDetailsSection({ walletDetails }: { walletDetails: WalletD
             style={[styles.quickActionButton, styles.quickActionPrimary]}
             onPress={handlePrimarySend}
           >
-            <Ionicons name="paper-plane-outline" size={18} color={WHITE} />
-            <Text style={styles.quickActionPrimaryText}>Send</Text>
+            <Ionicons name="card-outline" size={18} color={WHITE} />
+            <Text style={styles.quickActionPrimaryText}>Pay</Text>
           </RegentPressable>
           <RegentPressable
             style={[styles.quickActionButton, styles.quickActionSecondary]}
@@ -249,7 +249,7 @@ export function WalletDetailsSection({ walletDetails }: { walletDetails: WalletD
         <RegentPressable haptic="selection" pressStyle="card" style={styles.cardHeader} onPress={() => setBalancesExpanded((current) => !current)}>
           <View style={styles.cardHeaderCopy}>
             <Text style={styles.cardTitle}>Mainnet balances</Text>
-            <Text style={styles.cardHint}>Base stays at the top, with send and cash-out actions close to each balance.</Text>
+            <Text style={styles.cardHint}>Base stays at the top, with pay and cash-out actions close to each balance.</Text>
           </View>
           <Ionicons name={balancesExpanded ? 'chevron-up' : 'chevron-down'} size={18} color={TEXT_SECONDARY} />
         </RegentPressable>

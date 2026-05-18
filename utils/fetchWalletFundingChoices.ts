@@ -19,23 +19,13 @@ const STABLECOINS = new Set(['USDC', 'EURC']);
 
 export async function fetchWalletFundingChoices(input: {
   evmAddress?: string | null;
-  solanaAddress?: string | null;
 }) {
   const balances: WalletFundingChoice[] = [];
 
   if (input.evmAddress) {
-    const [baseData, ethereumData] = await Promise.all([
-      fetchAuthorizedJson(`${getBaseUrl()}/balances/evm?address=${input.evmAddress}&network=base`),
-      fetchAuthorizedJson(`${getBaseUrl()}/balances/evm?address=${input.evmAddress}&network=ethereum`),
-    ]);
-
+    const address = encodeURIComponent(input.evmAddress);
+    const baseData = await fetchAuthorizedJson(`${getBaseUrl()}/balances/evm?address=${address}&network=base`);
     balances.push(...(baseData.balances || []).map((balance) => ({ ...balance, network: 'Base' })));
-    balances.push(...(ethereumData.balances || []).map((balance) => ({ ...balance, network: 'Ethereum' })));
-  }
-
-  if (input.solanaAddress) {
-    const solanaData = await fetchAuthorizedJson(`${getBaseUrl()}/balances/solana?address=${input.solanaAddress}`);
-    balances.push(...(solanaData.balances || []).map((balance) => ({ ...balance, network: 'Solana' })));
   }
 
   return balances.filter((balance) => {

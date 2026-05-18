@@ -29,6 +29,21 @@ const platformCompanySchema = z.object({
     hermes: z.object({
       status: z.string(),
     }).passthrough(),
+    voice: z.object({
+      enabled: z.boolean(),
+      health: z.enum(['ok', 'degraded', 'unavailable']),
+      status_url: z.string(),
+      session_url: z.string(),
+      provider: z.literal('openai-realtime'),
+      model: z.string(),
+      tool_registry_digest: z.string(),
+      account: z.object({
+        required: z.literal(true),
+        satisfied: z.boolean(),
+        provider: z.literal('openai_chatgpt'),
+        connect_url: z.string().nullable().optional(),
+      }),
+    }),
   }),
   formation: z.object({
     status: z.string(),

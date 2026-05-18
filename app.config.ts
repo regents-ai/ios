@@ -17,6 +17,7 @@ const config: ExpoConfig = {
       supportsTablet: false,
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
+        NSMicrophoneUsageDescription: 'Talk to Hermes with your voice.',
         UIBackgroundModes: ['fetch', 'remote-notification'],
       }
     },
@@ -47,10 +48,15 @@ const config: ExpoConfig = {
         ],
       }],
       ['expo-splash-screen', { image: './assets/images/splash-icon.png', imageWidth: 200, resizeMode: 'contain', backgroundColor: '#ffffff' }],
-      ['expo-build-properties', { ios: { deploymentTarget: '15.1' } }],
+      ['expo-build-properties', { ios: { deploymentTarget: '16.0' } }],
       ['expo-notifications', {
         icon: './assets/images/icon.png',
         color: '#0052FF'
+      }],
+      ['expo-image-picker', {
+        photosPermission: 'Choose a QR code photo to fill in the send recipient.',
+        cameraPermission: false,
+        microphonePermission: false,
       }],
       withGooglePayWebView,
     ],

@@ -24,9 +24,15 @@ x-regent-rate-limits:
   cli_allowance_requires_verified_siwa: false
 x-regent-chat-room-contract:
   owner: ios
-  xmtp_room_routes: []
+  xmtp_room_routes:
+    - /mobile/message/threads
+    - /mobile/message/contacts/recent-addresses
+    - /mobile/message/contacts/regent-users
+    - /mobile/message/xmtp/phone-identities
+    - /mobile/message/xmtp/agents/{agent_id}
+    - /mobile/message/threads/{thread_id}/xmtp-links
   talk_source: Platform Regent Work Runtime
-  transport_boundary: Mobile Talk uses Platform work records and mobile routes. It does not create XMTP rooms today.
+  transport_boundary: Mobile Message threads are sourced from Platform Regent Work Runtime. XMTP links attach phone and agent transport metadata to canonical Platform threads by environment; XMTP is not the source of truth.
 paths:
   /health:
     get:
@@ -579,8 +585,20 @@ paths:
                 properties:
                   fundingIntent:
                     $ref: '#/components/schemas/RegentFundingIntent'
+        '400':
+          description: Invalid funding details or funding destination
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '404':
           description: Regent not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '409':
+          description: Regent wallet is not ready for funding
           content:
             application/json:
               schema:
@@ -1161,6 +1179,188 @@ paths:
                     $ref: '#/components/schemas/TerminalSessionDetail'
         '429':
           $ref: '#/components/responses/RateLimitError'
+  /mobile/agents/{agent_id}/voice/status:
+    get:
+      operationId: getMobileHermesVoiceStatus
+      summary: Check whether Hermes voice is ready for one mobile Regent
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: agent_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Hermes voice status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HermesVoiceStatus'
+        '403':
+          description: ChatGPT connection is required before voice starts
+          x-regent-error-codes: [ChatGptAccountRequired, HermesVoiceUnavailable]
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+  /mobile/agents/{agent_id}/voice/session:
+    post:
+      operationId: createMobileHermesVoiceSession
+      summary: Create one short-lived Hermes voice session
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: agent_id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateHermesVoiceSessionRequest'
+      responses:
+        '201':
+          description: Short-lived Hermes voice session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HermesVoiceSession'
+        '403':
+          description: ChatGPT connection is required before voice starts
+          x-regent-error-codes: [ChatGptAccountRequired, HermesVoiceUnavailable]
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+  /mobile/agents/{agent_id}/voice/prewarm:
+    post:
+      operationId: prewarmMobileHermesVoice
+      summary: Prepare Hermes voice for one mobile Regent
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: agent_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '202':
+          description: Hermes voice prewarm accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+        '403':
+          description: ChatGPT connection is required before voice starts
+          x-regent-error-codes: [ChatGptAccountRequired, HermesVoiceUnavailable]
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+  /mobile/agents/{agent_id}/voice/disconnect:
+    post:
+      operationId: disconnectMobileHermesVoice
+      summary: End one Hermes voice session
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: agent_id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [session_id]
+              additionalProperties: false
+              properties:
+                session_id:
+                  type: string
+      responses:
+        '200':
+          description: Hermes voice session ended
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+        '404':
+          description: Voice session was not found
+          x-regent-error-codes: [VoiceSessionNotFound]
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+  /mobile/agents/{agent_id}/voice/tool-results:
+    post:
+      operationId: submitMobileHermesVoiceToolResult
+      summary: Submit one iOS voice tool result
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: agent_id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HermesVoiceToolResult'
+      responses:
+        '202':
+          description: Hermes voice tool result accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+        '403':
+          description: ChatGPT connection is required before voice results are accepted
+          x-regent-error-codes: [ChatGptAccountRequired, HermesVoiceUnavailable]
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: Voice session was not found
+          x-regent-error-codes: [VoiceSessionNotFound]
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
   /mobile/terminal/sessions/{id}:
     get:
       operationId: getMobileTerminalSession
@@ -1326,6 +1526,206 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '429':
           $ref: '#/components/responses/RateLimitError'
+  /mobile/message/threads:
+    get:
+      operationId: listMobileMessageThreads
+      summary: List canonical mobile Message threads sourced from Platform Regent Work Runtime
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Canonical mobile Message threads with optional attached XMTP transport links
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [threads]
+                properties:
+                  threads:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MessageThread'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+  /mobile/message/contacts/recent-addresses:
+    get:
+      operationId: lookupMobileMessageRecentAddresses
+      summary: Look up recent ENS contacts that interacted with one Ethereum address or ENS name
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: addressOrName
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Recent ENS contacts for the requested Ethereum address or ENS name
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [target, contacts]
+                properties:
+                  target:
+                    $ref: '#/components/schemas/MessageContactLookupTarget'
+                  contacts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MessageContactSuggestion'
+        '400':
+          description: Invalid Ethereum address or ENS name
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '502':
+          description: Recent contact lookup is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: Recent contact lookup is not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+  /mobile/message/contacts/regent-users:
+    get:
+      operationId: listMobileMessageRegentUsers
+      summary: List Regent app contacts available to the signed-in mobile user
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Regent app contacts for the signed-in mobile user
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [contacts]
+                properties:
+                  contacts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MessageContactSuggestion'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+  /mobile/message/xmtp/phone-identities:
+    post:
+      operationId: registerMobilePhoneXmtpIdentity
+      summary: Register one phone XMTP identity for the signed-in mobile user
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterPhoneXmtpIdentityRequest'
+      responses:
+        '200':
+          description: Phone XMTP identity metadata registered for the signed-in mobile user
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [identity]
+                properties:
+                  identity:
+                    $ref: '#/components/schemas/PhoneXmtpIdentity'
+        '400':
+          description: Invalid phone XMTP identity metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+  /mobile/message/xmtp/agents/{agent_id}:
+    get:
+      operationId: getMobileAgentXmtpIdentity
+      summary: Fetch agent XMTP identity metadata
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: agent_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Agent XMTP identity metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [identity]
+                properties:
+                  identity:
+                    $ref: '#/components/schemas/AgentXmtpIdentity'
+        '404':
+          description: Agent XMTP identity metadata not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+  /mobile/message/threads/{thread_id}/xmtp-links:
+    post:
+      operationId: linkMobileMessageThreadXmtpConversation
+      summary: Link one XMTP DM or group conversation to a canonical Platform Message thread
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: thread_id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LinkXmtpConversationRequest'
+      responses:
+        '200':
+          description: XMTP transport link attached to the canonical Platform Message thread
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [thread]
+                properties:
+                  thread:
+                    $ref: '#/components/schemas/MessageThread'
+        '400':
+          description: Invalid XMTP conversation link
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: Message thread not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '409':
+          description: XMTP conversation is already linked to a different Message thread
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
 components:
   securitySchemes:
     bearerAuth:
@@ -1406,6 +1806,7 @@ components:
         - runtimeStatus
         - walletAddress
         - platformState
+        - voice
         - lastActiveAt
       properties:
         id:
@@ -1420,6 +1821,8 @@ components:
           type: string
         platformState:
           $ref: '#/components/schemas/RegentPlatformState'
+        voice:
+          $ref: '#/components/schemas/MobileRegentVoice'
         lastActiveAt:
           type: string
           format: date-time
@@ -1554,6 +1957,7 @@ components:
           pattern: '^0x[a-fA-F0-9]{40}$'
         destinationWalletAddress:
           type: string
+          description: Must match the Regent wallet address from the current Platform projection and the ERC-20 transfer recipient.
           pattern: '^0x[a-fA-F0-9]{40}$'
         chainId:
           type: integer
@@ -2175,6 +2579,284 @@ components:
           properties:
             composerPlaceholder:
               type: string
+    MessageThread:
+      type: object
+      required: [id, platformThreadId, agentId, agentName, source, title, latestNote, lastUpdatedAt, xmtpLinks]
+      properties:
+        id:
+          type: string
+        platformThreadId:
+          type: string
+        agentId:
+          type: string
+        agentName:
+          type: string
+        source:
+          type: string
+          enum: [platform_rwr]
+        title:
+          type: string
+        latestNote:
+          type: string
+        lastUpdatedAt:
+          type: string
+          format: date-time
+        xmtpLinks:
+          type: array
+          items:
+            $ref: '#/components/schemas/XmtpConversationLink'
+    MessageContactLookupTarget:
+      type: object
+      required: [input, address]
+      properties:
+        input:
+          type: string
+        address:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
+        ensName:
+          type: string
+    MessageContactSuggestion:
+      type: object
+      required: [id, kind, label, address]
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+          enum: [recent_ens, regent_agent, regent_human]
+        label:
+          type: string
+        address:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
+        ensName:
+          type: string
+        detail:
+          type: string
+        agentId:
+          type: string
+    XmtpConversationLink:
+      type: object
+      required: [conversationId, conversationKind, environment, linkedAt]
+      properties:
+        conversationId:
+          type: string
+        conversationKind:
+          type: string
+          enum: [dm, group]
+        environment:
+          type: string
+          enum: [dev, production]
+        linkedAt:
+          type: string
+          format: date-time
+    RegisterPhoneXmtpIdentityRequest:
+      type: object
+      additionalProperties: false
+      required: [inboxId, installationId, walletAddress, environment]
+      properties:
+        inboxId:
+          type: string
+        installationId:
+          type: string
+        walletAddress:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
+        environment:
+          type: string
+          enum: [dev, production]
+    PhoneXmtpIdentity:
+      type: object
+      required: [inboxId, installationId, walletAddress, environment, registeredAt]
+      properties:
+        inboxId:
+          type: string
+        installationId:
+          type: string
+        walletAddress:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
+        environment:
+          type: string
+          enum: [dev, production]
+        registeredAt:
+          type: string
+          format: date-time
+    AgentXmtpIdentity:
+      type: object
+      required: [agentId, inboxId, walletAddress, environment]
+      properties:
+        agentId:
+          type: string
+        inboxId:
+          type: string
+        walletAddress:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
+        environment:
+          type: string
+          enum: [dev, production]
+        displayName:
+          type: string
+    LinkXmtpConversationRequest:
+      type: object
+      additionalProperties: false
+      required: [conversationId, conversationKind, environment]
+      properties:
+        conversationId:
+          type: string
+        conversationKind:
+          type: string
+          enum: [dm, group]
+        environment:
+          type: string
+          enum: [dev, production]
+    HermesVoiceAccount:
+      type: object
+      additionalProperties: false
+      required: [required, satisfied, provider]
+      properties:
+        required:
+          type: boolean
+          enum: [true]
+        satisfied:
+          type: boolean
+        provider:
+          type: string
+          enum: [openai_chatgpt]
+        connect_url:
+          type: string
+          format: uri
+          nullable: true
+    MobileRegentVoice:
+      type: object
+      additionalProperties: false
+      required: [enabled, health, account]
+      properties:
+        enabled:
+          type: boolean
+        health:
+          type: string
+          enum: [ok, degraded, unavailable]
+        account:
+          $ref: '#/components/schemas/HermesVoiceAccount'
+    CreateHermesVoiceSessionRequest:
+      type: object
+      additionalProperties: false
+      required: [device_capabilities]
+      properties:
+        voice:
+          type: string
+          default: marin
+        locale:
+          type: string
+        timezone:
+          type: string
+        reasoning_effort:
+          type: string
+          enum: [low, medium, high]
+          default: low
+        device_capabilities:
+          type: array
+          items:
+            type: string
+        preferred_transport:
+          type: string
+          enum: [webrtc]
+          default: webrtc
+    HermesVoiceSession:
+      type: object
+      additionalProperties: false
+      required: [session_id, agent_id, realtime, tools, expires_at, account]
+      properties:
+        session_id:
+          type: string
+        agent_id:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+        account:
+          $ref: '#/components/schemas/HermesVoiceAccount'
+        realtime:
+          type: object
+          additionalProperties: false
+          required: [provider, model, client_secret, client_secret_expires_at]
+          properties:
+            provider:
+              type: string
+              enum: [openai-realtime]
+            model:
+              type: string
+              default: gpt-realtime-2
+            client_secret:
+              type: string
+            client_secret_expires_at:
+              type: string
+              format: date-time
+            calls_url:
+              type: string
+              default: https://api.openai.com/v1/realtime/calls
+        tools:
+          type: array
+          items:
+            $ref: '#/components/schemas/HermesVoiceTool'
+    HermesVoiceStatus:
+      type: object
+      additionalProperties: false
+      required: [enabled, health, agent_id, account]
+      properties:
+        enabled:
+          type: boolean
+        health:
+          type: string
+          enum: [ok, degraded, unavailable]
+        agent_id:
+          type: string
+        account:
+          $ref: '#/components/schemas/HermesVoiceAccount'
+        active_session_id:
+          type: string
+          nullable: true
+        active_turn_id:
+          type: string
+          nullable: true
+        queue_depth:
+          type: integer
+        last_event_id:
+          type: string
+          nullable: true
+    HermesVoiceTool:
+      type: object
+      additionalProperties: false
+      required: [name, owner, description]
+      properties:
+        name:
+          type: string
+        owner:
+          type: string
+          enum: [hermes, ios]
+        description:
+          type: string
+        requires_approval:
+          type: boolean
+          default: false
+    HermesVoiceToolResult:
+      type: object
+      additionalProperties: false
+      required: [session_id, tool_call_id, ok]
+      properties:
+        session_id:
+          type: string
+        tool_call_id:
+          type: string
+        ok:
+          type: boolean
+        result: {}
+        error:
+          type: object
+          nullable: true
     CreateTerminalSessionRequest:
       type: object
       required: [agentId, agentName]

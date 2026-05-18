@@ -19,6 +19,21 @@ export type RegentPlatformState = {
   nextPauseAt?: string;
 };
 
+export type HermesVoiceHealth = 'ok' | 'degraded' | 'unavailable';
+
+export type HermesVoiceAccount = {
+  required: true;
+  satisfied: boolean;
+  provider: 'openai_chatgpt';
+  connect_url?: string | null;
+};
+
+export type MobileRegentVoice = {
+  enabled: boolean;
+  health: HermesVoiceHealth;
+  account: HermesVoiceAccount;
+};
+
 export type RegentSummary = {
   id: string;
   name: string;
@@ -26,6 +41,7 @@ export type RegentSummary = {
   runtimeStatus: RegentRuntimeStatus;
   walletAddress: string;
   platformState: RegentPlatformState;
+  voice: MobileRegentVoice;
   lastActiveAt: string;
   treasuryNote?: string;
 };
@@ -207,6 +223,111 @@ export type TerminalEvent = {
   contractAddress?: string;
   result?: 'approved' | 'denied' | 'timed_out';
   message?: string;
+};
+
+export type HermesVoiceTool = {
+  name: string;
+  owner: 'hermes' | 'ios';
+  description: string;
+  requires_approval?: boolean;
+};
+
+export type CreateHermesVoiceSessionRequest = {
+  voice?: string;
+  locale?: string;
+  timezone?: string;
+  reasoning_effort?: 'low' | 'medium' | 'high';
+  device_capabilities: string[];
+  preferred_transport?: 'webrtc';
+};
+
+export type HermesVoiceSession = {
+  session_id: string;
+  agent_id: string;
+  expires_at: string;
+  account: HermesVoiceAccount;
+  realtime: {
+    provider: 'openai-realtime';
+    model: string;
+    client_secret: string;
+    client_secret_expires_at: string;
+    calls_url?: string;
+  };
+  tools: HermesVoiceTool[];
+};
+
+export type HermesVoiceStatus = {
+  enabled: boolean;
+  health: HermesVoiceHealth;
+  agent_id: string;
+  account: HermesVoiceAccount;
+  active_session_id?: string | null;
+  active_turn_id?: string | null;
+  queue_depth?: number;
+  last_event_id?: string | null;
+};
+
+export type HermesVoiceToolResult = {
+  session_id: string;
+  tool_call_id: string;
+  ok: boolean;
+  result?: unknown;
+  error?: Record<string, unknown> | null;
+};
+
+export type XmtpConversationKind = 'dm' | 'group';
+export type XmtpEnvironment = 'dev' | 'production';
+export type MessageContactKind = 'recent_ens' | 'regent_agent' | 'regent_human';
+
+export type XmtpConversationLink = {
+  conversationId: string;
+  conversationKind: XmtpConversationKind;
+  environment: XmtpEnvironment;
+  linkedAt: string;
+};
+
+export type MessageContactLookupTarget = {
+  input: string;
+  address: string;
+  ensName?: string;
+};
+
+export type MessageContactSuggestion = {
+  id: string;
+  kind: MessageContactKind;
+  label: string;
+  address: string;
+  ensName?: string;
+  detail?: string;
+  agentId?: string;
+};
+
+export type MessageThread = {
+  id: string;
+  platformThreadId: string;
+  agentId: string;
+  agentName: string;
+  source: 'platform_rwr';
+  title: string;
+  latestNote: string;
+  lastUpdatedAt: string;
+  xmtpLinks: XmtpConversationLink[];
+};
+
+export type PhoneXmtpIdentity = {
+  inboxId: string;
+  installationId: string;
+  walletAddress: string;
+  environment: XmtpEnvironment;
+  registeredAt: string;
+};
+
+export type AgentXmtpIdentity = {
+  agentId: string;
+  inboxId: string;
+  walletAddress: string;
+  environment: XmtpEnvironment;
+  displayName?: string;
 };
 
 export type PreparedWalletAction = {

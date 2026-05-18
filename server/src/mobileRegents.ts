@@ -11,6 +11,7 @@ type PlatformFormationStatus = 'pending' | 'blocked' | 'provisioning' | 'ready';
 type PlatformBillingStatus = 'trial' | 'free-day' | 'prepaid' | 'paused' | 'zero' | 'failed';
 type PlatformRuntimeStatus = 'provisioning' | 'ready' | 'paused' | 'blocked';
 type WalletActionType = 'funding' | 'return';
+type HermesVoiceHealth = 'ok' | 'degraded' | 'unavailable';
 
 type RegentPlatformState = {
   claimedName: string;
@@ -25,6 +26,19 @@ type RegentPlatformState = {
   nextPauseAt?: string;
 };
 
+type HermesVoiceAccount = {
+  required: true;
+  satisfied: boolean;
+  provider: 'openai_chatgpt';
+  connect_url?: string | null | undefined;
+};
+
+export type MobileRegentVoice = {
+  enabled: boolean;
+  health: HermesVoiceHealth;
+  account: HermesVoiceAccount;
+};
+
 type RegentSummary = {
   id: string;
   name: string;
@@ -32,6 +46,7 @@ type RegentSummary = {
   runtimeStatus: RegentRuntimeStatus;
   walletAddress: string;
   platformState: RegentPlatformState;
+  voice: MobileRegentVoice;
   lastActiveAt: string;
   treasuryNote?: string;
 };
@@ -281,6 +296,15 @@ function statusForCompany(company: PlatformCompanyProjection): RegentStatus {
   return 'active';
 }
 
+export function voiceForCompany(company: PlatformCompanyProjection): MobileRegentVoice {
+  const voice = company.runtime.voice;
+  return {
+    enabled: voice.enabled && voice.account.satisfied && voice.health !== 'unavailable',
+    health: voice.health,
+    account: voice.account,
+  };
+}
+
 function returnRequestsForUser(userId: string, regentId: string) {
   return Object.entries(mobileRegentStore.read().returnRequestIntents)
     .filter(([key, request]) => key.startsWith(`${userId}:${regentId}:return:`) && request.regentId === regentId)
@@ -302,6 +326,7 @@ function summaryFromCompany(
     runtimeStatus,
     walletAddress: company.company.wallet_address || '0x0000000000000000000000000000000000000000',
     platformState: platformStateForCompany(projection, company),
+    voice: voiceForCompany(company),
     lastActiveAt: nowIso(),
   };
 

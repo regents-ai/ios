@@ -5,6 +5,19 @@ import { z } from 'zod';
 import { verifyBaseReceipt } from './baseReceiptVerification.js';
 import { sendError } from './httpResponses.js';
 import {
+  createMessageContactClient,
+  type MessageContactClient,
+  type MessageContactSuggestion,
+} from './messageContacts.js';
+import {
+  getAgentXmtpIdentityForUser,
+  linkXmtpConversationToThread,
+  listPhoneXmtpIdentitiesForContacts,
+  listMessageThreadsForUser,
+  messageThreadFromTerminalSession,
+  registerPhoneXmtpIdentityForUser,
+} from './mobileMessages.js';
+import {
   confirmPreparedWalletActionForUser,
   confirmRegentFundingIntentForUser,
   confirmRegentReturnRequestForUser,
@@ -37,6 +50,8 @@ import {
   type PlatformRwrClientResult,
   type PlatformStakingClient,
 } from './platformProjection.js';
+import { createMobileVoiceRoutes } from './routes/mobileVoice.js';
+import { createHermesVoiceClient, type HermesVoiceClient } from './services/hermesVoiceClient.js';
 
 const currentUserId = (userId?: string) => userId || '';
 
@@ -65,6 +80,34 @@ const terminalEventsQuerySchema = z.object({
 const terminalApprovalParamsSchema = z.object({
   id: z.string().min(1),
   request_id: z.string().min(1),
+});
+
+const messageThreadParamsSchema = z.object({
+  thread_id: z.string().min(1),
+});
+
+const recentMessageContactsQuerySchema = z.object({
+  addressOrName: z.string().trim().min(1),
+});
+
+const agentXmtpParamsSchema = z.object({
+  agent_id: z.string().min(1),
+});
+
+const xmtpConversationKindSchema = z.enum(['dm', 'group']);
+const xmtpEnvironmentSchema = z.enum(['dev', 'production']);
+
+const registerPhoneXmtpIdentityBodySchema = z.object({
+  inboxId: z.string().min(1),
+  installationId: z.string().min(1),
+  walletAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+  environment: xmtpEnvironmentSchema,
+});
+
+const linkXmtpConversationBodySchema = z.object({
+  conversationId: z.string().min(1),
+  conversationKind: xmtpConversationKindSchema,
+  environment: xmtpEnvironmentSchema,
 });
 
 const receiptSchema = z.object({
@@ -106,6 +149,10 @@ function sameAddress(first: string, second: string) {
   return first.toLowerCase() === second.toLowerCase();
 }
 
+function zeroAddress(value: string) {
+  return sameAddress(value, '0x0000000000000000000000000000000000000000');
+}
+
 function fundingTransferMatchesIntent(input: {
   amount: string;
   destinationWalletAddress: string;
@@ -143,11 +190,15 @@ export function createMobileRoutes(input?: {
   platformProjectionClient?: PlatformProjectionClient;
   platformRwrClient?: PlatformRwrClient;
   platformStakingClient?: PlatformStakingClient;
+  messageContactClient?: MessageContactClient;
+  hermesVoiceClient?: HermesVoiceClient;
 }) {
   const router = Router();
   const platformProjectionClient = input?.platformProjectionClient || createPlatformProjectionClient();
   const platformRwrClient = input?.platformRwrClient || createPlatformRwrClient();
   const platformStakingClient = input?.platformStakingClient || createPlatformStakingClient();
+  const messageContactClient = input?.messageContactClient || createMessageContactClient();
+  const hermesVoiceClient = input?.hermesVoiceClient || createHermesVoiceClient();
 
   function platformAuth(req: Request): PlatformRequestAuth {
     return {
@@ -412,8 +463,19 @@ export function createMobileRoutes(input?: {
     if (!projection) {
       return;
     }
-    if (!hasRegentInPlatformProjection(parsedParams.data.id, projection)) {
+    const regent = getRegentForUserFromPlatformProjection(
+      currentUserId(req.userId),
+      parsedParams.data.id,
+      projection,
+    );
+    if (!regent) {
       return sendError(res, 404, 'NotFound', 'That Regent could not be found.');
+    }
+    if (zeroAddress(regent.walletAddress)) {
+      return sendError(res, 409, 'RegentFundingUnavailable', 'That Regent wallet is not ready for funding.');
+    }
+    if (!sameAddress(regent.walletAddress, parsedBody.data.destinationWalletAddress)) {
+      return sendError(res, 400, 'BadRequest', 'Funding destination must match this Regent wallet.');
     }
 
     const fundingIntent = createRegentFundingIntentForUser(
@@ -811,6 +873,143 @@ export function createMobileRoutes(input?: {
       parsedBody.data.decision,
     );
     return sendPlatformResult(res, result, (session) => ({ session }));
+  });
+
+  router.use(createMobileVoiceRoutes({
+    platformProjectionClient,
+    hermesVoiceClient,
+  }));
+
+  router.get('/mobile/message/threads', async (req, res) => {
+    const result = await listTerminalSessions(platformRwrClient, platformAuth(req));
+    return sendPlatformResult(res, result, (sessions) => ({
+      threads: listMessageThreadsForUser(currentUserId(req.userId), sessions),
+    }));
+  });
+
+  router.get('/mobile/message/contacts/recent-addresses', async (req, res) => {
+    const parsedQuery = recentMessageContactsQuerySchema.safeParse({
+      addressOrName: queryValue(req, 'addressOrName'),
+    });
+    if (!parsedQuery.success) {
+      return sendError(res, 400, 'BadRequest', 'Enter an Ethereum address or ENS name.');
+    }
+
+    const result = await messageContactClient.lookupRecentEnsContacts(parsedQuery.data.addressOrName);
+    if (result.kind === 'ok') {
+      return res.json({
+        target: result.target,
+        contacts: result.contacts,
+      });
+    }
+
+    if (result.kind === 'bad_request') {
+      return sendError(res, 400, 'BadRequest', result.message);
+    }
+
+    if (result.kind === 'missing_config') {
+      return sendError(
+        res,
+        503,
+        'RecentContactsMissing',
+        'Recent address lookup is not ready yet.',
+      );
+    }
+
+    return sendError(res, 502, 'RecentContactsUnavailable', result.message);
+  });
+
+  router.get('/mobile/message/contacts/regent-users', async (req, res) => {
+    const projection = await readPlatformProjection(req, res);
+    if (!projection) {
+      return;
+    }
+
+    const userId = currentUserId(req.userId);
+    const agentContacts: MessageContactSuggestion[] = listRegentsForUserFromPlatformProjection(userId, projection)
+      .filter(
+        (regent) =>
+          evmAddressSchema.safeParse(regent.walletAddress).success &&
+          !sameAddress(regent.walletAddress, '0x0000000000000000000000000000000000000000'),
+      )
+      .map((regent) => ({
+        id: `agent:${regent.id}`,
+        kind: 'regent_agent',
+        label: regent.name,
+        address: regent.walletAddress,
+        detail: 'Agent',
+        agentId: regent.id,
+      }));
+
+    const seenHumanAddresses = new Set<string>();
+    const humanContacts: MessageContactSuggestion[] = listPhoneXmtpIdentitiesForContacts().flatMap((entry) => {
+      if (!evmAddressSchema.safeParse(entry.identity.walletAddress).success) {
+        return [];
+      }
+
+      const normalizedAddress = entry.identity.walletAddress.toLowerCase();
+      if (seenHumanAddresses.has(normalizedAddress)) {
+        return [];
+      }
+
+      seenHumanAddresses.add(normalizedAddress);
+      return [{
+        id: `human:${normalizedAddress}`,
+        kind: 'regent_human',
+        label: entry.userId === userId ? 'You' : 'Regent user',
+        address: entry.identity.walletAddress,
+        detail: entry.userId === userId ? 'Your Regent address' : 'Regent app user',
+      }];
+    });
+
+    return res.json({ contacts: [...agentContacts, ...humanContacts] });
+  });
+
+  router.post('/mobile/message/xmtp/phone-identities', (req, res) => {
+    const parsedBody = registerPhoneXmtpIdentityBodySchema.safeParse(req.body);
+    if (!parsedBody.success) {
+      return sendError(res, 400, 'BadRequest', 'Valid message identity details are required.');
+    }
+
+    return res.json({
+      identity: registerPhoneXmtpIdentityForUser(currentUserId(req.userId), parsedBody.data),
+    });
+  });
+
+  router.get('/mobile/message/xmtp/agents/:agent_id', (req, res) => {
+    const parsedParams = agentXmtpParamsSchema.safeParse(req.params);
+    if (!parsedParams.success) {
+      return sendError(res, 400, 'BadRequest', 'A valid agent ID is required.');
+    }
+
+    const identity = getAgentXmtpIdentityForUser(currentUserId(req.userId), parsedParams.data.agent_id);
+    if (!identity) {
+      return sendError(res, 404, 'NotFound', 'That agent message address could not be found.');
+    }
+
+    return res.json({ identity });
+  });
+
+  router.post('/mobile/message/threads/:thread_id/xmtp-links', async (req, res) => {
+    const parsedParams = messageThreadParamsSchema.safeParse(req.params);
+    const parsedBody = linkXmtpConversationBodySchema.safeParse(req.body);
+    if (!parsedParams.success || !parsedBody.success) {
+      return sendError(res, 400, 'BadRequest', 'A valid message thread and conversation are required.');
+    }
+
+    const sessionResult = await getTerminalSession(platformRwrClient, platformAuth(req), parsedParams.data.thread_id);
+    if (sessionResult.kind !== 'ok') {
+      return sendPlatformResult(res, sessionResult, () => ({ thread: null }));
+    }
+
+    const linkResult = linkXmtpConversationToThread(currentUserId(req.userId), parsedParams.data.thread_id, parsedBody.data);
+    if (linkResult.kind === 'conflict') {
+      return sendError(res, 409, 'ConversationLinked', 'That secure conversation is already connected to another message thread.');
+    }
+
+    return res.json({
+      thread: messageThreadFromTerminalSession(currentUserId(req.userId), sessionResult.data),
+    });
   });
 
   return router;

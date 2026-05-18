@@ -3,6 +3,8 @@ import { LiveValueFlash } from '@/components/motion/LiveValueFlash';
 import { SpinningRefreshIcon } from '@/components/motion/SpinningRefreshIcon';
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { RegentPressable } from '@/components/ui/RegentPressable';
+import { HermesVoiceButton } from '@/components/voice/HermesVoiceButton';
+import { HermesVoiceSheet } from '@/components/voice/HermesVoiceSheet';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
 import {
@@ -65,7 +67,7 @@ function runtimeCopy(runtimeStatus: RegentSummary['runtimeStatus']) {
     case 'online':
       return 'Live';
     case 'waiting':
-      return 'Needs review';
+      return 'Needs approval';
     case 'offline':
       return 'Offline';
   }
@@ -139,6 +141,7 @@ export default function AgentDetailScreen() {
 
   const [agent, setAgent] = useState<RegentDetail | null>(null);
   const [regentManager, setRegentManager] = useState<RegentManagerDetail | null>(null);
+  const [voiceSheetOpen, setVoiceSheetOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [alertState, setAlertState] = useState<{
@@ -202,6 +205,10 @@ export default function AgentDetailScreen() {
     router.push(routes.terminal());
   }, [router]);
 
+  const openVoice = useCallback(() => {
+    setVoiceSheetOpen(true);
+  }, []);
+
   const openFundAgent = useCallback(() => {
     if (!agent) {
       return;
@@ -239,7 +246,7 @@ export default function AgentDetailScreen() {
       return {
         eyebrow: 'Next move',
         title: 'Start with the agent brief',
-        body: 'Review the brief, then decide whether this agent needs follow-up.',
+        body: 'Read the brief, then decide whether this agent needs follow-up.',
         cta: 'Open Agent Brief',
         onPress: openRegentManager,
         accent: DANGER,
@@ -250,9 +257,9 @@ export default function AgentDetailScreen() {
     if (agent.runtimeStatus === 'waiting') {
       return {
         eyebrow: 'Next move',
-        title: 'Review approvals',
-        body: 'Review messages, payment requests, and decisions for this agent.',
-        cta: 'Review',
+        title: 'Message this agent',
+        body: 'Reply to messages, payment requests, and decisions for this agent.',
+        cta: 'Message',
         onPress: openTalk,
         accent: AMBER,
         wash: AMBER_WASH,
@@ -333,9 +340,10 @@ export default function AgentDetailScreen() {
               style={styles.secondaryButton}
               onPress={openTalk}
             >
-              <Text style={styles.secondaryButtonText}>Review Approvals</Text>
+              <Text style={styles.secondaryButtonText}>Message Agent</Text>
             </RegentPressable>
           </View>
+          <HermesVoiceButton voice={agent.voice} onPress={openVoice} />
         </View>
 
         <View style={[styles.priorityCard, { backgroundColor: nextAction.wash }]}>
@@ -385,7 +393,7 @@ export default function AgentDetailScreen() {
               <Text style={styles.overviewLabel}>Status</Text>
               <Text style={styles.overviewValue}>{platformStatusCopy(agent.platformState.runtimeStatus)}</Text>
               <Text style={styles.overviewMeta}>
-                {agent.platformState.nextPauseAt ? `Next review ${formatDateShort(agent.platformState.nextPauseAt)}` : 'No pause scheduled'}
+                {agent.platformState.nextPauseAt ? `Next check ${formatDateShort(agent.platformState.nextPauseAt)}` : 'No pause scheduled'}
               </Text>
             </View>
             <View style={styles.overviewTile}>
@@ -534,6 +542,12 @@ export default function AgentDetailScreen() {
         message={alertState.message}
         type={alertState.type}
         onConfirm={() => setAlertState((current) => ({ ...current, visible: false }))}
+      />
+      <HermesVoiceSheet
+        agentId={agent.id}
+        agentName={agent.name}
+        visible={voiceSheetOpen}
+        onClose={() => setVoiceSheetOpen(false)}
       />
     </SafeAreaView>
   );

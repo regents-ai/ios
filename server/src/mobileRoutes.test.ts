@@ -19,6 +19,7 @@ import {
   resetMobileRegentStateForTests,
 } from './mobileRegents.js';
 import { createMobileRoutes } from './mobileRoutes.js';
+import { resetMobileVoiceSessionsForTests } from './mobileVoiceSessions.js';
 import {
   createTerminalSession,
   getTerminalEvents,
@@ -26,21 +27,58 @@ import {
   postTerminalMessage,
   resolveTerminalApproval,
 } from './mobileTerminal.js';
+import { registerPhoneXmtpIdentityForUser, resetMobileMessageStateForTests } from './mobileMessages.js';
 import {
   createPlatformStakingClient,
   type PlatformProjection,
   type PlatformRwrClient,
   type PlatformStakingClient,
 } from './platformProjection.js';
+import type { HermesVoiceClient } from './services/hermesVoiceClient.js';
 
 beforeEach(() => {
   resetMobileRegentStateForTests();
+  resetMobileMessageStateForTests();
+  resetMobileVoiceSessionsForTests();
 });
 
 function listRoutePaths() {
   const router = createMobileRoutes();
+  const paths: string[] = [];
 
-  return router.stack.map((layer) => layer.route?.path).filter((path): path is string => typeof path === 'string');
+  function collect(stack: Array<{ route?: { path?: unknown }; handle?: { stack?: unknown } }>) {
+    for (const layer of stack) {
+      if (typeof layer.route?.path === 'string') {
+        paths.push(layer.route.path);
+      }
+      if (Array.isArray(layer.handle?.stack)) {
+        collect(layer.handle.stack as Array<{ route?: { path?: unknown }; handle?: { stack?: unknown } }>);
+      }
+    }
+  }
+
+  collect(router.stack as Array<{ route?: { path?: unknown }; handle?: { stack?: unknown } }>);
+  return paths;
+}
+
+function voiceProjection(input?: { satisfied?: boolean; enabled?: boolean; health?: 'ok' | 'degraded' | 'unavailable' }) {
+  const satisfied = input?.satisfied ?? true;
+
+  return {
+    enabled: input?.enabled ?? satisfied,
+    health: input?.health ?? 'ok',
+    status_url: 'https://atlas.regents.sh/hermes/voice/status',
+    session_url: 'https://atlas.regents.sh/hermes/voice/session',
+    provider: 'openai-realtime' as const,
+    model: 'gpt-realtime-2',
+    tool_registry_digest: 'voice-tools-v1',
+    account: {
+      required: true as const,
+      satisfied,
+      provider: 'openai_chatgpt' as const,
+      connect_url: satisfied ? null : 'https://platform.regents.sh/app/agents/atlas-capital?connect=chatgpt',
+    },
+  };
 }
 
 const platformProjection: PlatformProjection = {
@@ -66,7 +104,7 @@ const platformProjection: PlatformProjection = {
         claimed_label: 'Atlas Capital',
         basename_fqdn: 'atlas.regents.sh',
         status: 'active',
-        wallet_address: '0x7aA4fB65E3A74F4797e95aA8ef1Fd54e9b3D0812',
+        wallet_address: '0x7AA4fb65E3a74F4797e95AA8EF1fD54e9b3d0812',
         runtime_status: 'ready',
         workspace_url: 'https://atlas.regents.sh',
         sprite_free_until: null,
@@ -82,6 +120,7 @@ const platformProjection: PlatformProjection = {
         hermes: {
           status: 'ready',
         },
+        voice: voiceProjection(),
       },
       formation: {
         status: 'ready',
@@ -120,6 +159,90 @@ function publicSlugProjection() {
       slug: 'atlas-public',
     })),
   } satisfies PlatformProjection;
+}
+
+function platformProjectionWithVoice(voice: ReturnType<typeof voiceProjection>) {
+  return {
+    ...platformProjection,
+    companies: platformProjection.companies.map((company) => ({
+      ...company,
+      runtime: {
+        ...company.runtime,
+        voice,
+      },
+    })),
+  } satisfies PlatformProjection;
+}
+
+function hermesVoiceClientForTests(input?: {
+  calls?: Array<{ method: string; input: unknown }>;
+  sessionId?: string;
+}): HermesVoiceClient {
+  const calls = input?.calls;
+
+  return {
+    async status(statusInput) {
+      calls?.push({ method: 'status', input: statusInput });
+      return {
+        kind: 'ok',
+        data: {
+          enabled: true,
+          health: 'ok',
+          agent_id: 'atlas-capital',
+          account: {
+            required: true,
+            satisfied: true,
+            provider: 'openai_chatgpt',
+            connect_url: null,
+          },
+          active_session_id: null,
+          active_turn_id: null,
+          queue_depth: 0,
+          last_event_id: null,
+        },
+      };
+    },
+    async createSession(sessionInput) {
+      calls?.push({ method: 'createSession', input: sessionInput });
+      const expiresAt = '2026-05-16T19:00:00.000Z';
+      return {
+        kind: 'ok',
+        data: {
+          session_id: input?.sessionId || 'hermes-session-1',
+          agent_id: 'atlas-capital',
+          expires_at: expiresAt,
+          realtime: {
+            provider: 'openai-realtime',
+            model: 'gpt-realtime-2',
+            client_secret: 'ephemeral-voice-secret',
+            client_secret_expires_at: expiresAt,
+            calls_url: 'https://api.openai.com/v1/realtime/calls',
+            realtime_session_id: 'realtime-session-1',
+          },
+          tools: [
+            {
+              name: 'hermes_turn',
+              owner: 'hermes',
+              description: 'Start hosted work.',
+              requires_approval: false,
+            },
+          ],
+        },
+      };
+    },
+    async prewarm(prewarmInput) {
+      calls?.push({ method: 'prewarm', input: prewarmInput });
+      return { kind: 'ok', data: { ok: true } };
+    },
+    async disconnect(disconnectInput) {
+      calls?.push({ method: 'disconnect', input: disconnectInput });
+      return { kind: 'ok', data: { ok: true } };
+    },
+    async submitToolResult(toolResultInput) {
+      calls?.push({ method: 'submitToolResult', input: toolResultInput });
+      return { kind: 'ok', data: { ok: true } };
+    },
+  };
 }
 
 async function requestMobileRoute(
@@ -216,6 +339,7 @@ async function requestMobileRoute(
 
 const expectedSigner = '0x1111111111111111111111111111111111111111';
 const expectedRecipient = '0x2222222222222222222222222222222222222222';
+const expectedRegentWallet = '0x7AA4fb65E3a74F4797e95AA8EF1fD54e9b3d0812';
 const expectedFundingToken = '0x3333333333333333333333333333333333333333';
 const expectedData = '0x';
 const stakingContract = '0x9999999999999999999999999999999999999999';
@@ -669,6 +793,198 @@ test('mobile Regent detail includes Platform-owned state', () => {
   assert.equal(body.platformState.formationStatus, 'ready');
   assert.equal(Array.isArray(body.platformState.blockers), true);
   assert.equal(Array.isArray(body.returnRequests), true);
+  assert.deepEqual(body.voice, {
+    enabled: true,
+    health: 'ok',
+    account: {
+      required: true,
+      satisfied: true,
+      provider: 'openai_chatgpt',
+      connect_url: null,
+    },
+  });
+});
+
+test('mobile Hermes voice routes mount through the live mobile router', () => {
+  const routePaths = listRoutePaths();
+
+  assert.ok(routePaths.includes('/mobile/agents/:agent_id/voice/status'));
+  assert.ok(routePaths.includes('/mobile/agents/:agent_id/voice/session'));
+  assert.ok(routePaths.includes('/mobile/agents/:agent_id/voice/prewarm'));
+  assert.ok(routePaths.includes('/mobile/agents/:agent_id/voice/disconnect'));
+  assert.ok(routePaths.includes('/mobile/agents/:agent_id/voice/tool-results'));
+});
+
+test('mobile Hermes voice status shows ChatGPT connection state without starting voice', async () => {
+  const calls: Array<{ method: string; input: unknown }> = [];
+  const response = await requestMobileRoute(
+    platformProjectionWithVoice(voiceProjection({ satisfied: false, enabled: false })),
+    {
+      method: 'GET',
+      url: '/mobile/agents/atlas-capital/voice/status',
+      headers: {
+        Authorization: 'Bearer mobile-token',
+      },
+    },
+    {
+      hermesVoiceClient: hermesVoiceClientForTests({ calls }),
+    },
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.enabled, false);
+  assert.equal(response.body.account.required, true);
+  assert.equal(response.body.account.satisfied, false);
+  assert.equal(response.body.account.provider, 'openai_chatgpt');
+  assert.match(response.body.account.connect_url, /connect=chatgpt/);
+  assert.deepEqual(calls, []);
+});
+
+test('mobile Hermes voice session requires connected ChatGPT account', async () => {
+  const calls: Array<{ method: string; input: unknown }> = [];
+  const response = await requestMobileRoute(
+    platformProjectionWithVoice(voiceProjection({ satisfied: false, enabled: false })),
+    {
+      method: 'POST',
+      url: '/mobile/agents/atlas-capital/voice/session',
+      headers: {
+        Authorization: 'Bearer mobile-token',
+      },
+      body: {
+        device_capabilities: ['ios_status'],
+        preferred_transport: 'webrtc',
+      },
+    },
+    {
+      hermesVoiceClient: hermesVoiceClientForTests({ calls }),
+    },
+  );
+
+  assert.equal(response.status, 403);
+  assert.equal(response.body.error.code, 'ChatGptAccountRequired');
+  assert.deepEqual(calls, []);
+});
+
+test('mobile Hermes voice session requires signed-in mobile auth', async () => {
+  const response = await requestMobileRoute(
+    platformProjection,
+    {
+      method: 'POST',
+      url: '/mobile/agents/atlas-capital/voice/session',
+      body: {
+        device_capabilities: ['ios_status'],
+        preferred_transport: 'webrtc',
+      },
+    },
+    {
+      platformProjectionClient: {
+        async fetchProjection(input) {
+          assert.equal(input.authorization, undefined);
+          return { kind: 'unauthorized' as const };
+        },
+      },
+    },
+  );
+
+  assert.equal(response.status, 401);
+  assert.equal(response.body.error.code, 'Unauthorized');
+});
+
+test('mobile Hermes voice session rejects agents outside the signed-in projection', async () => {
+  const response = await requestMobileRoute(
+    platformProjection,
+    {
+      method: 'POST',
+      url: '/mobile/agents/other-agent/voice/session',
+      headers: {
+        Authorization: 'Bearer mobile-token',
+      },
+      body: {
+        device_capabilities: ['ios_status'],
+        preferred_transport: 'webrtc',
+      },
+    },
+  );
+
+  assert.equal(response.status, 403);
+  assert.equal(response.body.error.code, 'Forbidden');
+});
+
+test('mobile Hermes voice session returns only short-lived voice credentials after account gate', async () => {
+  const calls: Array<{ method: string; input: unknown }> = [];
+  const response = await requestMobileRoute(
+    platformProjection,
+    {
+      method: 'POST',
+      url: '/mobile/agents/atlas-capital/voice/session',
+      headers: {
+        Authorization: 'Bearer mobile-token',
+      },
+      body: {
+        voice: 'marin',
+        locale: 'en-US',
+        timezone: 'America/New_York',
+        reasoning_effort: 'low',
+        device_capabilities: ['ios_status', 'ios_approval_request'],
+        preferred_transport: 'webrtc',
+      },
+    },
+    {
+      hermesVoiceClient: hermesVoiceClientForTests({ calls }),
+    },
+  );
+
+  assert.equal(response.status, 201);
+  assert.notEqual(response.body.session_id, 'hermes-session-1');
+  assert.equal(response.body.agent_id, 'atlas-capital');
+  assert.equal(response.body.account.satisfied, true);
+  assert.equal(response.body.realtime.provider, 'openai-realtime');
+  assert.equal(response.body.realtime.client_secret, 'ephemeral-voice-secret');
+  assert.doesNotMatch(JSON.stringify(response.body), /OPENAI_API_KEY|sk-[A-Za-z0-9]/);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0]?.method, 'createSession');
+  assert.match(JSON.stringify(calls[0]?.input), /OpenAI-Safety-Identifier|safetyIdentifier/);
+});
+
+test('mobile Hermes voice disconnect closes the hosted session recorded for the phone session', async () => {
+  const calls: Array<{ method: string; input: unknown }> = [];
+  const hermesVoiceClient = hermesVoiceClientForTests({ calls, sessionId: 'hermes-session-close-me' });
+  const session = await requestMobileRoute(
+    platformProjection,
+    {
+      method: 'POST',
+      url: '/mobile/agents/atlas-capital/voice/session',
+      headers: {
+        Authorization: 'Bearer mobile-token',
+      },
+      body: {
+        device_capabilities: ['ios_status'],
+        preferred_transport: 'webrtc',
+      },
+    },
+    { hermesVoiceClient },
+  );
+
+  assert.equal(session.status, 201);
+
+  const disconnect = await requestMobileRoute(
+    platformProjection,
+    {
+      method: 'POST',
+      url: '/mobile/agents/atlas-capital/voice/disconnect',
+      headers: {
+        Authorization: 'Bearer mobile-token',
+      },
+      body: {
+        session_id: session.body.session_id,
+      },
+    },
+    { hermesVoiceClient },
+  );
+
+  assert.equal(disconnect.status, 200);
+  const disconnectCall = calls.find((call) => call.method === 'disconnect');
+  assert.match(JSON.stringify(disconnectCall?.input), /hermes-session-close-me/);
 });
 
 test('mobile Platform projection forwards bearer auth without cookies', async () => {
@@ -908,13 +1224,13 @@ test('mobile money routes accept the listed Regent ID when Platform slugs differ
       amount: '25',
       currency: 'USDC',
       sourceWalletAddress: expectedSigner,
-      destinationWalletAddress: expectedRecipient,
+      destinationWalletAddress: expectedRegentWallet,
       chainId: 8453,
       tokenAddress: expectedFundingToken,
       expectedSigner,
       to: expectedFundingToken,
       value: '0',
-      data: fundingTransferData(),
+      data: fundingTransferData({ recipient: expectedRegentWallet }),
     },
   });
   assert.equal(fundingResponse.status, 201);
@@ -948,13 +1264,13 @@ test('funding intents reject transfer details for a different recipient or amoun
     amount: '25',
     currency: 'USDC',
     sourceWalletAddress: expectedSigner,
-    destinationWalletAddress: expectedRecipient,
+    destinationWalletAddress: expectedRegentWallet,
     chainId: 8453,
     tokenAddress: expectedFundingToken,
     expectedSigner,
     to: expectedFundingToken,
     value: '0',
-    data: fundingTransferData(),
+    data: fundingTransferData({ recipient: expectedRegentWallet }),
   };
 
   const wrongRecipient = await requestMobileRoute(projection, {
@@ -984,6 +1300,22 @@ test('funding intents reject transfer details for a different recipient or amoun
     },
   });
   assert.equal(wrongAmount.status, 400);
+
+  const wrongRegentWallet = await requestMobileRoute(projection, {
+    method: 'POST',
+    url: '/mobile/regents/atlas-public/funding-intents',
+    headers: {
+      'Content-Type': 'application/json',
+      'Idempotency-Key': 'wrong-regent-wallet',
+    },
+    body: {
+      ...baseBody,
+      destinationWalletAddress: expectedRecipient,
+      data: fundingTransferData({ recipient: expectedRecipient }),
+    },
+  });
+  assert.equal(wrongRegentWallet.status, 400);
+  assert.equal(wrongRegentWallet.body.error.message, 'Funding destination must match this Regent wallet.');
 });
 
 test('return requests require the displayed destination to match the transaction target', async () => {
@@ -1006,6 +1338,12 @@ test('return requests require the displayed destination to match the transaction
 test('mobile terminal and money routes remain mounted through the extracted router', async () => {
   const routePaths = listRoutePaths();
   assert.ok(routePaths.includes('/mobile/terminal/sessions'));
+  assert.ok(routePaths.includes('/mobile/message/threads'));
+  assert.ok(routePaths.includes('/mobile/message/contacts/recent-addresses'));
+  assert.ok(routePaths.includes('/mobile/message/contacts/regent-users'));
+  assert.ok(routePaths.includes('/mobile/message/xmtp/phone-identities'));
+  assert.ok(routePaths.includes('/mobile/message/xmtp/agents/:agent_id'));
+  assert.ok(routePaths.includes('/mobile/message/threads/:thread_id/xmtp-links'));
   assert.ok(routePaths.includes('/mobile/regents/:id/base-snapshot'));
   assert.ok(routePaths.includes('/mobile/regents/:id/funding-intents'));
   assert.ok(routePaths.includes('/mobile/regents/:id/funding-intents/:funding_intent_id'));
@@ -1024,6 +1362,125 @@ test('mobile terminal and money routes remain mounted through the extracted rout
   if (sessions.kind === 'ok') {
     assert.ok(sessions.data.length > 0);
   }
+});
+
+test('mobile Message XMTP routes mount without an XMTP network dependency', async () => {
+  const recentContacts = await requestMobileRoute(platformProjection, {
+    method: 'GET',
+    url: '/mobile/message/contacts/recent-addresses?addressOrName=atlas.eth',
+  }, {
+    messageContactClient: {
+      async lookupRecentEnsContacts(addressOrName) {
+        return {
+          kind: 'ok' as const,
+          target: {
+            input: addressOrName,
+            address: expectedSigner,
+            ensName: 'atlas.eth',
+          },
+          contacts: [{
+            id: 'recent:vitalik.eth:0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045',
+            kind: 'recent_ens' as const,
+            label: 'vitalik.eth',
+            address: '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045',
+            ensName: 'vitalik.eth',
+            detail: 'Recent contact',
+          }],
+        };
+      },
+    },
+  });
+  assert.equal(recentContacts.status, 200);
+  assert.equal(recentContacts.body.target.ensName, 'atlas.eth');
+  assert.equal(recentContacts.body.contacts[0].kind, 'recent_ens');
+  assert.equal(recentContacts.body.contacts[0].label, 'vitalik.eth');
+
+  const threads = await requestMobileRoute(platformProjection, {
+    method: 'GET',
+    url: '/mobile/message/threads',
+  }, { platformRwrClient });
+  assert.equal(threads.status, 200);
+  assert.equal(threads.body.threads[0].id, '101~201');
+  assert.equal(threads.body.threads[0].source, 'platform_rwr');
+  assert.deepEqual(threads.body.threads[0].xmtpLinks, []);
+
+  const identity = await requestMobileRoute(platformProjection, {
+    method: 'POST',
+    url: '/mobile/message/xmtp/phone-identities',
+    body: {
+      inboxId: 'xmtp-inbox-1',
+      installationId: 'phone-installation-1',
+      walletAddress: expectedSigner,
+      environment: 'dev',
+    },
+  });
+  assert.equal(identity.status, 200);
+  assert.equal(identity.body.identity.inboxId, 'xmtp-inbox-1');
+  assert.equal(identity.body.identity.installationId, 'phone-installation-1');
+  assert.equal(identity.body.identity.walletAddress, expectedSigner);
+  assert.equal(identity.body.identity.environment, 'dev');
+  assert.match(identity.body.identity.registeredAt, /^\d{4}-\d{2}-\d{2}T/);
+
+  registerPhoneXmtpIdentityForUser('another-user', {
+    inboxId: 'xmtp-inbox-2',
+    installationId: 'phone-installation-2',
+    walletAddress: '0x4444444444444444444444444444444444444444',
+    environment: 'dev',
+  });
+
+  const regentUsers = await requestMobileRoute(platformProjection, {
+    method: 'GET',
+    url: '/mobile/message/contacts/regent-users',
+  });
+  assert.equal(regentUsers.status, 200);
+  assert.deepEqual(regentUsers.body.contacts.map((contact: { kind: string; label: string; address: string }) => ({
+    kind: contact.kind,
+    label: contact.label,
+    address: contact.address,
+  })), [
+      {
+        kind: 'regent_agent',
+        label: 'Atlas Capital',
+        address: expectedRegentWallet,
+      },
+    {
+      kind: 'regent_human',
+      label: 'You',
+      address: expectedSigner,
+    },
+    {
+      kind: 'regent_human',
+      label: 'Regent user',
+      address: '0x4444444444444444444444444444444444444444',
+    },
+  ]);
+
+  const linked = await requestMobileRoute(platformProjection, {
+    method: 'POST',
+    url: '/mobile/message/threads/101~202~301/xmtp-links',
+    body: {
+      conversationId: 'xmtp-conversation-1',
+      conversationKind: 'group',
+      environment: 'dev',
+    },
+  }, { platformRwrClient });
+  assert.equal(linked.status, 200);
+  assert.equal(linked.body.thread.id, '101~202~301');
+  assert.equal(linked.body.thread.platformThreadId, '101~202~301');
+  assert.equal(linked.body.thread.agentId, 'atlas-capital');
+  assert.equal(linked.body.thread.agentName, 'Atlas Capital');
+  assert.equal(linked.body.thread.source, 'platform_rwr');
+  assert.deepEqual(linked.body.thread.xmtpLinks.map((link: { conversationId: string; conversationKind: string; environment: string }) => ({
+    conversationId: link.conversationId,
+    conversationKind: link.conversationKind,
+    environment: link.environment,
+  })), [
+    {
+      conversationId: 'xmtp-conversation-1',
+      conversationKind: 'group',
+      environment: 'dev',
+    },
+  ]);
 });
 
 test('mobile Regent wallet intent state is written to durable backend storage', () => {
