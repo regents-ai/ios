@@ -23,6 +23,7 @@ import { FONTS } from '@/constants/Typography';
 import { fetchWalletFundingChoices } from '@/utils/fetchWalletFundingChoices';
 import { buildEvmTransferCall, isNativeEvmToken } from '@/utils/onchain/buildTransferCall';
 import { parseSolanaAmountToBaseUnits } from '@/utils/onchain/solanaAmount';
+import { getTokenBalance, getUsdEstimate } from '@/utils/onchain/tokenDisplay';
 import { regentApi } from '@/utils/regentApi/client';
 import { routes } from '@/utils/navigation/routes';
 import type { WalletFundingChoice } from '@/types/walletFunding';
@@ -32,6 +33,7 @@ import { PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
 import { createTransferInstruction, getAssociatedTokenAddress, createAssociatedTokenAccountInstruction, getAccount } from '@solana/spl-token';
 import { scanFromURLAsync } from 'expo-camera';
 import * as Clipboard from 'expo-clipboard';
+import * as Crypto from 'expo-crypto';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, usePathname, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
@@ -98,30 +100,6 @@ function getNetworkLabel(network: string) {
   if (networkLower.includes('solana')) return 'Solana';
 
   return network.charAt(0).toUpperCase() + network.slice(1);
-}
-
-function getTokenBalance(selectedToken: any) {
-  if (!selectedToken?.amount) return '0';
-
-  const rawAmount = parseFloat(selectedToken.amount.amount || '0');
-  const decimals = parseInt(selectedToken.amount.decimals || '0', 10);
-  const actualBalance = rawAmount / Math.pow(10, decimals);
-
-  return actualBalance.toLocaleString(undefined, {
-    maximumFractionDigits: actualBalance >= 1 ? 4 : 6,
-  });
-}
-
-function getUsdEstimate(selectedToken: any, amount: string) {
-  if (!selectedToken?.usdValue || !selectedToken?.amount || !amount) return null;
-
-  const tokenBalance = parseFloat(selectedToken.amount.amount || '0') / Math.pow(10, parseInt(selectedToken.amount.decimals || '0', 10));
-  const pricePerToken = tokenBalance > 0 ? selectedToken.usdValue / tokenBalance : 0;
-  const estimate = parseFloat(amount) * pricePerToken;
-
-  if (!Number.isFinite(estimate)) return null;
-
-  return estimate.toFixed(2);
 }
 
 function formatAddressPreview(address?: string | null) {
@@ -254,7 +232,7 @@ function buildFundingIdempotencyKey(input: {
     fundingIdempotencySegment(input.recipientAddress),
     fundingIdempotencySegment(input.tokenAddress),
     fundingIdempotencySegment(input.amount),
-    Date.now().toString(36),
+    Crypto.randomUUID(),
   ].join(':');
 }
 
@@ -792,22 +770,12 @@ export default function TransferScreen() {
         pendingFundingActionRef.current = { actionId: preparedAction.action_id };
       }
 
-      if (isNativeTransfer) {
-        await sendUserOperation({
-          evmSmartAccount: smartAccountAddress as `0x${string}`,
-          network: network as any,
-          calls: [call],
-          useCdpPaymaster: isPaymasterSupported,
-        });
-      } else {
-        await sendUserOperation({
-          evmSmartAccount: smartAccountAddress as `0x${string}`,
-          network: network as any,
-          calls: [call],
-          useCdpPaymaster: isPaymasterSupported
-        });
-      }
-
+      await sendUserOperation({
+        evmSmartAccount: smartAccountAddress as `0x${string}`,
+        network: network as any,
+        calls: [call],
+        useCdpPaymaster: isPaymasterSupported,
+      });
     } catch (error) {
       console.error('EVM transfer error:', error);
       throw error;
@@ -991,6 +959,7 @@ export default function TransferScreen() {
 
   const networkDisplayName = getNetworkLabel(network);
   const tokenBalance = getTokenBalance(selectedToken);
+  const tokenBalanceUnavailable = tokenBalance === null;
   const usdEstimate = getUsdEstimate(selectedToken, amount);
   const fundingTarget = recipientLabel || 'this agent';
   const payTitle = isDefaultSendFlow ? 'Pay' : 'Send';
@@ -1214,11 +1183,13 @@ export default function TransferScreen() {
               </RegentPressable>
             </View>
 
-            <LiveValueFlash value={`available-${tokenBalance}-${selectedToken?.token?.symbol || ''}`} style={styles.availableFlash}>
-              <Text style={styles.helper}>
+            <LiveValueFlash value={`available-${tokenBalance ?? 'unavailable'}-${selectedToken?.token?.symbol || ''}`} style={styles.availableFlash}>
+              <Text style={[styles.helper, tokenBalanceUnavailable && styles.errorText]}>
                 {loadingFundingBalance
                   ? 'Checking Base USDC...'
-                  : `Available: ${tokenBalance} ${selectedToken?.token?.symbol || ''}`}
+                  : tokenBalanceUnavailable
+                    ? 'We could not read this balance. Close this screen and try again.'
+                    : `Available: ${tokenBalance} ${selectedToken?.token?.symbol || ''}`}
               </Text>
             </LiveValueFlash>
 
@@ -1317,9 +1288,9 @@ export default function TransferScreen() {
             </View>
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Available</Text>
-              <LiveValueFlash value={`from-wallet-available-${tokenBalance}-${selectedToken?.token?.symbol || ''}`} style={styles.detailValueFlash}>
+              <LiveValueFlash value={`from-wallet-available-${tokenBalance ?? 'unavailable'}-${selectedToken?.token?.symbol || ''}`} style={styles.detailValueFlash}>
                 <Text style={styles.detailValue}>
-                  {tokenBalance} {selectedToken?.token?.symbol || ''}
+                  {tokenBalance ?? 'Unavailable'} {selectedToken?.token?.symbol || ''}
                 </Text>
               </LiveValueFlash>
             </View>

@@ -156,6 +156,7 @@ function zeroAddress(value: string) {
 function fundingTransferMatchesIntent(input: {
   amount: string;
   destinationWalletAddress: string;
+  tokenDecimals: number;
   value: string;
   data: string;
 }) {
@@ -170,7 +171,7 @@ function fundingTransferMatchesIntent(input: {
     return (
       decoded.functionName === 'transfer' &&
       sameAddress(recipient, input.destinationWalletAddress) &&
-      amount === parseUnits(input.amount, 6) &&
+      amount === parseUnits(input.amount, input.tokenDecimals) &&
       input.value === '0'
     );
   } catch {
@@ -436,6 +437,7 @@ export function createMobileRoutes(input?: {
         destinationWalletAddress: evmAddressSchema,
         chainId: z.literal(8453),
         tokenAddress: evmAddressSchema,
+        tokenDecimals: z.number().int().min(0).max(255),
         expectedSigner: evmAddressSchema,
         to: evmAddressSchema,
         value: decimalValueSchema,

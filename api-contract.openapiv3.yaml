@@ -1943,6 +1943,7 @@ components:
         - destinationWalletAddress
         - chainId
         - tokenAddress
+        - tokenDecimals
         - expectedSigner
         - to
         - value
@@ -1965,6 +1966,11 @@ components:
         tokenAddress:
           type: string
           pattern: '^0x[a-fA-F0-9]{40}$'
+        tokenDecimals:
+          type: integer
+          description: Decimals of the token being transferred. The displayed amount is checked against the transfer calldata using these decimals.
+          minimum: 0
+          maximum: 255
         expectedSigner:
           type: string
           pattern: '^0x[a-fA-F0-9]{40}$'

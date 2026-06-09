@@ -277,6 +277,7 @@ export const regentApi = {
     destinationWalletAddress: string;
     chainId: number;
     tokenAddress: string;
+    tokenDecimals: number;
     expectedSigner: string;
     to: string;
     value: string;
@@ -298,6 +299,7 @@ export const regentApi = {
           destinationWalletAddress: input.destinationWalletAddress,
           chainId: input.chainId,
           tokenAddress: input.tokenAddress,
+          tokenDecimals: input.tokenDecimals,
           expectedSigner: input.expectedSigner,
           to: input.to,
           value: input.value,

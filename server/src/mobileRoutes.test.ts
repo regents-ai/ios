@@ -356,11 +356,11 @@ const erc20TransferAbi = [
   },
 ] as const;
 
-function fundingTransferData(input?: { recipient?: `0x${string}`; amount?: string }) {
+function fundingTransferData(input?: { recipient?: `0x${string}`; amount?: string; decimals?: number }) {
   return encodeFunctionData({
     abi: erc20TransferAbi,
     functionName: 'transfer',
-    args: [input?.recipient ?? expectedRecipient, parseUnits(input?.amount ?? '25', 6)],
+    args: [input?.recipient ?? expectedRecipient, parseUnits(input?.amount ?? '25', input?.decimals ?? 6)],
   });
 }
 
@@ -1227,6 +1227,7 @@ test('mobile money routes accept the listed Regent ID when Platform slugs differ
       destinationWalletAddress: expectedRegentWallet,
       chainId: 8453,
       tokenAddress: expectedFundingToken,
+      tokenDecimals: 6,
       expectedSigner,
       to: expectedFundingToken,
       value: '0',
@@ -1267,6 +1268,7 @@ test('funding intents reject transfer details for a different recipient or amoun
     destinationWalletAddress: expectedRegentWallet,
     chainId: 8453,
     tokenAddress: expectedFundingToken,
+    tokenDecimals: 6,
     expectedSigner,
     to: expectedFundingToken,
     value: '0',
@@ -1316,6 +1318,61 @@ test('funding intents reject transfer details for a different recipient or amoun
   });
   assert.equal(wrongRegentWallet.status, 400);
   assert.equal(wrongRegentWallet.body.error.message, 'Funding destination must match this Regent wallet.');
+});
+
+test('funding intents check transfer amounts using the supplied token decimals', async () => {
+  const projection = publicSlugProjection();
+  const baseBody = {
+    amount: '25',
+    currency: 'DAI',
+    sourceWalletAddress: expectedSigner,
+    destinationWalletAddress: expectedRegentWallet,
+    chainId: 8453,
+    tokenAddress: expectedFundingToken,
+    tokenDecimals: 18,
+    expectedSigner,
+    to: expectedFundingToken,
+    value: '0',
+    data: fundingTransferData({ recipient: expectedRegentWallet, decimals: 18 }),
+  };
+
+  const accepted = await requestMobileRoute(projection, {
+    method: 'POST',
+    url: '/mobile/regents/atlas-public/funding-intents',
+    headers: {
+      'Content-Type': 'application/json',
+      'Idempotency-Key': 'eighteen-decimals',
+    },
+    body: baseBody,
+  });
+  assert.equal(accepted.status, 201);
+  assert.equal(accepted.body.fundingIntent.amount, '25');
+
+  const sixDecimalData = await requestMobileRoute(projection, {
+    method: 'POST',
+    url: '/mobile/regents/atlas-public/funding-intents',
+    headers: {
+      'Content-Type': 'application/json',
+      'Idempotency-Key': 'eighteen-decimals-mismatch',
+    },
+    body: {
+      ...baseBody,
+      data: fundingTransferData({ recipient: expectedRegentWallet, decimals: 6 }),
+    },
+  });
+  assert.equal(sixDecimalData.status, 400);
+
+  const { tokenDecimals: _omitted, ...bodyWithoutDecimals } = baseBody;
+  const missingDecimals = await requestMobileRoute(projection, {
+    method: 'POST',
+    url: '/mobile/regents/atlas-public/funding-intents',
+    headers: {
+      'Content-Type': 'application/json',
+      'Idempotency-Key': 'missing-decimals',
+    },
+    body: bodyWithoutDecimals,
+  });
+  assert.equal(missingDecimals.status, 400);
 });
 
 test('return requests require the displayed destination to match the transaction target', async () => {

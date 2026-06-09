@@ -15,6 +15,13 @@ test('Solana amount builder rejects tiny fractions that cannot be represented', 
   assert.throws(() => parseSolanaAmountToBaseUnits('0.0000001', 6), /no more than 6 decimal places/);
 });
 
+test('Solana amount builder rejects NaN and invalid decimals before conversion', () => {
+  assert.throws(() => parseSolanaAmountToBaseUnits('1', NaN), /cannot be sent/);
+  assert.throws(() => parseSolanaAmountToBaseUnits('1', 4.5), /cannot be sent/);
+  assert.throws(() => parseSolanaAmountToBaseUnits('1', -1), /cannot be sent/);
+  assert.throws(() => parseSolanaAmountToBaseUnits('1', 19), /cannot be sent/);
+});
+
 test('Solana amount builder rejects invalid and oversized sends', () => {
   assert.throws(() => parseSolanaAmountToBaseUnits('0', 9), /greater than zero/);
   assert.throws(() => parseSolanaAmountToBaseUnits('-1', 9), /valid amount/);
