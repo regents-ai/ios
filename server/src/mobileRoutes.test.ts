@@ -1259,6 +1259,53 @@ test('mobile money routes accept the listed Regent ID when Platform slugs differ
   assert.equal(walletActionResponse.body.wallet_action.resource_id, 'atlas-public');
 });
 
+test('wallet action prepare caps and sanitizes risk copy', async () => {
+  const projection = publicSlugProjection();
+  const baseBody = {
+    regentId: 'atlas-public',
+    expectedSigner,
+    to: expectedRecipient,
+    value: '0',
+    data: expectedData,
+    amount: '25',
+    currency: 'USDC',
+  };
+
+  const tooLong = await requestMobileRoute(projection, {
+    method: 'POST',
+    url: '/mobile/wallet-actions/funding/prepare',
+    headers: {
+      'Content-Type': 'application/json',
+      'Idempotency-Key': 'risk-copy-too-long',
+    },
+    body: { ...baseBody, riskCopy: 'a'.repeat(201) },
+  });
+  assert.equal(tooLong.status, 400);
+
+  const markupOnly = await requestMobileRoute(projection, {
+    method: 'POST',
+    url: '/mobile/wallet-actions/funding/prepare',
+    headers: {
+      'Content-Type': 'application/json',
+      'Idempotency-Key': 'risk-copy-markup-only',
+    },
+    body: { ...baseBody, riskCopy: '<script></script> ' },
+  });
+  assert.equal(markupOnly.status, 400);
+
+  const sanitized = await requestMobileRoute(projection, {
+    method: 'POST',
+    url: '/mobile/wallet-actions/funding/prepare',
+    headers: {
+      'Content-Type': 'application/json',
+      'Idempotency-Key': 'risk-copy-sanitized',
+    },
+    body: { ...baseBody, riskCopy: '<b>You are sending</b> 25\u0000 USDC\r\nto Atlas.' },
+  });
+  assert.equal(sanitized.status, 201);
+  assert.equal(sanitized.body.wallet_action.risk_copy, 'You are sending 25 USDC to Atlas.');
+});
+
 test('funding intents reject transfer details for a different recipient or amount', async () => {
   const projection = publicSlugProjection();
   const baseBody = {

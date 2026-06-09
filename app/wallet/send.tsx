@@ -274,6 +274,12 @@ export default function TransferScreen() {
   const [reduceMotion, setReduceMotion] = useState(false);
   const quickAmountTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingFundingActionRef = useRef<{ actionId: string; txHash?: string } | null>(null);
+  // Synchronous guard so a double-tap on Review cannot re-enter handleSend
+  // while async ENS recipient resolution is still in flight.
+  const reviewSubmitInFlightRef = useRef(false);
+  // Tracks the last user-operation status transition we alerted on, so the
+  // status effect fires each alert exactly once per transition.
+  const lastHandledUserOpRef = useRef<string | null>(null);
 
   const { sendSolanaTransaction } = useSendSolanaTransaction();
   const { sendUserOperation, status: userOpStatus, data: userOpData, error: userOpError } = useSendUserOperation();
@@ -340,6 +346,15 @@ export default function TransferScreen() {
   }, []);
 
   useEffect(() => {
+    // Only react to actual status transitions. The deps below include values
+    // used for alert copy (amount, recipient, ...) that change independently;
+    // without this guard the same alert would re-fire on unrelated updates.
+    const transitionKey = `${userOpStatus}:${userOpData?.userOpHash ?? ''}`;
+    if (lastHandledUserOpRef.current === transitionKey) {
+      return;
+    }
+    lastHandledUserOpRef.current = transitionKey;
+
     if (userOpStatus === 'pending' && userOpData?.userOpHash) {
       showAlert(
         isAgentFundingFlow || isDefaultSendFlow ? 'Sending payment' : 'Sending funds',
@@ -492,7 +507,9 @@ export default function TransferScreen() {
     return () => {
       active = false;
     };
-  }, [isAgentFundingFlow, isDefaultSendFlow, params.token, smartAccountAddress]);
+    // `network` is a dependency so the cleanup above discards in-flight
+    // responses when the network switches, preventing stale balances.
+  }, [isAgentFundingFlow, isDefaultSendFlow, network, params.token, smartAccountAddress]);
 
   // Validate address format
   const validateAddress = (address: string) => {
@@ -686,27 +703,37 @@ export default function TransferScreen() {
   };
 
   const handleSend = async () => {
-    const recipientReady = await resolveRecipientInput();
-    if (!recipientReady.ok) {
-      showAlert('Check recipient', recipientReady.error || addressError || 'Add the wallet or ENS name you want to use.', 'error');
+    if (reviewSubmitInFlightRef.current || resolvingRecipient) {
       return;
     }
 
-    if (!amount || parseFloat(amount) <= 0) {
-      showAlert('Enter an amount', 'Choose an amount greater than zero.', 'error');
-      return;
-    }
+    reviewSubmitInFlightRef.current = true;
+    try {
+      const recipientReady = await resolveRecipientInput();
+      if (!recipientReady.ok) {
+        showAlert('Check recipient', recipientReady.error || addressError || 'Add the wallet or ENS name you want to use.', 'error');
+        return;
+      }
 
-    if (!selectedToken) {
-      showAlert('Add USDC first', 'Add Base USDC, then come back to send it.', 'error');
-      return;
-    }
+      if (!amount || parseFloat(amount) <= 0) {
+        showAlert('Enter an amount', 'Choose an amount greater than zero.', 'error');
+        return;
+      }
 
-    setShowConfirmation(true);
+      if (!selectedToken) {
+        showAlert('Add USDC first', 'Add Base USDC, then come back to send it.', 'error');
+        return;
+      }
+
+      setShowConfirmation(true);
+    } finally {
+      reviewSubmitInFlightRef.current = false;
+    }
   };
 
   const handleConfirmedSend = async () => {
     setShowConfirmation(false);
+    lastHandledUserOpRef.current = null;
     setSending(true);
     try {
       if (isSolanaNetwork(network)) {

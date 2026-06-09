@@ -657,7 +657,20 @@ export function createMobileRoutes(input?: {
         regentId: z.string().min(1),
         amount: z.string().optional(),
         currency: z.string().optional(),
-        riskCopy: z.string().min(1),
+        riskCopy: z
+          .string()
+          .min(1)
+          .max(200)
+          .transform((value) =>
+            value
+              // Strip markup tags and control characters before the copy is
+              // stored and echoed into audit logs.
+              .replace(/<[^>]*>/g, ' ')
+              .replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ')
+              .replace(/\s+/g, ' ')
+              .trim(),
+          )
+          .refine((value) => value.length > 0),
       })
       .merge(expectedBaseTransactionSchema.omit({ chainId: true }));
     const parsedParams = paramsSchema.safeParse(req.params);
