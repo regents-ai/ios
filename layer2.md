@@ -11,7 +11,7 @@ Regents Mobile is the iPhone entry path for Regent. It owns the iOS app, the mob
 - Repo: `ios`
 - Product name: Regents Mobile
 - Runtime shape: Expo iOS app plus a repo-local Express backend
-- Main contracts: `api-contract.openapiv3.yaml` and `regent-services-contract.openapiv3.yaml`
+- Main contracts: `api-contract.openapiv3.yaml` and `mobile-services-contract.openapiv3.yaml`
 
 ## Owned Surface
 
@@ -25,7 +25,7 @@ Regents Mobile is the iPhone entry path for Regent. It owns the iOS app, the mob
 ## Source-Of-Truth Files
 
 - `/Users/sean/Documents/regent/ios/api-contract.openapiv3.yaml`
-- `/Users/sean/Documents/regent/ios/regent-services-contract.openapiv3.yaml`
+- `/Users/sean/Documents/regent/ios/mobile-services-contract.openapiv3.yaml`
 - `/Users/sean/Documents/regent/ios/README.md`
 - `/Users/sean/Documents/regent/ios/IMPLEMENTATION_PLAN.md`
 
@@ -81,7 +81,7 @@ Regents Mobile is the iPhone entry path for Regent. It owns the iOS app, the mob
 - This repo does not own live Regent agent, Regent Manager, or Talk business logic. The current mobile routes read the owning product records and keep mobile wallet intent and receipt state here.
 - Mobile Talk uses Platform Regent Work Runtime records through mobile routes. It does not create or own XMTP room ids today.
 - `api-contract.openapiv3.yaml` is the current formal mobile product contract and covers the mobile Regent routes that the app exposes today
-- `regent-services-contract.openapiv3.yaml` is empty on purpose for Phase 0 because this repo does not yet ship any shared mobile service routes
+- `mobile-services-contract.openapiv3.yaml` is empty on purpose for Phase 0 because this repo does not yet ship any shared mobile service routes
 - `vendor/happy-app/` is donor material for future mobile ideas. It is not the current product surface or source of truth
 
 ## Acceptance Checks
