@@ -11,6 +11,7 @@ import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
 import { clearWalletInitFailureMessage, getWalletInitFailureMessage } from '@/utils/authStartupState';
 import { isAuthManagedRoute, resolveAuthGateState } from '@/utils/authFlowState';
+import { useChatGptAuth } from '@/hooks/useChatGptAuth';
 import { useRegentsAuth } from '@/hooks/useRegentsAuth';
 import { getEaseAnimate, getEaseInitialAnimate, getEaseTransition } from '@/components/motion/easePresets';
 import { useReducedMotion } from '@/components/motion/useReducedMotion';
@@ -29,6 +30,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const reducedMotionEnabled = useReducedMotion();
   const { isInitialized } = useIsInitialized();
   const { error: authError, isAuthenticated: isPrivyAuthenticated, isReady: isPrivyReady, signOut: signOutIdentity } = useRegentsAuth();
+  const { isReady: isChatGptReady, session: chatGptSession, signOut: signOutChatGpt } = useChatGptAuth();
   const { signOut: signOutWallet } = useSignOut();
   const segments = useSegments();
   const navigationState = useRootNavigationState();
@@ -36,12 +38,12 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
   const [startupTimeoutReached, setStartupTimeoutReached] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
-  const isAuthenticated = isPrivyAuthenticated;
-  const requiresWalletInitialization = isPrivyAuthenticated;
+  const isAuthenticated = !!chatGptSession && isPrivyAuthenticated;
+  const requiresWalletInitialization = !!chatGptSession && isPrivyAuthenticated;
   const walletReady = !requiresWalletInitialization || isInitialized;
   const gateState = resolveAuthGateState({
     isReady,
-    isPrivyReady,
+    isPrivyReady: isPrivyReady && isChatGptReady,
     walletReady,
     hasCheckedAuth,
     isAuthenticated,
@@ -53,6 +55,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const handleWalletRecovery = useCallback(async () => {
     try {
       clearWalletInitFailureMessage();
+      await signOutChatGpt();
       await signOutIdentity();
       await signOutWallet();
     } catch (error) {
@@ -67,7 +70,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       setRetryKey(prev => prev + 1);
       router.replace('/auth/login');
     }
-  }, [signOutIdentity, signOutWallet]);
+  }, [signOutChatGpt, signOutIdentity, signOutWallet]);
 
   useEffect(() => {
     if (navigationState?.key) {
@@ -76,16 +79,16 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   }, [navigationState?.key]);
 
   useEffect(() => {
-    if (isPrivyReady && walletReady) {
+    if (isPrivyReady && isChatGptReady && walletReady) {
       const timer = setTimeout(() => {
         setHasCheckedAuth(true);
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [isPrivyReady, walletReady]);
+  }, [isChatGptReady, isPrivyReady, walletReady]);
 
   useEffect(() => {
-    if (isAuthenticated || isPrivyReady) {
+    if (isAuthenticated || (isPrivyReady && isChatGptReady)) {
       setStartupTimeoutReached(false);
       return;
     }
@@ -95,14 +98,14 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     }, 4000);
 
     return () => clearTimeout(timer);
-  }, [isAuthenticated, isPrivyReady, retryKey]);
+  }, [isAuthenticated, isChatGptReady, isPrivyReady, retryKey]);
 
   useEffect(() => {
     if (!isReady) {
       return;
     }
 
-    if (!isPrivyReady || !walletReady) {
+    if (!isPrivyReady || !isChatGptReady || !walletReady) {
       return;
     }
 
@@ -127,7 +130,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     }, 0);
 
     return () => clearTimeout(redirectTimer);
-  }, [hasCheckedAuth, isAuthenticated, isPrivyReady, isReady, segments, walletReady]);
+  }, [hasCheckedAuth, isAuthenticated, isChatGptReady, isPrivyReady, isReady, segments, walletReady]);
 
   if (gateState.mode === 'issue') {
     return (

@@ -17,7 +17,7 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
 
   if (moduleName === "uuid") {
     return {
-      filePath: path.resolve(__dirname, 'node_modules/uuid/dist/index.js'),
+      filePath: path.resolve(__dirname, 'node_modules/uuid/dist/esm-browser/index.js'),
       type: 'sourceFile',
     };
   }

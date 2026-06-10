@@ -1,18 +1,23 @@
 import { RegentPressable } from '@/components/ui/RegentPressable';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
+import { useChatGptAuth } from '@/hooks/useChatGptAuth';
 import { useRegentsAuth } from '@/hooks/useRegentsAuth';
+import { hasRegentsAccountConfig } from '@/utils/mobilePublicConfig';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { EaseView } from 'react-native-ease';
 import {
   AccessibilityInfo,
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
+  View,
 } from 'react-native';
 
 const { DARK_BG, CARD_BG, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, WHITE, BORDER } = COLORS;
@@ -26,10 +31,26 @@ function buildEntryTransition(reduceMotion: boolean, delay = 0, duration = 220) 
     : { type: 'timing' as const, duration, easing: 'easeOut' as const, delay };
 }
 
+function RegentsAccountRedirect({ hasChatGptSession }: { hasChatGptSession: boolean }) {
+  const { isAuthenticated: isRegentsAuthenticated } = useRegentsAuth();
+  const router = useRouter();
+  const isAuthenticated = hasChatGptSession && isRegentsAuthenticated;
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.replace('/agents');
+    }
+  }, [isAuthenticated, router]);
+
+  return null;
+}
+
 export default function LoginScreen() {
-  const { isAuthenticated } = useRegentsAuth();
+  const { error: chatGptError, isLoading: isChatGptLoading, isReady: isChatGptReady, session: chatGptSession, signIn } = useChatGptAuth();
   const router = useRouter();
   const [reduceMotion, setReduceMotion] = useState(false);
+  const hasChatGptSession = !!chatGptSession;
+  const canUseRegentsAccount = hasRegentsAccountConfig();
 
   useEffect(() => {
     let mounted = true;
@@ -49,14 +70,36 @@ export default function LoginScreen() {
     };
   }, []);
 
-  useEffect(() => {
-    if (isAuthenticated) {
-      router.replace('/agents');
+  const handleChatGptSignIn = async () => {
+    try {
+      await signIn();
+    } catch {
+      // The hook owns the visible error message.
     }
-  }, [isAuthenticated, router]);
+  };
+
+  if (!isChatGptReady) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingWrap}>
+          <EaseView
+            initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={buildEntryTransition(reduceMotion)}
+            style={styles.loadingCard}
+          >
+            <ActivityIndicator color={BLUE} style={styles.loadingSpinner} />
+            <Text style={styles.loadingTitle}>Regents</Text>
+            <Text style={styles.loadingText}>Getting sign-in ready...</Text>
+          </EaseView>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
+      {hasChatGptSession && canUseRegentsAccount ? <RegentsAccountRedirect hasChatGptSession={hasChatGptSession} /> : null}
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.keyboardWrap}>
         <ScrollView
           contentInsetAdjustmentBehavior="automatic"
@@ -86,38 +129,73 @@ export default function LoginScreen() {
             animate={{ opacity: 1, translateY: 0 }}
             transition={buildEntryTransition(reduceMotion, STAGGER_STEP * 2)}
           >
-            <Text style={styles.subtitle}>Sign in to add USDC, pay agents, and review what they spend.</Text>
+            <Text style={styles.subtitle}>
+              {hasChatGptSession ? 'Choose how to continue.' : 'Sign in with ChatGPT, then connect your Regents account.'}
+            </Text>
           </EaseView>
 
-          <EaseView
-            initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
-            animate={{ opacity: 1, translateY: 0 }}
-            transition={buildEntryTransition(reduceMotion, STAGGER_STEP * 3)}
-            style={styles.actionWrap}
-          >
-            <RegentPressable style={styles.primaryButton} onPress={() => router.push({ pathname: '/email-verify', params: { mode: 'signin' } })}>
-              <Text style={styles.primaryButtonText}>Continue with email</Text>
-            </RegentPressable>
-          </EaseView>
+          {hasChatGptSession && canUseRegentsAccount ? (
+            <>
+              <EaseView
+                initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
+                animate={{ opacity: 1, translateY: 0 }}
+                transition={buildEntryTransition(reduceMotion, STAGGER_STEP * 3)}
+              >
+                <Text style={styles.accountTitle}>Connect your Regents account</Text>
+              </EaseView>
 
-          <EaseView
-            initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
-            animate={{ opacity: 1, translateY: 0 }}
-            transition={buildEntryTransition(reduceMotion, STAGGER_STEP * 4)}
-            style={styles.actionWrap}
-          >
-            <RegentPressable style={styles.secondaryButton} onPress={() => router.push({ pathname: '/phone-verify', params: { mode: 'signin' } })}>
-              <Text style={styles.secondaryButtonText}>Continue with phone</Text>
-            </RegentPressable>
-          </EaseView>
+              <EaseView
+                initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
+                animate={{ opacity: 1, translateY: 0 }}
+                transition={buildEntryTransition(reduceMotion, STAGGER_STEP * 4)}
+                style={styles.actionWrap}
+              >
+                <RegentPressable style={styles.primaryButton} onPress={() => router.push({ pathname: '/email-verify', params: { mode: 'signin' } })}>
+                  <Text style={styles.primaryButtonText}>Continue with email</Text>
+                </RegentPressable>
+              </EaseView>
 
-          <EaseView
-            initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
-            animate={{ opacity: 1, translateY: 0 }}
-            transition={buildEntryTransition(reduceMotion, STAGGER_STEP * 5)}
-          >
+              <EaseView
+                initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
+                animate={{ opacity: 1, translateY: 0 }}
+                transition={buildEntryTransition(reduceMotion, STAGGER_STEP * 5)}
+                style={styles.actionWrap}
+              >
+                <RegentPressable style={styles.secondaryButton} onPress={() => router.push({ pathname: '/phone-verify', params: { mode: 'signin' } })}>
+                  <Text style={styles.secondaryButtonText}>Continue with phone</Text>
+                </RegentPressable>
+              </EaseView>
+            </>
+          ) : hasChatGptSession ? (
+            <EaseView
+              initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
+              animate={{ opacity: 1, translateY: 0 }}
+              transition={buildEntryTransition(reduceMotion, STAGGER_STEP * 3)}
+            >
+              <Text style={styles.accountSetupText}>Regents account sign-in is not ready on this device.</Text>
+            </EaseView>
+          ) : (
+            <EaseView
+              initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
+              animate={{ opacity: 1, translateY: 0 }}
+              transition={buildEntryTransition(reduceMotion, STAGGER_STEP * 3)}
+              style={styles.actionWrap}
+            >
+              <RegentPressable style={[styles.chatGptButton, isChatGptLoading && styles.disabledButton]} onPress={handleChatGptSignIn} disabled={isChatGptLoading}>
+                <View style={styles.chatGptButtonContent}>
+                  <Ionicons name="sparkles-outline" size={20} color={WHITE} />
+                  {isChatGptLoading ? <ActivityIndicator color={WHITE} /> : <Text style={styles.chatGptButtonText}>Sign in with ChatGPT</Text>}
+                  <Ionicons name="arrow-forward" size={22} color={WHITE} />
+                </View>
+              </RegentPressable>
+            </EaseView>
+          )}
+
+          {chatGptError ? (
+            <Text style={styles.errorText}>{chatGptError}</Text>
+          ) : (
             <Text style={styles.helperText}>Apple Pay is available after sign-in where supported.</Text>
-          </EaseView>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -167,6 +245,36 @@ const styles = StyleSheet.create({
   actionWrap: {
     width: '100%',
   },
+  accountTitle: {
+    color: TEXT_PRIMARY,
+    textAlign: 'center',
+    fontSize: 22,
+    lineHeight: 28,
+    fontFamily: FONTS.heading,
+    marginBottom: 2,
+  },
+  chatGptButton: {
+    minHeight: 58,
+    borderRadius: 18,
+    backgroundColor: '#05070D',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  chatGptButtonContent: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  chatGptButtonText: {
+    color: WHITE,
+    fontSize: 18,
+    fontFamily: FONTS.body,
+    flex: 1,
+    textAlign: 'center',
+  },
   primaryButton: {
     minHeight: 58,
     borderRadius: 18,
@@ -195,6 +303,9 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontFamily: FONTS.body,
   },
+  disabledButton: {
+    opacity: 0.65,
+  },
   helperText: {
     color: TEXT_SECONDARY,
     textAlign: 'center',
@@ -202,6 +313,21 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontFamily: FONTS.body,
     marginTop: 8,
+  },
+  errorText: {
+    color: '#FFB4A8',
+    textAlign: 'center',
+    fontSize: 14,
+    lineHeight: 20,
+    fontFamily: FONTS.body,
+    marginTop: 8,
+  },
+  accountSetupText: {
+    color: TEXT_SECONDARY,
+    textAlign: 'center',
+    fontSize: 15,
+    lineHeight: 22,
+    fontFamily: FONTS.body,
   },
   loadingWrap: {
     flex: 1,

@@ -18,7 +18,6 @@
 
 import structuredClone from "@ungap/structured-clone";
 import "fast-text-encoding";
-import "@ethersproject/shims";
 import { Buffer } from "buffer";
 import "react-native-get-random-values";
 import "react-native-url-polyfill/auto";
@@ -57,4 +56,5 @@ if (!isExpoGo && !isWeb) {
 }
 
 // Now it's safe to import the app
-import "expo-router/entry";
+require("@ethersproject/shims");
+require("expo-router/entry");

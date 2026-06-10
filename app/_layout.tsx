@@ -1,5 +1,5 @@
 import { CDPHooksProvider, Config } from "@coinbase/cdp-hooks";
-import { Stack } from "expo-router";
+import { Redirect, Stack, useSegments } from "expo-router";
 import { PrivyProvider } from "@privy-io/expo";
 
 import { AuthGate } from "@/components/AuthGate";
@@ -10,7 +10,7 @@ import { FONTS } from "@/constants/Typography";
 import { useAppBootstrap } from "@/hooks/useAppBootstrap";
 import { useRegentsAuth } from "@/hooks/useRegentsAuth";
 import { fetchCdpAuthToken } from "@/utils/fetchCdpAuthToken";
-import { parseXmtpEnvironment } from "@/utils/xmtp/secureMessagingConfig";
+import { hasRegentsAccountConfig, readMobilePublicConfig } from "@/utils/mobilePublicConfig";
 import type { XmtpEnvironment } from "@/types/regents";
 import { useMemo } from "react";
 import 'react-native-get-random-values';
@@ -70,22 +70,31 @@ function WalletProviders({
 
 export default function RootLayout() {
   useAppBootstrap();
-  const privyAppId = process.env.EXPO_PUBLIC_PRIVY_APP_ID;
-  const privyClientId = process.env.EXPO_PUBLIC_PRIVY_CLIENT_ID;
-  const cdpProjectId = process.env.EXPO_PUBLIC_CDP_PROJECT_ID;
-  const xmtpEnv = process.env.EXPO_PUBLIC_XMTP_ENV;
-  const resolvedPrivyAppId = privyAppId;
-  const resolvedPrivyClientId = privyClientId;
-  const resolvedCdpProjectId = cdpProjectId;
-  const resolvedXmtpEnvironment = (() => {
-    try {
-      return parseXmtpEnvironment(xmtpEnv);
-    } catch {
-      return null;
-    }
-  })();
+  const segments = useSegments();
+  const config = readMobilePublicConfig();
+  const canUseRegentsAccount = hasRegentsAccountConfig(config);
+  const isLoginRoute = segments[0] === 'auth' && segments[1] === 'login';
 
-  if (!resolvedPrivyAppId || !resolvedPrivyClientId || !resolvedCdpProjectId || !resolvedXmtpEnvironment) {
+  if (!canUseRegentsAccount && !isLoginRoute) {
+    return <Redirect href="/auth/login" />;
+  }
+
+  if (!canUseRegentsAccount) {
+    return (
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen
+          name="auth/login"
+          options={{
+            headerShown: false,
+            gestureEnabled: false,
+            animation: 'fade',
+          }}
+        />
+      </Stack>
+    );
+  }
+
+  if (!canUseRegentsAccount || !config.privyAppId || !config.privyClientId || !config.cdpProjectId || !config.xmtpEnvironment) {
     return (
       <View style={styles.missingConfigContainer}>
         <View style={styles.missingConfigCard}>
@@ -120,8 +129,8 @@ export default function RootLayout() {
   }
 
   return (
-    <PrivyProvider appId={resolvedPrivyAppId} clientId={resolvedPrivyClientId}>
-      <WalletProviders cdpProjectId={resolvedCdpProjectId} xmtpEnvironment={resolvedXmtpEnvironment}>
+    <PrivyProvider appId={config.privyAppId} clientId={config.privyClientId}>
+      <WalletProviders cdpProjectId={config.cdpProjectId} xmtpEnvironment={config.xmtpEnvironment}>
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen
             name="auth/login"

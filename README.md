@@ -12,6 +12,9 @@ What is real today:
 - wallet send and receive
 - wallet history
 - Regents, Regent Manager, and Talk screens through the mobile backend
+- send checks that reject bad or missing transfer details before payment review
+- tracked agent-funding actions that do not duplicate the same funding request
+- network-specific wallet state for balances and funding choices
 
 ## Repo Story
 

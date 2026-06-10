@@ -2,6 +2,7 @@ import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { RegentPressable } from '@/components/ui/RegentPressable';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
+import { useChatGptAuth } from '@/hooks/useChatGptAuth';
 import { useRegentsAuth } from '@/hooks/useRegentsAuth';
 import { useLinkEmail, useLoginWithEmail } from '@privy-io/expo';
 import { Ionicons } from '@expo/vector-icons';
@@ -51,6 +52,7 @@ export default function EmailVerifyScreen() {
   const { sendCode: sendLoginCode } = useLoginWithEmail();
   const { sendCode: sendLinkCode } = useLinkEmail();
   const { isAuthenticated } = useRegentsAuth();
+  const { isReady: isChatGptReady, session: chatGptSession } = useChatGptAuth();
 
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
@@ -72,7 +74,23 @@ export default function EmailVerifyScreen() {
     };
   }, []);
 
+  React.useEffect(() => {
+    if (isChatGptReady && !chatGptSession) {
+      router.replace('/auth/login');
+    }
+  }, [chatGptSession, isChatGptReady, router]);
+
   const startEmailVerification = async () => {
+    if (!isChatGptReady || !chatGptSession) {
+      setAlert({
+        visible: true,
+        title: 'Sign in with ChatGPT',
+        message: 'Finish ChatGPT sign-in before you continue.',
+        type: 'error',
+      });
+      return;
+    }
+
     if (!isEmailValid) {
       setAlert({ visible: true, title: 'Enter an email address', message: 'Please add a valid email address to continue.', type: 'error' });
       return;

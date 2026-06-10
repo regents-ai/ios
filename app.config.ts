@@ -18,6 +18,11 @@ const config: ExpoConfig = {
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
         NSMicrophoneUsageDescription: 'Talk to Hermes with your voice.',
+        NSLocalNetworkUsageDescription: 'Regents uses this to return you to the app after ChatGPT sign-in.',
+        NSAppTransportSecurity: {
+          NSAllowsArbitraryLoads: false,
+          NSAllowsLocalNetworking: true,
+        },
         UIBackgroundModes: ['fetch', 'remote-notification'],
       }
     },

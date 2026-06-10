@@ -2,6 +2,7 @@ import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { RegentPressable } from '@/components/ui/RegentPressable';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
+import { useChatGptAuth } from '@/hooks/useChatGptAuth';
 import { useLinkEmail, useLoginWithEmail } from '@privy-io/expo';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -55,6 +56,7 @@ export default function EmailCodeScreen() {
 
   const { sendCode: sendLoginCode, loginWithCode } = useLoginWithEmail();
   const { sendCode: sendLinkCode, linkWithCode } = useLinkEmail();
+  const { isReady: isChatGptReady, session: chatGptSession } = useChatGptAuth();
 
   useEffect(() => {
     let mounted = true;
@@ -88,6 +90,12 @@ export default function EmailCodeScreen() {
     };
   }, []);
 
+  useEffect(() => {
+    if (isChatGptReady && !chatGptSession) {
+      router.replace('/auth/login');
+    }
+  }, [chatGptSession, isChatGptReady, router]);
+
   const canResend = resendSeconds <= 0 && !sending && !verifying;
   const scheduleDismiss = (run: () => void) => {
     if (dismissTimerRef.current) {
@@ -101,6 +109,16 @@ export default function EmailCodeScreen() {
   };
 
   const resendCode = async () => {
+    if (!isChatGptReady || !chatGptSession) {
+      setAlert({
+        visible: true,
+        title: 'Sign in with ChatGPT',
+        message: 'Finish ChatGPT sign-in before you continue.',
+        type: 'error',
+      });
+      return;
+    }
+
     setSending(true);
     try {
       if (mode === 'signin') {
@@ -123,6 +141,16 @@ export default function EmailCodeScreen() {
 
   const verifyEmail = async () => {
     if (!otp) return;
+    if (!isChatGptReady || !chatGptSession) {
+      setAlert({
+        visible: true,
+        title: 'Sign in with ChatGPT',
+        message: 'Finish ChatGPT sign-in before you continue.',
+        type: 'error',
+      });
+      return;
+    }
+
     setVerifying(true);
 
     try {

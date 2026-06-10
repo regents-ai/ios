@@ -1,5 +1,6 @@
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
+import { useChatGptAuth } from '@/hooks/useChatGptAuth';
 import { useRegentsAuth } from '@/hooks/useRegentsAuth';
 import { useLinkSMS, useLoginWithSMS } from '@privy-io/expo';
 import { Ionicons } from '@expo/vector-icons';
@@ -43,6 +44,7 @@ export default function PhoneVerifyScreen() {
   });
 
   const { isAuthenticated } = useRegentsAuth();
+  const { isReady: isChatGptReady, session: chatGptSession } = useChatGptAuth();
   const { sendCode: sendLoginCode } = useLoginWithSMS();
   const { sendCode: sendLinkCode } = useLinkSMS();
 
@@ -78,6 +80,12 @@ export default function PhoneVerifyScreen() {
     };
   }, []);
 
+  useEffect(() => {
+    if (isChatGptReady && !chatGptSession) {
+      router.replace('/auth/login');
+    }
+  }, [chatGptSession, isChatGptReady, router]);
+
   const handlePhoneChange = (input: string) => {
     setPhoneNumber(input.replace(/\D/g, ''));
   };
@@ -86,6 +94,16 @@ export default function PhoneVerifyScreen() {
   const isPhoneValid = phoneNumber.length >= selectedCountry.minDigits;
 
   const startSms = useCallback(async () => {
+    if (!isChatGptReady || !chatGptSession) {
+      setAlert({
+        visible: true,
+        title: 'Sign in with ChatGPT',
+        message: 'Finish ChatGPT sign-in before you continue.',
+        type: 'error',
+      });
+      return;
+    }
+
     if (!isPhoneValid) {
       setAlert({
         visible: true,
@@ -128,17 +146,17 @@ export default function PhoneVerifyScreen() {
     } finally {
       setSending(false);
     }
-  }, [isAuthenticated, isPhoneValid, mode, phoneE164, router, selectedCountry.minDigits, selectedCountry.name, sendLinkCode, sendLoginCode]);
+  }, [chatGptSession, isAuthenticated, isChatGptReady, isPhoneValid, mode, phoneE164, router, selectedCountry.minDigits, selectedCountry.name, sendLinkCode, sendLoginCode]);
 
   useEffect(() => {
-    const shouldAutoSend = (mode === 'reverify' && initialPhone && isAuthenticated) || (autoSend && initialPhone);
+    const shouldAutoSend = ((mode === 'reverify' && initialPhone && isAuthenticated) || (autoSend && initialPhone)) && !!chatGptSession;
     if (!shouldAutoSend || !isPhoneValid || hasAutoSent || sending) {
       return;
     }
 
     setHasAutoSent(true);
     startSms();
-  }, [autoSend, hasAutoSent, initialPhone, isAuthenticated, isPhoneValid, mode, sending, startSms]);
+  }, [autoSend, chatGptSession, hasAutoSent, initialPhone, isAuthenticated, isPhoneValid, mode, sending, startSms]);
 
   const title = mode === 'link' ? 'Add your phone' : 'Verify your phone';
   const subtitle = mode === 'signin' ? 'Use a number you can access now.' : mode === 'reverify' ? 'Use the number you want to keep.' : 'Use a number you can access now.';

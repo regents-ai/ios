@@ -1,0 +1,13 @@
+{
+  "name": "regents-chatgpt-auth",
+  "version": "0.1.0",
+  "description": "Local iOS ChatGPT sign-in module for Regents Mobile.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "private": true,
+  "license": "MIT",
+  "peerDependencies": {
+    "expo": "*",
+    "react-native": "*"
+  }
+}

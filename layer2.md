@@ -90,4 +90,7 @@ Regents Mobile is the iPhone entry path for Regent. It owns the iOS app, the mob
 - `npm run check:app`
 - `cd server && npm test`
 - The live wallet path works for sign-in, wallet opening, buy, cash-out, send, receive, and history
+- Wallet sends reject invalid amounts, missing token details, bad recipients, and unsupported networks with clear messages
+- Tracked funding actions do not duplicate the same funding request after repeated attempts
+- Network-specific balances and funding choices refresh when the user changes networks
 - The Regent, Regent Manager, and Talk tabs use the current mobile route family
