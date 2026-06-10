@@ -57,47 +57,55 @@ test('agent detail starts the tracked fund-agent send flow', () => {
 
 test('agent funding mode prefers Base USDC and records wallet actions', () => {
   const send = read('app/wallet/send.tsx');
+  const fundingChoicesHook = read('hooks/wallet/useFundingChoices.ts');
+  const evmTransferHook = read('hooks/wallet/useEvmTransfer.ts');
+  const userOpAlertsHook = read('hooks/wallet/useUserOpStatusAlerts.ts');
+  const confirmationModal = read('components/wallet/SendConfirmationModal.tsx');
   const fundingChoices = read('utils/fetchWalletFundingChoices.ts');
 
   assert.match(send, /const AGENT_FUNDING_FLOW = 'agent-funding'/);
   assert.match(send, /const SEND_FLOW = 'send'/);
-  assert.match(send, /fetchWalletFundingChoices\(\{ evmAddress: smartAccountAddress \}\)/);
-  assert.match(send, /choices\.find\(isBaseUsdcBalance\)/);
-  assert.match(send, /setNetwork\('base'\)/);
+  assert.match(fundingChoicesHook, /fetchWalletFundingChoices\(\{ evmAddress: smartAccountAddress \}\)/);
+  assert.match(fundingChoicesHook, /choices\.find\(isBaseUsdcBalance\)/);
+  assert.match(fundingChoicesHook, /setNetwork\('base'\)/);
   assert.match(send, /Add USDC first/);
   assert.match(send, /noBaseUsdcForSend/);
-  assert.match(send, /regentApi\.prepareWalletAction/);
-  assert.match(send, /type: 'funding'/);
-  assert.match(send, /regentApi\.confirmWalletAction/);
+  assert.match(evmTransferHook, /regentApi\.prepareWalletAction/);
+  assert.match(evmTransferHook, /type: 'funding'/);
+  assert.match(userOpAlertsHook, /regentApi\.confirmWalletAction/);
   assert.match(send, /Review payment/);
-  assert.match(send, /Pay now/);
-  assert.match(send, /Send to agent/);
-  assert.match(send, /You sent \$\{amount\} \$\{selectedToken\?\.token\?\.symbol \|\| 'USDC'\} to/);
+  assert.match(confirmationModal, /Review payment/);
+  assert.match(confirmationModal, /Pay now/);
+  assert.match(confirmationModal, /Send to agent/);
+  assert.match(userOpAlertsHook, /You sent \$\{amount\} \$\{selectedToken\?\.token\?\.symbol \|\| 'USDC'\} to/);
   assert.match(fundingChoices, /network=base/);
   assert.doesNotMatch(fundingChoices, /network=ethereum|balances\/solana|Promise\.all/);
 });
 
 test('pay flow accepts Ethereum addresses, ENS names, paste, and QR photos', () => {
   const send = read('app/wallet/send.tsx');
+  const recipientHook = read('hooks/wallet/useRecipientResolution.ts');
+  const recipientUtils = read('utils/onchain/recipient.ts');
   const routes = read('utils/navigation/routes.ts');
 
   assert.match(routes, /flow\?: 'agent-funding' \| 'send'/);
   assert.match(send, /const payTitle = isDefaultSendFlow \? 'Pay' : 'Send'/);
   assert.match(send, /placeholder=\{isSolanaNetwork\(network\) \? 'Solana address' : 'Ethereum address or ENS name'\}/);
-  assert.match(send, /getEthereumRecipientAddress/);
-  assert.match(send, /isAddress\(candidate\) \? getAddress\(candidate\)/);
-  assert.match(send, /resolveEnsRecipient/);
-  assert.match(send, /ensClient\.getEnsAddress/);
-  assert.match(send, /ensClient\.getEnsName/);
+  assert.match(recipientHook, /getEthereumRecipientAddress/);
+  assert.match(recipientUtils, /isAddress\(candidate\) \? getAddress\(candidate\)/);
+  assert.match(recipientHook, /resolveEnsRecipient/);
+  assert.match(recipientUtils, /ensClient\.getEnsAddress/);
+  assert.match(recipientUtils, /ensClient\.getEnsName/);
   assert.doesNotMatch(send, /\+eth\\b/);
-  assert.match(send, /candidate\.includes\('\.'\)/);
+  assert.doesNotMatch(recipientUtils, /\+eth\\b/);
+  assert.match(recipientUtils, /candidate\.includes\('\.'\)/);
   assert.match(send, /Checking ENS name/);
-  assert.match(send, /Wallet name confirmed/);
-  assert.match(send, /handlePasteRecipient/);
-  assert.match(send, /Clipboard\.getStringAsync/);
+  assert.match(recipientUtils, /Wallet name confirmed/);
+  assert.match(recipientHook, /handlePasteRecipient/);
+  assert.match(recipientHook, /Clipboard\.getStringAsync/);
   assert.match(send, /QR photo/);
-  assert.match(send, /ImagePicker\.launchImageLibraryAsync/);
-  assert.match(send, /scanFromURLAsync/);
+  assert.match(recipientHook, /ImagePicker\.launchImageLibraryAsync/);
+  assert.match(recipientHook, /scanFromURLAsync/);
 });
 
 test('message screens present agent messages and payment approvals plainly', () => {
