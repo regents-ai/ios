@@ -783,6 +783,55 @@ test('mobile Agent Brief route stays mounted and returns the current brief shape
   );
 });
 
+test('mobile Agent Brief is scoped to the signed-in projection: owner succeeds, others are denied', async () => {
+  // The projection is fetched with the caller's own bearer token, so it only
+  // ever contains the signed-in user's Regents. A different user's projection
+  // does not contain another user's Regent, so requesting it must be denied.
+  const ownerResponse = await requestMobileRoute(platformProjection, {
+    method: 'GET',
+    url: '/mobile/regents/atlas-capital/manager',
+    headers: {
+      Authorization: 'Bearer owner-token',
+    },
+  });
+
+  assert.equal(ownerResponse.status, 200);
+  assert.equal(ownerResponse.body.regentId, 'atlas-capital');
+
+  const otherUserProjection: PlatformProjection = {
+    ...platformProjection,
+    companies: platformProjection.companies.map((company) => ({
+      ...company,
+      company: {
+        ...company.company,
+        id: 999,
+        name: 'Borealis Labs',
+        slug: 'borealis-labs',
+        claimed_label: 'Borealis Labs',
+      },
+      public_profile: {
+        ...company.public_profile,
+        slug: 'borealis-labs',
+      },
+    })),
+    public_profiles: platformProjection.public_profiles.map((profile) => ({
+      ...profile,
+      slug: 'borealis-labs',
+    })),
+  };
+
+  const otherUserResponse = await requestMobileRoute(otherUserProjection, {
+    method: 'GET',
+    url: '/mobile/regents/atlas-capital/manager',
+    headers: {
+      Authorization: 'Bearer other-user-token',
+    },
+  });
+
+  assert.equal(otherUserResponse.status, 404);
+  assert.equal(otherUserResponse.body.error.code, 'NotFound');
+});
+
 test('mobile Regent detail includes Platform-owned state', () => {
   const routePaths = listRoutePaths();
   assert.ok(routePaths.includes('/mobile/regents/:id'));
