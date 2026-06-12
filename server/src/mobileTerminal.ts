@@ -17,8 +17,9 @@ type PendingTerminalApproval = {
   riskCopy: string;
   amount?: string;
   currency?: string;
+  amountUsd?: string;
   contractAddress?: string;
-  expiresAt: string;
+  expiresAt?: string;
   resolved: boolean;
 };
 
@@ -52,6 +53,7 @@ export type TerminalEvent = {
   riskCopy?: string;
   amount?: string;
   currency?: string;
+  amountUsd?: string;
   contractAddress?: string;
   result?: 'approved' | 'denied' | 'timed_out';
   message?: string;
@@ -135,13 +137,17 @@ function approvalPayloadString(approval: RwrApproval, key: string) {
 function approvalMoneyFields(approval: RwrApproval) {
   const amount = approvalPayloadString(approval, 'amount');
   const currency = approvalPayloadString(approval, 'currency');
+  const amountUsd = approvalPayloadString(approval, 'amount_usd');
   const contractAddress = approvalPayloadString(approval, 'contract_address');
-  const fields: Pick<PendingTerminalApproval, 'amount' | 'currency' | 'contractAddress'> = {};
+  const fields: Pick<PendingTerminalApproval, 'amount' | 'currency' | 'amountUsd' | 'contractAddress'> = {};
   if (amount) {
     fields.amount = amount;
   }
   if (currency) {
     fields.currency = currency;
+  }
+  if (amountUsd) {
+    fields.amountUsd = amountUsd;
   }
   if (contractAddress) {
     fields.contractAddress = contractAddress;
@@ -150,15 +156,20 @@ function approvalMoneyFields(approval: RwrApproval) {
 }
 
 function pendingApprovalFromRwr(approval: RwrApproval, regentName: string): PendingTerminalApproval {
-  return {
+  const pending: PendingTerminalApproval = {
     requestId: String(approval.id),
     action: approval.approval_type || 'Review request',
     regentName,
     riskCopy: approval.risk_summary || 'Review the requested payment or action before this agent continues.',
     ...approvalMoneyFields(approval),
-    expiresAt: approval.expires_at || approval.updated_at,
     resolved: approval.status !== 'pending',
   };
+
+  if (approval.expires_at) {
+    pending.expiresAt = approval.expires_at;
+  }
+
+  return pending;
 }
 
 function summaryFromWorkItem(item: RwrWorkItem, companies: RwrCompany[]): TerminalSessionSummary {

@@ -16,7 +16,7 @@ import { routes } from '@/utils/navigation/routes';
 import { regentApi } from '@/utils/regentApi/client';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -75,23 +75,74 @@ function eventTitle(event: TerminalEvent) {
   return 'Message';
 }
 
-function approvalMeta(approval: PendingTerminalApproval) {
-  const parts = [
-    approval.amount && approval.currency ? `${approval.amount} ${approval.currency}` : null,
-    approval.contractAddress ? `${approval.contractAddress.slice(0, 8)}...${approval.contractAddress.slice(-6)}` : null,
-  ].filter(Boolean);
-
-  return parts.join(' · ');
-}
-
 function approvalTitle(approval: PendingTerminalApproval) {
   return approval.amount && approval.currency
     ? `Agent requests ${approval.amount} ${approval.currency}`
-    : approval.action;
+    : approvalActionLabel(approval);
 }
 
-function approvalPurpose(approval: PendingTerminalApproval) {
-  return approval.amount && approval.currency ? approval.action : null;
+function approvalActionLabel(approval: PendingTerminalApproval) {
+  const plain = approval.action.replace(/[_-]+/g, ' ').trim();
+  return plain ? plain.charAt(0).toUpperCase() + plain.slice(1) : 'Review request';
+}
+
+function approvalAmountLabel(approval: PendingTerminalApproval) {
+  if (!approval.amount || !approval.currency) {
+    return null;
+  }
+
+  const base = `${approval.amount} ${approval.currency}`;
+  return approval.amountUsd ? `${base} · $${approval.amountUsd} USD` : base;
+}
+
+function approvalContractLabel(approval: PendingTerminalApproval) {
+  if (!approval.contractAddress) {
+    return null;
+  }
+
+  return `${approval.contractAddress.slice(0, 8)}...${approval.contractAddress.slice(-6)}`;
+}
+
+function approvalExpiresAtMs(approval: PendingTerminalApproval) {
+  if (!approval.expiresAt) {
+    return null;
+  }
+
+  const expiresAtMs = new Date(approval.expiresAt).getTime();
+  return Number.isFinite(expiresAtMs) ? expiresAtMs : null;
+}
+
+function isApprovalExpired(approval: PendingTerminalApproval, nowMs: number) {
+  const expiresAtMs = approvalExpiresAtMs(approval);
+  return expiresAtMs !== null && expiresAtMs <= nowMs;
+}
+
+function approvalExpiryLabel(approval: PendingTerminalApproval, nowMs: number) {
+  const expiresAtMs = approvalExpiresAtMs(approval);
+  if (expiresAtMs === null) {
+    return null;
+  }
+
+  const remainingMs = expiresAtMs - nowMs;
+  if (remainingMs <= 0) {
+    return 'Expired';
+  }
+
+  const minutes = Math.ceil(remainingMs / 60_000);
+  if (minutes < 2) {
+    return 'In less than a minute';
+  }
+  if (minutes < 60) {
+    return `In ${minutes} minutes`;
+  }
+
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) {
+    return hours === 1 ? 'In about 1 hour' : `In about ${hours} hours`;
+  }
+
+  const days = Math.round(hours / 24);
+  return days === 1 ? 'In about 1 day' : `In about ${days} days`;
 }
 
 export default function TalkDetailScreen() {
@@ -212,8 +263,12 @@ export default function TalkDetailScreen() {
   }, [draft, loadSession, router, sending, sessionId]);
 
   const resolveApproval = useCallback(async (decision: 'approved' | 'denied') => {
-    const requestId = session?.pendingApproval?.requestId;
-    if (!sessionId || !requestId || resolvingDecision) {
+    const approval = session?.pendingApproval;
+    const requestId = approval?.requestId;
+    if (!sessionId || !approval || !requestId || resolvingDecision) {
+      return;
+    }
+    if (isApprovalExpired(approval, Date.now())) {
       return;
     }
 
@@ -266,6 +321,19 @@ export default function TalkDetailScreen() {
 
   const pendingApproval = session?.pendingApproval;
   const isPaymentApproval = !!pendingApproval?.amount && !!pendingApproval.currency;
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!pendingApproval || pendingApproval.resolved || !pendingApproval.expiresAt) {
+      return;
+    }
+
+    setNowMs(Date.now());
+    const timer = setInterval(() => setNowMs(Date.now()), 30_000);
+    return () => clearInterval(timer);
+  }, [pendingApproval]);
+
+  const approvalExpired = !!pendingApproval && isApprovalExpired(pendingApproval, nowMs);
   const secureChannelConnected =
     messageThread?.xmtpLinks.some((link) => link.environment === secureMessageEnvironment) || false;
 
@@ -369,33 +437,63 @@ export default function TalkDetailScreen() {
                       <Text style={styles.approvalAgent}>{pendingApproval.regentName}</Text>
                     </View>
                   </View>
-                  {approvalPurpose(pendingApproval) ? (
-                    <Text style={styles.approvalPurpose}>Purpose: {approvalPurpose(pendingApproval)}</Text>
-                  ) : null}
-                  <Text style={styles.approvalBody}>{pendingApproval.riskCopy}</Text>
-                  {approvalMeta(pendingApproval) ? (
-                    <Text style={styles.approvalMeta}>{approvalMeta(pendingApproval)}</Text>
-                  ) : null}
-                  <View style={styles.approvalActions}>
-                    <RegentPressable
-                      style={styles.secondaryButton}
-                      disabled={!!resolvingDecision}
-                      onPress={() => resolveApproval('denied')}
-                    >
-                      <Text style={styles.secondaryButtonText}>
-                        {resolvingDecision === 'denied' ? 'Saving...' : 'Deny'}
-                      </Text>
-                    </RegentPressable>
-                    <RegentPressable
-                      style={styles.primaryButton}
-                      disabled={!!resolvingDecision}
-                      onPress={() => resolveApproval('approved')}
-                    >
-                      <Text style={styles.primaryButtonText}>
-                        {resolvingDecision === 'approved' ? 'Saving...' : isPaymentApproval ? 'Approve payment' : 'Approve'}
-                      </Text>
-                    </RegentPressable>
+                  <View style={styles.approvalDetails}>
+                    <View style={styles.approvalDetailRow}>
+                      <Text style={styles.approvalDetailLabel}>Action</Text>
+                      <Text style={styles.approvalDetailValue}>{approvalActionLabel(pendingApproval)}</Text>
+                    </View>
+                    <View style={styles.approvalDetailRow}>
+                      <Text style={styles.approvalDetailLabel}>Requested by</Text>
+                      <Text style={styles.approvalDetailValue}>{pendingApproval.regentName}</Text>
+                    </View>
+                    {approvalAmountLabel(pendingApproval) ? (
+                      <View style={styles.approvalDetailRow}>
+                        <Text style={styles.approvalDetailLabel}>Amount</Text>
+                        <Text style={styles.approvalDetailValue}>{approvalAmountLabel(pendingApproval)}</Text>
+                      </View>
+                    ) : null}
+                    {approvalContractLabel(pendingApproval) ? (
+                      <View style={styles.approvalDetailRow}>
+                        <Text style={styles.approvalDetailLabel}>Contract</Text>
+                        <Text style={styles.approvalDetailValue}>{approvalContractLabel(pendingApproval)}</Text>
+                      </View>
+                    ) : null}
+                    {approvalExpiryLabel(pendingApproval, nowMs) ? (
+                      <View style={styles.approvalDetailRow}>
+                        <Text style={styles.approvalDetailLabel}>Expires</Text>
+                        <Text style={[styles.approvalDetailValue, approvalExpired && styles.approvalDetailValueExpired]}>
+                          {approvalExpiryLabel(pendingApproval, nowMs)}
+                        </Text>
+                      </View>
+                    ) : null}
                   </View>
+                  <Text style={styles.approvalBody}>{pendingApproval.riskCopy}</Text>
+                  {approvalExpired ? (
+                    <Text style={styles.approvalExpiredNote}>
+                      This request expired before a decision was made, so it can no longer be approved. Nothing was sent. Ask {pendingApproval.regentName} for a new request if this is still needed.
+                    </Text>
+                  ) : (
+                    <View style={styles.approvalActions}>
+                      <RegentPressable
+                        style={styles.secondaryButton}
+                        disabled={!!resolvingDecision}
+                        onPress={() => resolveApproval('denied')}
+                      >
+                        <Text style={styles.secondaryButtonText}>
+                          {resolvingDecision === 'denied' ? 'Denying...' : 'Deny'}
+                        </Text>
+                      </RegentPressable>
+                      <RegentPressable
+                        style={styles.primaryButton}
+                        disabled={!!resolvingDecision}
+                        onPress={() => resolveApproval('approved')}
+                      >
+                        <Text style={styles.primaryButtonText}>
+                          {resolvingDecision === 'approved' ? 'Approving...' : isPaymentApproval ? 'Approve payment' : 'Approve'}
+                        </Text>
+                      </RegentPressable>
+                    </View>
+                  )}
                 </View>
               ) : null}
 
@@ -649,11 +747,35 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: FONTS.body,
   },
-  approvalPurpose: {
-    color: TEXT_PRIMARY,
+  approvalDetails: {
+    backgroundColor: WHITE,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 8,
+  },
+  approvalDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  approvalDetailLabel: {
+    color: TEXT_SECONDARY,
     fontSize: 13,
     lineHeight: 19,
     fontFamily: FONTS.body,
+  },
+  approvalDetailValue: {
+    flex: 1,
+    color: TEXT_PRIMARY,
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: 'right',
+    fontFamily: FONTS.body,
+  },
+  approvalDetailValueExpired: {
+    color: DANGER,
   },
   approvalBody: {
     color: TEXT_PRIMARY,
@@ -661,9 +783,10 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontFamily: FONTS.body,
   },
-  approvalMeta: {
-    color: AMBER,
-    fontSize: 12,
+  approvalExpiredNote: {
+    color: DANGER,
+    fontSize: 13,
+    lineHeight: 19,
     fontFamily: FONTS.body,
   },
   approvalActions: {

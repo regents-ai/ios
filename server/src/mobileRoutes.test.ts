@@ -23,6 +23,7 @@ import { resetMobileVoiceSessionsForTests } from './mobileVoiceSessions.js';
 import {
   createTerminalSession,
   getTerminalEvents,
+  getTerminalSession,
   listTerminalSessions,
   postTerminalMessage,
   resolveTerminalApproval,
@@ -672,6 +673,7 @@ const platformRwrClient: PlatformRwrClient = {
           payload: {
             amount: '500',
             currency: 'USDC',
+            amount_usd: '500.00',
             contract_address: '0x4444444444444444444444444444444444444444',
           },
           resolved_by_human_id: null,
@@ -1666,6 +1668,72 @@ test('mobile terminal approvals resolve through Platform RWR', async () => {
   assert.equal(result.kind, 'ok');
 });
 
+test('mobile terminal session detail carries the full structured approval schema', async () => {
+  const session = await getTerminalSession(platformRwrClient, {}, '101~202~301');
+  assert.equal(session.kind, 'ok');
+  if (session.kind !== 'ok') {
+    return;
+  }
+
+  const approval = session.data.pendingApproval;
+  assert.ok(approval);
+  assert.equal(approval.requestId, '501');
+  assert.equal(approval.action, 'transfer');
+  assert.equal(approval.regentName, 'Atlas Capital');
+  assert.equal(approval.riskCopy, 'Approve the treasury transfer.');
+  assert.equal(approval.amount, '500');
+  assert.equal(approval.currency, 'USDC');
+  assert.equal(approval.amountUsd, '500.00');
+  assert.equal(approval.contractAddress, '0x4444444444444444444444444444444444444444');
+  assert.equal(approval.expiresAt, '2026-04-18T00:00:00.000Z');
+  assert.equal(approval.resolved, false);
+});
+
+test('mobile terminal approvals without a Platform expiry or USD value omit those fields', async () => {
+  const noExpiryClient: PlatformRwrClient = {
+    ...platformRwrClient,
+    async fetchApprovals() {
+      return {
+        kind: 'ok',
+        data: [
+          {
+            id: 501,
+            company_id: 101,
+            run_id: 301,
+            approval_type: 'transfer',
+            status: 'pending',
+            requested_by_actor_kind: 'agent',
+            requested_by_actor_id: null,
+            risk_summary: 'Approve the treasury transfer.',
+            payload: {
+              amount: '500',
+              currency: 'USDC',
+              contract_address: '0x4444444444444444444444444444444444444444',
+            },
+            resolved_by_human_id: null,
+            resolved_at: null,
+            expires_at: null,
+            created_at: '2026-04-17T23:50:00.000Z',
+            updated_at: '2026-04-17T23:50:00.000Z',
+          },
+        ],
+      };
+    },
+  };
+
+  const session = await getTerminalSession(noExpiryClient, {}, '101~202~301');
+  assert.equal(session.kind, 'ok');
+  if (session.kind !== 'ok') {
+    return;
+  }
+
+  const approval = session.data.pendingApproval;
+  assert.ok(approval);
+  assert.equal(approval.expiresAt, undefined);
+  assert.equal(approval.amountUsd, undefined);
+  assert.equal(approval.resolved, false);
+});
+
 test('mobile terminal events expose explicit approval review fields and event polling markers', async () => {
   const first = await getTerminalEvents(platformRwrClient, {}, '101~202~301');
   assert.equal(first.kind, 'ok');
@@ -1680,6 +1748,7 @@ test('mobile terminal events expose explicit approval review fields and event po
   assert.equal(approvalEvent.riskCopy, 'Approve the treasury transfer.');
   assert.equal(approvalEvent.amount, '500');
   assert.equal(approvalEvent.currency, 'USDC');
+  assert.equal(approvalEvent.amountUsd, '500.00');
   assert.equal(approvalEvent.contractAddress, '0x4444444444444444444444444444444444444444');
 
   const latestEvent = first.data.at(-1);

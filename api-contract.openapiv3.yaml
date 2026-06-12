@@ -2530,25 +2530,35 @@ components:
       enum: [idle, running, waiting, failed]
     PendingTerminalApproval:
       type: object
-      required: [requestId, action, regentName, riskCopy, expiresAt, resolved]
+      required: [requestId, action, regentName, riskCopy, resolved]
       properties:
         requestId:
           type: string
         action:
           type: string
+          description: The action the Regent is asking to take, from the Platform RWR approval type.
         regentName:
           type: string
+          description: The Regent asking for this approval.
         riskCopy:
           type: string
+          description: Plain-language risk assessment from the Platform RWR approval risk summary.
         amount:
           type: string
+          description: Requested amount, from the Platform RWR approval payload `amount` key.
         currency:
           type: string
+          description: Token symbol for the requested amount, from the payload `currency` key.
+        amountUsd:
+          type: string
+          description: US dollar value of the requested amount when known, from the payload `amount_usd` key.
         contractAddress:
           type: string
+          description: Target contract address, from the payload `contract_address` key.
         expiresAt:
           type: string
           format: date-time
+          description: When this approval stops being valid. Absent when the Platform approval has no expiry.
         resolved:
           type: boolean
     TerminalSessionSummary:
@@ -2962,6 +2972,8 @@ components:
         amount:
           type: string
         currency:
+          type: string
+        amountUsd:
           type: string
         contractAddress:
           type: string

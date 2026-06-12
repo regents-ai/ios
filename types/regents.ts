@@ -185,8 +185,9 @@ export type PendingTerminalApproval = {
   riskCopy: string;
   amount?: string;
   currency?: string;
+  amountUsd?: string;
   contractAddress?: string;
-  expiresAt: string;
+  expiresAt?: string;
   resolved: boolean;
 };
 
@@ -220,6 +221,7 @@ export type TerminalEvent = {
   riskCopy?: string;
   amount?: string;
   currency?: string;
+  amountUsd?: string;
   contractAddress?: string;
   result?: 'approved' | 'denied' | 'timed_out';
   message?: string;

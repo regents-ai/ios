@@ -129,3 +129,44 @@ test('message screens present agent messages and payment approvals plainly', () 
   assert.match(detail, /Agent requests \$\{approval\.amount\} \$\{approval\.currency\}/);
   assert.match(detail, /Approve payment/);
 });
+
+test('approval card shows the full structured review schema', () => {
+  const detail = read('app/terminal/[id].tsx');
+  const types = read('types/regents.ts');
+  const contract = read('api-contract.openapiv3.yaml');
+
+  // Contract and types carry the structured fields.
+  assert.match(contract, /PendingTerminalApproval:[\s\S]*?required: \[requestId, action, regentName, riskCopy, resolved\]/);
+  assert.match(contract, /PendingTerminalApproval:[\s\S]*?amountUsd:/);
+  assert.match(types, /export type PendingTerminalApproval = \{[\s\S]*?amountUsd\?: string;[\s\S]*?expiresAt\?: string;[\s\S]*?\}/);
+
+  // Every schema field renders with a plain label.
+  assert.match(detail, />Action<\/Text>/);
+  assert.match(detail, />Requested by<\/Text>/);
+  assert.match(detail, />Amount<\/Text>/);
+  assert.match(detail, />Contract<\/Text>/);
+  assert.match(detail, />Expires<\/Text>/);
+  assert.match(detail, /\{pendingApproval\.riskCopy\}/);
+  assert.match(detail, /approvalAmountLabel/);
+  assert.match(detail, /approval\.amountUsd \? `\$\{base\} · \$\$\{approval\.amountUsd\} USD` : base/);
+  assert.match(detail, /approvalExpiryLabel/);
+  assert.match(detail, /In less than a minute/);
+});
+
+test('approve and deny are explicit, double-submit safe, and blocked once expired', () => {
+  const detail = read('app/terminal/[id].tsx');
+
+  // Both decisions disable while either is in flight.
+  const denyButton = detail.slice(detail.indexOf("resolveApproval('denied')") - 400, detail.indexOf("resolveApproval('denied')"));
+  const approveButton = detail.slice(detail.indexOf("resolveApproval('approved')") - 400, detail.indexOf("resolveApproval('approved')"));
+  assert.match(denyButton, /disabled=\{!!resolvingDecision\}/);
+  assert.match(approveButton, /disabled=\{!!resolvingDecision\}/);
+  assert.match(detail, /resolvingDecision === 'denied' \? 'Denying\.\.\.' : 'Deny'/);
+  assert.match(detail, /resolvingDecision === 'approved' \? 'Approving\.\.\.'/);
+
+  // Expired approvals cannot be resolved: render guard plus action guard.
+  assert.match(detail, /\{approvalExpired \? \(/);
+  assert.match(detail, /This request expired before a decision was made/);
+  assert.match(detail, /if \(isApprovalExpired\(approval, Date\.now\(\)\)\) \{\s*return;/);
+  assert.match(detail, /isApprovalExpired\(pendingApproval, nowMs\)/);
+});
