@@ -13,7 +13,9 @@ import {
   type EnsResolution,
 } from '@/utils/onchain/recipient';
 
-export type RecipientResolveResult = { ok: boolean; error?: string };
+export type RecipientResolveResult =
+  | { ok: true; address: string }
+  | { ok: false; error: string };
 
 /**
  * Recipient resolution state machine for the send flow.
@@ -107,7 +109,7 @@ export function useRecipientResolution({
 
     if (isSolanaNetwork(network)) {
       return validateAddress(candidate)
-        ? { ok: true }
+        ? { ok: true, address: candidate }
         : { ok: false, error: 'Enter a valid Solana address.' };
     }
 
@@ -115,7 +117,7 @@ export function useRecipientResolution({
     if (ethereumAddress) {
       setRecipientAddress(ethereumAddress);
       setAddressError(null);
-      return { ok: true };
+      return { ok: true, address: ethereumAddress };
     }
 
     if (!isLikelyEnsName(candidate)) {
@@ -131,7 +133,7 @@ export function useRecipientResolution({
       setRecipientAddress(resolution.address);
       setRecipientInput(resolution.name);
       setAddressError(null);
-      return { ok: true };
+      return { ok: true, address: resolution.address };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'We could not find that ENS name.';
       setEnsResolution(null);

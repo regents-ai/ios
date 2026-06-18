@@ -17,6 +17,7 @@ import {
   getNetworkLabel,
   isSolanaNetwork,
 } from '../utils/onchain/networkDisplay';
+import { getInsufficientBalanceError, getSelfSendError } from '../utils/onchain/sendValidation';
 
 test('network labels cover mainnets, testnets, and unknown networks', () => {
   assert.equal(getNetworkLabel('base'), 'Base');
@@ -83,6 +84,105 @@ test('funding idempotency keys mark missing segments without dropping them', () 
   });
 
   assert.equal(key, 'regents-mobile:fund-agent:regent-1:0xabc:0xdef:missing:1:n');
+});
+
+test('amounts above the available balance are rejected with friendly copy', () => {
+  const usdcWithFive = {
+    amount: { amount: '5000000', decimals: '6' },
+    token: { symbol: 'USDC' },
+  };
+
+  assert.equal(
+    getInsufficientBalanceError(usdcWithFive, '5.01'),
+    'You can send up to 5 USDC.'
+  );
+});
+
+test('amounts equal to or below the available balance are allowed', () => {
+  const usdcWithFive = {
+    amount: { amount: '5000000', decimals: '6' },
+    token: { symbol: 'USDC' },
+  };
+
+  assert.equal(getInsufficientBalanceError(usdcWithFive, '5'), null);
+  assert.equal(getInsufficientBalanceError(usdcWithFive, '4.999999'), null);
+});
+
+test('a missing token amount means a zero balance, not a free pass', () => {
+  const tokenWithoutAmount = { amount: null, token: { symbol: 'USDC' } };
+
+  assert.equal(
+    getInsufficientBalanceError(tokenWithoutAmount, '1'),
+    'You can send up to 0 USDC.'
+  );
+});
+
+test('an unavailable balance does not block the send', () => {
+  const tokenWithBadDecimals = {
+    amount: { amount: '5000000', decimals: 'not-a-number' },
+    token: { symbol: 'USDC' },
+  };
+
+  assert.equal(getInsufficientBalanceError(tokenWithBadDecimals, '999'), null);
+});
+
+const ownEvmAddress = '0x52908400098527886E0F7030069857D2E4169EE7';
+const ownSolanaAddress = '9xQeWvG816bnpHmjTuiCGB1zSxhGfWSFNdRKnyhVbqRb';
+
+test('self-sends are rejected on EVM networks even when the case differs', () => {
+  const expected = 'This is your own wallet address. Enter a different recipient.';
+
+  assert.equal(
+    getSelfSendError({
+      network: 'base',
+      recipientAddress: ownEvmAddress,
+      smartAccountAddress: ownEvmAddress,
+      solanaAddress: null,
+    }),
+    expected
+  );
+  assert.equal(
+    getSelfSendError({
+      network: 'ethereum',
+      recipientAddress: ownEvmAddress.toLowerCase(),
+      smartAccountAddress: ownEvmAddress,
+      solanaAddress: null,
+    }),
+    expected
+  );
+});
+
+test('self-sends are rejected on Solana', () => {
+  assert.equal(
+    getSelfSendError({
+      network: 'solana',
+      recipientAddress: ownSolanaAddress,
+      smartAccountAddress: null,
+      solanaAddress: ownSolanaAddress,
+    }),
+    'This is your own wallet address. Enter a different recipient.'
+  );
+});
+
+test('sends to a different recipient are allowed on both network families', () => {
+  assert.equal(
+    getSelfSendError({
+      network: 'base',
+      recipientAddress: '0x0000000000000000000000000000000000000001',
+      smartAccountAddress: ownEvmAddress,
+      solanaAddress: null,
+    }),
+    null
+  );
+  assert.equal(
+    getSelfSendError({
+      network: 'solana',
+      recipientAddress: '9xQeWvG816bnpHmjTuiCGB1zSxhGfWSFNdRKnyhVbqRc',
+      smartAccountAddress: null,
+      solanaAddress: ownSolanaAddress,
+    }),
+    null
+  );
 });
 
 type FakeAccountInfo = {

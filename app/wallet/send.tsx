@@ -48,6 +48,7 @@ import { useUserOpStatusAlerts } from '@/hooks/wallet/useUserOpStatusAlerts';
 import { routes } from '@/utils/navigation/routes';
 import { formatAddressPreview, getNetworkLabel, isSolanaNetwork } from '@/utils/onchain/networkDisplay';
 import { getEnsResolutionCopy } from '@/utils/onchain/recipient';
+import { getInsufficientBalanceError, getSelfSendError } from '@/utils/onchain/sendValidation';
 import { getTokenBalance, getUsdEstimate } from '@/utils/onchain/tokenDisplay';
 
 const { TEXT_PRIMARY, TEXT_SECONDARY, BLUE, WHITE } = COLORS;
@@ -242,7 +243,18 @@ export default function TransferScreen() {
     try {
       const recipientReady = await resolveRecipientInput();
       if (!recipientReady.ok) {
-        showAlert('Check recipient', recipientReady.error || addressError || 'Add the wallet or ENS name you want to use.', 'error');
+        showAlert('Check recipient', recipientReady.error, 'error');
+        return;
+      }
+
+      const selfSendError = getSelfSendError({
+        network,
+        recipientAddress: recipientReady.address,
+        smartAccountAddress,
+        solanaAddress,
+      });
+      if (selfSendError) {
+        showAlert('Check recipient', selfSendError, 'error');
         return;
       }
 
@@ -253,6 +265,12 @@ export default function TransferScreen() {
 
       if (!selectedToken) {
         showAlert('Add USDC first', 'Add Base USDC, then come back to send it.', 'error');
+        return;
+      }
+
+      const balanceError = getInsufficientBalanceError(selectedToken, amount);
+      if (balanceError) {
+        showAlert('Not enough balance', balanceError, 'error');
         return;
       }
 
