@@ -28,7 +28,6 @@ import {
   postTerminalMessage,
   resolveTerminalApproval,
 } from './mobileTerminal.js';
-import { registerPhoneXmtpIdentityForUser, resetMobileMessageStateForTests } from './mobileMessages.js';
 import {
   createPlatformStakingClient,
   type PlatformProjection,
@@ -39,7 +38,6 @@ import type { HermesVoiceClient } from './services/hermesVoiceClient.js';
 
 beforeEach(() => {
   resetMobileRegentStateForTests();
-  resetMobileMessageStateForTests();
   resetMobileVoiceSessionsForTests();
 });
 
@@ -1494,11 +1492,11 @@ test('mobile terminal and money routes remain mounted through the extracted rout
   const routePaths = listRoutePaths();
   assert.ok(routePaths.includes('/mobile/terminal/sessions'));
   assert.ok(routePaths.includes('/mobile/message/threads'));
-  assert.ok(routePaths.includes('/mobile/message/contacts/recent-addresses'));
-  assert.ok(routePaths.includes('/mobile/message/contacts/regent-users'));
-  assert.ok(routePaths.includes('/mobile/message/xmtp/phone-identities'));
-  assert.ok(routePaths.includes('/mobile/message/xmtp/agents/:agent_id'));
-  assert.ok(routePaths.includes('/mobile/message/threads/:thread_id/xmtp-links'));
+  assert.ok(!routePaths.includes('/mobile/message/contacts/recent-addresses'));
+  assert.ok(!routePaths.includes('/mobile/message/contacts/regent-users'));
+  assert.ok(!routePaths.includes('/mobile/message/xmtp/phone-identities'));
+  assert.ok(!routePaths.includes('/mobile/message/xmtp/agents/:agent_id'));
+  assert.ok(!routePaths.includes('/mobile/message/threads/:thread_id/xmtp-links'));
   assert.ok(routePaths.includes('/mobile/regents/:id/base-snapshot'));
   assert.ok(routePaths.includes('/mobile/regents/:id/funding-intents'));
   assert.ok(routePaths.includes('/mobile/regents/:id/funding-intents/:funding_intent_id'));
@@ -1519,37 +1517,7 @@ test('mobile terminal and money routes remain mounted through the extracted rout
   }
 });
 
-test('mobile Message XMTP routes mount without an XMTP network dependency', async () => {
-  const recentContacts = await requestMobileRoute(platformProjection, {
-    method: 'GET',
-    url: '/mobile/message/contacts/recent-addresses?addressOrName=atlas.eth',
-  }, {
-    messageContactClient: {
-      async lookupRecentEnsContacts(addressOrName) {
-        return {
-          kind: 'ok' as const,
-          target: {
-            input: addressOrName,
-            address: expectedSigner,
-            ensName: 'atlas.eth',
-          },
-          contacts: [{
-            id: 'recent:vitalik.eth:0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045',
-            kind: 'recent_ens' as const,
-            label: 'vitalik.eth',
-            address: '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045',
-            ensName: 'vitalik.eth',
-            detail: 'Recent contact',
-          }],
-        };
-      },
-    },
-  });
-  assert.equal(recentContacts.status, 200);
-  assert.equal(recentContacts.body.target.ensName, 'atlas.eth');
-  assert.equal(recentContacts.body.contacts[0].kind, 'recent_ens');
-  assert.equal(recentContacts.body.contacts[0].label, 'vitalik.eth');
-
+test('mobile Message threads are sourced from Platform RWR only', async () => {
   const threads = await requestMobileRoute(platformProjection, {
     method: 'GET',
     url: '/mobile/message/threads',
@@ -1557,85 +1525,7 @@ test('mobile Message XMTP routes mount without an XMTP network dependency', asyn
   assert.equal(threads.status, 200);
   assert.equal(threads.body.threads[0].id, '101~201');
   assert.equal(threads.body.threads[0].source, 'platform_rwr');
-  assert.deepEqual(threads.body.threads[0].xmtpLinks, []);
-
-  const identity = await requestMobileRoute(platformProjection, {
-    method: 'POST',
-    url: '/mobile/message/xmtp/phone-identities',
-    body: {
-      inboxId: 'xmtp-inbox-1',
-      installationId: 'phone-installation-1',
-      walletAddress: expectedSigner,
-      environment: 'dev',
-    },
-  });
-  assert.equal(identity.status, 200);
-  assert.equal(identity.body.identity.inboxId, 'xmtp-inbox-1');
-  assert.equal(identity.body.identity.installationId, 'phone-installation-1');
-  assert.equal(identity.body.identity.walletAddress, expectedSigner);
-  assert.equal(identity.body.identity.environment, 'dev');
-  assert.match(identity.body.identity.registeredAt, /^\d{4}-\d{2}-\d{2}T/);
-
-  registerPhoneXmtpIdentityForUser('another-user', {
-    inboxId: 'xmtp-inbox-2',
-    installationId: 'phone-installation-2',
-    walletAddress: '0x4444444444444444444444444444444444444444',
-    environment: 'dev',
-  });
-
-  const regentUsers = await requestMobileRoute(platformProjection, {
-    method: 'GET',
-    url: '/mobile/message/contacts/regent-users',
-  });
-  assert.equal(regentUsers.status, 200);
-  assert.deepEqual(regentUsers.body.contacts.map((contact: { kind: string; label: string; address: string }) => ({
-    kind: contact.kind,
-    label: contact.label,
-    address: contact.address,
-  })), [
-      {
-        kind: 'regent_agent',
-        label: 'Atlas Capital',
-        address: expectedRegentWallet,
-      },
-    {
-      kind: 'regent_human',
-      label: 'You',
-      address: expectedSigner,
-    },
-    {
-      kind: 'regent_human',
-      label: 'Regent user',
-      address: '0x4444444444444444444444444444444444444444',
-    },
-  ]);
-
-  const linked = await requestMobileRoute(platformProjection, {
-    method: 'POST',
-    url: '/mobile/message/threads/101~202~301/xmtp-links',
-    body: {
-      conversationId: 'xmtp-conversation-1',
-      conversationKind: 'group',
-      environment: 'dev',
-    },
-  }, { platformRwrClient });
-  assert.equal(linked.status, 200);
-  assert.equal(linked.body.thread.id, '101~202~301');
-  assert.equal(linked.body.thread.platformThreadId, '101~202~301');
-  assert.equal(linked.body.thread.agentId, 'atlas-capital');
-  assert.equal(linked.body.thread.agentName, 'Atlas Capital');
-  assert.equal(linked.body.thread.source, 'platform_rwr');
-  assert.deepEqual(linked.body.thread.xmtpLinks.map((link: { conversationId: string; conversationKind: string; environment: string }) => ({
-    conversationId: link.conversationId,
-    conversationKind: link.conversationKind,
-    environment: link.environment,
-  })), [
-    {
-      conversationId: 'xmtp-conversation-1',
-      conversationKind: 'group',
-      environment: 'dev',
-    },
-  ]);
+  assert.equal(Object.prototype.hasOwnProperty.call(threads.body.threads[0], 'xmtpLinks'), false);
 });
 
 test('mobile Regent wallet intent state is written to durable backend storage', () => {

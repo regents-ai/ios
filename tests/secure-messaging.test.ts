@@ -1,79 +1,49 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import {
-  bytesToHex,
-  hexToBytes,
-  parseXmtpEnvironment,
-  secureMessagingDbKeyStorageKey,
-} from '../utils/xmtp/secureMessagingConfig';
-import { getOrCreateSecureMessagingDbKey } from '../utils/xmtp/secureMessagingKeys';
+import { existsSync, readFileSync } from 'node:fs';
 
-test('secure message environment is explicit', () => {
-  assert.equal(parseXmtpEnvironment('dev'), 'dev');
-  assert.equal(parseXmtpEnvironment('production'), 'production');
-  assert.throws(() => parseXmtpEnvironment(undefined), /Secure messages are not configured/);
-  assert.throws(() => parseXmtpEnvironment('staging'), /Secure messages are not configured/);
+function read(path: string) {
+  return readFileSync(path, 'utf8');
+}
+
+test('message setup no longer requires a separate message network', () => {
+  const layout = read('app/_layout.tsx');
+  const config = read('utils/mobilePublicConfig.ts');
+  const envExample = read('.env.example');
+
+  assert.doesNotMatch(layout, /RegentsXmtpProvider|xmtpEnvironment|message network/);
+  assert.doesNotMatch(config, /EXPO_PUBLIC_XMTP_ENV|parseXmtpEnvironment|XmtpEnvironment/);
+  assert.doesNotMatch(envExample, /EXPO_PUBLIC_XMTP_ENV/);
 });
 
-test('secure message database key is stable per user wallet and environment', async () => {
-  const values = new Map<string, string>();
-  const store = {
-    getItemAsync: async (key: string) => values.get(key) || null,
-    setItemAsync: async (key: string, value: string) => {
-      values.set(key, value);
-    },
-  };
-  let generated = 0;
-  const input = {
-    userId: 'user-1',
-    walletAddress: '0xABCDEFabcdefABCDEFabcdefABCDEFabcdefABCD',
-    environment: 'dev' as const,
-  };
+test('app package and source have no XMTP message transport dependency', () => {
+  const packageJson = read('package.json');
+  const packageLock = read('package-lock.json');
+  const regentClient = read('utils/regentApi/client.ts');
+  const regentTypes = read('types/regents.ts');
 
-  const first = await getOrCreateSecureMessagingDbKey(input, {
-    store,
-    randomBytes: async (size) => {
-      generated += 1;
-      return new Uint8Array(size).fill(7);
-    },
-  });
-  const second = await getOrCreateSecureMessagingDbKey(input, {
-    store,
-    randomBytes: async (size) => {
-      generated += 1;
-      return new Uint8Array(size).fill(9);
-    },
-  });
-
-  assert.equal(generated, 1);
-  assert.equal(first.byteLength, 32);
-  assert.deepEqual(Array.from(second), Array.from(first));
-  assert.equal(values.size, 1);
-  assert.match(secureMessagingDbKeyStorageKey(input), /0xabcdefabcdefabcdefabcdefabcdefabcdefabcd/);
+  assert.equal(existsSync('components/xmtp/RegentsXmtpProvider.tsx'), false);
+  assert.equal(existsSync('utils/xmtp/secureMessagingConfig.ts'), false);
+  assert.equal(existsSync('utils/xmtp/secureMessagingKeys.ts'), false);
+  assert.doesNotMatch(packageJson, /@xmtp\/react-native-sdk/);
+  assert.doesNotMatch(packageLock, /@xmtp\/react-native-sdk|XMTPReactNative/);
+  assert.doesNotMatch(regentClient, /xmtp|Xmtp|registerPhone|linkXmtp|MessageContact/);
+  assert.doesNotMatch(regentTypes, /xmtp|Xmtp|MessageContact|PhoneXmtp|AgentXmtp/);
 });
 
-test('secure message key encoding preserves 32 bytes exactly', () => {
-  const bytes = new Uint8Array(32).fill(12);
-  const hex = bytesToHex(bytes);
-  assert.equal(hex.length, 64);
-  assert.deepEqual(Array.from(hexToBytes(hex)), Array.from(bytes));
-  assert.throws(() => hexToBytes('abcd'), /valid local key/);
-});
+test('message screens use the backend agent-work path without channel setup copy', () => {
+  const messageTab = read('app/(tabs)/terminal.tsx');
+  const detail = read('app/terminal/[id].tsx');
+  const visibleInternalWords = /<Text[^>]*>[^<]*(XMTP|inbox|installation|Platform|secure channel)[^<]*<\/Text>/i;
 
-test('message screens use secure-channel copy without public internals', () => {
-  const talkDetail = readFileSync('app/terminal/[id].tsx', 'utf8');
-  const messageTab = readFileSync('app/(tabs)/terminal.tsx', 'utf8');
-  const provider = readFileSync('components/xmtp/RegentsXmtpProvider.tsx', 'utf8');
-  const visibleStringPattern = /<Text[^>]*>[^<]*(XMTP|inbox|installation|Platform)[^<]*<\/Text>/i;
-
-  assert.match(talkDetail, /Connect secure channel/);
-  assert.match(talkDetail, /Secure channel connected/);
-  assert.match(talkDetail, /This agent is not ready for secure messages yet/);
-  assert.match(provider, /WHEN_UNLOCKED_THIS_DEVICE_ONLY/);
-  assert.match(provider, /connectWalletChannel/);
-  assert.match(provider, /findInboxIdFromIdentity/);
-  assert.match(provider, /findOrCreateDm/);
-  assert.doesNotMatch(talkDetail, visibleStringPattern);
-  assert.doesNotMatch(messageTab, visibleStringPattern);
+  assert.match(messageTab, /Message your agent/);
+  assert.match(messageTab, /Agent messages, payment requests, and work updates/);
+  assert.match(messageTab, /regentApi\.listTerminalSessions/);
+  assert.match(detail, /regentApi\.sendTerminalMessage/);
+  assert.match(detail, /regentApi\.resolveTerminalApproval/);
+  assert.match(detail, /Approve payment/);
+  assert.doesNotMatch(messageTab, /Lookup Recent Addresses|Lookup Regent Users|connectWalletChannel/);
+  assert.doesNotMatch(detail, /Connect secure channel|connectAgentChannel/);
+  assert.doesNotMatch(messageTab, visibleInternalWords);
+  assert.doesNotMatch(detail, visibleInternalWords);
 });
