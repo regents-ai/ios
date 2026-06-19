@@ -1,5 +1,8 @@
 import { Href } from 'expo-router';
 
+type EmailVerifyMode = 'signin' | 'link';
+type PhoneVerifyMode = 'signin' | 'link' | 'reverify';
+
 export const routes = {
   wallet(): Href {
     return '/wallet';
@@ -47,7 +50,21 @@ export const routes = {
   },
 
   agentVoice(regentId: string, name?: string): Href {
-    return { pathname: '/agent/[id]/voice', params: { id: regentId, ...(name ? { name } : {}) } } as unknown as Href;
+    return name
+      ? { pathname: '/agent/[id]/voice', params: { id: regentId, name } }
+      : { pathname: '/agent/[id]/voice', params: { id: regentId } };
+  },
+
+  emailVerify(params: { mode: EmailVerifyMode; initialEmail?: string }): Href {
+    return { pathname: '/email-verify', params };
+  },
+
+  phoneVerify(params: {
+    mode: PhoneVerifyMode;
+    initialPhone?: string;
+    autoSend?: 'true';
+  }): Href {
+    return { pathname: '/phone-verify', params };
   },
 
   onrampReturn(partnerUserRef?: string | null): Href {

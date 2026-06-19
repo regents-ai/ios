@@ -4,14 +4,12 @@ import { PrivyProvider } from "@privy-io/expo";
 
 import { AuthGate } from "@/components/AuthGate";
 import { AuthInitializer } from "@/components/AuthInitializer";
-import { RegentsXmtpProvider } from "@/components/xmtp/RegentsXmtpProvider";
 import { COLORS } from "@/constants/Colors";
 import { FONTS } from "@/constants/Typography";
 import { useAppBootstrap } from "@/hooks/useAppBootstrap";
 import { useRegentsAuth } from "@/hooks/useRegentsAuth";
 import { fetchCdpAuthToken } from "@/utils/fetchCdpAuthToken";
 import { hasRegentsAccountConfig, readMobilePublicConfig } from "@/utils/mobilePublicConfig";
-import type { XmtpEnvironment } from "@/types/regents";
 import { useMemo } from "react";
 import 'react-native-get-random-values';
 import 'react-native-url-polyfill/auto';
@@ -24,11 +22,9 @@ const cardSlideBottom = { presentation: 'card', animation: 'slide_from_bottom' }
 function WalletProviders({
   children,
   cdpProjectId,
-  xmtpEnvironment,
 }: {
   children: React.ReactNode;
   cdpProjectId: string;
-  xmtpEnvironment: XmtpEnvironment;
 }) {
   const { getAccessToken } = useRegentsAuth();
 
@@ -59,9 +55,7 @@ function WalletProviders({
     <CDPHooksProvider config={cdpConfig}>
       <AuthInitializer>
         <AuthGate>
-          <RegentsXmtpProvider environment={xmtpEnvironment}>
-            {children}
-          </RegentsXmtpProvider>
+          {children}
         </AuthGate>
       </AuthInitializer>
     </CDPHooksProvider>
@@ -94,7 +88,7 @@ export default function RootLayout() {
     );
   }
 
-  if (!canUseRegentsAccount || !config.privyAppId || !config.privyClientId || !config.cdpProjectId || !config.xmtpEnvironment) {
+  if (!canUseRegentsAccount || !config.privyAppId || !config.privyClientId || !config.cdpProjectId) {
     return (
       <View style={styles.missingConfigContainer}>
         <View style={styles.missingConfigCard}>
@@ -116,10 +110,6 @@ export default function RootLayout() {
             </View>
             <View style={styles.missingConfigRow}>
               <View style={styles.missingConfigDot} />
-              <Text style={styles.missingConfigItem}>Choose the message network for this build.</Text>
-            </View>
-            <View style={styles.missingConfigRow}>
-              <View style={styles.missingConfigDot} />
               <Text style={styles.missingConfigItem}>Reopen the app after saving those details.</Text>
             </View>
           </View>
@@ -130,7 +120,7 @@ export default function RootLayout() {
 
   return (
     <PrivyProvider appId={config.privyAppId} clientId={config.privyClientId}>
-      <WalletProviders cdpProjectId={config.cdpProjectId} xmtpEnvironment={config.xmtpEnvironment}>
+      <WalletProviders cdpProjectId={config.cdpProjectId}>
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen
             name="auth/login"
