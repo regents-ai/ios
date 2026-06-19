@@ -113,21 +113,19 @@ test('message screens present agent messages and payment approvals plainly', () 
   const detail = read('app/terminal/[id].tsx');
 
   assert.match(terminal, /Message your agent/);
-  assert.match(terminal, /secure agent chats/);
-  assert.match(terminal, /New message/);
-  assert.match(terminal, /ENS or Ethereum address/);
-  assert.match(terminal, /Lookup Recent Addresses/);
-  assert.match(terminal, /Lookup Regent Users/);
-  assert.match(terminal, /lookupRecentMessageContacts/);
-  assert.match(terminal, /listRegentMessageContacts/);
-  assert.match(terminal, /connectWalletChannel/);
-  assert.match(terminal, /No recent ENS names found for this address/);
-  assert.match(terminal, /listMessageThreads/);
-  assert.match(terminal, /Secure channel/);
+  assert.match(terminal, /approve payment requests/);
+  assert.match(terminal, /Agent messages, payment requests, and work updates/);
+  assert.match(terminal, /listTerminalSessions/);
+  assert.doesNotMatch(terminal, /New message|ENS or Ethereum address|Lookup Recent Addresses|Lookup Regent Users/);
+  assert.doesNotMatch(terminal, /lookupRecentMessageContacts|listRegentMessageContacts|connectWalletChannel/);
+  assert.doesNotMatch(terminal, /Secure channel|secure agent chats/);
   assert.match(terminal, /Payment approval/);
   assert.match(detail, /Payment requested/);
   assert.match(detail, /Agent requests \$\{approval\.amount\} \$\{approval\.currency\}/);
   assert.match(detail, /Approve payment/);
+  assert.match(detail, /sendTerminalMessage/);
+  assert.match(detail, /resolveTerminalApproval/);
+  assert.doesNotMatch(detail, /Connect secure channel|connectAgentChannel/);
 });
 
 test('approval card shows the full structured review schema', () => {

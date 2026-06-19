@@ -11,7 +11,7 @@ test('OpenAPI operations have stable operation IDs', () => {
   const operations = [...contract.matchAll(/^    (get|post|put|patch|delete):$/gm)];
   const operationIds = [...contract.matchAll(/^\s+operationId:\s+([A-Za-z0-9_]+)$/gm)].map((match) => match[1]);
 
-  assert.equal(operations.length, 46);
+  assert.equal(operations.length, 41);
   assert.equal(operationIds.length, operations.length);
   assert.equal(new Set(operationIds).size, operationIds.length);
 });
@@ -111,44 +111,28 @@ test('Platform staking wallet-action contract uses even-byte calldata constraint
   assert.match(approval, /data:[\s\S]*pattern: '\^0x\(\[a-fA-F0-9\]\{2\}\)\*\$'/);
 });
 
-test('Message XMTP contract keeps Platform RWR as the source of truth', () => {
-  assert.match(contract, /x-regent-chat-room-contract:[\s\S]*talk_source: Platform Regent Work Runtime/);
+test('Message contract keeps Platform RWR as the source of truth', () => {
+  assert.match(contract, /x-regent-message-contract:[\s\S]*talk_source: Platform Regent Work Runtime/);
   assert.match(contract, /transport_boundary: Mobile Message threads are sourced from Platform Regent Work Runtime/);
-  assert.match(contract, /xmtp_room_routes:[\s\S]*\/mobile\/message\/threads[\s\S]*\/mobile\/message\/contacts\/recent-addresses[\s\S]*\/mobile\/message\/contacts\/regent-users[\s\S]*\/mobile\/message\/xmtp\/phone-identities[\s\S]*\/mobile\/message\/xmtp\/agents\/\{agent_id\}[\s\S]*\/mobile\/message\/threads\/\{thread_id\}\/xmtp-links/);
+  assert.match(contract, /routes:[\s\S]*\/mobile\/message\/threads/);
 
   assert.match(contract, /\/mobile\/message\/threads:[\s\S]*operationId: listMobileMessageThreads/);
-  assert.match(contract, /\/mobile\/message\/contacts\/recent-addresses:[\s\S]*operationId: lookupMobileMessageRecentAddresses/);
-  assert.match(contract, /\/mobile\/message\/contacts\/regent-users:[\s\S]*operationId: listMobileMessageRegentUsers/);
-  assert.match(contract, /\/mobile\/message\/xmtp\/phone-identities:[\s\S]*operationId: registerMobilePhoneXmtpIdentity/);
-  assert.match(contract, /\/mobile\/message\/xmtp\/agents\/\{agent_id\}:[\s\S]*operationId: getMobileAgentXmtpIdentity/);
-  assert.match(contract, /\/mobile\/message\/threads\/\{thread_id\}\/xmtp-links:[\s\S]*operationId: linkMobileMessageThreadXmtpConversation/);
 
-  assert.match(contract, /MessageThread:[\s\S]*required: \[id, platformThreadId, agentId, agentName, source, title, latestNote, lastUpdatedAt, xmtpLinks\]/);
+  assert.match(contract, /MessageThread:[\s\S]*required: \[id, platformThreadId, agentId, agentName, source, title, latestNote, lastUpdatedAt\]/);
   assert.match(contract, /source:[\s\S]*enum: \[platform_rwr\]/);
-  assert.match(contract, /MessageContactLookupTarget:[\s\S]*required: \[input, address\]/);
-  assert.match(contract, /MessageContactSuggestion:[\s\S]*required: \[id, kind, label, address\][\s\S]*enum: \[recent_ens, regent_agent, regent_human\]/);
-  assert.match(contract, /XmtpConversationLink:[\s\S]*required: \[conversationId, conversationKind, environment, linkedAt\][\s\S]*environment:[\s\S]*enum: \[dev, production\]/);
-  assert.match(contract, /RegisterPhoneXmtpIdentityRequest:[\s\S]*additionalProperties: false[\s\S]*required: \[inboxId, installationId, walletAddress, environment\][\s\S]*environment:[\s\S]*enum: \[dev, production\]/);
-  assert.match(contract, /PhoneXmtpIdentity:[\s\S]*required: \[inboxId, installationId, walletAddress, environment, registeredAt\]/);
-  assert.match(contract, /AgentXmtpIdentity:[\s\S]*required: \[agentId, inboxId, walletAddress, environment\]/);
-  assert.match(contract, /LinkXmtpConversationRequest:[\s\S]*additionalProperties: false[\s\S]*required: \[conversationId, conversationKind, environment\][\s\S]*environment:[\s\S]*enum: \[dev, production\]/);
+  assert.doesNotMatch(contract, /\/mobile\/message\/contacts\/recent-addresses/);
+  assert.doesNotMatch(contract, /\/mobile\/message\/contacts\/regent-users/);
+  assert.doesNotMatch(contract, /\/mobile\/message\/xmtp|xmtp-links|Xmtp|XMTP/);
+  assert.doesNotMatch(contract, /MessageContactLookupTarget|MessageContactSuggestion/);
 });
 
-test('Regent app client has Message secure-channel calls with the XMTP native SDK', () => {
-  assert.match(packageJson, /"@xmtp\/react-native-sdk": "5\.7\.0"/);
+test('Regent app client uses only backend-sourced Message threads', () => {
+  assert.doesNotMatch(packageJson, /"@xmtp\/react-native-sdk"/);
   assert.match(regentTypes, /export type MessageThread = [\s\S]*source: 'platform_rwr'/);
-  assert.match(regentTypes, /export type XmtpConversationKind = 'dm' \| 'group'/);
-  assert.match(regentTypes, /export type XmtpEnvironment = 'dev' \| 'production'/);
+  assert.doesNotMatch(regentTypes, /Xmtp|xmtp|MessageContact|PhoneXmtp|AgentXmtp/);
 
   assert.match(regentClient, /const mobileMessageThreadsPath = '\/mobile\/message\/threads'/);
-  assert.match(regentClient, /const mobileMessageRecentContactsPath = '\/mobile\/message\/contacts\/recent-addresses'/);
-  assert.match(regentClient, /const mobileMessageRegentContactsPath = '\/mobile\/message\/contacts\/regent-users'/);
   assert.match(regentClient, /listMessageThreads\(\): Promise<MessageThread\[\]>/);
-  assert.match(regentClient, /lookupRecentMessageContacts\(input:/);
-  assert.match(regentClient, /listRegentMessageContacts\(\): Promise<MessageContactSuggestion\[\]>/);
-  assert.match(regentClient, /registerPhoneXmtpIdentity\(input:/);
-  assert.match(regentClient, /getAgentXmtpIdentity\(agentId: string\)/);
-  assert.match(regentClient, /linkXmtpConversation\(input:/);
-  assert.match(regentClient, /messageThreadXmtpLinksPath\(input\.threadId\)/);
-  assert.match(regentClient, /environment: XmtpEnvironment/);
+  assert.doesNotMatch(regentClient, /lookupRecentMessageContacts|listRegentMessageContacts|registerPhoneXmtpIdentity/);
+  assert.doesNotMatch(regentClient, /getAgentXmtpIdentity|linkXmtpConversation|xmtp|Xmtp|MessageContact/);
 });

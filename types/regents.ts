@@ -277,33 +277,6 @@ export type HermesVoiceToolResult = {
   error?: Record<string, unknown> | null;
 };
 
-export type XmtpConversationKind = 'dm' | 'group';
-export type XmtpEnvironment = 'dev' | 'production';
-export type MessageContactKind = 'recent_ens' | 'regent_agent' | 'regent_human';
-
-export type XmtpConversationLink = {
-  conversationId: string;
-  conversationKind: XmtpConversationKind;
-  environment: XmtpEnvironment;
-  linkedAt: string;
-};
-
-export type MessageContactLookupTarget = {
-  input: string;
-  address: string;
-  ensName?: string;
-};
-
-export type MessageContactSuggestion = {
-  id: string;
-  kind: MessageContactKind;
-  label: string;
-  address: string;
-  ensName?: string;
-  detail?: string;
-  agentId?: string;
-};
-
 export type MessageThread = {
   id: string;
   platformThreadId: string;
@@ -313,23 +286,6 @@ export type MessageThread = {
   title: string;
   latestNote: string;
   lastUpdatedAt: string;
-  xmtpLinks: XmtpConversationLink[];
-};
-
-export type PhoneXmtpIdentity = {
-  inboxId: string;
-  installationId: string;
-  walletAddress: string;
-  environment: XmtpEnvironment;
-  registeredAt: string;
-};
-
-export type AgentXmtpIdentity = {
-  agentId: string;
-  inboxId: string;
-  walletAddress: string;
-  environment: XmtpEnvironment;
-  displayName?: string;
 };
 
 export type PreparedWalletAction = {

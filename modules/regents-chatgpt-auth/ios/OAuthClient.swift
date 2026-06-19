@@ -121,11 +121,24 @@ public enum OAuthClient {
 
   private static func formEncode(_ pairs: [String: String]) -> Data {
     let encoded = pairs.map { key, value in
-      let encodedKey = key.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? key
-      let encodedValue = value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? value
+      let encodedKey = formComponentEncode(key)
+      let encodedValue = formComponentEncode(value)
       return "\(encodedKey)=\(encodedValue)"
     }.joined(separator: "&")
     return Data(encoded.utf8)
+  }
+
+  private static func formComponentEncode(_ value: String) -> String {
+    var encoded = ""
+    for byte in value.utf8 {
+      switch byte {
+      case 0x41...0x5A, 0x61...0x7A, 0x30...0x39, 0x2D, 0x2E, 0x5F, 0x7E:
+        encoded.append(Character(UnicodeScalar(byte)))
+      default:
+        encoded += String(format: "%%%02X", byte)
+      }
+    }
+    return encoded
   }
 }
 

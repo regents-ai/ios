@@ -1,10 +1,6 @@
 import { getBaseUrl } from '@/constants/BASE_URL';
 import {
-  AgentXmtpIdentity,
-  MessageContactLookupTarget,
-  MessageContactSuggestion,
   MessageThread,
-  PhoneXmtpIdentity,
   PreparedWalletAction,
   RegentDetail,
   RegentFundingIntent,
@@ -16,7 +12,6 @@ import {
   TerminalEvent,
   TerminalSessionDetail,
   TerminalSessionSummary,
-  XmtpEnvironment,
 } from '@/types/regents';
 import { authenticatedFetch } from '@/utils/authenticatedFetch';
 import { createHermesVoiceApi, type MobileHermesVoicePath } from '@/utils/regentApi/voice';
@@ -25,10 +20,6 @@ const mobileRegentsPath = '/mobile/regents';
 const mobileRegentStakingPath = '/mobile/regent/staking';
 const mobileTerminalSessionsPath = '/mobile/terminal/sessions';
 const mobileMessageThreadsPath = '/mobile/message/threads';
-const mobileMessageRecentContactsPath = '/mobile/message/contacts/recent-addresses';
-const mobileMessageRegentContactsPath = '/mobile/message/contacts/regent-users';
-const mobileMessageXmtpPhoneIdentitiesPath = '/mobile/message/xmtp/phone-identities';
-const mobileMessageXmtpAgentsPath = '/mobile/message/xmtp/agents';
 
 type MobileRegentPath =
   | typeof mobileRegentsPath
@@ -63,12 +54,7 @@ type MobileTerminalPath =
   | `${typeof mobileTerminalSessionsPath}/${string}/approvals/${string}`;
 
 type MobileMessagePath =
-  | typeof mobileMessageThreadsPath
-  | `${typeof mobileMessageRecentContactsPath}?addressOrName=${string}`
-  | typeof mobileMessageRegentContactsPath
-  | typeof mobileMessageXmtpPhoneIdentitiesPath
-  | `${typeof mobileMessageXmtpAgentsPath}/${string}`
-  | `${typeof mobileMessageThreadsPath}/${string}/xmtp-links`;
+  typeof mobileMessageThreadsPath;
 
 type RegentApiPath =
   | MobileRegentPath
@@ -156,17 +142,6 @@ const terminalApprovalPath = (
   requestId: string
 ): `${typeof mobileTerminalSessionsPath}/${string}/approvals/${string}` =>
   `${terminalSessionPath(sessionId)}/approvals/${encodeURIComponent(requestId)}`;
-
-const messageThreadXmtpLinksPath = (threadId: string): `${typeof mobileMessageThreadsPath}/${string}/xmtp-links` =>
-  `${mobileMessageThreadsPath}/${encodeURIComponent(threadId)}/xmtp-links`;
-
-const agentXmtpIdentityPath = (agentId: string): `${typeof mobileMessageXmtpAgentsPath}/${string}` =>
-  `${mobileMessageXmtpAgentsPath}/${encodeURIComponent(agentId)}`;
-
-const recentMessageContactsPath = (
-  addressOrName: string,
-): `${typeof mobileMessageRecentContactsPath}?addressOrName=${string}` =>
-  `${mobileMessageRecentContactsPath}?addressOrName=${encodeURIComponent(addressOrName)}`;
 
 export const regentApi = {
   ...createHermesVoiceApi(requestJson),
@@ -593,85 +568,5 @@ export const regentApi = {
     );
 
     return payload.threads;
-  },
-
-  lookupRecentMessageContacts(input: { addressOrName: string }): Promise<{
-    target: MessageContactLookupTarget;
-    contacts: MessageContactSuggestion[];
-  }> {
-    return requestJson<{
-      target: MessageContactLookupTarget;
-      contacts: MessageContactSuggestion[];
-    }>(
-      recentMessageContactsPath(input.addressOrName),
-      undefined,
-      'Unable to look up recent contacts right now.'
-    );
-  },
-
-  async listRegentMessageContacts(): Promise<MessageContactSuggestion[]> {
-    const payload = await requestJson<{ contacts: MessageContactSuggestion[] }>(
-      mobileMessageRegentContactsPath,
-      undefined,
-      'Unable to load Regent contacts right now.'
-    );
-
-    return payload.contacts;
-  },
-
-  async registerPhoneXmtpIdentity(input: {
-    inboxId: string;
-    installationId: string;
-    walletAddress: string;
-    environment: XmtpEnvironment;
-  }): Promise<PhoneXmtpIdentity> {
-    const payload = await requestJson<{ identity: PhoneXmtpIdentity }>(
-      mobileMessageXmtpPhoneIdentitiesPath,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(input),
-      },
-      'Unable to connect messages right now.'
-    );
-
-    return payload.identity;
-  },
-
-  async getAgentXmtpIdentity(agentId: string): Promise<AgentXmtpIdentity> {
-    const payload = await requestJson<{ identity: AgentXmtpIdentity }>(
-      agentXmtpIdentityPath(agentId),
-      undefined,
-      'Unable to load this agent message address right now.'
-    );
-
-    return payload.identity;
-  },
-
-  async linkXmtpConversation(input: {
-    threadId: string;
-    conversationId: string;
-    conversationKind: 'dm' | 'group';
-    environment: XmtpEnvironment;
-  }): Promise<MessageThread> {
-    const payload = await requestJson<{ thread: MessageThread }>(
-      messageThreadXmtpLinksPath(input.threadId),
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          conversationId: input.conversationId,
-          conversationKind: input.conversationKind,
-          environment: input.environment,
-        }),
-      },
-      'Unable to connect this conversation right now.'
-    );
-
-    return payload.thread;
   },
 };

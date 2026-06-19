@@ -1,8 +1,9 @@
 import { useCallback, useMemo, useState } from 'react';
-import { useRouter } from 'expo-router';
+import { type Href, useRouter } from 'expo-router';
 
 import { useRegentsAuth } from '@/hooks/useRegentsAuth';
 import type { OnrampFormData } from '@/components/onramp/onramp-form-types';
+import { routes } from '@/utils/navigation/routes';
 import {
   clearPendingForm,
   setPendingForm,
@@ -21,7 +22,7 @@ type AlertState = {
   title: string;
   message: string;
   type: 'success' | 'error' | 'info';
-  navigationPath?: string;
+  navigationPath?: Href;
   onConfirmCallback?: () => Promise<void> | void;
   onCancelCallback?: () => void;
   confirmText?: string;
@@ -163,7 +164,7 @@ export function useWalletOnrampSubmit({
             title: `Link Email for ${paymentLabel}`,
             message: `${paymentLabel} requires both email and phone verification for compliance.\n\nWould you like to link your email to this account to continue?`,
             type: 'info',
-            navigationPath: '/email-verify?mode=link',
+            navigationPath: routes.emailVerify({ mode: 'link' }),
           });
           return;
         }
@@ -189,14 +190,11 @@ export function useWalletOnrampSubmit({
                   await signOutWallet();
                   await new Promise(resolve => setTimeout(resolve, 500));
 
-                  router.replace({
-                    pathname: '/phone-verify',
-                    params: {
-                      initialPhone: cdpPhone,
-                      mode: 'signin',
-                      autoSend: 'true',
-                    },
-                  });
+                  router.replace(routes.phoneVerify({
+                    initialPhone: cdpPhone,
+                    mode: 'signin',
+                    autoSend: 'true',
+                  }));
                 } catch (signOutError: any) {
                   setAlertState({
                     visible: true,
@@ -217,7 +215,7 @@ export function useWalletOnrampSubmit({
               title: `Link Phone for ${paymentLabel}`,
               message: `${paymentLabel} requires both email and phone verification for compliance.\n\nWould you like to link your phone to this account to continue?`,
               type: 'info',
-              navigationPath: '/phone-verify?mode=link',
+              navigationPath: routes.phoneVerify({ mode: 'link' }),
             });
           }
           return;
@@ -242,14 +240,11 @@ export function useWalletOnrampSubmit({
                 await signOutWallet();
                 await new Promise(resolve => setTimeout(resolve, 500));
 
-                router.replace({
-                  pathname: '/phone-verify',
-                  params: {
-                    initialPhone: expiredPhone,
-                    mode: 'signin',
-                    autoSend: 'true',
-                  },
-                });
+                router.replace(routes.phoneVerify({
+                  initialPhone: expiredPhone || '',
+                  mode: 'signin',
+                  autoSend: 'true',
+                }));
               } catch (signOutError: any) {
                 setAlertState({
                   visible: true,
@@ -312,7 +307,7 @@ export function useWalletOnrampSubmit({
     }
 
     if (navigationPath) {
-      router.push(navigationPath as any);
+      router.push(navigationPath);
     }
   }, [alertState.navigationPath, alertState.onConfirmCallback, clearTransaction, resetAlertState, router]);
 
