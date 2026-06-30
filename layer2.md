@@ -1,3 +1,22 @@
+<!-- BEGIN REGENT META GENERATED -->
+## Layer 2 Generated View
+
+Generated from `meta/stack.yaml` and repo `repo.yaml` files. Local notes may live outside this block.
+
+- Owner: `ios`
+- Release group: `public_beta`
+- Required for public beta: `true`
+- Owned areas: `mobile_wallet`, `mobile_action_signing`, `mobile_regent_records`.
+
+Contracts:
+- `ios_api` (api, owner `ios`): `api-contract.openapiv3.yaml`
+- `ios_mobile_services_api` (api, owner `ios`): `mobile-services-contract.openapiv3.yaml`
+
+Acceptance checks:
+- `ios`: `npm run check:app`
+- `ios`: `npm run test:app`
+- `ios/server`: `npm test`
+<!-- END REGENT META GENERATED -->
 # iOS Layer 2
 
 This file is the repo contract for Regents Mobile.

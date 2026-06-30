@@ -1,0 +1,28 @@
+version: 1
+repo: ios
+owner: ios
+path: ios
+release_group: public_beta
+stack_contract: ../meta/stack.yaml
+owns:
+  - mobile_wallet
+  - mobile_action_signing
+  - mobile_regent_records
+source_of_truth:
+  repo_contract: repo.yaml
+  http_contracts:
+    - api-contract.openapiv3.yaml
+    - mobile-services-contract.openapiv3.yaml
+  cli_contracts: []
+  shared_contracts: []
+  runtime_contracts: []
+  chain_contracts: []
+code_map: []
+local_path_dependencies: []
+acceptance_commands:
+  - cwd: ios
+    command: npm run check:app
+  - cwd: ios
+    command: npm run test:app
+  - cwd: ios/server
+    command: npm test
