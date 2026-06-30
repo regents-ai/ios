@@ -5,7 +5,7 @@ import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { RegentPressable } from '@/components/ui/RegentPressable';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
-import { TerminalSessionStatus, TerminalSessionSummary } from '@/types/regents';
+import { MessageThreadStatus, MessageThread } from '@/types/regents';
 import { routes } from '@/utils/navigation/routes';
 import { regentApi } from '@/utils/regentApi/client';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -40,7 +40,7 @@ function formatRelativeTime(value: string) {
   return `${Math.round(diffHours / 24)}d ago`;
 }
 
-function statusTone(status: TerminalSessionStatus) {
+function statusTone(status: MessageThreadStatus) {
   switch (status) {
     case 'running':
       return { label: 'Working', accent: BLUE, wash: BLUE_WASH };
@@ -53,17 +53,17 @@ function statusTone(status: TerminalSessionStatus) {
   }
 }
 
-function sessionRank(session: TerminalSessionSummary) {
-  if (session.pendingApproval && !session.pendingApproval.resolved) return 0;
-  if (session.status === 'waiting') return 1;
-  if (session.status === 'failed') return 2;
-  if (session.status === 'running') return 3;
+function threadRank(thread: MessageThread) {
+  if (thread.pendingApproval && !thread.pendingApproval.resolved) return 0;
+  if (thread.status === 'waiting') return 1;
+  if (thread.status === 'failed') return 2;
+  if (thread.status === 'running') return 3;
   return 4;
 }
 
-export default function TerminalTab() {
+export default function MessageTab() {
   const router = useRouter();
-  const [sessions, setSessions] = useState<TerminalSessionSummary[]>([]);
+  const [threads, setThreads] = useState<MessageThread[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [alertState, setAlertState] = useState<{
@@ -78,7 +78,7 @@ export default function TerminalTab() {
     type: 'info',
   });
 
-  const loadSessions = useCallback(async (refresh = false) => {
+  const loadThreads = useCallback(async (refresh = false) => {
     try {
       if (refresh) {
         setRefreshing(true);
@@ -86,8 +86,8 @@ export default function TerminalTab() {
         setLoading(true);
       }
 
-      const nextSessions = await regentApi.listTerminalSessions();
-      setSessions(nextSessions);
+      const nextThreads = await regentApi.listMessageThreads();
+      setThreads(nextThreads);
     } catch (error) {
       setAlertState({
         visible: true,
@@ -103,21 +103,21 @@ export default function TerminalTab() {
 
   useFocusEffect(
     useCallback(() => {
-      loadSessions();
-    }, [loadSessions])
+      loadThreads();
+    }, [loadThreads])
   );
 
-  const sortedSessions = useMemo(
+  const sortedThreads = useMemo(
     () =>
-      [...sessions].sort((left, right) => {
-        const rankDiff = sessionRank(left) - sessionRank(right);
+      [...threads].sort((left, right) => {
+        const rankDiff = threadRank(left) - threadRank(right);
         if (rankDiff !== 0) return rankDiff;
         return new Date(right.lastUpdatedAt).getTime() - new Date(left.lastUpdatedAt).getTime();
       }),
-    [sessions]
+    [threads]
   );
 
-  const waitingCount = sessions.filter((session) => session.status === 'waiting' || !!session.pendingApproval).length;
+  const waitingCount = threads.filter((thread) => thread.status === 'waiting' || !!thread.pendingApproval).length;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -129,7 +129,7 @@ export default function TerminalTab() {
           <RefreshControl
             refreshing={refreshing}
             tintColor={BLUE}
-            onRefresh={() => loadSessions(true)}
+            onRefresh={() => loadThreads(true)}
           />
         }
       >
@@ -144,7 +144,7 @@ export default function TerminalTab() {
           <View style={styles.headerActions}>
             <RegentPressable
               pressStyle="icon"
-              onPress={() => loadSessions(true)}
+              onPress={() => loadThreads(true)}
               disabled={refreshing}
               style={styles.iconButton}
             >
@@ -156,7 +156,7 @@ export default function TerminalTab() {
 
         <View style={styles.summaryRow}>
           <View style={styles.summaryCard}>
-            <Text style={styles.summaryValue}>{sessions.length}</Text>
+            <Text style={styles.summaryValue}>{threads.length}</Text>
             <Text style={styles.summaryLabel}>Open</Text>
           </View>
           <View style={styles.summaryCard}>
@@ -170,7 +170,7 @@ export default function TerminalTab() {
             <ActivityIndicator color={BLUE} />
             <Text style={styles.emptyTitle}>Loading messages</Text>
           </View>
-        ) : sortedSessions.length === 0 ? (
+        ) : sortedThreads.length === 0 ? (
           <View style={styles.emptyState}>
             <View style={styles.emptyIcon}>
               <Ionicons name="chatbubble-ellipses-outline" size={24} color={BLUE} />
@@ -180,32 +180,32 @@ export default function TerminalTab() {
           </View>
         ) : (
           <View style={styles.sessionList}>
-            {sortedSessions.map((session) => {
-              const tone = statusTone(session.status);
+            {sortedThreads.map((thread) => {
+              const tone = statusTone(thread.status);
               return (
                 <RegentPressable
-                  key={session.id}
+                  key={thread.id}
                   pressStyle="card"
                   style={styles.sessionCard}
-                  onPress={() => router.push(routes.terminalSession(session.id))}
+                  onPress={() => router.push(routes.messageThread(thread.id))}
                 >
                   <View style={styles.sessionHeader}>
                     <View style={styles.sessionTitleGroup}>
-                      <Text style={styles.sessionAgent}>{session.agentName}</Text>
-                      <Text style={styles.sessionTitle} numberOfLines={2}>{session.title}</Text>
+                      <Text style={styles.sessionAgent}>{thread.agentName}</Text>
+                      <Text style={styles.sessionTitle} numberOfLines={2}>{thread.title}</Text>
                     </View>
                     <StatusPill label={tone.label} color={tone.accent} backgroundColor={tone.wash} compact />
                   </View>
 
-                  <Text style={styles.sessionNote} numberOfLines={2}>{session.latestNote}</Text>
+                  <Text style={styles.sessionNote} numberOfLines={2}>{thread.latestNote}</Text>
 
                   <View style={styles.sessionFooter}>
-                    <Text style={styles.sessionMeta}>{formatRelativeTime(session.lastUpdatedAt)}</Text>
-                    {session.pendingApproval && !session.pendingApproval.resolved ? (
+                    <Text style={styles.sessionMeta}>{formatRelativeTime(thread.lastUpdatedAt)}</Text>
+                    {thread.pendingApproval && !thread.pendingApproval.resolved ? (
                       <View style={styles.reviewChip}>
                         <Ionicons name="eye-outline" size={14} color={AMBER} />
                         <Text style={styles.reviewText}>
-                          {session.pendingApproval.amount && session.pendingApproval.currency ? 'Payment approval' : 'Reply waiting'}
+                          {thread.pendingApproval.amount && thread.pendingApproval.currency ? 'Payment approval' : 'Reply waiting'}
                         </Text>
                       </View>
                     ) : null}

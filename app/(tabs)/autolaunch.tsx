@@ -99,7 +99,7 @@ export default function AutolaunchTab() {
         <Text style={styles.noteTitle}>Keep it light</Text>
         <Text style={styles.noteBody}>
           This screen is only for the handoff. The rest of the app should help you decide what is
-          worth opening, not bury you in a trading terminal.
+          worth opening, not bury you in a trading screen.
         </Text>
       </View>
     </ScrollView>

@@ -202,7 +202,7 @@ export default function AgentDetailScreen() {
   }, [agent, router]);
 
   const openTalk = useCallback(() => {
-    router.push(routes.terminal());
+    router.push(routes.message());
   }, [router]);
 
   const openVoice = useCallback(() => {

@@ -21,13 +21,13 @@ import {
 import { createMobileRoutes } from './mobileRoutes.js';
 import { resetMobileVoiceSessionsForTests } from './mobileVoiceSessions.js';
 import {
-  createTerminalSession,
-  getTerminalEvents,
-  getTerminalSession,
-  listTerminalSessions,
-  postTerminalMessage,
-  resolveTerminalApproval,
-} from './mobileTerminal.js';
+  createMessageThread,
+  getMessageThreadEvents,
+  getMessageThread,
+  listMessageThreads,
+  postMessageThreadMessage,
+  resolveMessageThreadApproval,
+} from './mobileMessageThreads.js';
 import {
   createPlatformStakingClient,
   type PlatformProjection,
@@ -1066,13 +1066,13 @@ test('mobile Platform projection forwards bearer auth without cookies', async ()
   ]);
 });
 
-test('mobile Platform terminal routes forward bearer auth without cookies', async () => {
+test('mobile Platform message routes forward bearer auth without cookies', async () => {
   const forwarded: unknown[] = [];
   const result = await requestMobileRoute(
     platformProjection,
     {
       method: 'GET',
-      url: '/mobile/terminal/sessions',
+      url: '/mobile/message/threads',
       headers: {
         Authorization: 'Bearer mobile-token',
         Cookie: 'platform_session=secret',
@@ -1488,10 +1488,13 @@ test('return requests require the displayed destination to match the transaction
   assert.equal(response.status, 400);
 });
 
-test('mobile terminal and money routes remain mounted through the extracted router', async () => {
+test('mobile message and money routes remain mounted through the extracted router', async () => {
   const routePaths = listRoutePaths();
-  assert.ok(routePaths.includes('/mobile/terminal/sessions'));
   assert.ok(routePaths.includes('/mobile/message/threads'));
+  assert.ok(routePaths.includes('/mobile/message/threads/:thread_id'));
+  assert.ok(routePaths.includes('/mobile/message/threads/:thread_id/events'));
+  assert.ok(routePaths.includes('/mobile/message/threads/:thread_id/messages'));
+  assert.ok(routePaths.includes('/mobile/message/threads/:thread_id/approvals/:approval_id'));
   assert.ok(!routePaths.includes('/mobile/message/contacts/recent-addresses'));
   assert.ok(!routePaths.includes('/mobile/message/contacts/regent-users'));
   assert.ok(!routePaths.includes('/mobile/message/xmtp/phone-identities'));
@@ -1510,10 +1513,10 @@ test('mobile terminal and money routes remain mounted through the extracted rout
   assert.ok(routePaths.includes('/mobile/wallet-actions/:type/prepare'));
   assert.ok(routePaths.includes('/mobile/wallet-actions/:action_id/confirm'));
 
-  const sessions = await listTerminalSessions(platformRwrClient, {});
-  assert.equal(sessions.kind, 'ok');
-  if (sessions.kind === 'ok') {
-    assert.ok(sessions.data.length > 0);
+  const threads = await listMessageThreads(platformRwrClient, {});
+  assert.equal(threads.kind, 'ok');
+  if (threads.kind === 'ok') {
+    assert.ok(threads.data.length > 0);
   }
 });
 
@@ -1542,24 +1545,24 @@ test('mobile Regent wallet intent state is written to durable backend storage', 
   assert.match(readFileSync(filePath, 'utf8'), /atlas-capital/);
 });
 
-test('mobile terminal sessions and messages are sourced from Platform RWR', async () => {
-  const created = await createTerminalSession(platformRwrClient, {}, { agentId: '101', agentName: 'Atlas Capital' });
+test('mobile message threads and messages are sourced from Platform RWR', async () => {
+  const created = await createMessageThread(platformRwrClient, {}, { agentId: '101', agentName: 'Atlas Capital' });
   assert.equal(created.kind, 'ok');
   if (created.kind !== 'ok') {
     return;
   }
 
-  const updated = await postTerminalMessage(platformRwrClient, {}, created.data.id, 'Review this from mobile.');
+  const updated = await postMessageThreadMessage(platformRwrClient, {}, created.data.id, 'Review this from mobile.');
   assert.equal(updated.kind, 'ok');
 });
 
-test('mobile terminal approvals resolve through Platform RWR', async () => {
-  const result = await resolveTerminalApproval(platformRwrClient, {}, '101~202~301', '501', 'approved');
+test('mobile message approvals resolve through Platform RWR', async () => {
+  const result = await resolveMessageThreadApproval(platformRwrClient, {}, '101~202~301', '501', 'approved');
   assert.equal(result.kind, 'ok');
 });
 
-test('mobile terminal session detail carries the full structured approval schema', async () => {
-  const session = await getTerminalSession(platformRwrClient, {}, '101~202~301');
+test('mobile message thread detail carries the full structured approval schema', async () => {
+  const session = await getMessageThread(platformRwrClient, {}, '101~202~301');
   assert.equal(session.kind, 'ok');
   if (session.kind !== 'ok') {
     return;
@@ -1579,7 +1582,7 @@ test('mobile terminal session detail carries the full structured approval schema
   assert.equal(approval.resolved, false);
 });
 
-test('mobile terminal approvals without a Platform expiry or USD value omit those fields', async () => {
+test('mobile message approvals without a Platform expiry or USD value omit those fields', async () => {
   const noExpiryClient: PlatformRwrClient = {
     ...platformRwrClient,
     async fetchApprovals() {
@@ -1611,7 +1614,7 @@ test('mobile terminal approvals without a Platform expiry or USD value omit thos
     },
   };
 
-  const session = await getTerminalSession(noExpiryClient, {}, '101~202~301');
+  const session = await getMessageThread(noExpiryClient, {}, '101~202~301');
   assert.equal(session.kind, 'ok');
   if (session.kind !== 'ok') {
     return;
@@ -1624,8 +1627,8 @@ test('mobile terminal approvals without a Platform expiry or USD value omit thos
   assert.equal(approval.resolved, false);
 });
 
-test('mobile terminal events expose explicit approval review fields and event polling markers', async () => {
-  const first = await getTerminalEvents(platformRwrClient, {}, '101~202~301');
+test('mobile message events expose explicit approval review fields and event polling markers', async () => {
+  const first = await getMessageThreadEvents(platformRwrClient, {}, '101~202~301');
   assert.equal(first.kind, 'ok');
   if (first.kind !== 'ok') {
     return;
@@ -1643,15 +1646,15 @@ test('mobile terminal events expose explicit approval review fields and event po
 
   const latestEvent = first.data.at(-1);
   assert.ok(latestEvent?.eventId);
-  const next = await getTerminalEvents(platformRwrClient, {}, '101~202~301', latestEvent.eventId);
+  const next = await getMessageThreadEvents(platformRwrClient, {}, '101~202~301', latestEvent.eventId);
   assert.equal(next.kind, 'ok');
   if (next.kind === 'ok') {
     assert.deepEqual(next.data, []);
   }
 });
 
-test('mobile terminal event polling returns only the approval decision after approval resolves', async () => {
-  const first = await getTerminalEvents(platformRwrClient, {}, '101~202~301');
+test('mobile message event polling returns only the approval decision after approval resolves', async () => {
+  const first = await getMessageThreadEvents(platformRwrClient, {}, '101~202~301');
   assert.equal(first.kind, 'ok');
   if (first.kind !== 'ok') {
     return;
@@ -1660,7 +1663,7 @@ test('mobile terminal event polling returns only the approval decision after app
   const requestEvent = first.data.find((event) => event.type === 'tool.request');
   assert.equal(requestEvent?.eventId, 'approval:501:requested');
 
-  const next = await getTerminalEvents(resolvedApprovalClient, {}, '101~202~301', requestEvent.eventId);
+  const next = await getMessageThreadEvents(resolvedApprovalClient, {}, '101~202~301', requestEvent.eventId);
   assert.equal(next.kind, 'ok');
   if (next.kind === 'ok') {
     assert.deepEqual(

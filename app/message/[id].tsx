@@ -5,10 +5,10 @@ import { RegentPressable } from '@/components/ui/RegentPressable';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
 import {
-  PendingTerminalApproval,
-  TerminalEvent,
-  TerminalSessionDetail,
-  TerminalSessionStatus,
+  PendingMessageApproval,
+  MessageThreadEvent,
+  MessageThreadDetail,
+  MessageThreadStatus,
 } from '@/types/regents';
 import { routes } from '@/utils/navigation/routes';
 import { regentApi } from '@/utils/regentApi/client';
@@ -46,7 +46,7 @@ function formatEventTime(value: string) {
   });
 }
 
-function statusTone(status: TerminalSessionStatus) {
+function statusTone(status: MessageThreadStatus) {
   switch (status) {
     case 'running':
       return { label: 'Working', accent: BLUE, wash: BLUE_WASH };
@@ -59,11 +59,11 @@ function statusTone(status: TerminalSessionStatus) {
   }
 }
 
-function eventCopy(event: TerminalEvent) {
+function eventCopy(event: MessageThreadEvent) {
   return event.text || event.chunk || event.message || event.riskCopy || event.status || event.type;
 }
 
-function eventTitle(event: TerminalEvent) {
+function eventTitle(event: MessageThreadEvent) {
   if (event.type === 'tool.request' && event.amount && event.currency) return 'Payment requested';
   if (event.type === 'tool.request') return 'Approval requested';
   if (event.type === 'tool.resolved') return 'Approval updated';
@@ -73,18 +73,18 @@ function eventTitle(event: TerminalEvent) {
   return 'Message';
 }
 
-function approvalTitle(approval: PendingTerminalApproval) {
+function approvalTitle(approval: PendingMessageApproval) {
   return approval.amount && approval.currency
     ? `Agent requests ${approval.amount} ${approval.currency}`
     : approvalActionLabel(approval);
 }
 
-function approvalActionLabel(approval: PendingTerminalApproval) {
+function approvalActionLabel(approval: PendingMessageApproval) {
   const plain = approval.action.replace(/[_-]+/g, ' ').trim();
   return plain ? plain.charAt(0).toUpperCase() + plain.slice(1) : 'Review request';
 }
 
-function approvalAmountLabel(approval: PendingTerminalApproval) {
+function approvalAmountLabel(approval: PendingMessageApproval) {
   if (!approval.amount || !approval.currency) {
     return null;
   }
@@ -93,7 +93,7 @@ function approvalAmountLabel(approval: PendingTerminalApproval) {
   return approval.amountUsd ? `${base} · $${approval.amountUsd} USD` : base;
 }
 
-function approvalContractLabel(approval: PendingTerminalApproval) {
+function approvalContractLabel(approval: PendingMessageApproval) {
   if (!approval.contractAddress) {
     return null;
   }
@@ -101,7 +101,7 @@ function approvalContractLabel(approval: PendingTerminalApproval) {
   return `${approval.contractAddress.slice(0, 8)}...${approval.contractAddress.slice(-6)}`;
 }
 
-function approvalExpiresAtMs(approval: PendingTerminalApproval) {
+function approvalExpiresAtMs(approval: PendingMessageApproval) {
   if (!approval.expiresAt) {
     return null;
   }
@@ -110,12 +110,12 @@ function approvalExpiresAtMs(approval: PendingTerminalApproval) {
   return Number.isFinite(expiresAtMs) ? expiresAtMs : null;
 }
 
-function isApprovalExpired(approval: PendingTerminalApproval, nowMs: number) {
+function isApprovalExpired(approval: PendingMessageApproval, nowMs: number) {
   const expiresAtMs = approvalExpiresAtMs(approval);
   return expiresAtMs !== null && expiresAtMs <= nowMs;
 }
 
-function approvalExpiryLabel(approval: PendingTerminalApproval, nowMs: number) {
+function approvalExpiryLabel(approval: PendingMessageApproval, nowMs: number) {
   const expiresAtMs = approvalExpiresAtMs(approval);
   if (expiresAtMs === null) {
     return null;
@@ -143,12 +143,12 @@ function approvalExpiryLabel(approval: PendingTerminalApproval, nowMs: number) {
   return days === 1 ? 'In about 1 day' : `In about ${days} days`;
 }
 
-export default function TalkDetailScreen() {
+export default function MessageDetailScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string }>();
-  const sessionId = typeof params.id === 'string' ? params.id : '';
-  const [session, setSession] = useState<TerminalSessionDetail | null>(null);
-  const [events, setEvents] = useState<TerminalEvent[]>([]);
+  const threadId = typeof params.id === 'string' ? params.id : '';
+  const [thread, setThread] = useState<MessageThreadDetail | null>(null);
+  const [events, setEvents] = useState<MessageThreadEvent[]>([]);
   const [latestEventId, setLatestEventId] = useState('');
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(true);
@@ -167,8 +167,8 @@ export default function TalkDetailScreen() {
     type: 'info',
   });
 
-  const loadSession = useCallback(async (refresh = false) => {
-    if (!sessionId) {
+  const loadThread = useCallback(async (refresh = false) => {
+    if (!threadId) {
       return;
     }
 
@@ -179,11 +179,11 @@ export default function TalkDetailScreen() {
         setLoading(true);
       }
 
-      const [nextSession, nextEvents] = await Promise.all([
-        regentApi.getTerminalSession(sessionId),
-        regentApi.getTerminalEvents({ sessionId }),
+      const [nextThread, nextEvents] = await Promise.all([
+        regentApi.getMessageThread(threadId),
+        regentApi.getMessageThreadEvents({ threadId }),
       ]);
-      setSession(nextSession);
+      setThread(nextThread);
       setEvents(nextEvents.events);
       setLatestEventId(nextEvents.latestEventId);
     } catch (error) {
@@ -197,14 +197,14 @@ export default function TalkDetailScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [sessionId]);
+  }, [threadId]);
 
   const refreshNewEvents = useCallback(async () => {
-    if (!sessionId) {
+    if (!threadId) {
       return;
     }
 
-    const nextEvents = await regentApi.getTerminalEvents({ sessionId, sinceEventId: latestEventId || undefined });
+    const nextEvents = await regentApi.getMessageThreadEvents({ threadId, sinceEventId: latestEventId || undefined });
     if (nextEvents.events.length > 0) {
       setEvents((current) => {
         const seen = new Set(current.map((event) => event.eventId));
@@ -212,15 +212,15 @@ export default function TalkDetailScreen() {
       });
       setLatestEventId(nextEvents.latestEventId);
     }
-  }, [latestEventId, sessionId]);
+  }, [latestEventId, threadId]);
 
   useFocusEffect(
     useCallback(() => {
-      loadSession();
-    }, [loadSession])
+      loadThread();
+    }, [loadThread])
   );
 
-  const tone = statusTone(session?.status || 'idle');
+  const tone = statusTone(thread?.status || 'idle');
   const visibleEvents = useMemo(
     () => events.filter((event) => !!eventCopy(event)),
     [events]
@@ -228,21 +228,21 @@ export default function TalkDetailScreen() {
 
   const sendMessage = useCallback(async () => {
     const text = draft.trim();
-    if (!sessionId || !text || sending) {
+    if (!threadId || !text || sending) {
       return;
     }
 
     try {
       setSending(true);
-      const nextSession = await regentApi.sendTerminalMessage({ sessionId, text });
-      setSession(nextSession);
+      const nextThread = await regentApi.sendMessageThreadMessage({ threadId, text });
+      setThread(nextThread);
       setDraft('');
-      if (nextSession.id !== sessionId) {
-        router.replace(routes.terminalSession(nextSession.id));
+      if (nextThread.id !== threadId) {
+        router.replace(routes.messageThread(nextThread.id));
         return;
       }
 
-      await loadSession(true);
+      await loadThread(true);
     } catch (error) {
       setAlertState({
         visible: true,
@@ -253,12 +253,12 @@ export default function TalkDetailScreen() {
     } finally {
       setSending(false);
     }
-  }, [draft, loadSession, router, sending, sessionId]);
+  }, [draft, loadThread, router, sending, threadId]);
 
   const resolveApproval = useCallback(async (decision: 'approved' | 'denied') => {
-    const approval = session?.pendingApproval;
+    const approval = thread?.pendingApproval;
     const requestId = approval?.requestId;
-    if (!sessionId || !approval || !requestId || resolvingDecision) {
+    if (!threadId || !approval || !requestId || resolvingDecision) {
       return;
     }
     if (isApprovalExpired(approval, Date.now())) {
@@ -267,9 +267,9 @@ export default function TalkDetailScreen() {
 
     try {
       setResolvingDecision(decision);
-      const nextSession = await regentApi.resolveTerminalApproval({ sessionId, requestId, decision });
-      setSession(nextSession);
-      await loadSession(true);
+      const nextThread = await regentApi.resolveMessageThreadApproval({ threadId, requestId, decision });
+      setThread(nextThread);
+      await loadThread(true);
     } catch (error) {
       setAlertState({
         visible: true,
@@ -280,9 +280,9 @@ export default function TalkDetailScreen() {
     } finally {
       setResolvingDecision(null);
     }
-  }, [loadSession, resolvingDecision, session, sessionId]);
+  }, [loadThread, resolvingDecision, thread, threadId]);
 
-  const pendingApproval = session?.pendingApproval;
+  const pendingApproval = thread?.pendingApproval;
   const isPaymentApproval = !!pendingApproval?.amount && !!pendingApproval.currency;
   const [nowMs, setNowMs] = useState(() => Date.now());
 
@@ -310,11 +310,11 @@ export default function TalkDetailScreen() {
           </RegentPressable>
           <View style={styles.headerTitleGroup}>
             <Text style={styles.headerEyebrow}>Message</Text>
-            <Text style={styles.headerTitle} numberOfLines={1}>{session?.agentName || 'Agent'}</Text>
+            <Text style={styles.headerTitle} numberOfLines={1}>{thread?.agentName || 'Agent'}</Text>
           </View>
           <RegentPressable
             pressStyle="icon"
-            onPress={() => loadSession(true)}
+            onPress={() => loadThread(true)}
             disabled={refreshing}
             style={styles.iconButton}
           >
@@ -331,7 +331,7 @@ export default function TalkDetailScreen() {
             <RefreshControl
               refreshing={refreshing}
               tintColor={BLUE}
-              onRefresh={() => loadSession(true)}
+              onRefresh={() => loadThread(true)}
             />
           }
         >
@@ -340,13 +340,13 @@ export default function TalkDetailScreen() {
               <ActivityIndicator color={BLUE} />
               <Text style={styles.emptyTitle}>Loading messages</Text>
             </View>
-          ) : session ? (
+          ) : thread ? (
             <>
               <View style={styles.sessionCard}>
                 <View style={styles.sessionHeader}>
                   <View style={styles.sessionTitleGroup}>
-                    <Text style={styles.sessionTitle}>{session.title}</Text>
-                    <Text style={styles.sessionNote}>{session.latestNote}</Text>
+                    <Text style={styles.sessionTitle}>{thread.title}</Text>
+                    <Text style={styles.sessionNote}>{thread.latestNote}</Text>
                   </View>
                   <StatusPill label={tone.label} color={tone.accent} backgroundColor={tone.wash} compact />
                 </View>
@@ -460,12 +460,12 @@ export default function TalkDetailScreen() {
           )}
         </ScrollView>
 
-        {session ? (
+        {thread ? (
           <View style={styles.composer}>
             <TextInput
               value={draft}
               onChangeText={setDraft}
-              placeholder={session.composerPlaceholder || 'Message this agent...'}
+              placeholder={thread.composerPlaceholder || 'Message this agent...'}
               placeholderTextColor={TEXT_SECONDARY}
               multiline
               style={styles.composerInput}

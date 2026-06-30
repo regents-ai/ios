@@ -1,5 +1,6 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
+import { RegentPressable } from '@/components/ui/RegentPressable';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
 
@@ -17,9 +18,9 @@ export function WalletOptionsError({ message, onRetry }: Props) {
         <Text style={styles.errorTitle}>Adding cash is not ready</Text>
         <Text style={styles.errorMessage}>{message}</Text>
       </View>
-      <Pressable onPress={onRetry} style={({ pressed }) => [styles.retryButton, pressed && styles.retryPressed]}>
+      <RegentPressable onPress={onRetry} style={styles.retryButton}>
         <Text style={styles.retryText}>Retry</Text>
-      </Pressable>
+      </RegentPressable>
     </View>
   );
 }
@@ -56,9 +57,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     alignItems: 'center',
     width: '100%',
-  },
-  retryPressed: {
-    opacity: 0.88,
   },
   retryText: {
     color: '#fff',

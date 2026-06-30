@@ -176,9 +176,9 @@ export type RegentStakingActionResponse = {
   wallet_action: PlatformWalletAction;
 };
 
-export type TerminalSessionStatus = 'idle' | 'running' | 'waiting' | 'failed';
+export type MessageThreadStatus = 'idle' | 'running' | 'waiting' | 'failed';
 
-export type PendingTerminalApproval = {
+export type PendingMessageApproval = {
   requestId: string;
   action: string;
   regentName: string;
@@ -191,30 +191,32 @@ export type PendingTerminalApproval = {
   resolved: boolean;
 };
 
-export type TerminalSessionSummary = {
+export type MessageThread = {
   id: string;
+  platformThreadId: string;
   title: string;
   agentId: string;
   agentName: string;
-  status: TerminalSessionStatus;
+  source: 'platform_rwr';
+  status: MessageThreadStatus;
   latestNote: string;
   lastUpdatedAt: string;
-  pendingApproval?: PendingTerminalApproval;
+  pendingApproval?: PendingMessageApproval;
 };
 
-export type TerminalSessionDetail = TerminalSessionSummary & {
+export type MessageThreadDetail = MessageThread & {
   composerPlaceholder: string;
 };
 
-export type TerminalEvent = {
+export type MessageThreadEvent = {
   eventId: string;
   type: string;
-  sessionId: string;
+  threadId: string;
   ts: string;
   chunk?: string;
   text?: string;
   role?: 'user' | 'assistant' | 'system';
-  status?: TerminalSessionStatus;
+  status?: MessageThreadStatus;
   requestId?: string;
   action?: string;
   regentName?: string;
@@ -275,17 +277,6 @@ export type HermesVoiceToolResult = {
   ok: boolean;
   result?: unknown;
   error?: Record<string, unknown> | null;
-};
-
-export type MessageThread = {
-  id: string;
-  platformThreadId: string;
-  agentId: string;
-  agentName: string;
-  source: 'platform_rwr';
-  title: string;
-  latestNote: string;
-  lastUpdatedAt: string;
 };
 
 export type PreparedWalletAction = {

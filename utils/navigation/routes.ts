@@ -33,12 +33,12 @@ export const routes = {
     return '/settings';
   },
 
-  terminal(): Href {
-    return '/terminal';
+  message(): Href {
+    return '/message';
   },
 
-  terminalSession(sessionId: string): Href {
-    return { pathname: '/terminal/[id]', params: { id: sessionId } };
+  messageThread(threadId: string): Href {
+    return { pathname: '/message/[id]', params: { id: threadId } };
   },
 
   agent(regentId: string): Href {

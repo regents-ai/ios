@@ -11,7 +11,7 @@ test('OpenAPI operations have stable operation IDs', () => {
   const operations = [...contract.matchAll(/^    (get|post|put|patch|delete):$/gm)];
   const operationIds = [...contract.matchAll(/^\s+operationId:\s+([A-Za-z0-9_]+)$/gm)].map((match) => match[1]);
 
-  assert.equal(operations.length, 41);
+  assert.equal(operations.length, 40);
   assert.equal(operationIds.length, operations.length);
   assert.equal(new Set(operationIds).size, operationIds.length);
 });
@@ -66,7 +66,7 @@ test('money-action contract declares current Base address and calldata constrain
   const section = (name: string, nextName: string) =>
     contract.slice(contract.indexOf(`    ${name}:`), contract.indexOf(`    ${nextName}:`));
   const contractSlices = [
-    section('CreateRegentReturnRequest', 'TerminalSessionStatus'),
+    section('CreateRegentReturnRequest', 'MessageThreadStatus'),
     section('CreateRegentFundingIntent', 'RegentFundingIntent'),
     section('PrepareWalletActionRequest', 'PreparedWalletAction'),
     section('PreparedWalletAction', 'RegentDetail'),
@@ -112,14 +112,26 @@ test('Platform staking wallet-action contract uses even-byte calldata constraint
 });
 
 test('Message contract keeps Platform RWR as the source of truth', () => {
+  const messageThreadSchema = contract.slice(
+    contract.indexOf('    MessageThread:'),
+    contract.indexOf('    MessageThreadDetail:'),
+  );
+
   assert.match(contract, /x-regent-message-contract:[\s\S]*talk_source: Platform Regent Work Runtime/);
   assert.match(contract, /transport_boundary: Mobile Message threads are sourced from Platform Regent Work Runtime/);
   assert.match(contract, /routes:[\s\S]*\/mobile\/message\/threads/);
 
   assert.match(contract, /\/mobile\/message\/threads:[\s\S]*operationId: listMobileMessageThreads/);
+  assert.match(contract, /\/mobile\/message\/threads:[\s\S]*operationId: createMobileMessageThread/);
+  assert.match(contract, /\/mobile\/message\/threads\/\{thread_id\}:[\s\S]*operationId: getMobileMessageThread/);
+  assert.match(contract, /\/mobile\/message\/threads\/\{thread_id\}\/events:[\s\S]*operationId: getMobileMessageThreadEvents/);
+  assert.match(contract, /\/mobile\/message\/threads\/\{thread_id\}\/messages:[\s\S]*operationId: postMobileMessageThreadMessage/);
+  assert.match(contract, /\/mobile\/message\/threads\/\{thread_id\}\/approvals\/\{approval_id\}:[\s\S]*operationId: resolveMobileMessageThreadApproval/);
 
-  assert.match(contract, /MessageThread:[\s\S]*required: \[id, platformThreadId, agentId, agentName, source, title, latestNote, lastUpdatedAt\]/);
-  assert.match(contract, /source:[\s\S]*enum: \[platform_rwr\]/);
+  for (const field of ['id', 'platformThreadId', 'agentId', 'agentName', 'source', 'title', 'status', 'latestNote', 'lastUpdatedAt']) {
+    assert.match(messageThreadSchema, new RegExp(`- ${field}\\b`));
+  }
+  assert.match(messageThreadSchema, /source:[\s\S]*enum: \[platform_rwr\]/);
   assert.doesNotMatch(contract, /\/mobile\/message\/contacts\/recent-addresses/);
   assert.doesNotMatch(contract, /\/mobile\/message\/contacts\/regent-users/);
   assert.doesNotMatch(contract, /\/mobile\/message\/xmtp|xmtp-links|Xmtp|XMTP/);
@@ -133,6 +145,11 @@ test('Regent app client uses only backend-sourced Message threads', () => {
 
   assert.match(regentClient, /const mobileMessageThreadsPath = '\/mobile\/message\/threads'/);
   assert.match(regentClient, /listMessageThreads\(\): Promise<MessageThread\[\]>/);
+  assert.match(regentClient, /createMessageThread\(input:/);
+  assert.match(regentClient, /getMessageThread\(threadId: string\)/);
+  assert.match(regentClient, /getMessageThreadEvents\(input:/);
+  assert.match(regentClient, /sendMessageThreadMessage\(input:/);
+  assert.match(regentClient, /resolveMessageThreadApproval\(input:/);
   assert.doesNotMatch(regentClient, /lookupRecentMessageContacts|listRegentMessageContacts|registerPhoneXmtpIdentity/);
   assert.doesNotMatch(regentClient, /getAgentXmtpIdentity|linkXmtpConversation|xmtp|Xmtp|MessageContact/);
 });

@@ -4,7 +4,6 @@ import { z } from 'zod';
 
 import { verifyBaseReceipt } from './baseReceiptVerification.js';
 import { sendError } from './httpResponses.js';
-import { listMessageThreads } from './mobileMessages.js';
 import {
   confirmPreparedWalletActionForUser,
   confirmRegentFundingIntentForUser,
@@ -21,13 +20,13 @@ import {
   prepareWalletActionForUser,
 } from './mobileRegents.js';
 import {
-  createTerminalSession,
-  getTerminalEvents,
-  getTerminalSession,
-  listTerminalSessions,
-  postTerminalMessage,
-  resolveTerminalApproval,
-} from './mobileTerminal.js';
+  createMessageThread,
+  getMessageThreadEvents,
+  getMessageThread,
+  listMessageThreads,
+  postMessageThreadMessage,
+  resolveMessageThreadApproval,
+} from './mobileMessageThreads.js';
 import {
   createPlatformProjectionClient,
   createPlatformRwrClient,
@@ -57,17 +56,17 @@ const fundingIntentParamsSchema = z.object({
   funding_intent_id: z.string().min(1),
 });
 
-const terminalSessionParamsSchema = z.object({
-  id: z.string().min(1),
+const messageThreadParamsSchema = z.object({
+  thread_id: z.string().min(1),
 });
 
-const terminalEventsQuerySchema = z.object({
+const messageThreadEventsQuerySchema = z.object({
   since_event_id: z.string().min(1).optional(),
 });
 
-const terminalApprovalParamsSchema = z.object({
-  id: z.string().min(1),
-  request_id: z.string().min(1),
+const messageThreadApprovalParamsSchema = z.object({
+  thread_id: z.string().min(1),
+  approval_id: z.string().min(1),
 });
 
 const receiptSchema = z.object({
@@ -728,16 +727,16 @@ export function createMobileRoutes(input?: {
         res,
         503,
         'PlatformRwrMissing',
-        `${result.requiredEnv} is required before Talk records can be loaded from Platform.`,
+        `${result.requiredEnv} is required before messages can be loaded from Platform.`,
       );
     }
 
     if (result.kind === 'unauthorized') {
-      return sendError(res, 401, 'Unauthorized', 'Sign in again before loading Talk.');
+      return sendError(res, 401, 'Unauthorized', 'Sign in again before loading messages.');
     }
 
     if (result.kind === 'not_found') {
-      return sendError(res, 404, 'NotFound', 'That Talk record could not be found.');
+      return sendError(res, 404, 'NotFound', 'That message thread could not be found.');
     }
 
     if (result.kind === 'conflict') {
@@ -747,12 +746,12 @@ export function createMobileRoutes(input?: {
     return sendError(res, 502, 'PlatformRwrUnavailable', result.message);
   }
 
-  router.get('/mobile/terminal/sessions', async (req, res) => {
-    const result = await listTerminalSessions(platformRwrClient, platformAuth(req));
-    return sendPlatformResult(res, result, (sessions) => ({ sessions }));
+  router.get('/mobile/message/threads', async (req, res) => {
+    const result = await listMessageThreads(platformRwrClient, platformAuth(req));
+    return sendPlatformResult(res, result, (threads) => ({ threads }));
   });
 
-  router.post('/mobile/terminal/sessions', async (req, res) => {
+  router.post('/mobile/message/threads', async (req, res) => {
     const bodySchema = z.object({
       agentId: z.string().min(1),
       agentName: z.string().min(1),
@@ -762,39 +761,39 @@ export function createMobileRoutes(input?: {
       return sendError(res, 400, 'BadRequest', 'An agent ID and agent name are required.');
     }
 
-    const result = await createTerminalSession(platformRwrClient, platformAuth(req), parsedBody.data);
+    const result = await createMessageThread(platformRwrClient, platformAuth(req), parsedBody.data);
     if (result.kind === 'ok') {
-      return res.status(201).json({ session: result.data });
+      return res.status(201).json({ thread: result.data });
     }
 
-    return sendPlatformResult(res, result, (session) => ({ session }));
+    return sendPlatformResult(res, result, (thread) => ({ thread }));
   });
 
-  router.get('/mobile/terminal/sessions/:id', async (req, res) => {
-    const parsed = terminalSessionParamsSchema.safeParse(req.params);
+  router.get('/mobile/message/threads/:thread_id', async (req, res) => {
+    const parsed = messageThreadParamsSchema.safeParse(req.params);
     if (!parsed.success) {
-      return sendError(res, 400, 'BadRequest', 'A valid session ID is required.');
+      return sendError(res, 400, 'BadRequest', 'A valid message thread ID is required.');
     }
 
-    const result = await getTerminalSession(platformRwrClient, platformAuth(req), parsed.data.id);
-    return sendPlatformResult(res, result, (session) => ({ session }));
+    const result = await getMessageThread(platformRwrClient, platformAuth(req), parsed.data.thread_id);
+    return sendPlatformResult(res, result, (thread) => ({ thread }));
   });
 
-  router.get('/mobile/terminal/sessions/:id/events', async (req, res) => {
-    const parsed = terminalSessionParamsSchema.safeParse(req.params);
+  router.get('/mobile/message/threads/:thread_id/events', async (req, res) => {
+    const parsed = messageThreadParamsSchema.safeParse(req.params);
     if (!parsed.success) {
-      return sendError(res, 400, 'BadRequest', 'A valid session ID is required.');
+      return sendError(res, 400, 'BadRequest', 'A valid message thread ID is required.');
     }
 
-    const parsedQuery = terminalEventsQuerySchema.safeParse(req.query);
+    const parsedQuery = messageThreadEventsQuerySchema.safeParse(req.query);
     if (!parsedQuery.success) {
       return sendError(res, 400, 'BadRequest', 'A valid event marker is required.');
     }
 
-    const result = await getTerminalEvents(
+    const result = await getMessageThreadEvents(
       platformRwrClient,
       platformAuth(req),
-      parsed.data.id,
+      parsed.data.thread_id,
       parsedQuery.data.since_event_id,
     );
     return sendPlatformResult(res, result, (events) => ({
@@ -803,62 +802,57 @@ export function createMobileRoutes(input?: {
     }));
   });
 
-  router.post('/mobile/terminal/sessions/:id/messages', async (req, res) => {
+  router.post('/mobile/message/threads/:thread_id/messages', async (req, res) => {
     const bodySchema = z.object({
       text: z.string().min(1),
+      source: z.enum(['text', 'voice_summary']).optional(),
     });
-    const parsedParams = terminalSessionParamsSchema.safeParse(req.params);
+    const parsedParams = messageThreadParamsSchema.safeParse(req.params);
     const parsedBody = bodySchema.safeParse(req.body);
 
     if (!parsedParams.success || !parsedBody.success) {
-      return sendError(res, 400, 'BadRequest', 'A valid session ID and message are required.');
+      return sendError(res, 400, 'BadRequest', 'A valid message thread ID and message are required.');
     }
 
-    const result = await postTerminalMessage(
+    const result = await postMessageThreadMessage(
       platformRwrClient,
       platformAuth(req),
-      parsedParams.data.id,
+      parsedParams.data.thread_id,
       parsedBody.data.text,
+      parsedBody.data.source || 'text',
     );
     if (result.kind === 'ok') {
-      return res.status(202).json({ session: result.data });
+      return res.status(202).json({ thread: result.data });
     }
 
-    return sendPlatformResult(res, result, (session) => ({ session }));
+    return sendPlatformResult(res, result, (thread) => ({ thread }));
   });
 
-  router.post('/mobile/terminal/sessions/:id/approvals/:request_id', async (req, res) => {
+  router.post('/mobile/message/threads/:thread_id/approvals/:approval_id', async (req, res) => {
     const bodySchema = z.object({
       decision: z.enum(['approved', 'denied']),
     });
-    const parsedParams = terminalApprovalParamsSchema.safeParse(req.params);
+    const parsedParams = messageThreadApprovalParamsSchema.safeParse(req.params);
     const parsedBody = bodySchema.safeParse(req.body);
 
     if (!parsedParams.success || !parsedBody.success) {
-      return sendError(res, 400, 'BadRequest', 'A valid session ID, request ID, and decision are required.');
+      return sendError(res, 400, 'BadRequest', 'A valid message thread ID, approval ID, and decision are required.');
     }
 
-    const result = await resolveTerminalApproval(
+    const result = await resolveMessageThreadApproval(
       platformRwrClient,
       platformAuth(req),
-      parsedParams.data.id,
-      parsedParams.data.request_id,
+      parsedParams.data.thread_id,
+      parsedParams.data.approval_id,
       parsedBody.data.decision,
     );
-    return sendPlatformResult(res, result, (session) => ({ session }));
+    return sendPlatformResult(res, result, (thread) => ({ thread }));
   });
 
   router.use(createMobileVoiceRoutes({
     platformProjectionClient,
     hermesVoiceClient,
   }));
-
-  router.get('/mobile/message/threads', async (req, res) => {
-    const result = await listTerminalSessions(platformRwrClient, platformAuth(req));
-    return sendPlatformResult(res, result, (sessions) => ({
-      threads: listMessageThreads(sessions),
-    }));
-  });
 
   return router;
 }

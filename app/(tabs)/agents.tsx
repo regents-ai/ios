@@ -220,7 +220,7 @@ export default function AgentsTab() {
       meta: 'Message',
       icon: 'chatbubble-ellipses-outline',
       accent: BLUE,
-      onPress: () => router.push(routes.terminal()),
+      onPress: () => router.push(routes.message()),
     };
 
     return [
@@ -301,7 +301,7 @@ export default function AgentsTab() {
                 <Text style={styles.secondaryButtonText}>Add USDC</Text>
               </RegentPressable>
               <RegentPressable
-                onPress={() => router.push(routes.terminal())}
+                onPress={() => router.push(routes.message())}
                 style={styles.secondaryButton}
               >
                 <Text style={styles.secondaryButtonText}>Message Agent</Text>
@@ -457,7 +457,7 @@ export default function AgentsTab() {
               <RegentPressable
                 pressStyle="card"
                 style={styles.quickCard}
-                onPress={() => router.push(routes.terminal())}
+                onPress={() => router.push(routes.message())}
               >
                 <Ionicons name="chatbubble-ellipses-outline" size={18} color={BLUE} />
                 <Text style={styles.quickTitle}>Message</Text>

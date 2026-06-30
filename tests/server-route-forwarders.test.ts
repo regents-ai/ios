@@ -46,7 +46,7 @@ function implementedRoutes() {
   return routes;
 }
 
-test('server route forwarders exist for auth, live Regent, and terminal endpoints', () => {
+test('server route forwarders exist for auth, live Regent, and message endpoints', () => {
   const files = [
     '../server/api/auth/me.js',
     '../server/api/auth/cdp-token.js',
@@ -76,7 +76,7 @@ test('served backend routes stay declared in the mobile API contract', () => {
     '/push-tokens/debug/{user_id}',
     '/webhooks/onramp',
     '/mobile/regents',
-    '/mobile/terminal/sessions',
+    '/mobile/message/threads',
   ];
 
   for (const routePath of routePaths) {
@@ -117,7 +117,7 @@ test('mobile Regent forwarder preserves the live route prefix', () => {
   assert.match(contents, /\/mobile\//);
 });
 
-test('mobile terminal routes use the live mobile prefix only', () => {
+test('mobile message routes use the live mobile prefix only', () => {
   const contents = readFileSync(resolve(testDir, '../server/api/mobile/[...slug].js'), 'utf8');
 
   assert.match(contents, /\/mobile\//);

@@ -32,15 +32,15 @@ test('app package and source have no XMTP message transport dependency', () => {
 });
 
 test('message screens use the backend agent-work path without channel setup copy', () => {
-  const messageTab = read('app/(tabs)/terminal.tsx');
-  const detail = read('app/terminal/[id].tsx');
+  const messageTab = read('app/(tabs)/message.tsx');
+  const detail = read('app/message/[id].tsx');
   const visibleInternalWords = /<Text[^>]*>[^<]*(XMTP|inbox|installation|Platform|secure channel)[^<]*<\/Text>/i;
 
   assert.match(messageTab, /Message your agent/);
   assert.match(messageTab, /Agent messages, payment requests, and work updates/);
-  assert.match(messageTab, /regentApi\.listTerminalSessions/);
-  assert.match(detail, /regentApi\.sendTerminalMessage/);
-  assert.match(detail, /regentApi\.resolveTerminalApproval/);
+  assert.match(messageTab, /regentApi\.listMessageThreads/);
+  assert.match(detail, /regentApi\.sendMessageThreadMessage/);
+  assert.match(detail, /regentApi\.resolveMessageThreadApproval/);
   assert.match(detail, /Approve payment/);
   assert.doesNotMatch(messageTab, /Lookup Recent Addresses|Lookup Regent Users|connectWalletChannel/);
   assert.doesNotMatch(detail, /Connect secure channel|connectAgentChannel/);

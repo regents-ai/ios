@@ -8,9 +8,9 @@ import type {
   RwrWorkItem,
 } from './platformProjection.js';
 
-type TerminalSessionStatus = 'idle' | 'running' | 'waiting' | 'failed';
+type MessageThreadStatus = 'idle' | 'running' | 'waiting' | 'failed';
 
-type PendingTerminalApproval = {
+type PendingMessageApproval = {
   requestId: string;
   action: string;
   regentName: string;
@@ -23,30 +23,32 @@ type PendingTerminalApproval = {
   resolved: boolean;
 };
 
-export type TerminalSessionSummary = {
+export type MessageThread = {
   id: string;
+  platformThreadId: string;
   title: string;
   agentId: string;
   agentName: string;
-  status: TerminalSessionStatus;
+  source: 'platform_rwr';
+  status: MessageThreadStatus;
   latestNote: string;
   lastUpdatedAt: string;
-  pendingApproval?: PendingTerminalApproval;
+  pendingApproval?: PendingMessageApproval;
 };
 
-export type TerminalSessionDetail = TerminalSessionSummary & {
+export type MessageThreadDetail = MessageThread & {
   composerPlaceholder: string;
 };
 
-export type TerminalEvent = {
+export type MessageThreadEvent = {
   eventId: string;
   type: string;
-  sessionId: string;
+  threadId: string;
   ts: string;
   chunk?: string;
   text?: string;
   role?: 'user' | 'assistant' | 'system';
-  status?: TerminalSessionStatus;
+  status?: MessageThreadStatus;
   requestId?: string;
   action?: string;
   regentName?: string;
@@ -59,7 +61,7 @@ export type TerminalEvent = {
   message?: string;
 };
 
-export type MobileTerminalResult<T> =
+export type MobileMessageResult<T> =
   | { kind: 'ok'; data: T }
   | { kind: 'missing_config'; requiredEnv: 'PLATFORM_API_BASE_URL' }
   | { kind: 'unauthorized' }
@@ -67,20 +69,20 @@ export type MobileTerminalResult<T> =
   | { kind: 'conflict' }
   | { kind: 'upstream_error'; message: string };
 
-type ParsedSessionId =
+type ParsedThreadId =
   | { kind: 'work_item'; companyId: number; workItemId: number }
   | { kind: 'run'; companyId: number; workItemId: number; runId: number };
 
-function sessionIdForWorkItem(workItem: RwrWorkItem) {
+function threadIdForWorkItem(workItem: RwrWorkItem) {
   return `${workItem.company_id}~${workItem.id}`;
 }
 
-function sessionIdForRun(run: RwrRun) {
+function threadIdForRun(run: RwrRun) {
   return `${run.company_id}~${run.work_item_id}~${run.id}`;
 }
 
-function parseSessionId(sessionId: string): ParsedSessionId | null {
-  const parts = sessionId.split('~').map((part) => Number.parseInt(part, 10));
+function parseThreadId(threadId: string): ParsedThreadId | null {
+  const parts = threadId.split('~').map((part) => Number.parseInt(part, 10));
   if ((parts.length !== 2 && parts.length !== 3) || parts.some((part) => !Number.isInteger(part) || part <= 0)) {
     return null;
   }
@@ -93,7 +95,7 @@ function parseSessionId(sessionId: string): ParsedSessionId | null {
   return { kind: 'run', companyId: companyId!, workItemId: workItemId!, runId: runId! };
 }
 
-function statusFromWorkItem(item: RwrWorkItem): TerminalSessionStatus {
+function statusFromWorkItem(item: RwrWorkItem): MessageThreadStatus {
   if (item.status === 'failed' || item.status === 'canceled') {
     return 'failed';
   }
@@ -107,7 +109,7 @@ function statusFromWorkItem(item: RwrWorkItem): TerminalSessionStatus {
   return 'idle';
 }
 
-function statusFromRun(run: RwrRun): TerminalSessionStatus {
+function statusFromRun(run: RwrRun): MessageThreadStatus {
   if (run.status === 'failed' || run.status === 'canceled') {
     return 'failed';
   }
@@ -139,7 +141,7 @@ function approvalMoneyFields(approval: RwrApproval) {
   const currency = approvalPayloadString(approval, 'currency');
   const amountUsd = approvalPayloadString(approval, 'amount_usd');
   const contractAddress = approvalPayloadString(approval, 'contract_address');
-  const fields: Pick<PendingTerminalApproval, 'amount' | 'currency' | 'amountUsd' | 'contractAddress'> = {};
+  const fields: Pick<PendingMessageApproval, 'amount' | 'currency' | 'amountUsd' | 'contractAddress'> = {};
   if (amount) {
     fields.amount = amount;
   }
@@ -155,8 +157,8 @@ function approvalMoneyFields(approval: RwrApproval) {
   return fields;
 }
 
-function pendingApprovalFromRwr(approval: RwrApproval, regentName: string): PendingTerminalApproval {
-  const pending: PendingTerminalApproval = {
+function pendingApprovalFromRwr(approval: RwrApproval, regentName: string): PendingMessageApproval {
+  const pending: PendingMessageApproval = {
     requestId: String(approval.id),
     action: approval.approval_type || 'Review request',
     regentName,
@@ -172,21 +174,23 @@ function pendingApprovalFromRwr(approval: RwrApproval, regentName: string): Pend
   return pending;
 }
 
-function summaryFromWorkItem(item: RwrWorkItem, companies: RwrCompany[]): TerminalSessionSummary {
+function summaryFromWorkItem(item: RwrWorkItem, companies: RwrCompany[]): MessageThread {
   const name = companyName(companies, item.company_id);
 
   return {
-    id: sessionIdForWorkItem(item),
+    id: threadIdForWorkItem(item),
+    platformThreadId: threadIdForWorkItem(item),
     title: item.title,
     agentId: companySlug(companies, item.company_id),
     agentName: name,
+    source: 'platform_rwr',
     status: statusFromWorkItem(item),
     latestNote: item.description || item.status,
     lastUpdatedAt: item.updated_at,
   };
 }
 
-function detailFromWorkItem(item: RwrWorkItem, companies: RwrCompany[]): TerminalSessionDetail {
+function detailFromWorkItem(item: RwrWorkItem, companies: RwrCompany[]): MessageThreadDetail {
   const summary = summaryFromWorkItem(item, companies);
 
   return {
@@ -195,12 +199,13 @@ function detailFromWorkItem(item: RwrWorkItem, companies: RwrCompany[]): Termina
   };
 }
 
-function detailFromRun(run: RwrRun, workItem: RwrWorkItem, companies: RwrCompany[], approvals: RwrApproval[]): TerminalSessionDetail {
+function detailFromRun(run: RwrRun, workItem: RwrWorkItem, companies: RwrCompany[], approvals: RwrApproval[]): MessageThreadDetail {
   const summary = summaryFromWorkItem(workItem, companies);
   const pendingApproval = approvals.find((approval) => approval.status === 'pending');
-  const detail: TerminalSessionDetail = {
+  const detail: MessageThreadDetail = {
     ...summary,
-    id: sessionIdForRun(run),
+    id: threadIdForRun(run),
+    platformThreadId: threadIdForRun(run),
     status: pendingApproval ? 'waiting' : statusFromRun(run),
     latestNote: run.summary || run.failure_reason || summary.latestNote,
     lastUpdatedAt: run.updated_at,
@@ -225,13 +230,13 @@ function textFromPayload(payload: Record<string, unknown>) {
   return null;
 }
 
-function eventFromRwr(event: RwrRunEvent, sessionId: string): TerminalEvent {
+function eventFromRwr(event: RwrRunEvent, threadId: string): MessageThreadEvent {
   const text = textFromPayload(event.payload);
   if (event.kind.includes('error')) {
     return {
       eventId: `run:${event.id}`,
       type: 'session.error',
-      sessionId,
+      threadId,
       ts: event.occurred_at,
       message: text || 'The run reported a problem.',
     };
@@ -241,7 +246,7 @@ function eventFromRwr(event: RwrRunEvent, sessionId: string): TerminalEvent {
     return {
       eventId: `run:${event.id}`,
       type: 'message.user',
-      sessionId,
+      threadId,
       ts: event.occurred_at,
       role: 'user',
       text: text || event.kind,
@@ -251,18 +256,18 @@ function eventFromRwr(event: RwrRunEvent, sessionId: string): TerminalEvent {
   return {
     eventId: `run:${event.id}`,
     type: 'message.delta',
-    sessionId,
+    threadId,
     ts: event.occurred_at,
     role: 'assistant',
     chunk: text || event.kind,
   };
 }
 
-function approvalRequestEvent(approval: RwrApproval, sessionId: string, regentName: string): TerminalEvent {
+function approvalRequestEvent(approval: RwrApproval, threadId: string, regentName: string): MessageThreadEvent {
   return {
     eventId: `approval:${approval.id}:requested`,
     type: 'tool.request',
-    sessionId,
+    threadId,
     ts: approval.created_at,
     requestId: String(approval.id),
     action: approval.approval_type || 'Review request',
@@ -272,24 +277,24 @@ function approvalRequestEvent(approval: RwrApproval, sessionId: string, regentNa
   };
 }
 
-function approvalResolvedEvent(approval: RwrApproval, sessionId: string): TerminalEvent {
+function approvalResolvedEvent(approval: RwrApproval, threadId: string): MessageThreadEvent {
   return {
     eventId: `approval:${approval.id}:resolved`,
     type: 'tool.resolved',
-    sessionId,
+    threadId,
     ts: approval.resolved_at || approval.updated_at,
     requestId: String(approval.id),
     result: approval.status === 'approved' ? 'approved' : approval.status === 'denied' ? 'denied' : 'timed_out',
   };
 }
 
-function approvalEvents(approval: RwrApproval, sessionId: string, regentName: string): TerminalEvent[] {
-  const requestEvent = approvalRequestEvent(approval, sessionId, regentName);
+function approvalEvents(approval: RwrApproval, threadId: string, regentName: string): MessageThreadEvent[] {
+  const requestEvent = approvalRequestEvent(approval, threadId, regentName);
   if (approval.status === 'pending') {
     return [requestEvent];
   }
 
-  return [requestEvent, approvalResolvedEvent(approval, sessionId)];
+  return [requestEvent, approvalResolvedEvent(approval, threadId)];
 }
 
 async function account(client: PlatformRwrClient, auth: PlatformRequestAuth) {
@@ -306,7 +311,7 @@ async function findWorkItem(client: PlatformRwrClient, auth: PlatformRequestAuth
   return workItem ? { kind: 'ok' as const, data: workItem } : { kind: 'not_found' as const };
 }
 
-export async function listTerminalSessions(client: PlatformRwrClient, auth: PlatformRequestAuth): Promise<MobileTerminalResult<TerminalSessionSummary[]>> {
+export async function listMessageThreads(client: PlatformRwrClient, auth: PlatformRequestAuth): Promise<MobileMessageResult<MessageThread[]>> {
   const accountResult = await account(client, auth);
   if (accountResult.kind !== 'ok') {
     return accountResult;
@@ -328,11 +333,11 @@ export async function listTerminalSessions(client: PlatformRwrClient, auth: Plat
   };
 }
 
-export async function createTerminalSession(
+export async function createMessageThread(
   client: PlatformRwrClient,
   auth: PlatformRequestAuth,
   input: { agentId: string; agentName: string }
-): Promise<MobileTerminalResult<TerminalSessionDetail>> {
+): Promise<MobileMessageResult<MessageThreadDetail>> {
   const accountResult = await account(client, auth);
   if (accountResult.kind !== 'ok') {
     return accountResult;
@@ -355,26 +360,18 @@ export async function createTerminalSession(
     return created;
   }
 
-  const run = await client.startRun(auth, company.id, created.data.id, {
-    instructions: `Start a mobile review with ${input.agentName}.`,
-    metadata: { source: 'regents-mobile' },
-  });
-  if (run.kind !== 'ok') {
-    return run;
-  }
-
   return {
     kind: 'ok',
-    data: detailFromRun(run.data, created.data, accountResult.data.companies, []),
+    data: detailFromWorkItem(created.data, accountResult.data.companies),
   };
 }
 
-export async function getTerminalSession(
+export async function getMessageThread(
   client: PlatformRwrClient,
   auth: PlatformRequestAuth,
-  sessionId: string
-): Promise<MobileTerminalResult<TerminalSessionDetail>> {
-  const parsed = parseSessionId(sessionId);
+  threadId: string
+): Promise<MobileMessageResult<MessageThreadDetail>> {
+  const parsed = parseThreadId(threadId);
   if (!parsed) {
     return { kind: 'not_found' };
   }
@@ -407,13 +404,13 @@ export async function getTerminalSession(
   };
 }
 
-export async function getTerminalEvents(
+export async function getMessageThreadEvents(
   client: PlatformRwrClient,
   auth: PlatformRequestAuth,
-  sessionId: string,
+  threadId: string,
   sinceEventId?: string
-): Promise<MobileTerminalResult<TerminalEvent[]>> {
-  const parsed = parseSessionId(sessionId);
+): Promise<MobileMessageResult<MessageThreadEvent[]>> {
+  const parsed = parseThreadId(threadId);
   if (!parsed) {
     return { kind: 'not_found' };
   }
@@ -423,9 +420,9 @@ export async function getTerminalEvents(
       kind: 'ok',
       data: [
         {
-          eventId: `session:${sessionId}:started`,
+          eventId: `thread:${threadId}:started`,
           type: 'session.started',
-          sessionId,
+          threadId,
           ts: new Date(0).toISOString(),
         },
       ],
@@ -447,15 +444,15 @@ export async function getTerminalEvents(
       ? companyName(accountResult.data.companies, workItemResult.data.company_id)
       : `Company ${parsed.companyId}`;
   const approvalTimelineEvents =
-    approvalsResult.kind === 'ok' ? approvalsResult.data.flatMap((approval) => approvalEvents(approval, sessionId, regentName)) : [];
+    approvalsResult.kind === 'ok' ? approvalsResult.data.flatMap((approval) => approvalEvents(approval, threadId, regentName)) : [];
   const events = [
     {
-      eventId: `session:${sessionId}:started`,
+      eventId: `thread:${threadId}:started`,
       type: 'session.started',
-      sessionId,
+      threadId,
       ts: eventsResult.data[0]?.occurred_at || new Date(0).toISOString(),
     },
-    ...eventsResult.data.map((event) => eventFromRwr(event, sessionId)),
+    ...eventsResult.data.map((event) => eventFromRwr(event, threadId)),
     ...approvalTimelineEvents,
   ].sort((a, b) => a.ts.localeCompare(b.ts));
   const cursorIndex = sinceEventId ? events.findIndex((event) => event.eventId === sinceEventId) : -1;
@@ -466,13 +463,14 @@ export async function getTerminalEvents(
   };
 }
 
-export async function postTerminalMessage(
+export async function postMessageThreadMessage(
   client: PlatformRwrClient,
   auth: PlatformRequestAuth,
-  sessionId: string,
-  text: string
-): Promise<MobileTerminalResult<TerminalSessionDetail>> {
-  const parsed = parseSessionId(sessionId);
+  threadId: string,
+  text: string,
+  source: 'text' | 'voice_summary' = 'text'
+): Promise<MobileMessageResult<MessageThreadDetail>> {
+  const parsed = parseThreadId(threadId);
   if (!parsed) {
     return { kind: 'not_found' };
   }
@@ -483,8 +481,8 @@ export async function postTerminalMessage(
   }
 
   const run = await client.startRun(auth, parsed.companyId, parsed.workItemId, {
-    instructions: text,
-    metadata: { source: 'regents-mobile' },
+    instructions: source === 'voice_summary' ? `Voice summary:\n${text}` : text,
+    metadata: { source: 'regents-mobile', message_source: source },
   });
   if (run.kind !== 'ok') {
     return run;
@@ -499,14 +497,14 @@ export async function postTerminalMessage(
   };
 }
 
-export async function resolveTerminalApproval(
+export async function resolveMessageThreadApproval(
   client: PlatformRwrClient,
   auth: PlatformRequestAuth,
-  sessionId: string,
+  threadId: string,
   requestId: string,
   decision: 'approved' | 'denied'
-): Promise<MobileTerminalResult<TerminalSessionDetail>> {
-  const parsed = parseSessionId(sessionId);
+): Promise<MobileMessageResult<MessageThreadDetail>> {
+  const parsed = parseThreadId(threadId);
   const approvalId = Number.parseInt(requestId, 10);
   if (!parsed || parsed.kind !== 'run' || !Number.isInteger(approvalId) || approvalId <= 0) {
     return { kind: 'not_found' };
@@ -520,5 +518,5 @@ export async function resolveTerminalApproval(
     return approval;
   }
 
-  return getTerminalSession(client, auth, sessionId);
+  return getMessageThread(client, auth, threadId);
 }

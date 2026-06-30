@@ -140,7 +140,7 @@ export default function RootLayout() {
           <Stack.Screen name="agent/[id]" options={cardSlideRight} />
           <Stack.Screen name="agent/[id]/regent-manager" options={cardSlideRight} />
           <Stack.Screen name="agent/[id]/voice" options={cardSlideBottom} />
-          <Stack.Screen name="terminal/[id]" options={cardSlideRight} />
+          <Stack.Screen name="message/[id]" options={cardSlideRight} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         </Stack>
       </WalletProviders>

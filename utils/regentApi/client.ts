@@ -1,6 +1,8 @@
 import { getBaseUrl } from '@/constants/BASE_URL';
 import {
   MessageThread,
+  MessageThreadDetail,
+  MessageThreadEvent,
   PreparedWalletAction,
   RegentDetail,
   RegentFundingIntent,
@@ -9,16 +11,12 @@ import {
   RegentStakingActionResponse,
   RegentStakingState,
   RegentSummary,
-  TerminalEvent,
-  TerminalSessionDetail,
-  TerminalSessionSummary,
 } from '@/types/regents';
 import { authenticatedFetch } from '@/utils/authenticatedFetch';
 import { createHermesVoiceApi, type MobileHermesVoicePath } from '@/utils/regentApi/voice';
 
 const mobileRegentsPath = '/mobile/regents';
 const mobileRegentStakingPath = '/mobile/regent/staking';
-const mobileTerminalSessionsPath = '/mobile/terminal/sessions';
 const mobileMessageThreadsPath = '/mobile/message/threads';
 
 type MobileRegentPath =
@@ -45,22 +43,18 @@ type MobileWalletActionPath =
   | `/mobile/wallet-actions/${PreparedWalletAction['action']}/prepare`
   | `/mobile/wallet-actions/${string}/confirm`;
 
-type MobileTerminalPath =
-  | typeof mobileTerminalSessionsPath
-  | `${typeof mobileTerminalSessionsPath}/${string}`
-  | `${typeof mobileTerminalSessionsPath}/${string}/events`
-  | `${typeof mobileTerminalSessionsPath}/${string}/events?since_event_id=${string}`
-  | `${typeof mobileTerminalSessionsPath}/${string}/messages`
-  | `${typeof mobileTerminalSessionsPath}/${string}/approvals/${string}`;
-
 type MobileMessagePath =
-  typeof mobileMessageThreadsPath;
+  | typeof mobileMessageThreadsPath
+  | `${typeof mobileMessageThreadsPath}/${string}`
+  | `${typeof mobileMessageThreadsPath}/${string}/events`
+  | `${typeof mobileMessageThreadsPath}/${string}/events?since_event_id=${string}`
+  | `${typeof mobileMessageThreadsPath}/${string}/messages`
+  | `${typeof mobileMessageThreadsPath}/${string}/approvals/${string}`;
 
 type RegentApiPath =
   | MobileRegentPath
   | MobileRegentStakingPath
   | MobileWalletActionPath
-  | MobileTerminalPath
   | MobileMessagePath
   | MobileHermesVoicePath;
 
@@ -123,25 +117,25 @@ const mobileWalletConfirmPath = (actionId: string): `/mobile/wallet-actions/${st
 const mobileRegentStakingWithWalletPath = (walletAddress: string): `${typeof mobileRegentStakingPath}?walletAddress=${string}` =>
   `${mobileRegentStakingPath}?walletAddress=${encodeURIComponent(walletAddress)}`;
 
-const terminalSessionPath = (sessionId: string): `${typeof mobileTerminalSessionsPath}/${string}` =>
-  `${mobileTerminalSessionsPath}/${encodeURIComponent(sessionId)}`;
+const messageThreadPath = (threadId: string): `${typeof mobileMessageThreadsPath}/${string}` =>
+  `${mobileMessageThreadsPath}/${encodeURIComponent(threadId)}`;
 
-const terminalEventsPath = (
-  sessionId: string,
+const messageThreadEventsPath = (
+  threadId: string,
   sinceEventId?: string
-): `${typeof mobileTerminalSessionsPath}/${string}/events` | `${typeof mobileTerminalSessionsPath}/${string}/events?since_event_id=${string}` => {
-  const basePath = `${terminalSessionPath(sessionId)}/events` as const;
+): `${typeof mobileMessageThreadsPath}/${string}/events` | `${typeof mobileMessageThreadsPath}/${string}/events?since_event_id=${string}` => {
+  const basePath = `${messageThreadPath(threadId)}/events` as const;
   return sinceEventId ? `${basePath}?since_event_id=${encodeURIComponent(sinceEventId)}` : basePath;
 };
 
-const terminalMessagesPath = (sessionId: string): `${typeof mobileTerminalSessionsPath}/${string}/messages` =>
-  `${terminalSessionPath(sessionId)}/messages`;
+const messageThreadMessagesPath = (threadId: string): `${typeof mobileMessageThreadsPath}/${string}/messages` =>
+  `${messageThreadPath(threadId)}/messages`;
 
-const terminalApprovalPath = (
-  sessionId: string,
+const messageThreadApprovalPath = (
+  threadId: string,
   requestId: string
-): `${typeof mobileTerminalSessionsPath}/${string}/approvals/${string}` =>
-  `${terminalSessionPath(sessionId)}/approvals/${encodeURIComponent(requestId)}`;
+): `${typeof mobileMessageThreadsPath}/${string}/approvals/${string}` =>
+  `${messageThreadPath(threadId)}/approvals/${encodeURIComponent(requestId)}`;
 
 export const regentApi = {
   ...createHermesVoiceApi(requestJson),
@@ -477,19 +471,9 @@ export const regentApi = {
     return payload.wallet_action;
   },
 
-  async listTerminalSessions(): Promise<TerminalSessionSummary[]> {
-    const payload = await requestJson<{ sessions: TerminalSessionSummary[] }>(
-      mobileTerminalSessionsPath,
-      undefined,
-      'Unable to load Talk right now.'
-    );
-
-    return payload.sessions;
-  },
-
-  async createTerminalSession(input: { agentId: string; agentName: string }): Promise<TerminalSessionDetail> {
-    const payload = await requestJson<{ session: TerminalSessionDetail }>(
-      mobileTerminalSessionsPath,
+  async createMessageThread(input: { agentId: string; agentName: string }): Promise<MessageThreadDetail> {
+    const payload = await requestJson<{ thread: MessageThreadDetail }>(
+      mobileMessageThreadsPath,
       {
         method: 'POST',
         headers: {
@@ -497,56 +481,59 @@ export const regentApi = {
         },
         body: JSON.stringify(input),
       },
-      'Unable to start Talk right now.'
+      'Unable to start this message thread right now.'
     );
 
-    return payload.session;
+    return payload.thread;
   },
 
-  async getTerminalSession(sessionId: string): Promise<TerminalSessionDetail> {
-    const payload = await requestJson<{ session: TerminalSessionDetail }>(
-      terminalSessionPath(sessionId),
+  async getMessageThread(threadId: string): Promise<MessageThreadDetail> {
+    const payload = await requestJson<{ thread: MessageThreadDetail }>(
+      messageThreadPath(threadId),
       undefined,
-      'Unable to load this Talk session right now.'
+      'Unable to load this message thread right now.'
     );
 
-    return payload.session;
+    return payload.thread;
   },
 
-  async getTerminalEvents(input: { sessionId: string; sinceEventId?: string }): Promise<{
-    events: TerminalEvent[];
+  async getMessageThreadEvents(input: { threadId: string; sinceEventId?: string }): Promise<{
+    events: MessageThreadEvent[];
     latestEventId: string;
   }> {
-    return requestJson<{ events: TerminalEvent[]; latestEventId: string }>(
-      terminalEventsPath(input.sessionId, input.sinceEventId),
+    return requestJson<{ events: MessageThreadEvent[]; latestEventId: string }>(
+      messageThreadEventsPath(input.threadId, input.sinceEventId),
       undefined,
-      'Unable to load Talk messages right now.'
+      'Unable to load messages right now.'
     );
   },
 
-  async sendTerminalMessage(input: { sessionId: string; text: string }): Promise<TerminalSessionDetail> {
-    const payload = await requestJson<{ session: TerminalSessionDetail }>(
-      terminalMessagesPath(input.sessionId),
+  async sendMessageThreadMessage(input: { threadId: string; text: string; source?: 'text' | 'voice_summary' }): Promise<MessageThreadDetail> {
+    const payload = await requestJson<{ thread: MessageThreadDetail }>(
+      messageThreadMessagesPath(input.threadId),
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ text: input.text }),
+        body: JSON.stringify({
+          text: input.text,
+          source: input.source || 'text',
+        }),
       },
       'Unable to send this message right now.'
     );
 
-    return payload.session;
+    return payload.thread;
   },
 
-  async resolveTerminalApproval(input: {
-    sessionId: string;
+  async resolveMessageThreadApproval(input: {
+    threadId: string;
     requestId: string;
     decision: 'approved' | 'denied';
-  }): Promise<TerminalSessionDetail> {
-    const payload = await requestJson<{ session: TerminalSessionDetail }>(
-      terminalApprovalPath(input.sessionId, input.requestId),
+  }): Promise<MessageThreadDetail> {
+    const payload = await requestJson<{ thread: MessageThreadDetail }>(
+      messageThreadApprovalPath(input.threadId, input.requestId),
       {
         method: 'POST',
         headers: {
@@ -557,7 +544,7 @@ export const regentApi = {
       'Unable to update this review right now.'
     );
 
-    return payload.session;
+    return payload.thread;
   },
 
   async listMessageThreads(): Promise<MessageThread[]> {

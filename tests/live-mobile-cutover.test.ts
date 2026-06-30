@@ -11,7 +11,7 @@ test('mobile Regent contract exposes the current route family', () => {
   const contract = readFileSync(resolve(testDir, '../api-contract.openapiv3.yaml'), 'utf8');
 
   assert.match(contract, /\/mobile\/regents/);
-  assert.match(contract, /\/mobile\/terminal\/sessions/);
+  assert.match(contract, /\/mobile\/message\/threads/);
   assert.match(contract, /\/mobile\/agents\/\{agent_id\}\/voice\/session/);
   assert.match(contract, /RegentReturnRequest/);
   assert.match(contract, /HermesVoiceAccount/);
@@ -27,40 +27,40 @@ test('mobile app and backend do not use the old preview route family', () => {
   assert.equal(result.stdout, '');
 });
 
-test('mobile Talk surfaces use the contracted terminal routes', () => {
+test('mobile Message surfaces use the contracted message routes', () => {
   const appFiles = [
     '../app/(tabs)/agents.tsx',
-    '../app/(tabs)/terminal.tsx',
+    '../app/(tabs)/message.tsx',
     '../app/agent/[id].tsx',
-    '../app/terminal/[id].tsx',
+    '../app/message/[id].tsx',
   ];
   const helperFiles = [
     '../utils/regentApi/client.ts',
     '../utils/navigation/routes.ts',
   ];
-  const terminalTab = readFileSync(resolve(testDir, '../app/(tabs)/terminal.tsx'), 'utf8');
-  const terminalDetail = readFileSync(resolve(testDir, '../app/terminal/[id].tsx'), 'utf8');
+  const messageTab = readFileSync(resolve(testDir, '../app/(tabs)/message.tsx'), 'utf8');
+  const messageDetail = readFileSync(resolve(testDir, '../app/message/[id].tsx'), 'utf8');
   const agentsTab = readFileSync(resolve(testDir, '../app/(tabs)/agents.tsx'), 'utf8');
   const agentDetail = readFileSync(resolve(testDir, '../app/agent/[id].tsx'), 'utf8');
   const regentClient = readFileSync(resolve(testDir, '../utils/regentApi/client.ts'), 'utf8');
   const navigationRoutes = readFileSync(resolve(testDir, '../utils/navigation/routes.ts'), 'utf8');
 
-  assert.match(terminalTab, /regentApi\.listTerminalSessions/);
-  assert.match(terminalTab, /routes\.terminalSession\(session\.id\)/);
-  assert.match(terminalDetail, /regentApi\.getTerminalSession/);
-  assert.match(terminalDetail, /regentApi\.getTerminalEvents/);
-  assert.match(terminalDetail, /regentApi\.sendTerminalMessage/);
-  assert.match(terminalDetail, /nextSession\.id !== sessionId[\s\S]*router\.replace\(routes\.terminalSession\(nextSession\.id\)\)/);
-  assert.match(terminalDetail, /regentApi\.resolveTerminalApproval/);
-  assert.match(agentsTab, /router\.push\(routes\.terminal\(\)\)/);
-  assert.match(agentDetail, /router\.push\(routes\.terminal\(\)\)/);
-  assert.match(regentClient, /listTerminalSessions\(\)/);
-  assert.match(regentClient, /createTerminalSession\(input:/);
-  assert.match(regentClient, /getTerminalSession\(sessionId: string\)/);
-  assert.match(regentClient, /getTerminalEvents\(input:/);
-  assert.match(regentClient, /sendTerminalMessage\(input:/);
-  assert.match(regentClient, /resolveTerminalApproval\(input:/);
-  assert.match(navigationRoutes, /terminalSession\(sessionId: string\)/);
+  assert.match(messageTab, /regentApi\.listMessageThreads/);
+  assert.match(messageTab, /routes\.messageThread\(thread\.id\)/);
+  assert.match(messageDetail, /regentApi\.getMessageThread/);
+  assert.match(messageDetail, /regentApi\.getMessageThreadEvents/);
+  assert.match(messageDetail, /regentApi\.sendMessageThreadMessage/);
+  assert.match(messageDetail, /nextThread\.id !== threadId[\s\S]*router\.replace\(routes\.messageThread\(nextThread\.id\)\)/);
+  assert.match(messageDetail, /regentApi\.resolveMessageThreadApproval/);
+  assert.match(agentsTab, /router\.push\(routes\.message\(\)\)/);
+  assert.match(agentDetail, /router\.push\(routes\.message\(\)\)/);
+  assert.match(regentClient, /listMessageThreads\(\)/);
+  assert.match(regentClient, /createMessageThread\(input:/);
+  assert.match(regentClient, /getMessageThread\(threadId: string\)/);
+  assert.match(regentClient, /getMessageThreadEvents\(input:/);
+  assert.match(regentClient, /sendMessageThreadMessage\(input:/);
+  assert.match(regentClient, /resolveMessageThreadApproval\(input:/);
+  assert.match(navigationRoutes, /messageThread\(threadId: string\)/);
 
   for (const file of [...appFiles, ...helperFiles]) {
     const contents = readFileSync(resolve(testDir, file), 'utf8');

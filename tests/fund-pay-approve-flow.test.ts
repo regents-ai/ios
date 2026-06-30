@@ -15,7 +15,7 @@ test('main mobile tabs lead with fund, pay, earn, and message', () => {
   assert.match(layout, /name="wallet"[\s\S]*title: 'Fund'/);
   assert.match(layout, /name="send"[\s\S]*title: 'Pay'/);
   assert.match(layout, /name="earn"[\s\S]*title: 'Earn'/);
-  assert.match(layout, /name="terminal"[\s\S]*title: 'Message'/);
+  assert.match(layout, /name="message"[\s\S]*title: 'Message'/);
   assert.match(layout, /name="agents"[\s\S]*href: null/);
   assert.match(layout, /name="autolaunch"[\s\S]*href: null/);
   assert.match(sendTab, /export \{ default \} from '\.\.\/wallet\/send'/);
@@ -109,34 +109,34 @@ test('pay flow accepts Ethereum addresses, ENS names, paste, and QR photos', () 
 });
 
 test('message screens present agent messages and payment approvals plainly', () => {
-  const terminal = read('app/(tabs)/terminal.tsx');
-  const detail = read('app/terminal/[id].tsx');
+  const message = read('app/(tabs)/message.tsx');
+  const detail = read('app/message/[id].tsx');
 
-  assert.match(terminal, /Message your agent/);
-  assert.match(terminal, /approve payment requests/);
-  assert.match(terminal, /Agent messages, payment requests, and work updates/);
-  assert.match(terminal, /listTerminalSessions/);
-  assert.doesNotMatch(terminal, /New message|ENS or Ethereum address|Lookup Recent Addresses|Lookup Regent Users/);
-  assert.doesNotMatch(terminal, /lookupRecentMessageContacts|listRegentMessageContacts|connectWalletChannel/);
-  assert.doesNotMatch(terminal, /Secure channel|secure agent chats/);
-  assert.match(terminal, /Payment approval/);
+  assert.match(message, /Message your agent/);
+  assert.match(message, /approve payment requests/);
+  assert.match(message, /Agent messages, payment requests, and work updates/);
+  assert.match(message, /listMessageThreads/);
+  assert.doesNotMatch(message, /New message|ENS or Ethereum address|Lookup Recent Addresses|Lookup Regent Users/);
+  assert.doesNotMatch(message, /lookupRecentMessageContacts|listRegentMessageContacts|connectWalletChannel/);
+  assert.doesNotMatch(message, /Secure channel|secure agent chats/);
+  assert.match(message, /Payment approval/);
   assert.match(detail, /Payment requested/);
   assert.match(detail, /Agent requests \$\{approval\.amount\} \$\{approval\.currency\}/);
   assert.match(detail, /Approve payment/);
-  assert.match(detail, /sendTerminalMessage/);
-  assert.match(detail, /resolveTerminalApproval/);
+  assert.match(detail, /sendMessageThreadMessage/);
+  assert.match(detail, /resolveMessageThreadApproval/);
   assert.doesNotMatch(detail, /Connect secure channel|connectAgentChannel/);
 });
 
 test('approval card shows the full structured review schema', () => {
-  const detail = read('app/terminal/[id].tsx');
+  const detail = read('app/message/[id].tsx');
   const types = read('types/regents.ts');
   const contract = read('api-contract.openapiv3.yaml');
 
   // Contract and types carry the structured fields.
-  assert.match(contract, /PendingTerminalApproval:[\s\S]*?required: \[requestId, action, regentName, riskCopy, resolved\]/);
-  assert.match(contract, /PendingTerminalApproval:[\s\S]*?amountUsd:/);
-  assert.match(types, /export type PendingTerminalApproval = \{[\s\S]*?amountUsd\?: string;[\s\S]*?expiresAt\?: string;[\s\S]*?\}/);
+  assert.match(contract, /PendingMessageApproval:[\s\S]*?required: \[requestId, action, regentName, riskCopy, resolved\]/);
+  assert.match(contract, /PendingMessageApproval:[\s\S]*?amountUsd:/);
+  assert.match(types, /export type PendingMessageApproval = \{[\s\S]*?amountUsd\?: string;[\s\S]*?expiresAt\?: string;[\s\S]*?\}/);
 
   // Every schema field renders with a plain label.
   assert.match(detail, />Action<\/Text>/);
@@ -152,7 +152,7 @@ test('approval card shows the full structured review schema', () => {
 });
 
 test('approve and deny are explicit, double-submit safe, and blocked once expired', () => {
-  const detail = read('app/terminal/[id].tsx');
+  const detail = read('app/message/[id].tsx');
 
   // Both decisions disable while either is in flight.
   const denyButton = detail.slice(detail.indexOf("resolveApproval('denied')") - 400, detail.indexOf("resolveApproval('denied')"));

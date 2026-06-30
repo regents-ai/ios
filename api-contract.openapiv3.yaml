@@ -6,7 +6,7 @@ info:
     Source-of-truth contract for the current Regents Mobile backend surface.
 
     Mobile wallet flows are live. Mobile Regent records are sourced from Platform projection.
-    Talk records are sourced from Platform Regent Work Runtime. The mobile backend only owns
+    Message records are sourced from Platform Regent Work Runtime. The mobile backend only owns
     wallet intent and receipt state needed for phone wallet rails.
 x-regent-capability:
   status: beta
@@ -26,6 +26,10 @@ x-regent-message-contract:
   owner: ios
   routes:
     - /mobile/message/threads
+    - /mobile/message/threads/{thread_id}
+    - /mobile/message/threads/{thread_id}/events
+    - /mobile/message/threads/{thread_id}/messages
+    - /mobile/message/threads/{thread_id}/approvals/{approval_id}
   talk_source: Platform Regent Work Runtime
   transport_boundary: Mobile Message threads are sourced from Platform Regent Work Runtime. The mobile app does not own a separate peer-to-peer message transport.
 paths:
@@ -1129,30 +1133,30 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '429':
           $ref: '#/components/responses/RateLimitError'
-  /mobile/terminal/sessions:
+  /mobile/message/threads:
     get:
-      operationId: listMobileTerminalSessions
-      summary: List mobile Talk sessions from Platform Regent Work Runtime
+      operationId: listMobileMessageThreads
+      summary: List mobile Message threads from Platform Regent Work Runtime
       security:
         - bearerAuth: []
       responses:
         '200':
-          description: Mobile Talk session list sourced from Platform RWR work items
+          description: Mobile Message thread list sourced from Platform RWR work items
           content:
             application/json:
               schema:
                 type: object
-                required: [sessions]
+                required: [threads]
                 properties:
-                  sessions:
+                  threads:
                     type: array
                     items:
-                      $ref: '#/components/schemas/TerminalSessionSummary'
+                      $ref: '#/components/schemas/MessageThread'
         '429':
           $ref: '#/components/responses/RateLimitError'
     post:
-      operationId: createMobileTerminalSession
-      summary: Create one mobile Talk session as a Platform RWR work item and run
+      operationId: createMobileMessageThread
+      summary: Create one mobile Message thread as a Platform RWR work item
       security:
         - bearerAuth: []
       requestBody:
@@ -1160,18 +1164,18 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreateTerminalSessionRequest'
+              $ref: '#/components/schemas/CreateMessageThreadRequest'
       responses:
         '201':
-          description: Mobile Talk session created from Platform RWR records
+          description: Mobile Message thread created from Platform RWR records
           content:
             application/json:
               schema:
                 type: object
-                required: [session]
+                required: [thread]
                 properties:
-                  session:
-                    $ref: '#/components/schemas/TerminalSessionDetail'
+                  thread:
+                    $ref: '#/components/schemas/MessageThreadDetail'
         '429':
           $ref: '#/components/responses/RateLimitError'
   /mobile/agents/{agent_id}/voice/status:
@@ -1356,46 +1360,46 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '429':
           $ref: '#/components/responses/RateLimitError'
-  /mobile/terminal/sessions/{id}:
+  /mobile/message/threads/{thread_id}:
     get:
-      operationId: getMobileTerminalSession
-      summary: Fetch one mobile Talk session from Platform Regent Work Runtime
+      operationId: getMobileMessageThread
+      summary: Fetch one mobile Message thread from Platform Regent Work Runtime
       security:
         - bearerAuth: []
       parameters:
         - in: path
-          name: id
+          name: thread_id
           required: true
           schema:
             type: string
       responses:
         '200':
-          description: Mobile Talk session detail sourced from Platform RWR
+          description: Mobile Message thread detail sourced from Platform RWR
           content:
             application/json:
               schema:
                 type: object
-                required: [session]
+                required: [thread]
                 properties:
-                  session:
-                    $ref: '#/components/schemas/TerminalSessionDetail'
+                  thread:
+                    $ref: '#/components/schemas/MessageThreadDetail'
         '404':
-          description: Mobile terminal session not found
+          description: Mobile Message thread not found
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '429':
           $ref: '#/components/responses/RateLimitError'
-  /mobile/terminal/sessions/{id}/events:
+  /mobile/message/threads/{thread_id}/events:
     get:
-      operationId: getMobileTerminalEvents
-      summary: Fetch new mobile Talk events from Platform Regent Work Runtime
+      operationId: getMobileMessageThreadEvents
+      summary: Fetch new mobile Message events from Platform Regent Work Runtime
       security:
         - bearerAuth: []
       parameters:
         - in: path
-          name: id
+          name: thread_id
           required: true
           schema:
             type: string
@@ -1406,7 +1410,7 @@ paths:
             type: string
       responses:
         '200':
-          description: Mobile Talk events sourced from Platform RWR run events and approvals
+          description: Mobile Message events sourced from Platform RWR run events and approvals
           content:
             application/json:
               schema:
@@ -1416,26 +1420,26 @@ paths:
                   events:
                     type: array
                     items:
-                      $ref: '#/components/schemas/TerminalEvent'
+                      $ref: '#/components/schemas/MessageThreadEvent'
                   latestEventId:
                     type: string
         '404':
-          description: Mobile terminal session not found
+          description: Mobile Message thread not found
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '429':
           $ref: '#/components/responses/RateLimitError'
-  /mobile/terminal/sessions/{id}/messages:
+  /mobile/message/threads/{thread_id}/messages:
     post:
-      operationId: postMobileTerminalMessage
-      summary: Start a Platform RWR run from one mobile Talk message
+      operationId: postMobileMessageThreadMessage
+      summary: Start a Platform RWR run from one mobile Message
       security:
         - bearerAuth: []
       parameters:
         - in: path
-          name: id
+          name: thread_id
           required: true
           schema:
             type: string
@@ -1449,39 +1453,43 @@ paths:
               properties:
                 text:
                   type: string
+                source:
+                  type: string
+                  enum: [text, voice_summary]
+                  default: text
       responses:
         '202':
-          description: Mobile Talk session updated from the new Platform RWR run
+          description: Mobile Message thread updated from the new Platform RWR run
           content:
             application/json:
               schema:
                 type: object
-                required: [session]
+                required: [thread]
                 properties:
-                  session:
-                    $ref: '#/components/schemas/TerminalSessionDetail'
+                  thread:
+                    $ref: '#/components/schemas/MessageThreadDetail'
         '404':
-          description: Mobile terminal session not found
+          description: Mobile Message thread not found
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '429':
           $ref: '#/components/responses/RateLimitError'
-  /mobile/terminal/sessions/{id}/approvals/{request_id}:
+  /mobile/message/threads/{thread_id}/approvals/{approval_id}:
     post:
-      operationId: resolveMobileTerminalApproval
-      summary: Resolve one Platform RWR approval from mobile Talk
+      operationId: resolveMobileMessageThreadApproval
+      summary: Resolve one Platform RWR approval from mobile Message
       security:
         - bearerAuth: []
       parameters:
         - in: path
-          name: id
+          name: thread_id
           required: true
           schema:
             type: string
         - in: path
-          name: request_id
+          name: approval_id
           required: true
           schema:
             type: string
@@ -1498,17 +1506,17 @@ paths:
                   enum: [approved, denied]
       responses:
         '200':
-          description: Mobile terminal review step updated
+          description: Mobile Message review step updated
           content:
             application/json:
               schema:
                 type: object
-                required: [session]
+                required: [thread]
                 properties:
-                  session:
-                    $ref: '#/components/schemas/TerminalSessionDetail'
+                  thread:
+                    $ref: '#/components/schemas/MessageThreadDetail'
         '404':
-          description: Mobile terminal session or review step not found
+          description: Mobile Message thread or review step not found
           content:
             application/json:
               schema:
@@ -1519,27 +1527,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
-        '429':
-          $ref: '#/components/responses/RateLimitError'
-  /mobile/message/threads:
-    get:
-      operationId: listMobileMessageThreads
-      summary: List canonical mobile Message threads sourced from Platform Regent Work Runtime
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: Canonical mobile Message threads sourced from Platform Regent Work Runtime
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [threads]
-                properties:
-                  threads:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/MessageThread'
         '429':
           $ref: '#/components/responses/RateLimitError'
 components:
@@ -2341,10 +2328,10 @@ components:
         data:
           type: string
           pattern: '^0x([a-fA-F0-9]{2})*$'
-    TerminalSessionStatus:
+    MessageThreadStatus:
       type: string
       enum: [idle, running, waiting, failed]
-    PendingTerminalApproval:
+    PendingMessageApproval:
       type: object
       required: [requestId, action, regentName, riskCopy, resolved]
       properties:
@@ -2377,49 +2364,24 @@ components:
           description: When this approval stops being valid. Absent when the Platform approval has no expiry.
         resolved:
           type: boolean
-    TerminalSessionSummary:
+    MessageThread:
       type: object
       required:
         - id
+        - platformThreadId
         - title
         - agentId
         - agentName
+        - source
         - status
         - latestNote
         - lastUpdatedAt
       properties:
         id:
           type: string
-        title:
-          type: string
-        agentId:
-          type: string
-        agentName:
-          type: string
-        status:
-          $ref: '#/components/schemas/TerminalSessionStatus'
-        latestNote:
-          type: string
-        lastUpdatedAt:
-          type: string
-          format: date-time
-        pendingApproval:
-          $ref: '#/components/schemas/PendingTerminalApproval'
-    TerminalSessionDetail:
-      allOf:
-        - $ref: '#/components/schemas/TerminalSessionSummary'
-        - type: object
-          required: [composerPlaceholder]
-          properties:
-            composerPlaceholder:
-              type: string
-    MessageThread:
-      type: object
-      required: [id, platformThreadId, agentId, agentName, source, title, latestNote, lastUpdatedAt]
-      properties:
-        id:
-          type: string
         platformThreadId:
+          type: string
+        title:
           type: string
         agentId:
           type: string
@@ -2428,13 +2390,23 @@ components:
         source:
           type: string
           enum: [platform_rwr]
-        title:
-          type: string
+        status:
+          $ref: '#/components/schemas/MessageThreadStatus'
         latestNote:
           type: string
         lastUpdatedAt:
           type: string
           format: date-time
+        pendingApproval:
+          $ref: '#/components/schemas/PendingMessageApproval'
+    MessageThreadDetail:
+      allOf:
+        - $ref: '#/components/schemas/MessageThread'
+        - type: object
+          required: [composerPlaceholder]
+          properties:
+            composerPlaceholder:
+              type: string
     HermesVoiceAccount:
       type: object
       additionalProperties: false
@@ -2580,7 +2552,7 @@ components:
         error:
           type: object
           nullable: true
-    CreateTerminalSessionRequest:
+    CreateMessageThreadRequest:
       type: object
       required: [agentId, agentName]
       properties:
@@ -2644,15 +2616,15 @@ components:
           type: string
         failureReason:
           type: string
-    TerminalEvent:
+    MessageThreadEvent:
       type: object
-      required: [eventId, type, sessionId, ts]
+      required: [eventId, type, threadId, ts]
       properties:
         eventId:
           type: string
         type:
           type: string
-        sessionId:
+        threadId:
           type: string
         ts:
           type: string
