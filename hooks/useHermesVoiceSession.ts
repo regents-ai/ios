@@ -10,7 +10,20 @@ import { AppState, Linking } from 'react-native';
 
 type VoiceConnectionState = 'idle' | 'checking' | 'connecting' | 'connected' | 'disconnected' | 'error';
 
-export function useHermesVoiceSession(agentId: string) {
+type VoiceTranscriptTurn = {
+  role: 'user' | 'assistant';
+  text: string;
+};
+
+function voiceSummary(turns: VoiceTranscriptTurn[]) {
+  const lines = turns
+    .map((turn) => `${turn.role === 'user' ? 'You' : 'Hermes'}: ${turn.text}`)
+    .filter((line) => line.trim());
+  const summary = lines.join('\n').slice(0, 2400).trim();
+  return summary ? `Voice summary\n${summary}` : null;
+}
+
+export function useHermesVoiceSession(agentId: string, agentName = 'Hermes') {
   const [status, setStatus] = useState<HermesVoiceStatus | null>(null);
   const [session, setSession] = useState<HermesVoiceSession | null>(null);
   const [connectionState, setConnectionState] = useState<VoiceConnectionState>('idle');
@@ -18,6 +31,8 @@ export function useHermesVoiceSession(agentId: string) {
   const [approvalRequest, setApprovalRequest] = useState<VoiceApprovalRequest | null>(null);
   const realtimeClient = useRef<HermesRealtimeClient | null>(null);
   const sessionRef = useRef<HermesVoiceSession | null>(null);
+  const transcriptTurns = useRef<VoiceTranscriptTurn[]>([]);
+  const persistedVoiceSessionIds = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     sessionRef.current = session;
@@ -117,6 +132,25 @@ export function useHermesVoiceSession(agentId: string) {
     }
   }, [agentId]);
 
+  const persistVoiceSummary = useCallback(async (sessionId: string | undefined) => {
+    if (!sessionId || persistedVoiceSessionIds.current.has(sessionId)) {
+      return;
+    }
+
+    const summary = voiceSummary(transcriptTurns.current);
+    if (!summary) {
+      return;
+    }
+
+    persistedVoiceSessionIds.current.add(sessionId);
+    const thread = await regentApi.createMessageThread({ agentId, agentName });
+    await regentApi.sendMessageThreadMessage({
+      threadId: thread.id,
+      text: summary,
+      source: 'voice_summary',
+    });
+  }, [agentId, agentName]);
+
   const disconnect = useCallback(async () => {
     const activeSessionId = sessionRef.current?.session_id;
     realtimeClient.current?.disconnect();
@@ -129,8 +163,9 @@ export function useHermesVoiceSession(agentId: string) {
 
     if (activeSessionId) {
       await regentApi.disconnectHermesVoice({ agentId, sessionId: activeSessionId }).catch(() => null);
+      await persistVoiceSummary(activeSessionId).catch(() => null);
     }
-  }, [agentId]);
+  }, [agentId, persistVoiceSummary]);
 
   const start = useCallback(async () => {
     const nextStatus = status || await refreshStatus();
@@ -147,6 +182,7 @@ export function useHermesVoiceSession(agentId: string) {
 
     setConnectionState('connecting');
     setErrorMessage(null);
+    transcriptTurns.current = [];
     try {
       const locale = getLocales()[0]?.languageTag;
       const timezone = getCalendars()[0]?.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -170,6 +206,9 @@ export function useHermesVoiceSession(agentId: string) {
         session: nextSession,
         onToolCall: (toolCall) => {
           void handleToolCall(toolCall);
+        },
+        onTranscript: (turn) => {
+          transcriptTurns.current = [...transcriptTurns.current, turn].slice(-16);
         },
         onStatus: setConnectionState,
         onError: setErrorMessage,

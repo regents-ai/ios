@@ -21,6 +21,7 @@ export type HermesRealtimeClient = {
 type RealtimeClientOptions = {
   session: HermesVoiceSession;
   onToolCall?: (toolCall: RealtimeToolCall) => void;
+  onTranscript?: (turn: { role: 'user' | 'assistant'; text: string }) => void;
   onStatus?: (status: 'connecting' | 'connected' | 'disconnected') => void;
   onError?: (message: string) => void;
 };
@@ -75,6 +76,33 @@ function toolCallFromRealtimeEvent(event: Record<string, unknown>): RealtimeTool
   return null;
 }
 
+function transcriptFromRealtimeEvent(event: Record<string, unknown>): { role: 'user' | 'assistant'; text: string } | null {
+  if (event.type === 'conversation.item.input_audio_transcription.completed') {
+    const transcript = event.transcript;
+    return typeof transcript === 'string' && transcript.trim()
+      ? { role: 'user', text: transcript.trim() }
+      : null;
+  }
+
+  if (event.type === 'response.audio_transcript.done' || event.type === 'response.output_text.done' || event.type === 'response.text.done') {
+    const transcript = event.transcript || event.text;
+    return typeof transcript === 'string' && transcript.trim()
+      ? { role: 'assistant', text: transcript.trim() }
+      : null;
+  }
+
+  return null;
+}
+
+function voiceStartErrorMessage(error: unknown) {
+  const message = error instanceof Error ? error.message : '';
+  if (/permission|denied|notallowed|microphone|audio/i.test(message)) {
+    return 'Allow microphone access, then start voice again.';
+  }
+
+  return message || 'Voice could not start.';
+}
+
 export function createHermesRealtimeClient(options: RealtimeClientOptions): HermesRealtimeClient {
   const peerConnection = new RTCPeerConnection({});
   const dataChannel = peerConnection.createDataChannel('oai-events');
@@ -90,6 +118,10 @@ export function createHermesRealtimeClient(options: RealtimeClientOptions): Herm
       const toolCall = toolCallFromRealtimeEvent(event);
       if (toolCall) {
         options.onToolCall?.(toolCall);
+      }
+      const transcript = transcriptFromRealtimeEvent(event);
+      if (transcript) {
+        options.onTranscript?.(transcript);
       }
     } catch {
       options.onError?.('Voice had trouble reading a response.');
@@ -115,7 +147,9 @@ export function createHermesRealtimeClient(options: RealtimeClientOptions): Herm
     async connect() {
       options.onStatus?.('connecting');
       try {
-        localStream = await mediaDevices.getUserMedia({ audio: true, video: false });
+        localStream = await mediaDevices.getUserMedia({ audio: true, video: false }).catch((error) => {
+          throw new Error(voiceStartErrorMessage(error));
+        });
         for (const track of localStream.getTracks()) {
           peerConnection.addTrack(track, localStream);
         }
@@ -145,7 +179,7 @@ export function createHermesRealtimeClient(options: RealtimeClientOptions): Herm
         options.onStatus?.('connected');
       } catch (error) {
         options.onStatus?.('disconnected');
-        options.onError?.(error instanceof Error ? error.message : 'Voice could not start.');
+        options.onError?.(voiceStartErrorMessage(error));
         disconnect();
       }
     },

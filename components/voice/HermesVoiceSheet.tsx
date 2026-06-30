@@ -35,7 +35,7 @@ function statusCopy(value: string) {
 }
 
 export function HermesVoiceSheet({ agentId, agentName, visible, onClose }: HermesVoiceSheetProps) {
-  const voice = useHermesVoiceSession(agentId);
+  const voice = useHermesVoiceSession(agentId, agentName);
   const refreshStatus = voice.refreshStatus;
   const prewarm = voice.prewarm;
   const needsAccount = voice.status?.account.satisfied === false;
