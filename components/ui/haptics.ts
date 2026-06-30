@@ -1,21 +1,27 @@
 import * as Haptics from 'expo-haptics';
 import { Platform } from 'react-native';
 
-export type RegentHapticKind = 'tap' | 'selection' | 'copy' | 'success' | 'warning' | 'none';
+import { getRegentHapticPattern, type RegentHapticKind } from './hapticMapping';
+
+export type { RegentHapticKind } from './hapticMapping';
 
 export function runRegentHaptic(kind: RegentHapticKind) {
-  if (kind === 'none' || Platform.OS === 'web') {
+  const pattern = getRegentHapticPattern(kind, Platform.OS);
+
+  if (pattern.type === 'none') {
     return;
   }
 
   const feedback =
-    kind === 'tap'
+    pattern.type === 'impact'
       ? Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-      : kind === 'selection'
+      : pattern.type === 'selection'
         ? Haptics.selectionAsync()
-        : kind === 'warning'
-          ? Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning)
-          : Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        : Haptics.notificationAsync(
+            pattern.notification === 'warning'
+              ? Haptics.NotificationFeedbackType.Warning
+              : Haptics.NotificationFeedbackType.Success
+          );
 
   feedback.catch(() => undefined);
 }

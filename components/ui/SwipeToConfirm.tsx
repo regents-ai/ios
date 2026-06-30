@@ -3,6 +3,7 @@ import React, { useCallback, useRef, useState } from "react";
 import { ActivityIndicator, Animated, Easing, PanResponder, StyleSheet, Text, View } from "react-native";
 import { useReducedMotion } from "@/components/motion/useReducedMotion";
 import { runRegentHaptic } from "@/components/ui/haptics";
+import { getSwipeReleaseMotion, hasReachedSwipeThreshold } from "@/components/ui/swipeToConfirmMotion";
 import { COLORS } from "../../constants/Colors";
 import { FONTS } from "../../constants/Typography";
 
@@ -65,21 +66,36 @@ export function SwipeToConfirm({ label, disabled = false, onConfirm, isLoading =
 
   const snapBack = useCallback(() => {
     setThresholdReached(false);
+    if (getSwipeReleaseMotion(reduceMotionEnabled, 'reset') === 'instant') {
+      translateX.setValue(0);
+      currentXRef.current = 0;
+      animateKnobScale(1);
+      return;
+    }
+
     Animated.spring(translateX, { toValue: 0, useNativeDriver: true, bounciness: 0, speed: 16 }).start(() => {
       currentXRef.current = 0;
     });
     animateKnobScale(1);
-  }, [animateKnobScale, setThresholdReached, translateX]);
+  }, [animateKnobScale, reduceMotionEnabled, setThresholdReached, translateX]);
 
   const complete = useCallback(() => {
     setThresholdReached(false);
+    if (getSwipeReleaseMotion(reduceMotionEnabled, 'confirm') === 'instant') {
+      translateX.setValue(maxX);
+      currentXRef.current = maxX;
+      animateKnobScale(1);
+      onConfirm(() => snapBack());
+      return;
+    }
+
     Animated.timing(translateX, { toValue: maxX, duration: 150, useNativeDriver: true }).start(() => {
       currentXRef.current = maxX;
       const reset = () => snapBack();
       onConfirm(reset);
     });
     animateKnobScale(1);
-  }, [animateKnobScale, maxX, onConfirm, setThresholdReached, snapBack, translateX]);
+  }, [animateKnobScale, maxX, onConfirm, reduceMotionEnabled, setThresholdReached, snapBack, translateX]);
 
   React.useEffect(() => {
     Animated.timing(labelOpacity, {
@@ -90,6 +106,13 @@ export function SwipeToConfirm({ label, disabled = false, onConfirm, isLoading =
     }).start();
 
     if (isLoading) {
+      if (reduceMotionEnabled) {
+        translateX.setValue(maxX);
+        currentXRef.current = maxX;
+        animateKnobScale(1);
+        return;
+      }
+
       Animated.timing(translateX, {
         toValue: maxX,
         duration: 200,
@@ -99,6 +122,12 @@ export function SwipeToConfirm({ label, disabled = false, onConfirm, isLoading =
       });
       animateKnobScale(1);
     } else {
+      if (reduceMotionEnabled) {
+        translateX.setValue(0);
+        currentXRef.current = 0;
+        return;
+      }
+
       Animated.spring(translateX, {
         toValue: 0,
         useNativeDriver: true,
@@ -108,7 +137,7 @@ export function SwipeToConfirm({ label, disabled = false, onConfirm, isLoading =
         currentXRef.current = 0;
       });
     }
-  }, [animateKnobScale, isLoading, labelOpacity, maxX, translateX]);
+  }, [animateKnobScale, isLoading, labelOpacity, maxX, reduceMotionEnabled, translateX]);
 
   const pan = React.useMemo(
     () =>
@@ -126,21 +155,20 @@ export function SwipeToConfirm({ label, disabled = false, onConfirm, isLoading =
           const clamped = Math.max(0, Math.min(maxX, localX));
           startXRef.current = clamped;
           currentXRef.current = clamped;
-          setThresholdReached(maxX > 0 && clamped >= maxX * 0.8);
+          setThresholdReached(hasReachedSwipeThreshold(clamped, maxX));
           translateX.setValue(clamped);
         },
         onPanResponderMove: (_e, g) => {
           if (isLoading) return;
           const next = Math.max(0, Math.min(maxX, startXRef.current + g.dx));
           currentXRef.current = next;
-          setThresholdReached(maxX > 0 && next >= maxX * 0.8);
+          setThresholdReached(hasReachedSwipeThreshold(next, maxX));
           translateX.setValue(next);
         },
         onPanResponderRelease: () => {
           if (isLoading) return;
           onSwipeEnd?.();
-          const threshold = maxX * 0.8;
-          if (maxX > 0 && currentXRef.current >= threshold) {
+          if (hasReachedSwipeThreshold(currentXRef.current, maxX)) {
             complete();
           } else {
             snapBack();

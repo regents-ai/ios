@@ -1,5 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react';
-import { Animated, Easing, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
+import { Animated, Easing, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { useReducedMotion } from '@/components/motion/useReducedMotion';
 
@@ -39,13 +39,13 @@ export function LiveValueFlash({ children, nudge = false, style, value }: LiveVa
       toValue: 0,
       duration: 520,
       easing: Easing.out(Easing.cubic),
-      useNativeDriver: false,
+      useNativeDriver: true,
     }).start();
   }, [flash, reducedMotionEnabled, value]);
 
-  const backgroundColor = flash.interpolate({
+  const flashOpacity = flash.interpolate({
     inputRange: [0, 1],
-    outputRange: ['rgba(31, 122, 87, 0)', 'rgba(31, 122, 87, 0.16)'],
+    outputRange: [0, 0.16],
   });
   const scale = flash.interpolate({
     inputRange: [0, 1],
@@ -53,8 +53,14 @@ export function LiveValueFlash({ children, nudge = false, style, value }: LiveVa
   });
 
   return (
-    <Animated.View style={[styles.flashWrap, style, !reducedMotionEnabled && { backgroundColor, transform: [{ scale }] }]}>
-      {children}
+    <Animated.View style={[styles.flashWrap, style, !reducedMotionEnabled && { transform: [{ scale }] }]}>
+      {!reducedMotionEnabled ? (
+        <Animated.View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFillObject, styles.flashTint, { opacity: flashOpacity }]}
+        />
+      ) : null}
+      <View style={styles.flashContent}>{children}</View>
     </Animated.View>
   );
 }
@@ -63,6 +69,15 @@ const styles = StyleSheet.create({
   flashWrap: {
     borderRadius: 9,
     marginHorizontal: -4,
+    overflow: 'hidden',
     paddingHorizontal: 4,
+    position: 'relative',
+  },
+  flashTint: {
+    backgroundColor: '#1F7A57',
+    borderRadius: 9,
+  },
+  flashContent: {
+    position: 'relative',
   },
 });
