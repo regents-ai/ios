@@ -32,6 +32,7 @@ import {
   createPlatformStakingClient,
   type PlatformProjection,
   type PlatformRwrClient,
+  type RwrWorkItem,
   type PlatformStakingClient,
 } from './platformProjection.js';
 import type { HermesVoiceClient } from './services/hermesVoiceClient.js';
@@ -1529,6 +1530,168 @@ test('mobile Message threads are sourced from Platform RWR only', async () => {
   assert.equal(threads.body.threads[0].id, '101~201');
   assert.equal(threads.body.threads[0].source, 'platform_rwr');
   assert.equal(Object.prototype.hasOwnProperty.call(threads.body.threads[0], 'xmtpLinks'), false);
+});
+
+test('freshly formed Platform companies appear as chattable mobile Message threads before work exists', async () => {
+  const freshFormationClient: PlatformRwrClient = {
+    ...platformRwrClient,
+    async fetchWorkItems() {
+      return { kind: 'ok', data: [] };
+    },
+  };
+
+  const threads = await listMessageThreads(freshFormationClient, {});
+  assert.equal(threads.kind, 'ok');
+  if (threads.kind !== 'ok') {
+    return;
+  }
+
+  assert.equal(threads.data.length, 1);
+  assert.equal(threads.data[0]?.id, '101');
+  assert.equal(threads.data[0]?.agentId, 'atlas-capital');
+  assert.equal(threads.data[0]?.agentName, 'Atlas Capital');
+  assert.equal(threads.data[0]?.latestNote, 'Send a message to start.');
+});
+
+test('posting to a fresh company thread materializes the Platform work item and run', async () => {
+  const calls: unknown[] = [];
+  const freshFormationClient: PlatformRwrClient = {
+    ...platformRwrClient,
+    async fetchWorkItems() {
+      return { kind: 'ok', data: [] };
+    },
+    async createWorkItem(auth, companyId, input) {
+      calls.push({ method: 'createWorkItem', auth, companyId, input });
+      return platformRwrClient.createWorkItem(auth, companyId, input);
+    },
+    async startRun(auth, companyId, workItemId, input) {
+      calls.push({ method: 'startRun', auth, companyId, workItemId, input });
+      return platformRwrClient.startRun(auth, companyId, workItemId, input);
+    },
+  };
+
+  const updated = await postMessageThreadMessage(freshFormationClient, {}, '101', 'Hello from mobile.');
+  assert.equal(updated.kind, 'ok');
+  if (updated.kind !== 'ok') {
+    return;
+  }
+
+  assert.equal(updated.data.id, '101~202~301');
+  assert.deepEqual(calls, [
+    {
+      method: 'createWorkItem',
+      auth: {},
+      companyId: 101,
+      input: {
+        title: 'Atlas Capital mobile conversation',
+        description: 'Started from mobile.',
+        visibility: 'operator',
+        metadata: { source: 'regents-mobile', agent_slug: 'atlas-capital' },
+      },
+    },
+    {
+      method: 'startRun',
+      auth: {},
+      companyId: 101,
+      workItemId: 202,
+      input: {
+        instructions: 'Hello from mobile.',
+        metadata: { source: 'regents-mobile', message_source: 'text' },
+      },
+    },
+  ]);
+});
+
+test('posting to the returned run thread polls that run and reuses the work item for later sends', async () => {
+  const calls: Array<{ method: string; companyId?: number; workItemId?: number; runId?: number; input?: unknown }> = [];
+  const workItems: RwrWorkItem[] = [];
+  let nextRunId = 301;
+  const freshFormationClient: PlatformRwrClient = {
+    ...platformRwrClient,
+    async fetchWorkItems(auth, companyId) {
+      calls.push({ method: 'fetchWorkItems', companyId });
+      return { kind: 'ok', data: workItems };
+    },
+    async createWorkItem(auth, companyId, input) {
+      calls.push({ method: 'createWorkItem', companyId, input });
+      const created = await platformRwrClient.createWorkItem(auth, companyId, input);
+      if (created.kind === 'ok') {
+        workItems.push(created.data);
+      }
+      return created;
+    },
+    async startRun(auth, companyId, workItemId, input) {
+      calls.push({ method: 'startRun', companyId, workItemId, input });
+      const run = await platformRwrClient.startRun(auth, companyId, workItemId, input);
+      if (run.kind !== 'ok') {
+        return run;
+      }
+
+      return {
+        kind: 'ok' as const,
+        data: {
+          ...run.data,
+          id: nextRunId++,
+        },
+      };
+    },
+    async fetchRunEvents(auth, companyId, runId) {
+      calls.push({ method: 'fetchRunEvents', companyId, runId });
+      return platformRwrClient.fetchRunEvents(auth, companyId, runId);
+    },
+  };
+
+  const first = await postMessageThreadMessage(freshFormationClient, {}, '101', 'Hello from mobile.');
+  assert.equal(first.kind, 'ok');
+  if (first.kind !== 'ok') {
+    return;
+  }
+  assert.equal(first.data.id, '101~202~301');
+
+  const events = await getMessageThreadEvents(freshFormationClient, {}, first.data.id);
+  assert.equal(events.kind, 'ok');
+
+  const second = await postMessageThreadMessage(freshFormationClient, {}, first.data.id, 'Second message.');
+  assert.equal(second.kind, 'ok');
+
+  assert.equal(workItems.length, 1);
+  assert.equal(calls.filter((call) => call.method === 'createWorkItem').length, 1);
+  assert.deepEqual(
+    calls.filter((call) => call.method === 'startRun').map((call) => call.workItemId),
+    [202, 202],
+  );
+  assert.ok(calls.some((call) => call.method === 'fetchRunEvents' && call.runId === 301));
+});
+
+test('mobile message routes accept push payload thread IDs shaped as company work item and run', async () => {
+  const response = await requestMobileRoute(platformProjection, {
+    method: 'GET',
+    url: '/mobile/message/threads/101~202~301',
+  }, { platformRwrClient });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.thread.id, '101~202~301');
+});
+
+test('mobile message thread routes reject malformed thread IDs with 400', async () => {
+  const response = await requestMobileRoute(platformProjection, {
+    method: 'GET',
+    url: '/mobile/message/threads/101~202abc',
+  }, { platformRwrClient });
+
+  assert.equal(response.status, 400);
+  assert.equal(response.body.error.code, 'BadRequest');
+});
+
+test('mobile message approval routes reject malformed approval IDs with 400', async () => {
+  const response = await requestMobileRoute(platformProjection, {
+    method: 'POST',
+    url: '/mobile/message/threads/101~202~301/approvals/abc',
+    body: { decision: 'approved' },
+  }, { platformRwrClient });
+
+  assert.equal(response.status, 400);
+  assert.equal(response.body.error.code, 'BadRequest');
 });
 
 test('mobile Regent wallet intent state is written to durable backend storage', () => {

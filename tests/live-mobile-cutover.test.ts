@@ -50,7 +50,9 @@ test('mobile Message surfaces use the contracted message routes', () => {
   assert.match(messageDetail, /regentApi\.getMessageThread/);
   assert.match(messageDetail, /regentApi\.getMessageThreadEvents/);
   assert.match(messageDetail, /regentApi\.sendMessageThreadMessage/);
-  assert.match(messageDetail, /nextThread\.id !== threadId[\s\S]*router\.replace\(routes\.messageThread\(nextThread\.id\)\)/);
+  assert.match(messageDetail, /effectiveThreadId/);
+  assert.match(messageDetail, /adoptMessageThreadId\(requestThreadId, nextThread\.id\)/);
+  assert.match(messageDetail, /router\.replace\(routes\.messageThread\(nextThreadId\)\)/);
   assert.match(messageDetail, /regentApi\.resolveMessageThreadApproval/);
   assert.match(agentsTab, /router\.push\(routes\.message\(\)\)/);
   assert.match(agentDetail, /router\.push\(routes\.message\(\)\)/);

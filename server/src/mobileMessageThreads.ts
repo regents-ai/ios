@@ -63,6 +63,7 @@ export type MessageThreadEvent = {
 
 export type MobileMessageResult<T> =
   | { kind: 'ok'; data: T }
+  | { kind: 'bad_request' }
   | { kind: 'missing_config'; requiredEnv: 'PLATFORM_API_BASE_URL' }
   | { kind: 'unauthorized' }
   | { kind: 'not_found' }
@@ -70,8 +71,13 @@ export type MobileMessageResult<T> =
   | { kind: 'upstream_error'; message: string };
 
 type ParsedThreadId =
+  | { kind: 'company'; companyId: number }
   | { kind: 'work_item'; companyId: number; workItemId: number }
   | { kind: 'run'; companyId: number; workItemId: number; runId: number };
+
+function threadIdForCompany(company: RwrCompany) {
+  return String(company.id);
+}
 
 function threadIdForWorkItem(workItem: RwrWorkItem) {
   return `${workItem.company_id}~${workItem.id}`;
@@ -82,12 +88,23 @@ function threadIdForRun(run: RwrRun) {
 }
 
 function parseThreadId(threadId: string): ParsedThreadId | null {
-  const parts = threadId.split('~').map((part) => Number.parseInt(part, 10));
-  if ((parts.length !== 2 && parts.length !== 3) || parts.some((part) => !Number.isInteger(part) || part <= 0)) {
+  const rawParts = threadId.split('~');
+  if (
+    (rawParts.length !== 1 && rawParts.length !== 2 && rawParts.length !== 3) ||
+    rawParts.some((part) => !/^[0-9]+$/.test(part))
+  ) {
+    return null;
+  }
+
+  const parts = rawParts.map((part) => Number(part));
+  if (parts.some((part) => !Number.isSafeInteger(part) || part <= 0)) {
     return null;
   }
 
   const [companyId, workItemId, runId] = parts;
+  if (parts.length === 1) {
+    return { kind: 'company', companyId: companyId! };
+  }
   if (parts.length === 2) {
     return { kind: 'work_item', companyId: companyId!, workItemId: workItemId! };
   }
@@ -129,6 +146,27 @@ function companyName(companies: RwrCompany[], companyId: number) {
 
 function companySlug(companies: RwrCompany[], companyId: number) {
   return companies.find((company) => company.id === companyId)?.slug || String(companyId);
+}
+
+function summaryFromCompany(company: RwrCompany): MessageThread {
+  return {
+    id: threadIdForCompany(company),
+    platformThreadId: threadIdForCompany(company),
+    title: `${company.name} messages`,
+    agentId: company.slug,
+    agentName: company.name,
+    source: 'platform_rwr',
+    status: company.status === 'forming' || company.status === 'provisioning' ? 'running' : 'idle',
+    latestNote: 'Send a message to start.',
+    lastUpdatedAt: new Date().toISOString(),
+  };
+}
+
+function detailFromCompany(company: RwrCompany): MessageThreadDetail {
+  return {
+    ...summaryFromCompany(company),
+    composerPlaceholder: `Message ${company.name}...`,
+  };
 }
 
 function approvalPayloadString(approval: RwrApproval, key: string) {
@@ -301,6 +339,10 @@ async function account(client: PlatformRwrClient, auth: PlatformRequestAuth) {
   return client.fetchAccount(auth);
 }
 
+function findCompany(companies: RwrCompany[], companyId: number) {
+  return companies.find((company) => company.id === companyId) || null;
+}
+
 async function findWorkItem(client: PlatformRwrClient, auth: PlatformRequestAuth, companyId: number, workItemId: number) {
   const itemsResult = await client.fetchWorkItems(auth, companyId);
   if (itemsResult.kind !== 'ok') {
@@ -320,15 +362,25 @@ export async function listMessageThreads(client: PlatformRwrClient, auth: Platfo
   const sessionGroups = await Promise.all(
     accountResult.data.companies.map(async (company) => {
       const itemsResult = await client.fetchWorkItems(auth, company.id);
-      return itemsResult.kind === 'ok' ? itemsResult.data : [];
+      if (itemsResult.kind !== 'ok') {
+        return itemsResult;
+      }
+
+      return {
+        kind: 'ok' as const,
+        data: itemsResult.data.length > 0 ? itemsResult.data.map((item) => summaryFromWorkItem(item, accountResult.data.companies)) : [summaryFromCompany(company)],
+      };
     })
   );
+  const failedGroup = sessionGroups.find((group) => group.kind !== 'ok');
+  if (failedGroup) {
+    return failedGroup;
+  }
 
   return {
     kind: 'ok',
     data: sessionGroups
-      .flat()
-      .map((item) => summaryFromWorkItem(item, accountResult.data.companies))
+      .flatMap((group) => group.kind === 'ok' ? group.data : [])
       .sort((a, b) => b.lastUpdatedAt.localeCompare(a.lastUpdatedAt)),
   };
 }
@@ -373,12 +425,17 @@ export async function getMessageThread(
 ): Promise<MobileMessageResult<MessageThreadDetail>> {
   const parsed = parseThreadId(threadId);
   if (!parsed) {
-    return { kind: 'not_found' };
+    return { kind: 'bad_request' };
   }
 
   const accountResult = await account(client, auth);
   if (accountResult.kind !== 'ok') {
     return accountResult;
+  }
+
+  if (parsed.kind === 'company') {
+    const company = findCompany(accountResult.data.companies, parsed.companyId);
+    return company ? { kind: 'ok', data: detailFromCompany(company) } : { kind: 'not_found' };
   }
 
   const workItemResult = await findWorkItem(client, auth, parsed.companyId, parsed.workItemId);
@@ -412,10 +469,10 @@ export async function getMessageThreadEvents(
 ): Promise<MobileMessageResult<MessageThreadEvent[]>> {
   const parsed = parseThreadId(threadId);
   if (!parsed) {
-    return { kind: 'not_found' };
+    return { kind: 'bad_request' };
   }
 
-  if (parsed.kind === 'work_item') {
+  if (parsed.kind === 'company' || parsed.kind === 'work_item') {
     return {
       kind: 'ok',
       data: [
@@ -472,7 +529,42 @@ export async function postMessageThreadMessage(
 ): Promise<MobileMessageResult<MessageThreadDetail>> {
   const parsed = parseThreadId(threadId);
   if (!parsed) {
-    return { kind: 'not_found' };
+    return { kind: 'bad_request' };
+  }
+
+  if (parsed.kind === 'company') {
+    const accountResult = await account(client, auth);
+    if (accountResult.kind !== 'ok') {
+      return accountResult;
+    }
+
+    const company = findCompany(accountResult.data.companies, parsed.companyId);
+    if (!company) {
+      return { kind: 'not_found' };
+    }
+
+    const created = await client.createWorkItem(auth, company.id, {
+      title: `${company.name} mobile conversation`,
+      description: 'Started from mobile.',
+      visibility: 'operator',
+      metadata: { source: 'regents-mobile', agent_slug: company.slug },
+    });
+    if (created.kind !== 'ok') {
+      return created;
+    }
+
+    const run = await client.startRun(auth, company.id, created.data.id, {
+      instructions: source === 'voice_summary' ? `Voice summary:\n${text}` : text,
+      metadata: { source: 'regents-mobile', message_source: source },
+    });
+    if (run.kind !== 'ok') {
+      return run;
+    }
+
+    return {
+      kind: 'ok',
+      data: detailFromRun(run.data, created.data, accountResult.data.companies, []),
+    };
   }
 
   const workItemResult = await findWorkItem(client, auth, parsed.companyId, parsed.workItemId);
@@ -505,8 +597,11 @@ export async function resolveMessageThreadApproval(
   decision: 'approved' | 'denied'
 ): Promise<MobileMessageResult<MessageThreadDetail>> {
   const parsed = parseThreadId(threadId);
-  const approvalId = Number.parseInt(requestId, 10);
-  if (!parsed || parsed.kind !== 'run' || !Number.isInteger(approvalId) || approvalId <= 0) {
+  const approvalId = /^[0-9]+$/.test(requestId) ? Number(requestId) : null;
+  if (!parsed || !approvalId || !Number.isSafeInteger(approvalId)) {
+    return { kind: 'bad_request' };
+  }
+  if (parsed.kind !== 'run') {
     return { kind: 'not_found' };
   }
 

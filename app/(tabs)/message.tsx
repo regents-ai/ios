@@ -10,12 +10,13 @@ import { routes } from '@/utils/navigation/routes';
 import { regentApi } from '@/utils/regentApi/client';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  FlatList,
+  type ListRenderItem,
   RefreshControl,
   SafeAreaView,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -59,6 +60,60 @@ function threadRank(thread: MessageThread) {
   if (thread.status === 'failed') return 2;
   if (thread.status === 'running') return 3;
   return 4;
+}
+
+type MessageThreadRowProps = {
+  thread: MessageThread;
+  onPressThread: (thread: MessageThread) => void;
+};
+
+const MessageThreadRow = memo(function MessageThreadRow({
+  thread,
+  onPressThread,
+}: MessageThreadRowProps) {
+  const tone = statusTone(thread.status);
+  const handlePress = useCallback(() => {
+    onPressThread(thread);
+  }, [onPressThread, thread]);
+
+  return (
+    <RegentPressable
+      pressStyle="card"
+      style={styles.sessionCard}
+      onPress={handlePress}
+    >
+      <View style={styles.sessionHeader}>
+        <View style={styles.sessionTitleGroup}>
+          <Text style={styles.sessionAgent}>{thread.agentName}</Text>
+          <Text style={styles.sessionTitle} numberOfLines={2}>{thread.title}</Text>
+        </View>
+        <StatusPill label={tone.label} color={tone.accent} backgroundColor={tone.wash} compact />
+      </View>
+
+      <Text style={styles.sessionNote} numberOfLines={2}>{thread.latestNote}</Text>
+
+      <View style={styles.sessionFooter}>
+        <Text style={styles.sessionMeta}>{formatRelativeTime(thread.lastUpdatedAt)}</Text>
+        {thread.pendingApproval && !thread.pendingApproval.resolved ? (
+          <View style={styles.reviewChip}>
+            <Ionicons name="eye-outline" size={14} color={AMBER} />
+            <Text style={styles.reviewText}>
+              {thread.pendingApproval.amount && thread.pendingApproval.currency ? 'Payment approval' : 'Reply waiting'}
+            </Text>
+          </View>
+        ) : null}
+        <Ionicons name="chevron-forward" size={18} color={TEXT_SECONDARY} />
+      </View>
+    </RegentPressable>
+  );
+});
+
+function ThreadSeparator() {
+  return <View style={styles.threadSeparator} />;
+}
+
+function keyThread(thread: MessageThread) {
+  return thread.id;
 }
 
 export default function MessageTab() {
@@ -119,12 +174,89 @@ export default function MessageTab() {
 
   const waitingCount = threads.filter((thread) => thread.status === 'waiting' || !!thread.pendingApproval).length;
 
+  const handleThreadPress = useCallback((thread: MessageThread) => {
+    router.push(routes.messageThread(thread.id));
+  }, [router]);
+
+  const renderThread = useCallback<ListRenderItem<MessageThread>>(
+    ({ item }) => (
+      <MessageThreadRow
+        thread={item}
+        onPressThread={handleThreadPress}
+      />
+    ),
+    [handleThreadPress]
+  );
+
+  const listHeader = useMemo(() => (
+    <View style={styles.listHeader}>
+      <View style={styles.header}>
+        <View style={styles.titleGroup}>
+          <Text style={styles.eyebrow}>Message</Text>
+          <Text style={styles.title}>Message your agent</Text>
+          <Text style={styles.subtitle}>
+            Talk with your own agent, approve payment requests, and keep agent work together.
+          </Text>
+        </View>
+        <View style={styles.headerActions}>
+          <RegentPressable
+            pressStyle="icon"
+            onPress={() => loadThreads(true)}
+            disabled={refreshing}
+            style={styles.iconButton}
+          >
+            <SpinningRefreshIcon refreshing={refreshing} size={18} color={BLUE} />
+          </RegentPressable>
+          <ProfileButton />
+        </View>
+      </View>
+
+      <View style={styles.summaryRow}>
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryValue}>{threads.length}</Text>
+          <Text style={styles.summaryLabel}>Open</Text>
+        </View>
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryValue}>{waitingCount}</Text>
+          <Text style={styles.summaryLabel}>Needs approval</Text>
+        </View>
+      </View>
+    </View>
+  ), [loadThreads, refreshing, threads.length, waitingCount]);
+
+  const listEmpty = useMemo(() => {
+    if (loading) {
+      return (
+        <View style={styles.emptyState}>
+          <ActivityIndicator color={BLUE} />
+          <Text style={styles.emptyTitle}>Loading messages</Text>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.emptyState}>
+        <View style={styles.emptyIcon}>
+          <Ionicons name="chatbubble-ellipses-outline" size={24} color={BLUE} />
+        </View>
+        <Text style={styles.emptyTitle}>No messages yet</Text>
+        <Text style={styles.emptyBody}>Agent messages, payment requests, and work updates can appear here when they need you.</Text>
+      </View>
+    );
+  }, [loading]);
+
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView
+      <FlatList
         style={styles.scroller}
-        contentInsetAdjustmentBehavior="automatic"
+        data={sortedThreads}
+        renderItem={renderThread}
+        keyExtractor={keyThread}
+        ItemSeparatorComponent={ThreadSeparator}
+        ListHeaderComponent={listHeader}
+        ListEmptyComponent={listEmpty}
         contentContainerStyle={styles.content}
+        contentInsetAdjustmentBehavior="automatic"
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -132,91 +264,7 @@ export default function MessageTab() {
             onRefresh={() => loadThreads(true)}
           />
         }
-      >
-        <View style={styles.header}>
-          <View style={styles.titleGroup}>
-            <Text style={styles.eyebrow}>Message</Text>
-            <Text style={styles.title}>Message your agent</Text>
-            <Text style={styles.subtitle}>
-              Talk with your own agent, approve payment requests, and keep agent work together.
-            </Text>
-          </View>
-          <View style={styles.headerActions}>
-            <RegentPressable
-              pressStyle="icon"
-              onPress={() => loadThreads(true)}
-              disabled={refreshing}
-              style={styles.iconButton}
-            >
-              <SpinningRefreshIcon refreshing={refreshing} size={18} color={BLUE} />
-            </RegentPressable>
-            <ProfileButton />
-          </View>
-        </View>
-
-        <View style={styles.summaryRow}>
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryValue}>{threads.length}</Text>
-            <Text style={styles.summaryLabel}>Open</Text>
-          </View>
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryValue}>{waitingCount}</Text>
-            <Text style={styles.summaryLabel}>Needs approval</Text>
-          </View>
-        </View>
-
-        {loading ? (
-          <View style={styles.emptyState}>
-            <ActivityIndicator color={BLUE} />
-            <Text style={styles.emptyTitle}>Loading messages</Text>
-          </View>
-        ) : sortedThreads.length === 0 ? (
-          <View style={styles.emptyState}>
-            <View style={styles.emptyIcon}>
-              <Ionicons name="chatbubble-ellipses-outline" size={24} color={BLUE} />
-            </View>
-            <Text style={styles.emptyTitle}>No messages yet</Text>
-            <Text style={styles.emptyBody}>Agent messages, payment requests, and work updates can appear here when they need you.</Text>
-          </View>
-        ) : (
-          <View style={styles.sessionList}>
-            {sortedThreads.map((thread) => {
-              const tone = statusTone(thread.status);
-              return (
-                <RegentPressable
-                  key={thread.id}
-                  pressStyle="card"
-                  style={styles.sessionCard}
-                  onPress={() => router.push(routes.messageThread(thread.id))}
-                >
-                  <View style={styles.sessionHeader}>
-                    <View style={styles.sessionTitleGroup}>
-                      <Text style={styles.sessionAgent}>{thread.agentName}</Text>
-                      <Text style={styles.sessionTitle} numberOfLines={2}>{thread.title}</Text>
-                    </View>
-                    <StatusPill label={tone.label} color={tone.accent} backgroundColor={tone.wash} compact />
-                  </View>
-
-                  <Text style={styles.sessionNote} numberOfLines={2}>{thread.latestNote}</Text>
-
-                  <View style={styles.sessionFooter}>
-                    <Text style={styles.sessionMeta}>{formatRelativeTime(thread.lastUpdatedAt)}</Text>
-                    {thread.pendingApproval && !thread.pendingApproval.resolved ? (
-                      <View style={styles.reviewChip}>
-                        <Ionicons name="eye-outline" size={14} color={AMBER} />
-                        <Text style={styles.reviewText}>
-                          {thread.pendingApproval.amount && thread.pendingApproval.currency ? 'Payment approval' : 'Reply waiting'}
-                        </Text>
-                      </View>
-                    ) : null}
-                    <Ionicons name="chevron-forward" size={18} color={TEXT_SECONDARY} />
-                  </View>
-                </RegentPressable>
-              );
-            })}
-          </View>
-        )}
-      </ScrollView>
+      />
 
       <CoinbaseAlert
         visible={alertState.visible}
@@ -241,7 +289,10 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 20,
     paddingBottom: 120,
+  },
+  listHeader: {
     gap: 16,
+    marginBottom: 16,
   },
   header: {
     flexDirection: 'row',
@@ -311,8 +362,8 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: FONTS.body,
   },
-  sessionList: {
-    gap: 12,
+  threadSeparator: {
+    height: 12,
   },
   sessionCard: {
     backgroundColor: CARD_BG,

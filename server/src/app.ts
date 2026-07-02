@@ -8,6 +8,7 @@ import { createCdpCustomAuthToken, getCdpJwks } from './identity.js';
 import { resolveClientIp } from './ip.js';
 import { isReleaseRuntime } from './runtime.js';
 import { createMobileRoutes } from './mobileRoutes.js';
+import { processMobileMessagePushRequest } from './mobileMessagePush.js';
 import {
   createApnsProviderFromEnv,
   sendPushNotification,
@@ -152,6 +153,7 @@ app.use((req, res, next) => {
     req.path === '/health' ||
     req.path === '/.well-known/jwks.json' ||
     req.path.startsWith('/webhooks') ||
+    req.path === '/internal/mobile/message/push' ||
     req.path === '/push-tokens/ping'
   ) {
     return next();
@@ -752,6 +754,21 @@ app.post('/push-tokens', async (req, res) => {
     console.error('❌ [PUSH] Error:', summarizeErrorLog(error));
     sendError(res, 500, 'PushTokenStoreFailed', 'Unable to register this device for notifications right now.');
   }
+});
+
+app.post('/internal/mobile/message/push', webhookRateLimiter, async (req, res) => {
+  const result = await processMobileMessagePushRequest({
+    headers: req.headers,
+    body: req.body,
+  }, {
+    env: process.env,
+    readPushTokenForUser,
+    sendPushNotification: (tokenData, notification) => sendPushNotification(tokenData, notification, {
+      apnProvider,
+    }),
+  });
+
+  return res.status(result.status).json(result.body);
 });
 
 // Debug endpoint to check push token status

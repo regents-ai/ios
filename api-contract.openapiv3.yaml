@@ -30,6 +30,7 @@ x-regent-message-contract:
     - /mobile/message/threads/{thread_id}/events
     - /mobile/message/threads/{thread_id}/messages
     - /mobile/message/threads/{thread_id}/approvals/{approval_id}
+    - /internal/mobile/message/push
   talk_source: Platform Regent Work Runtime
   transport_boundary: Mobile Message threads are sourced from Platform Regent Work Runtime. The mobile app does not own a separate peer-to-peer message transport.
 paths:
@@ -363,6 +364,45 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '500':
           description: Webhook verification is not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+  /internal/mobile/message/push:
+    post:
+      operationId: sendMobileMessagePush
+      summary: Send one mobile Message push notification from a Platform RWR event
+      security:
+        - platformWebhookToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MobileMessagePushRequest'
+      responses:
+        '202':
+          description: Push trigger accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MobileMessagePushResponse'
+        '400':
+          description: Push trigger body does not match the current contract
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '401':
+          description: Platform webhook token is missing or invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: Push trigger or delivery is not configured
           content:
             application/json:
               schema:
@@ -1383,6 +1423,12 @@ paths:
                 properties:
                   thread:
                     $ref: '#/components/schemas/MessageThreadDetail'
+        '400':
+          description: Mobile Message thread ID is malformed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '404':
           description: Mobile Message thread not found
           content:
@@ -1423,6 +1469,12 @@ paths:
                       $ref: '#/components/schemas/MessageThreadEvent'
                   latestEventId:
                     type: string
+        '400':
+          description: Mobile Message thread ID or event marker is malformed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '404':
           description: Mobile Message thread not found
           content:
@@ -1468,6 +1520,12 @@ paths:
                 properties:
                   thread:
                     $ref: '#/components/schemas/MessageThreadDetail'
+        '400':
+          description: Mobile Message thread ID or message body is malformed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '404':
           description: Mobile Message thread not found
           content:
@@ -1515,6 +1573,12 @@ paths:
                 properties:
                   thread:
                     $ref: '#/components/schemas/MessageThreadDetail'
+        '400':
+          description: Mobile Message thread ID, review step ID, or decision is malformed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '404':
           description: Mobile Message thread or review step not found
           content:
@@ -1535,6 +1599,10 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+    platformWebhookToken:
+      type: apiKey
+      in: header
+      name: X-Regent-Platform-Webhook-Token
   responses:
     RateLimitError:
       description: Too many requests
@@ -1894,6 +1962,39 @@ components:
         tokenType:
           type: string
           enum: [native, expo]
+    MobileMessagePushRequest:
+      type: object
+      additionalProperties: false
+      required: [userId, threadId, eventId, eventType, agentName]
+      properties:
+        userId:
+          type: string
+          minLength: 1
+        threadId:
+          type: string
+          minLength: 1
+        eventId:
+          type: string
+          minLength: 1
+        eventType:
+          type: string
+          enum: [assistant_message, approval_request]
+        agentName:
+          type: string
+          minLength: 1
+        message:
+          type: string
+          maxLength: 240
+    MobileMessagePushResponse:
+      type: object
+      additionalProperties: false
+      required: [delivered]
+      properties:
+        delivered:
+          type: boolean
+        reason:
+          type: string
+          enum: [no_token]
     MobileRegentStakingWalletRequest:
       type: object
       additionalProperties: false
@@ -2379,6 +2480,7 @@ components:
       properties:
         id:
           type: string
+          description: One, two, or three positive integer segments separated by `~`. A one-segment ID starts a company thread before Platform has a work item.
         platformThreadId:
           type: string
         title:

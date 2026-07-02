@@ -12,16 +12,24 @@ import {
 } from '@/types/regents';
 import { routes } from '@/utils/navigation/routes';
 import { regentApi } from '@/utils/regentApi/client';
+import {
+  adoptMessageThreadId,
+  completeMessagePoll,
+  extendMessagePollBurst,
+  mergeMessageThreadEvents,
+  nextMessagePollDelay,
+} from '@/utils/regentApi/messagePolling';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  FlatList,
   KeyboardAvoidingView,
+  type ListRenderItem,
   Platform,
   RefreshControl,
   SafeAreaView,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -143,13 +151,48 @@ function approvalExpiryLabel(approval: PendingMessageApproval, nowMs: number) {
   return days === 1 ? 'In about 1 day' : `In about ${days} days`;
 }
 
+type MessageEventRowProps = {
+  event: MessageThreadEvent;
+};
+
+const MessageEventRow = memo(function MessageEventRow({
+  event,
+}: MessageEventRowProps) {
+  return (
+    <View style={[
+      styles.eventCard,
+      event.role === 'user' && styles.userEventCard,
+    ]}>
+      <View style={styles.eventHeader}>
+        <Text style={styles.eventTitle}>{eventTitle(event)}</Text>
+        <Text style={styles.eventTime}>{formatEventTime(event.ts)}</Text>
+      </View>
+      <Text style={styles.eventBody}>{eventCopy(event)}</Text>
+    </View>
+  );
+});
+
+function EventSeparator() {
+  return <View style={styles.eventSeparator} />;
+}
+
+function keyEvent(event: MessageThreadEvent) {
+  return event.eventId;
+}
+
 export default function MessageDetailScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string }>();
-  const threadId = typeof params.id === 'string' ? params.id : '';
+  const routeThreadId = typeof params.id === 'string' ? params.id : '';
+  const eventListRef = useRef<FlatList<MessageThreadEvent>>(null);
+  const previousEventCountRef = useRef(0);
+  const previousThreadScrollKeyRef = useRef('');
+  const [effectiveThreadId, setEffectiveThreadId] = useState(routeThreadId);
   const [thread, setThread] = useState<MessageThreadDetail | null>(null);
   const [events, setEvents] = useState<MessageThreadEvent[]>([]);
   const [latestEventId, setLatestEventId] = useState('');
+  const [pollBurstUntilMs, setPollBurstUntilMs] = useState(0);
+  const [pollTick, setPollTick] = useState(0);
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -167,8 +210,22 @@ export default function MessageDetailScreen() {
     type: 'info',
   });
 
-  const loadThread = useCallback(async (refresh = false) => {
-    if (!threadId) {
+  useEffect(() => {
+    setEffectiveThreadId(routeThreadId);
+    setLatestEventId('');
+    setPollBurstUntilMs(0);
+    setPollTick((current) => current + 1);
+  }, [routeThreadId]);
+
+  const moveToThread = useCallback((nextThreadId: string) => {
+    setEffectiveThreadId(nextThreadId);
+    if (nextThreadId && nextThreadId !== routeThreadId) {
+      router.replace(routes.messageThread(nextThreadId));
+    }
+  }, [routeThreadId, router]);
+
+  const loadThread = useCallback(async (refresh = false, requestedThreadId = effectiveThreadId || routeThreadId) => {
+    if (!requestedThreadId) {
       return;
     }
 
@@ -179,12 +236,13 @@ export default function MessageDetailScreen() {
         setLoading(true);
       }
 
-      const [nextThread, nextEvents] = await Promise.all([
-        regentApi.getMessageThread(threadId),
-        regentApi.getMessageThreadEvents({ threadId }),
-      ]);
+      const nextThread = await regentApi.getMessageThread(requestedThreadId);
+      const nextThreadId = adoptMessageThreadId(requestedThreadId, nextThread.id);
+      moveToThread(nextThreadId);
+
+      const nextEvents = await regentApi.getMessageThreadEvents({ threadId: nextThreadId });
       setThread(nextThread);
-      setEvents(nextEvents.events);
+      setEvents(mergeMessageThreadEvents([], nextEvents.events));
       setLatestEventId(nextEvents.latestEventId);
     } catch (error) {
       setAlertState({
@@ -197,22 +255,21 @@ export default function MessageDetailScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [threadId]);
+  }, [effectiveThreadId, moveToThread, routeThreadId]);
 
   const refreshNewEvents = useCallback(async () => {
-    if (!threadId) {
-      return;
+    const requestThreadId = effectiveThreadId || routeThreadId;
+    if (!requestThreadId) {
+      return 0;
     }
 
-    const nextEvents = await regentApi.getMessageThreadEvents({ threadId, sinceEventId: latestEventId || undefined });
+    const nextEvents = await regentApi.getMessageThreadEvents({ threadId: requestThreadId, sinceEventId: latestEventId || undefined });
     if (nextEvents.events.length > 0) {
-      setEvents((current) => {
-        const seen = new Set(current.map((event) => event.eventId));
-        return [...current, ...nextEvents.events.filter((event) => !seen.has(event.eventId))];
-      });
-      setLatestEventId(nextEvents.latestEventId);
+      setEvents((current) => mergeMessageThreadEvents(current, nextEvents.events));
     }
-  }, [latestEventId, threadId]);
+    setLatestEventId(nextEvents.latestEventId);
+    return nextEvents.events.length;
+  }, [effectiveThreadId, latestEventId, routeThreadId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -220,29 +277,69 @@ export default function MessageDetailScreen() {
     }, [loadThread])
   );
 
+  useEffect(() => {
+    const requestThreadId = effectiveThreadId || routeThreadId;
+    if (!requestThreadId || loading) {
+      return;
+    }
+
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      refreshNewEvents()
+        .then((receivedEventCount) => {
+          if (cancelled) {
+            return;
+          }
+
+          const completed = completeMessagePoll({
+            currentTick: pollTick,
+            receivedEventCount,
+          });
+          if (completed.burstUntilMs) {
+            setPollBurstUntilMs(completed.burstUntilMs);
+          }
+          setPollTick(completed.nextTick);
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setPollTick((current) => completeMessagePoll({
+              currentTick: current,
+              receivedEventCount: 0,
+            }).nextTick);
+          }
+        });
+    }, nextMessagePollDelay({ burstUntilMs: pollBurstUntilMs }));
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [effectiveThreadId, loading, pollBurstUntilMs, pollTick, refreshNewEvents, routeThreadId]);
+
   const tone = statusTone(thread?.status || 'idle');
   const visibleEvents = useMemo(
     () => events.filter((event) => !!eventCopy(event)),
     [events]
   );
+  const currentThreadScrollKey = thread?.id || effectiveThreadId;
 
   const sendMessage = useCallback(async () => {
     const text = draft.trim();
-    if (!threadId || !text || sending) {
+    const requestThreadId = effectiveThreadId || routeThreadId;
+    if (!requestThreadId || !text || sending) {
       return;
     }
 
     try {
       setSending(true);
-      const nextThread = await regentApi.sendMessageThreadMessage({ threadId, text });
+      setPollBurstUntilMs(extendMessagePollBurst());
+      const nextThread = await regentApi.sendMessageThreadMessage({ threadId: requestThreadId, text });
+      const nextThreadId = adoptMessageThreadId(requestThreadId, nextThread.id);
       setThread(nextThread);
+      moveToThread(nextThreadId);
       setDraft('');
-      if (nextThread.id !== threadId) {
-        router.replace(routes.messageThread(nextThread.id));
-        return;
-      }
 
-      await loadThread(true);
+      await loadThread(true, nextThreadId);
     } catch (error) {
       setAlertState({
         visible: true,
@@ -253,12 +350,13 @@ export default function MessageDetailScreen() {
     } finally {
       setSending(false);
     }
-  }, [draft, loadThread, router, sending, threadId]);
+  }, [draft, effectiveThreadId, loadThread, moveToThread, routeThreadId, sending]);
 
   const resolveApproval = useCallback(async (decision: 'approved' | 'denied') => {
     const approval = thread?.pendingApproval;
     const requestId = approval?.requestId;
-    if (!threadId || !approval || !requestId || resolvingDecision) {
+    const requestThreadId = effectiveThreadId || routeThreadId;
+    if (!requestThreadId || !approval || !requestId || resolvingDecision) {
       return;
     }
     if (isApprovalExpired(approval, Date.now())) {
@@ -267,9 +365,12 @@ export default function MessageDetailScreen() {
 
     try {
       setResolvingDecision(decision);
-      const nextThread = await regentApi.resolveMessageThreadApproval({ threadId, requestId, decision });
+      const nextThread = await regentApi.resolveMessageThreadApproval({ threadId: requestThreadId, requestId, decision });
+      const nextThreadId = adoptMessageThreadId(requestThreadId, nextThread.id);
       setThread(nextThread);
-      await loadThread(true);
+      moveToThread(nextThreadId);
+      setPollBurstUntilMs(extendMessagePollBurst());
+      await loadThread(true, nextThreadId);
     } catch (error) {
       setAlertState({
         visible: true,
@@ -280,7 +381,7 @@ export default function MessageDetailScreen() {
     } finally {
       setResolvingDecision(null);
     }
-  }, [loadThread, resolvingDecision, thread, threadId]);
+  }, [effectiveThreadId, loadThread, moveToThread, resolvingDecision, routeThreadId, thread]);
 
   const pendingApproval = thread?.pendingApproval;
   const isPaymentApproval = !!pendingApproval?.amount && !!pendingApproval.currency;
@@ -297,6 +398,184 @@ export default function MessageDetailScreen() {
   }, [pendingApproval]);
 
   const approvalExpired = !!pendingApproval && isApprovalExpired(pendingApproval, nowMs);
+
+  useEffect(() => {
+    const threadChanged = previousThreadScrollKeyRef.current !== currentThreadScrollKey;
+    if (threadChanged) {
+      previousThreadScrollKeyRef.current = currentThreadScrollKey;
+      previousEventCountRef.current = 0;
+    }
+
+    if (visibleEvents.length === 0) {
+      previousEventCountRef.current = 0;
+      return;
+    }
+
+    const previousCount = previousEventCountRef.current;
+    previousEventCountRef.current = visibleEvents.length;
+
+    if (threadChanged || visibleEvents.length > previousCount) {
+      requestAnimationFrame(() => {
+        eventListRef.current?.scrollToEnd({ animated: !threadChanged && previousCount > 0 });
+      });
+    }
+  }, [currentThreadScrollKey, visibleEvents.length]);
+
+  const renderEvent = useCallback<ListRenderItem<MessageThreadEvent>>(
+    ({ item }) => <MessageEventRow event={item} />,
+    []
+  );
+
+  const handleRefreshNewEventsPress = useCallback(() => {
+    refreshNewEvents();
+  }, [refreshNewEvents]);
+
+  const listHeader = useMemo(() => {
+    if (loading) {
+      return (
+        <View style={styles.emptyState}>
+          <ActivityIndicator color={BLUE} />
+          <Text style={styles.emptyTitle}>Loading messages</Text>
+        </View>
+      );
+    }
+
+    if (!thread) {
+      return (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyTitle}>Message not found</Text>
+          <Text style={styles.emptyBody}>Go back and choose another conversation.</Text>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.listHeader}>
+        <View style={styles.sessionCard}>
+          <View style={styles.sessionHeader}>
+            <View style={styles.sessionTitleGroup}>
+              <Text style={styles.sessionTitle}>{thread.title}</Text>
+              <Text style={styles.sessionNote}>{thread.latestNote}</Text>
+            </View>
+            <StatusPill label={tone.label} color={tone.accent} backgroundColor={tone.wash} compact />
+          </View>
+        </View>
+
+        {pendingApproval && !pendingApproval.resolved ? (
+          <View style={styles.approvalCard}>
+            <View style={styles.approvalHeader}>
+              <View style={styles.approvalIcon}>
+                <Ionicons name="eye-outline" size={18} color={AMBER} />
+              </View>
+              <View style={styles.approvalTitleGroup}>
+                <Text style={styles.approvalTitle}>{approvalTitle(pendingApproval)}</Text>
+                <Text style={styles.approvalAgent}>{pendingApproval.regentName}</Text>
+              </View>
+            </View>
+            <View style={styles.approvalDetails}>
+              <View style={styles.approvalDetailRow}>
+                <Text style={styles.approvalDetailLabel}>Action</Text>
+                <Text style={styles.approvalDetailValue}>{approvalActionLabel(pendingApproval)}</Text>
+              </View>
+              <View style={styles.approvalDetailRow}>
+                <Text style={styles.approvalDetailLabel}>Requested by</Text>
+                <Text style={styles.approvalDetailValue}>{pendingApproval.regentName}</Text>
+              </View>
+              {approvalAmountLabel(pendingApproval) ? (
+                <View style={styles.approvalDetailRow}>
+                  <Text style={styles.approvalDetailLabel}>Amount</Text>
+                  <Text style={styles.approvalDetailValue}>{approvalAmountLabel(pendingApproval)}</Text>
+                </View>
+              ) : null}
+              {approvalContractLabel(pendingApproval) ? (
+                <View style={styles.approvalDetailRow}>
+                  <Text style={styles.approvalDetailLabel}>Contract</Text>
+                  <Text style={styles.approvalDetailValue}>{approvalContractLabel(pendingApproval)}</Text>
+                </View>
+              ) : null}
+              {approvalExpiryLabel(pendingApproval, nowMs) ? (
+                <View style={styles.approvalDetailRow}>
+                  <Text style={styles.approvalDetailLabel}>Expires</Text>
+                  <Text style={[styles.approvalDetailValue, approvalExpired && styles.approvalDetailValueExpired]}>
+                    {approvalExpiryLabel(pendingApproval, nowMs)}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+            <Text style={styles.approvalBody}>{pendingApproval.riskCopy}</Text>
+            {approvalExpired ? (
+              <Text style={styles.approvalExpiredNote}>
+                This request expired before a decision was made, so it can no longer be approved. Nothing was sent. Ask {pendingApproval.regentName} for a new request if this is still needed.
+              </Text>
+            ) : (
+              <View style={styles.approvalActions}>
+                <RegentPressable
+                  style={styles.secondaryButton}
+                  disabled={!!resolvingDecision}
+                  onPress={() => resolveApproval('denied')}
+                >
+                  <Text style={styles.secondaryButtonText}>
+                    {resolvingDecision === 'denied' ? 'Denying...' : 'Deny'}
+                  </Text>
+                </RegentPressable>
+                <RegentPressable
+                  style={styles.primaryButton}
+                  disabled={!!resolvingDecision}
+                  onPress={() => resolveApproval('approved')}
+                >
+                  <Text style={styles.primaryButtonText}>
+                    {resolvingDecision === 'approved' ? 'Approving...' : isPaymentApproval ? 'Approve payment' : 'Approve'}
+                  </Text>
+                </RegentPressable>
+              </View>
+            )}
+          </View>
+        ) : null}
+      </View>
+    );
+  }, [
+    approvalExpired,
+    isPaymentApproval,
+    loading,
+    nowMs,
+    pendingApproval,
+    resolveApproval,
+    resolvingDecision,
+    thread,
+    tone.accent,
+    tone.label,
+    tone.wash,
+  ]);
+
+  const listEmpty = useMemo(() => {
+    if (loading || !thread) {
+      return null;
+    }
+
+    return (
+      <View style={styles.emptyEventState}>
+        <Text style={styles.emptyTitle}>No messages yet</Text>
+        <Text style={styles.emptyBody}>Send a note to start the conversation.</Text>
+      </View>
+    );
+  }, [loading, thread]);
+
+  const listFooter = useMemo(() => {
+    if (loading || !thread) {
+      return null;
+    }
+
+    return (
+      <View style={styles.refreshFooter}>
+        <RegentPressable
+          style={styles.refreshSmallButton}
+          onPress={handleRefreshNewEventsPress}
+        >
+          <Text style={styles.refreshSmallText}>Check for new messages</Text>
+        </RegentPressable>
+      </View>
+    );
+  }, [handleRefreshNewEventsPress, loading, thread]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -322,8 +601,16 @@ export default function MessageDetailScreen() {
           </RegentPressable>
         </View>
 
-        <ScrollView
+        <FlatList
+          ref={eventListRef}
           style={styles.scroller}
+          data={loading || !thread ? [] : visibleEvents}
+          renderItem={renderEvent}
+          keyExtractor={keyEvent}
+          ItemSeparatorComponent={EventSeparator}
+          ListHeaderComponent={listHeader}
+          ListEmptyComponent={listEmpty}
+          ListFooterComponent={listFooter}
           contentContainerStyle={styles.content}
           contentInsetAdjustmentBehavior="automatic"
           keyboardShouldPersistTaps="handled"
@@ -334,131 +621,7 @@ export default function MessageDetailScreen() {
               onRefresh={() => loadThread(true)}
             />
           }
-        >
-          {loading ? (
-            <View style={styles.emptyState}>
-              <ActivityIndicator color={BLUE} />
-              <Text style={styles.emptyTitle}>Loading messages</Text>
-            </View>
-          ) : thread ? (
-            <>
-              <View style={styles.sessionCard}>
-                <View style={styles.sessionHeader}>
-                  <View style={styles.sessionTitleGroup}>
-                    <Text style={styles.sessionTitle}>{thread.title}</Text>
-                    <Text style={styles.sessionNote}>{thread.latestNote}</Text>
-                  </View>
-                  <StatusPill label={tone.label} color={tone.accent} backgroundColor={tone.wash} compact />
-                </View>
-              </View>
-
-              {pendingApproval && !pendingApproval.resolved ? (
-                <View style={styles.approvalCard}>
-                  <View style={styles.approvalHeader}>
-                    <View style={styles.approvalIcon}>
-                      <Ionicons name="eye-outline" size={18} color={AMBER} />
-                    </View>
-                    <View style={styles.approvalTitleGroup}>
-                      <Text style={styles.approvalTitle}>{approvalTitle(pendingApproval)}</Text>
-                      <Text style={styles.approvalAgent}>{pendingApproval.regentName}</Text>
-                    </View>
-                  </View>
-                  <View style={styles.approvalDetails}>
-                    <View style={styles.approvalDetailRow}>
-                      <Text style={styles.approvalDetailLabel}>Action</Text>
-                      <Text style={styles.approvalDetailValue}>{approvalActionLabel(pendingApproval)}</Text>
-                    </View>
-                    <View style={styles.approvalDetailRow}>
-                      <Text style={styles.approvalDetailLabel}>Requested by</Text>
-                      <Text style={styles.approvalDetailValue}>{pendingApproval.regentName}</Text>
-                    </View>
-                    {approvalAmountLabel(pendingApproval) ? (
-                      <View style={styles.approvalDetailRow}>
-                        <Text style={styles.approvalDetailLabel}>Amount</Text>
-                        <Text style={styles.approvalDetailValue}>{approvalAmountLabel(pendingApproval)}</Text>
-                      </View>
-                    ) : null}
-                    {approvalContractLabel(pendingApproval) ? (
-                      <View style={styles.approvalDetailRow}>
-                        <Text style={styles.approvalDetailLabel}>Contract</Text>
-                        <Text style={styles.approvalDetailValue}>{approvalContractLabel(pendingApproval)}</Text>
-                      </View>
-                    ) : null}
-                    {approvalExpiryLabel(pendingApproval, nowMs) ? (
-                      <View style={styles.approvalDetailRow}>
-                        <Text style={styles.approvalDetailLabel}>Expires</Text>
-                        <Text style={[styles.approvalDetailValue, approvalExpired && styles.approvalDetailValueExpired]}>
-                          {approvalExpiryLabel(pendingApproval, nowMs)}
-                        </Text>
-                      </View>
-                    ) : null}
-                  </View>
-                  <Text style={styles.approvalBody}>{pendingApproval.riskCopy}</Text>
-                  {approvalExpired ? (
-                    <Text style={styles.approvalExpiredNote}>
-                      This request expired before a decision was made, so it can no longer be approved. Nothing was sent. Ask {pendingApproval.regentName} for a new request if this is still needed.
-                    </Text>
-                  ) : (
-                    <View style={styles.approvalActions}>
-                      <RegentPressable
-                        style={styles.secondaryButton}
-                        disabled={!!resolvingDecision}
-                        onPress={() => resolveApproval('denied')}
-                      >
-                        <Text style={styles.secondaryButtonText}>
-                          {resolvingDecision === 'denied' ? 'Denying...' : 'Deny'}
-                        </Text>
-                      </RegentPressable>
-                      <RegentPressable
-                        style={styles.primaryButton}
-                        disabled={!!resolvingDecision}
-                        onPress={() => resolveApproval('approved')}
-                      >
-                        <Text style={styles.primaryButtonText}>
-                          {resolvingDecision === 'approved' ? 'Approving...' : isPaymentApproval ? 'Approve payment' : 'Approve'}
-                        </Text>
-                      </RegentPressable>
-                    </View>
-                  )}
-                </View>
-              ) : null}
-
-              <View style={styles.eventList}>
-                {visibleEvents.length === 0 ? (
-                  <View style={styles.emptyEventState}>
-                    <Text style={styles.emptyTitle}>No messages yet</Text>
-                    <Text style={styles.emptyBody}>Send a note to start the conversation.</Text>
-                  </View>
-                ) : (
-                  visibleEvents.map((event) => (
-                    <View key={event.eventId} style={[
-                      styles.eventCard,
-                      event.role === 'user' && styles.userEventCard,
-                    ]}>
-                      <View style={styles.eventHeader}>
-                        <Text style={styles.eventTitle}>{eventTitle(event)}</Text>
-                        <Text style={styles.eventTime}>{formatEventTime(event.ts)}</Text>
-                      </View>
-                      <Text style={styles.eventBody}>{eventCopy(event)}</Text>
-                    </View>
-                  ))
-                )}
-              </View>
-
-              <RegentPressable
-                style={styles.refreshSmallButton}
-                onPress={refreshNewEvents}
-              >
-                <Text style={styles.refreshSmallText}>Check for new messages</Text>
-              </RegentPressable>
-            </>
-          ) : (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyTitle}>Message not found</Text>
-              <Text style={styles.emptyBody}>Go back and choose another conversation.</Text>
-            </View>
-          )}
-        </ScrollView>
+        />
 
         {thread ? (
           <View style={styles.composer}>
@@ -548,7 +711,10 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 20,
     paddingBottom: 18,
+  },
+  listHeader: {
     gap: 14,
+    marginBottom: 14,
   },
   sessionCard: {
     backgroundColor: CARD_BG,
@@ -690,8 +856,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: FONTS.heading,
   },
-  eventList: {
-    gap: 10,
+  eventSeparator: {
+    height: 10,
   },
   eventCard: {
     backgroundColor: CARD_BG,
@@ -761,6 +927,10 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 22,
     gap: 6,
+  },
+  refreshFooter: {
+    alignItems: 'center',
+    marginTop: 14,
   },
   emptyTitle: {
     color: TEXT_PRIMARY,

@@ -711,6 +711,7 @@ export function createMobileRoutes(input?: {
     result:
       | Awaited<ReturnType<PlatformRwrClient['fetchAccount']>>
       | { kind: 'ok'; data: T }
+      | { kind: 'bad_request' }
       | { kind: 'missing_config'; requiredEnv: 'PLATFORM_API_BASE_URL' }
       | { kind: 'unauthorized' }
       | { kind: 'not_found' }
@@ -733,6 +734,10 @@ export function createMobileRoutes(input?: {
 
     if (result.kind === 'unauthorized') {
       return sendError(res, 401, 'Unauthorized', 'Sign in again before loading messages.');
+    }
+
+    if (result.kind === 'bad_request') {
+      return sendError(res, 400, 'BadRequest', 'A valid message thread ID is required.');
     }
 
     if (result.kind === 'not_found') {
