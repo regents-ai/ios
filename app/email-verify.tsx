@@ -1,3 +1,4 @@
+import { VerificationMotion } from '@/components/auth/verification-motion';
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { RegentPressable } from '@/components/ui/RegentPressable';
 import { COLORS } from '@/constants/Colors';
@@ -8,9 +9,7 @@ import { useLinkEmail, useLoginWithEmail } from '@privy-io/expo';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { EaseView } from 'react-native-ease';
 import {
-  AccessibilityInfo,
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
@@ -23,15 +22,6 @@ import {
 } from 'react-native';
 
 const { DARK_BG, CARD_BG, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, WHITE, BORDER } = COLORS;
-const SCREEN_OFFSET = 12;
-const CARD_OFFSET = 8;
-const STAGGER_STEP = 50;
-
-function buildEntryTransition(reduceMotion: boolean, delay = 0, duration = 220) {
-  return reduceMotion
-    ? { type: 'none' as const }
-    : { type: 'timing' as const, duration, easing: 'easeOut' as const, delay };
-}
 
 export default function EmailVerifyScreen() {
   const router = useRouter();
@@ -41,7 +31,6 @@ export default function EmailVerifyScreen() {
 
   const [email, setEmail] = useState(initialEmail);
   const [sending, setSending] = useState(false);
-  const [reduceMotion, setReduceMotion] = useState(false);
   const [alert, setAlert] = useState<{ visible: boolean; title: string; message: string; type: 'success' | 'error' | 'info' }>({
     visible: false,
     title: '',
@@ -55,24 +44,6 @@ export default function EmailVerifyScreen() {
   const { isReady: isChatGptReady, session: chatGptSession } = useChatGptAuth();
 
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-
-  React.useEffect(() => {
-    let mounted = true;
-    AccessibilityInfo.isReduceMotionEnabled()
-      .then((enabled) => {
-        if (mounted) {
-          setReduceMotion(enabled);
-        }
-      })
-      .catch(() => undefined);
-
-    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
-
-    return () => {
-      mounted = false;
-      subscription.remove();
-    };
-  }, []);
 
   React.useEffect(() => {
     if (isChatGptReady && !chatGptSession) {
@@ -142,39 +113,22 @@ export default function EmailVerifyScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <EaseView
-            initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
-            animate={{ opacity: 1, translateY: 0 }}
-            transition={buildEntryTransition(reduceMotion)}
-            style={styles.header}
-          >
+          <VerificationMotion style={styles.header}>
             <RegentPressable pressStyle="icon" onPress={() => router.back()} style={styles.backButton}>
               <Ionicons name="arrow-back" size={24} color={TEXT_PRIMARY} />
             </RegentPressable>
-          </EaseView>
+          </VerificationMotion>
 
           <View style={styles.content}>
-            <EaseView
-              initialAnimate={{ opacity: 0, translateY: SCREEN_OFFSET }}
-              animate={{ opacity: 1, translateY: 0 }}
-              transition={buildEntryTransition(reduceMotion, STAGGER_STEP)}
-            >
+            <VerificationMotion order={1} variant="screen">
               <Text style={styles.title}>{title}</Text>
-            </EaseView>
+            </VerificationMotion>
 
-            <EaseView
-              initialAnimate={{ opacity: 0, translateY: SCREEN_OFFSET }}
-              animate={{ opacity: 1, translateY: 0 }}
-              transition={buildEntryTransition(reduceMotion, STAGGER_STEP * 2)}
-            >
+            <VerificationMotion order={2} variant="screen">
               <Text style={styles.subtitle}>{subtitle}</Text>
-            </EaseView>
+            </VerificationMotion>
 
-            <EaseView
-              initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
-              animate={{ opacity: 1, translateY: 0 }}
-              transition={buildEntryTransition(reduceMotion, STAGGER_STEP * 3)}
-            >
+            <VerificationMotion order={3}>
               <Text style={styles.fieldLabel}>Email</Text>
               <TextInput
                 style={styles.input}
@@ -188,21 +142,15 @@ export default function EmailVerifyScreen() {
                 editable={!sending}
                 autoFocus
               />
-            </EaseView>
+            </VerificationMotion>
 
-            <EaseView
-              initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
-              animate={{ opacity: 1, translateY: 0 }}
-              transition={buildEntryTransition(reduceMotion, STAGGER_STEP * 4)}
-            >
+            <VerificationMotion order={4}>
               <Text style={styles.helperText}>Check your inbox and spam folder for the code.</Text>
-            </EaseView>
+            </VerificationMotion>
           </View>
 
-          <EaseView
-            initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
-            animate={{ opacity: 1, translateY: 0 }}
-            transition={buildEntryTransition(reduceMotion, STAGGER_STEP * 5)}
+          <VerificationMotion
+            order={5}
             style={styles.footer}
           >
             <RegentPressable
@@ -212,7 +160,7 @@ export default function EmailVerifyScreen() {
             >
               {sending ? <ActivityIndicator color={WHITE} /> : <Text style={styles.primaryButtonText}>Send code</Text>}
             </RegentPressable>
-          </EaseView>
+          </VerificationMotion>
         </ScrollView>
       </KeyboardAvoidingView>
 

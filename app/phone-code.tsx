@@ -1,28 +1,19 @@
+import { VerificationMotion } from '@/components/auth/verification-motion';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
 import { useChatGptAuth } from '@/hooks/useChatGptAuth';
 import { useRegentsAuth } from '@/hooks/useRegentsAuth';
+import { useVerificationResendTimer } from '@/hooks/useVerificationResendTimer';
 import { useLinkSMS, useLoginWithSMS } from '@privy-io/expo';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { EaseView } from 'react-native-ease';
-import { AccessibilityInfo, ActivityIndicator, KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { CoinbaseAlert } from '../components/ui/CoinbaseAlerts';
 import { RegentPressable } from '../components/ui/RegentPressable';
 import { setVerifiedPhone } from '../utils/state/verificationState';
 
 const { DARK_BG, CARD_BG, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, WHITE, BORDER } = COLORS;
-const RESEND_SECONDS = 30;
-const SCREEN_OFFSET = 12;
-const CARD_OFFSET = 8;
-const STAGGER_STEP = 50;
-
-function buildEntryTransition(reduceMotion: boolean, delay = 0, duration = 220) {
-  return reduceMotion
-    ? { type: 'none' as const }
-    : { type: 'timing' as const, duration, easing: 'easeOut' as const, delay };
-}
 
 export default function PhoneCodeScreen() {
   const router = useRouter();
@@ -33,8 +24,6 @@ export default function PhoneCodeScreen() {
   const [code, setCode] = useState('');
   const [verifying, setVerifying] = useState(false);
   const [sending, setSending] = useState(false);
-  const [resendSeconds, setResendSeconds] = useState(RESEND_SECONDS);
-  const [reduceMotion, setReduceMotion] = useState(false);
   const [alert, setAlert] = useState<{ visible: boolean; title: string; message: string; type: 'success' | 'error' | 'info' }>({
     visible: false,
     title: '',
@@ -47,33 +36,11 @@ export default function PhoneCodeScreen() {
   const { sendCode: sendLinkCode, linkWithCode } = useLinkSMS();
   const { regentsUserId } = useRegentsAuth();
   const { isReady: isChatGptReady, session: chatGptSession } = useChatGptAuth();
-
-  useEffect(() => {
-    let mounted = true;
-    AccessibilityInfo.isReduceMotionEnabled()
-      .then((enabled) => {
-        if (mounted) {
-          setReduceMotion(enabled);
-        }
-      })
-      .catch(() => undefined);
-
-    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
-
-    return () => {
-      mounted = false;
-      subscription.remove();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (resendSeconds <= 0) {
-      return;
-    }
-
-    const timer = setInterval(() => setResendSeconds((current) => current - 1), 1000);
-    return () => clearInterval(timer);
-  }, [resendSeconds]);
+  const {
+    canResend: resendReady,
+    resendSeconds,
+    resetResendTimer,
+  } = useVerificationResendTimer();
 
   useEffect(() => {
     return () => {
@@ -119,7 +86,7 @@ export default function PhoneCodeScreen() {
         await sendLinkCode({ phone });
       }
 
-      setResendSeconds(RESEND_SECONDS);
+      resetResendTimer();
     } catch (error: any) {
       setAlert({
         visible: true,
@@ -187,21 +154,16 @@ export default function PhoneCodeScreen() {
     }
   };
 
-  const canResend = resendSeconds <= 0 && !sending && !verifying;
+  const canResend = resendReady && !sending && !verifying;
   const title = mode === 'link' ? 'Confirm your phone' : 'Enter your code';
 
   return (
     <SafeAreaView style={styles.container}>
-      <EaseView
-        initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
-        animate={{ opacity: 1, translateY: 0 }}
-        transition={buildEntryTransition(reduceMotion)}
-        style={styles.header}
-      >
+      <VerificationMotion style={styles.header}>
         <RegentPressable pressStyle="icon" onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={26} color={TEXT_PRIMARY} />
         </RegentPressable>
-      </EaseView>
+      </VerificationMotion>
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.content}>
         <ScrollView
@@ -212,26 +174,16 @@ export default function PhoneCodeScreen() {
         >
           <View style={styles.flow}>
             <View style={styles.centerBlock}>
-              <EaseView
-                initialAnimate={{ opacity: 0, translateY: SCREEN_OFFSET }}
-                animate={{ opacity: 1, translateY: 0 }}
-                transition={buildEntryTransition(reduceMotion, STAGGER_STEP)}
-              >
+              <VerificationMotion order={1} variant="screen">
                 <Text style={styles.title}>{title}</Text>
-              </EaseView>
+              </VerificationMotion>
 
-              <EaseView
-                initialAnimate={{ opacity: 0, translateY: SCREEN_OFFSET }}
-                animate={{ opacity: 1, translateY: 0 }}
-                transition={buildEntryTransition(reduceMotion, STAGGER_STEP * 2)}
-              >
+              <VerificationMotion order={2} variant="screen">
                 <Text style={styles.subtitle}>We sent a short code to {phone}.</Text>
-              </EaseView>
+              </VerificationMotion>
 
-              <EaseView
-                initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
-                animate={{ opacity: 1, translateY: 0 }}
-                transition={buildEntryTransition(reduceMotion, STAGGER_STEP * 3)}
+              <VerificationMotion
+                order={3}
                 style={styles.codeCard}
               >
                 <TextInput
@@ -247,14 +199,12 @@ export default function PhoneCodeScreen() {
                   editable={!verifying}
                   autoFocus
                 />
-              </EaseView>
+              </VerificationMotion>
             </View>
 
             <View style={styles.footerBlock}>
-              <EaseView
-                initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
-                animate={{ opacity: 1, translateY: 0 }}
-                transition={buildEntryTransition(reduceMotion, STAGGER_STEP * 4)}
+              <VerificationMotion
+                order={4}
                 style={styles.buttonWrap}
               >
                 <RegentPressable
@@ -264,12 +214,10 @@ export default function PhoneCodeScreen() {
                 >
                   {verifying ? <ActivityIndicator color={WHITE} /> : <Text style={styles.continueButtonText}>Continue</Text>}
                 </RegentPressable>
-              </EaseView>
+              </VerificationMotion>
 
-              <EaseView
-                initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
-                animate={{ opacity: 1, translateY: 0 }}
-                transition={buildEntryTransition(reduceMotion, STAGGER_STEP * 5)}
+              <VerificationMotion
+                order={5}
                 style={styles.resendContainer}
               >
                 {resendSeconds > 0 ? (
@@ -279,7 +227,7 @@ export default function PhoneCodeScreen() {
                     <Text style={[styles.resendButton, !canResend && styles.disabledText]}>Resend code</Text>
                   </RegentPressable>
                 )}
-              </EaseView>
+              </VerificationMotion>
             </View>
           </View>
         </ScrollView>

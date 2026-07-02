@@ -1,3 +1,4 @@
+import { VerificationMotion } from '@/components/auth/verification-motion';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
 import { useChatGptAuth } from '@/hooks/useChatGptAuth';
@@ -6,22 +7,12 @@ import { useLinkSMS, useLoginWithSMS } from '@privy-io/expo';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-import { EaseView } from 'react-native-ease';
-import { AccessibilityInfo, ActivityIndicator, KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { CoinbaseAlert } from '../components/ui/CoinbaseAlerts';
 import { RegentPressable } from '../components/ui/RegentPressable';
 import { PHONE_COUNTRIES } from '../constants/PhoneCountries';
 
 const { DARK_BG, CARD_BG, TEXT_PRIMARY, TEXT_SECONDARY, BORDER, BLUE, WHITE } = COLORS;
-const SCREEN_OFFSET = 12;
-const CARD_OFFSET = 8;
-const STAGGER_STEP = 50;
-
-function buildEntryTransition(reduceMotion: boolean, delay = 0, duration = 220) {
-  return reduceMotion
-    ? { type: 'none' as const }
-    : { type: 'timing' as const, duration, easing: 'easeOut' as const, delay };
-}
 
 export default function PhoneVerifyScreen() {
   const router = useRouter();
@@ -35,7 +26,6 @@ export default function PhoneVerifyScreen() {
   const [sending, setSending] = useState(false);
   const [countryPickerVisible, setCountryPickerVisible] = useState(false);
   const [hasAutoSent, setHasAutoSent] = useState(false);
-  const [reduceMotion, setReduceMotion] = useState(false);
   const [alert, setAlert] = useState<{ visible: boolean; title: string; message: string; type: 'success' | 'error' | 'info' }>({
     visible: false,
     title: '',
@@ -61,24 +51,6 @@ export default function PhoneVerifyScreen() {
     setSelectedCountry(country);
     setPhoneNumber(initialPhone.slice(country.code.length));
   }, [initialPhone]);
-
-  useEffect(() => {
-    let mounted = true;
-    AccessibilityInfo.isReduceMotionEnabled()
-      .then((enabled) => {
-        if (mounted) {
-          setReduceMotion(enabled);
-        }
-      })
-      .catch(() => undefined);
-
-    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
-
-    return () => {
-      mounted = false;
-      subscription.remove();
-    };
-  }, []);
 
   useEffect(() => {
     if (isChatGptReady && !chatGptSession) {
@@ -164,16 +136,11 @@ export default function PhoneVerifyScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <EaseView
-        initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
-        animate={{ opacity: 1, translateY: 0 }}
-        transition={buildEntryTransition(reduceMotion)}
-        style={styles.header}
-      >
+      <VerificationMotion style={styles.header}>
         <RegentPressable pressStyle="icon" onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={26} color={TEXT_PRIMARY} />
         </RegentPressable>
-      </EaseView>
+      </VerificationMotion>
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.content}>
         <ScrollView
@@ -184,26 +151,16 @@ export default function PhoneVerifyScreen() {
         >
           <View style={styles.flow}>
             <View style={styles.centerBlock}>
-              <EaseView
-                initialAnimate={{ opacity: 0, translateY: SCREEN_OFFSET }}
-                animate={{ opacity: 1, translateY: 0 }}
-                transition={buildEntryTransition(reduceMotion, STAGGER_STEP)}
-              >
+              <VerificationMotion order={1} variant="screen">
                 <Text style={styles.title}>{title}</Text>
-              </EaseView>
+              </VerificationMotion>
 
-              <EaseView
-                initialAnimate={{ opacity: 0, translateY: SCREEN_OFFSET }}
-                animate={{ opacity: 1, translateY: 0 }}
-                transition={buildEntryTransition(reduceMotion, STAGGER_STEP * 2)}
-              >
+              <VerificationMotion order={2} variant="screen">
                 <Text style={styles.subtitle}>{subtitle}</Text>
-              </EaseView>
+              </VerificationMotion>
 
-              <EaseView
-                initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
-                animate={{ opacity: 1, translateY: 0 }}
-                transition={buildEntryTransition(reduceMotion, STAGGER_STEP * 3)}
+              <VerificationMotion
+                order={3}
                 style={styles.fieldShell}
               >
                 <View style={styles.fieldRow}>
@@ -236,12 +193,7 @@ export default function PhoneVerifyScreen() {
                 </View>
 
                 {countryPickerVisible ? (
-                  <EaseView
-                    initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
-                    animate={{ opacity: 1, translateY: 0 }}
-                    transition={buildEntryTransition(reduceMotion, 0, 180)}
-                    style={styles.countryList}
-                  >
+                  <VerificationMotion style={styles.countryList}>
                     {PHONE_COUNTRIES.map((country) => (
                       <RegentPressable
                         key={country.code}
@@ -260,25 +212,19 @@ export default function PhoneVerifyScreen() {
                         </View>
                       </RegentPressable>
                     ))}
-                  </EaseView>
+                  </VerificationMotion>
                 ) : null}
-              </EaseView>
+              </VerificationMotion>
 
               {helperText ? (
-                <EaseView
-                  initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
-                  animate={{ opacity: 1, translateY: 0 }}
-                  transition={buildEntryTransition(reduceMotion, STAGGER_STEP * 4)}
-                >
+                <VerificationMotion order={4}>
                   <Text style={styles.helperText}>{helperText}</Text>
-                </EaseView>
+                </VerificationMotion>
               ) : null}
             </View>
 
-            <EaseView
-              initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
-              animate={{ opacity: 1, translateY: 0 }}
-              transition={buildEntryTransition(reduceMotion, STAGGER_STEP * 5)}
+            <VerificationMotion
+              order={5}
               style={styles.buttonWrap}
             >
               <RegentPressable
@@ -288,7 +234,7 @@ export default function PhoneVerifyScreen() {
               >
                 {sending ? <ActivityIndicator color={WHITE} /> : <Text style={styles.continueButtonText}>Continue</Text>}
               </RegentPressable>
-            </EaseView>
+            </VerificationMotion>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
