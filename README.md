@@ -1,136 +1,67 @@
 # Regents Mobile
 
-Regents Mobile is the iOS workstream built on top of the Coinbase mobile wallet demo.
+Regents Mobile is the iPhone wallet for Regent users. The live path is the wallet: open a wallet, add funds, send, receive, cash out, and review history with Base USDC as the happy path.
 
-## Current Reality
+The app also contains preview surfaces for connecting to a hosted Regent, Regent Manager, Talk, Paperclip, and terminal-style work. Treat those as preview until the related product status is marked live.
 
-What is real today:
+## What You Can Do Today
 
-- sign-in and wallet opening
-- buy flow
-- cash-out flow
-- wallet send and receive
-- wallet history
-- Regents, Regent Manager, and Talk screens through the mobile backend
-- send checks that reject bad or missing transfer details before payment review
-- tracked agent-funding actions that do not duplicate the same funding request
-- network-specific wallet state for balances and funding choices
+- Open a mobile wallet after signing in.
+- Add USDC on Base, with Apple Pay shown when it is available for the user and region.
+- Send funds to another wallet or fund an agent working balance.
+- Receive funds by copying the Base and Ethereum wallet address.
+- Cash out supported balances through the Coinbase cash-out flow.
+- Review wallet history and failed transaction support details.
+- Check $REGENT staking and reward actions from the mobile staking screen.
 
-## Repo Story
+Base USDC is the primary route for agent funding. Other balances may appear in the wallet detail view, but Base USDC remains the recommended path.
 
-- Coinbase provides the wallet base: sign-in, wallet creation, onramp, offramp, transfer, history, and the local proxy for secret-bearing wallet work.
-- Happy is kept only as a short donor note for future terminal UX ideas.
-- Mobile Regent routes now use the live route family in the app and backend contract.
+## Preview Regent Surfaces
 
-## Repo Shape
+The Agents, Message, Regent Manager, and voice screens let the app connect to Regent work records and agent conversations. These screens are present, but the founder status ledger marks live hosted Regent connection, Paperclip, and terminal as preview.
 
-- `app/`: mobile screens and routes
-- `components/`: shared mobile UI pieces
-- `constants/`, `hooks/`, `utils/`: app support code
-- `server/`: local backend for wallet and mobile Regent routes
-- `vendor/happy-app/`: short note about donor ideas that should be rebuilt inside Regents Mobile
-
-## Setup
-
-### Prerequisites
-
-- Node.js 20 or newer
-- an iPhone or iOS simulator
-- a CDP project and credentials
-
-### Install dependencies
-
-```bash
-npm install
-cd server
-npm install
-```
-
-### Configure local environment
-
-Copy the example files and fill in real values:
-
-```bash
-cp .env.example .env
-cp server/.env.example server/.env
-```
-
-The mobile app needs:
-
-- `EXPO_PUBLIC_CDP_PROJECT_ID`
-- `EXPO_PUBLIC_PRIVY_APP_ID`
-- `EXPO_PUBLIC_PRIVY_CLIENT_ID`
-- `EXPO_PUBLIC_BASE_URL`
-- `EXPO_PUBLIC_USE_EXPO_CRYPTO`
-
-The local backend needs:
-
-- `CDP_API_KEY_ID`
-- `CDP_API_KEY_SECRET`
-- `BASE_RPC_URL`
-- `PLATFORM_API_BASE_URL`
-- `HERMES_VOICE_GATEWAY_TOKEN`
-- `PRIVY_APP_ID`
-- `PRIVY_VERIFICATION_KEY`
-- `REGENTS_CDP_JWT_ISSUER`
-- `REGENTS_CDP_JWT_AUDIENCE`
-- `REGENTS_CDP_JWT_KID`
-- `REGENTS_CDP_JWT_ALG`
-- `REGENTS_CDP_JWT_PRIVATE_KEY`
-- `WEBHOOK_SECRET`
-
-Release mode is enabled when `NODE_ENV=production`, `VERCEL_ENV=production`, or `REGENTS_RELEASE=true`. In release mode the backend requires durable Redis storage, a backend-owned mobile state directory, and production push delivery settings.
-
-Keep database secrets on the backend. A Neon Postgres URL must not be placed in the mobile app environment. This app currently uses `REDIS_URL` on the backend for push-token storage. Production push delivery also uses the backend APNs settings in `server/.env.example`. Regent records come from Platform’s `/api/agent-platform/projection` endpoint, and Talk records come from Platform Regent Work Runtime routes. The mobile backend stores only wallet intent and receipt state under `.regents-mobile-state` unless `REGENTS_MOBILE_STATE_DIR` points to another backend-owned directory.
+Preview surfaces can help test agent funding, replies, approvals, and work updates. They should not be described as the same level of availability as wallet opening, buy, cash-out, send, receive, or history.
 
 ## Run Locally
 
-Start the backend:
+Install dependencies:
 
-```bash
+```sh
+npm install
+cd server && npm install
+```
+
+Run the local backend in one terminal:
+
+```sh
 cd server
 npm run dev
 ```
 
-Start the mobile app in a second terminal:
+Run the Expo app in another terminal:
 
-```bash
-npx expo start
+```sh
+npm run start
 ```
 
-For an installed iPhone build from a clean checkout, generate the native project first. The generated `ios/` directory is intentionally not committed.
+Use `npm run ios` for an iOS simulator build, `npm run android` for Android, and `npm run web` for the web target when needed.
 
-```bash
-npx expo prebuild --platform ios
-flowdeck context --project "$PWD" --json
-flowdeck build --project "$PWD" --scheme RegentsMobile
-```
+## Checks
 
-## App Checks
+The app-level checks are:
 
-Run the app-side checks from the repo root:
-
-```bash
-npm run test:app
+```sh
 npm run check:app
+npm run test:app
+cd server && npm test
 ```
 
-Run the server tests from `server/`:
+`eas.json` defines development, preview, and production EAS build profiles.
 
-```bash
-npm test
-```
+## Agent Orientation
 
-## Testing Notes
+Start with `AGENTS.md`, `repo.yaml`, and `layer2.md` before editing. The app uses Expo Router under `app/`, shared UI under `components/`, wallet and Regent API helpers under `hooks/` and `utils/`, and the local mobile backend under `server/`.
 
-- The wallet rails still rely on Coinbase-hosted purchase and cash-out surfaces where expected.
-- Apple Pay is part of the Coinbase-based wallet path where the account and region are eligible.
-- Base and USDC remain the main happy path for the wallet side of the product.
-- Push notifications should be checked on a physical iPhone. They do not work on the iOS simulator.
-- Regent money actions stay explicit and require wallet confirmation.
+The in-repo API source of truth is `api-contract.openapiv3.yaml`. `mobile-services-contract.openapiv3.yaml` currently documents that there are no separate shipped shared mobile service routes.
 
-## Contracts And Planning
-
-- [`api-contract.openapiv3.yaml`](./api-contract.openapiv3.yaml) is the source of truth for the current mobile backend surface.
-- [`regent-services-contract.openapiv3.yaml`](./regent-services-contract.openapiv3.yaml) records that there are no shipped shared mobile service routes yet.
-- [`IMPLEMENTATION_PLAN.md`](./IMPLEMENTATION_PLAN.md) tracks the next live-account work after this mobile route cutover.
+When changing wallet behavior, remember that mobile wallet opening and wallet actions are production-data work. Keep value movement user-signed, keep backend secrets out of the app, and verify Base USDC flows before treating a change as complete.
