@@ -56,6 +56,7 @@ export function useWalletOnrampSubmit({
 }: Params) {
   const router = useRouter();
   const { linkedPhone } = useRegentsAuth();
+  const partnerUserRef = currentUser?.userId;
   const [currentTransaction, setCurrentTransaction] = useState<{
     amount: string;
     paymentCurrency: string;
@@ -146,7 +147,7 @@ export function useWalletOnrampSubmit({
             await openCoinbaseWidgetSession({
               router,
               url,
-              partnerUserRef: currentUser?.userId,
+              partnerUserRef,
             });
           }
           return;
@@ -286,6 +287,7 @@ export function useWalletOnrampSubmit({
       getAssetSymbolFromName,
       getNetworkNameFromDisplayName,
       linkedPhone,
+      partnerUserRef,
       resolveTargetAddress,
       router,
       setIsProcessingPayment,

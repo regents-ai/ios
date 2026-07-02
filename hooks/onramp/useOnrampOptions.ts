@@ -7,7 +7,7 @@ import { getCountry, getSubdivision, setSubdivision } from '@/utils/state/locati
 type CountryConfig = {
   id?: string;
   subdivisions?: string[];
-  payment_methods?: Array<{ id?: string }>;
+  payment_methods?: { id?: string }[];
   payment_currencies?: string[];
   currencies?: string[];
 };
@@ -19,12 +19,12 @@ type BuyConfig = {
 type PurchaseCurrencyOption = {
   name?: string;
   symbol?: string;
-  networks: Array<{ name?: string; display_name?: string; icon_url?: string | null }>;
+  networks: { name?: string; display_name?: string; icon_url?: string | null }[];
 };
 
 type BuyOptions = {
   countries?: CountryConfig[];
-  payment_currencies?: Array<string | { id?: string }>;
+  payment_currencies?: (string | { id?: string })[];
   purchase_currencies?: PurchaseCurrencyOption[];
 };
 

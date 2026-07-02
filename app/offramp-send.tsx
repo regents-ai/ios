@@ -15,6 +15,7 @@
  */
 
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
+import { RegentPressable } from '@/components/ui/RegentPressable';
 import { COLORS } from '@/constants/Colors';
 import { fetchOfframpTransaction, OfframpTransaction } from '@/utils/fetchOfframpTransaction';
 import { buildEvmTransferCall, isNativeEvmToken } from '@/utils/onchain/buildTransferCall';
@@ -28,10 +29,9 @@ import {
 } from '@coinbase/cdp-hooks';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Pressable,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -87,6 +87,14 @@ export default function OfframpSendScreen() {
   const smartAccountAddress = currentUser?.evmSmartAccounts?.[0] ?? null;
   const storedBalance = getPendingOfframpBalance();
 
+  const showAlert = useCallback((title: string, message: string, type: 'success' | 'error' | 'info', hideButton: boolean) => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType(type);
+    setAlertHideButton(hideButton);
+    setAlertVisible(true);
+  }, []);
+
   // Fetch transaction details on mount, retrying a few times since Coinbase
   // redirects immediately on "Cash out now" but creates the transaction asynchronously.
   useEffect(() => {
@@ -98,37 +106,67 @@ export default function OfframpSendScreen() {
 
     const MAX_ATTEMPTS = 6;
     const RETRY_DELAY_MS = 2000;
+    let cancelled = false;
+    let retryTimeout: ReturnType<typeof setTimeout> | null = null;
+    let resolveRetryDelay: (() => void) | null = null;
 
-    const tryFetch = async (attempt: number) => {
-      try {
-        console.log(`📡 [OFFRAMP SEND] Fetching transaction, attempt ${attempt}/${MAX_ATTEMPTS}`);
-        const tx = await fetchOfframpTransaction(partnerUserRef);
-        if (tx) {
-          setTransaction(tx);
-          setLoading(false);
-          return;
+    const waitBeforeRetry = () =>
+      new Promise<void>((resolve) => {
+        resolveRetryDelay = resolve;
+        retryTimeout = setTimeout(() => {
+          retryTimeout = null;
+          resolveRetryDelay = null;
+          resolve();
+        }, RETRY_DELAY_MS);
+      });
+
+    const tryFetch = async () => {
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS && !cancelled; attempt += 1) {
+        try {
+          console.log(`📡 [OFFRAMP SEND] Fetching transaction, attempt ${attempt}/${MAX_ATTEMPTS}`);
+          const tx = await fetchOfframpTransaction(partnerUserRef);
+          if (cancelled) {
+            return;
+          }
+
+          if (tx) {
+            setTransaction(tx);
+            setLoading(false);
+            return;
+          }
+
+          if (attempt === MAX_ATTEMPTS) {
+            setFetchError('Transaction not found. Coinbase may still be processing — please wait a moment and try again.');
+            setLoading(false);
+            return;
+          }
+        } catch (err: any) {
+          if (cancelled) {
+            return;
+          }
+
+          if (attempt === MAX_ATTEMPTS) {
+            setFetchError(err.message || 'Failed to load transaction details.');
+            setLoading(false);
+            return;
+          }
         }
 
-        // Transaction not yet available — retry if we have attempts left
-        if (attempt < MAX_ATTEMPTS) {
-          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
-          await tryFetch(attempt + 1);
-        } else {
-          setFetchError('Transaction not found. Coinbase may still be processing — please wait a moment and try again.');
-          setLoading(false);
-        }
-      } catch (err: any) {
-        if (attempt < MAX_ATTEMPTS) {
-          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
-          await tryFetch(attempt + 1);
-        } else {
-          setFetchError(err.message || 'Failed to load transaction details.');
-          setLoading(false);
-        }
+        await waitBeforeRetry();
       }
     };
 
-    tryFetch(1);
+    void tryFetch();
+
+    return () => {
+      cancelled = true;
+      if (retryTimeout) {
+        clearTimeout(retryTimeout);
+        retryTimeout = null;
+      }
+      resolveRetryDelay?.();
+      resolveRetryDelay = null;
+    };
   }, [partnerUserRef]);
 
   // Watch EVM user operation status
@@ -153,15 +191,7 @@ export default function OfframpSendScreen() {
     } else if (userOpStatus === 'error' && userOpError) {
       showAlert('Send Failed ❌', `Error: ${userOpError.message}\n\nPlease try again.`, 'error', false);
     }
-  }, [userOpStatus, userOpData, userOpError, transaction]);
-
-  const showAlert = (title: string, message: string, type: 'success' | 'error' | 'info', hideButton: boolean) => {
-    setAlertTitle(title);
-    setAlertMessage(message);
-    setAlertType(type);
-    setAlertHideButton(hideButton);
-    setAlertVisible(true);
-  };
+  }, [showAlert, userOpStatus, userOpData, userOpError, transaction]);
 
   const handleAlertConfirm = () => {
     setAlertVisible(false);
@@ -303,9 +333,9 @@ export default function OfframpSendScreen() {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backButton}>
+        <RegentPressable pressStyle="icon" onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="chevron-back" size={24} color={TEXT_PRIMARY} />
-        </Pressable>
+        </RegentPressable>
         <Text style={styles.headerTitle}>Send to Coinbase</Text>
         <View style={{ width: 40 }} />
       </View>
@@ -327,9 +357,9 @@ export default function OfframpSendScreen() {
             <Ionicons name="alert-circle" size={40} color="#FF6B6B" style={{ alignSelf: 'center', marginBottom: 12 }} />
             <Text style={[styles.sectionTitle, { color: '#FF6B6B', textAlign: 'center' }]}>Transaction Not Found</Text>
             <Text style={[styles.helper, { textAlign: 'center', marginTop: 8 }]}>{fetchError}</Text>
-            <Pressable style={[styles.button, { marginTop: 20 }]} onPress={() => router.back()}>
+            <RegentPressable style={[styles.button, { marginTop: 20 }]} onPress={() => router.back()}>
               <Text style={styles.buttonText}>Go Back</Text>
-            </Pressable>
+            </RegentPressable>
           </View>
         )}
 
@@ -367,7 +397,7 @@ export default function OfframpSendScreen() {
             </View>
 
             {/* Send button */}
-            <Pressable
+            <RegentPressable
               style={[styles.button, styles.sendButton, sending && styles.buttonDisabled]}
               onPress={handleSend}
               disabled={sending}
@@ -382,7 +412,7 @@ export default function OfframpSendScreen() {
                   </Text>
                 </>
               )}
-            </Pressable>
+            </RegentPressable>
 
             <Text style={styles.disclaimer}>
               Once this transfer is confirmed, Coinbase will validate and process your cash-out. Fiat will be deposited to your linked account.

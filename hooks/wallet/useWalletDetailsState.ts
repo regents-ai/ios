@@ -2,11 +2,12 @@ import { useCurrentUser, useEvmAddress, useSolanaAddress } from '@coinbase/cdp-h
 import * as Clipboard from 'expo-clipboard';
 import { useFocusEffect, useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { getBaseUrl } from '@/constants/BASE_URL';
 import { runRegentHaptic } from '@/components/ui/haptics';
 import { useRegentsAuth } from '@/hooks/useRegentsAuth';
+import { createLatestRequestGate, type LatestRequestGate } from '@/utils/async/latestRequestGate';
 import { authenticatedFetch } from '@/utils/authenticatedFetch';
 import { createOfframpSession } from '@/utils/createOfframpSession';
 import { setPendingOfframpBalance } from '@/utils/state/flowRuntimeState';
@@ -35,6 +36,13 @@ async function fetchAuthorizedJson(url: string) {
   return response.json();
 }
 
+async function fetchNetworkBalances(url: string, network: string): Promise<BalanceRecord[]> {
+  const data = await fetchAuthorizedJson(url);
+  const balances = Array.isArray(data.balances) ? data.balances : [];
+
+  return balances.map((balance: BalanceRecord) => ({ ...balance, network }));
+}
+
 export function useWalletDetailsState() {
   const router = useRouter();
   const { regentsUserId } = useRegentsAuth();
@@ -59,6 +67,16 @@ export function useWalletDetailsState() {
   const [testnetBalancesError, setTestnetBalancesError] = useState<string | null>(null);
   const [testnetExpanded, setTestnetExpanded] = useState(false);
   const [recentCopyKey, setRecentCopyKey] = useState<string | null>(null);
+  const balancesRequestGateRef = useRef<LatestRequestGate | null>(null);
+  if (balancesRequestGateRef.current === null) {
+    balancesRequestGateRef.current = createLatestRequestGate();
+  }
+  const balancesRequestGate = balancesRequestGateRef.current;
+  const testnetBalancesRequestGateRef = useRef<LatestRequestGate | null>(null);
+  if (testnetBalancesRequestGateRef.current === null) {
+    testnetBalancesRequestGateRef.current = createLatestRequestGate();
+  }
+  const testnetBalancesRequestGate = testnetBalancesRequestGateRef.current;
 
   const [alertState, setAlertState] = useState<{
     visible: boolean;
@@ -82,73 +100,100 @@ export function useWalletDetailsState() {
       return;
     }
 
+    const requestId = balancesRequestGate.next();
+    const isLatestRequest = () => balancesRequestGate.isLatest(requestId);
     setLoadingBalances(true);
     setBalancesError(null);
 
     try {
-      const allBalances: BalanceRecord[] = [];
+      const balanceRequests: Promise<BalanceRecord[]>[] = [];
 
       if (primaryAddress) {
-        const baseData = await fetchAuthorizedJson(`${getBaseUrl()}/balances/evm?address=${primaryAddress}&network=base`);
-        allBalances.push(...(baseData.balances || []).map((balance: BalanceRecord) => ({ ...balance, network: 'Base' })));
-
-        const ethereumData = await fetchAuthorizedJson(`${getBaseUrl()}/balances/evm?address=${primaryAddress}&network=ethereum`);
-        allBalances.push(...(ethereumData.balances || []).map((balance: BalanceRecord) => ({ ...balance, network: 'Ethereum' })));
+        balanceRequests.push(
+          fetchNetworkBalances(`${getBaseUrl()}/balances/evm?address=${primaryAddress}&network=base`, 'Base'),
+          fetchNetworkBalances(`${getBaseUrl()}/balances/evm?address=${primaryAddress}&network=ethereum`, 'Ethereum')
+        );
       }
 
       if (solanaAddress) {
-        const solanaData = await fetchAuthorizedJson(`${getBaseUrl()}/balances/solana?address=${solanaAddress}`);
-        allBalances.push(...(solanaData.balances || []).map((balance: BalanceRecord) => ({ ...balance, network: 'Solana' })));
+        balanceRequests.push(fetchNetworkBalances(`${getBaseUrl()}/balances/solana?address=${solanaAddress}`, 'Solana'));
       }
 
+      const allBalances = (await Promise.all(balanceRequests)).flat();
+      if (!isLatestRequest()) {
+        return;
+      }
       setBalances(allBalances);
     } catch (error) {
+      if (!isLatestRequest()) {
+        return;
+      }
       console.warn('Failed to load wallet balances:', error);
       setBalancesError('Unable to load your balances right now.');
     } finally {
-      setLoadingBalances(false);
+      if (isLatestRequest()) {
+        setLoadingBalances(false);
+      }
     }
-  }, [primaryAddress, solanaAddress]);
+  }, [balancesRequestGate, primaryAddress, solanaAddress]);
 
   const fetchTestnetBalances = useCallback(async () => {
     if (!primaryAddress && !solanaAddress) {
       return;
     }
 
+    const requestId = testnetBalancesRequestGate.next();
+    const isLatestRequest = () => testnetBalancesRequestGate.isLatest(requestId);
     setLoadingTestnetBalances(true);
     setTestnetBalancesError(null);
 
     try {
-      const allBalances: BalanceRecord[] = [];
+      const balanceRequests: Promise<BalanceRecord[]>[] = [];
 
       if (primaryAddress) {
-        const baseSepoliaData = await fetchAuthorizedJson(`${getBaseUrl()}/balances/evm?address=${primaryAddress}&network=base-sepolia`);
-        allBalances.push(...(baseSepoliaData.balances || []).map((balance: BalanceRecord) => ({ ...balance, network: 'Base Sepolia' })));
-
-        const ethereumSepoliaData = await fetchAuthorizedJson(`${getBaseUrl()}/balances/evm?address=${primaryAddress}&network=ethereum-sepolia`);
-        allBalances.push(...(ethereumSepoliaData.balances || []).map((balance: BalanceRecord) => ({ ...balance, network: 'Ethereum Sepolia' })));
+        balanceRequests.push(
+          fetchNetworkBalances(`${getBaseUrl()}/balances/evm?address=${primaryAddress}&network=base-sepolia`, 'Base Sepolia'),
+          fetchNetworkBalances(`${getBaseUrl()}/balances/evm?address=${primaryAddress}&network=ethereum-sepolia`, 'Ethereum Sepolia')
+        );
       }
 
       if (solanaAddress) {
-        const solanaDevnetData = await fetchAuthorizedJson(`${getBaseUrl()}/balances/solana?address=${solanaAddress}&network=solana-devnet`);
-        allBalances.push(...(solanaDevnetData.balances || []).map((balance: BalanceRecord) => ({ ...balance, network: 'Solana Devnet' })));
+        balanceRequests.push(fetchNetworkBalances(`${getBaseUrl()}/balances/solana?address=${solanaAddress}&network=solana-devnet`, 'Solana Devnet'));
       }
 
+      const allBalances = (await Promise.all(balanceRequests)).flat();
+      if (!isLatestRequest()) {
+        return;
+      }
       setTestnetBalances(allBalances);
     } catch (error) {
+      if (!isLatestRequest()) {
+        return;
+      }
       console.warn('Failed to load testnet balances:', error);
       setTestnetBalancesError('Unable to load testnet balances right now.');
     } finally {
-      setLoadingTestnetBalances(false);
+      if (isLatestRequest()) {
+        setLoadingTestnetBalances(false);
+      }
     }
-  }, [primaryAddress, solanaAddress]);
+  }, [primaryAddress, solanaAddress, testnetBalancesRequestGate]);
 
   useEffect(() => {
     if (primaryAddress || solanaAddress) {
       void fetchBalances();
       void fetchTestnetBalances();
+    } else {
+      balancesRequestGate.next();
+      testnetBalancesRequestGate.next();
+      setBalances([]);
+      setTestnetBalances([]);
+      setBalancesError(null);
+      setTestnetBalancesError(null);
+      setLoadingBalances(false);
+      setLoadingTestnetBalances(false);
     }
-  }, [fetchBalances, fetchTestnetBalances, primaryAddress, solanaAddress]);
+  }, [balancesRequestGate, fetchBalances, fetchTestnetBalances, primaryAddress, solanaAddress, testnetBalancesRequestGate]);
 
   useFocusEffect(
     useCallback(() => {
