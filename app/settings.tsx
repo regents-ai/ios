@@ -1,10 +1,11 @@
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
-import { RegentPressable } from '@/components/ui/RegentPressable';
-import { runRegentHaptic } from '@/components/ui/haptics';
-import { StaggerGroup } from '@/components/motion/StaggerGroup';
-import { StaggerItem } from '@/components/motion/StaggerItem';
-import { getEaseTransition } from '@/components/motion/easePresets';
-import { useReducedMotion } from '@/components/motion/useReducedMotion';
+import { AccountManagementSection } from '@/components/settings/AccountManagementSection';
+import { HelpSupportSection } from '@/components/settings/HelpSupportSection';
+import { PhoneReverifyModal } from '@/components/settings/PhoneReverifyModal';
+import { SettingsHero } from '@/components/settings/SettingsHero';
+import { SettingsMenu, type SettingsSectionKey } from '@/components/settings/SettingsMenu';
+import { SignOutSection } from '@/components/settings/SignOutSection';
+import { WalletSettingsSection } from '@/components/settings/WalletSettingsSection';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
 import { useRegentsAuth } from '@/hooks/useRegentsAuth';
@@ -18,7 +19,6 @@ import {
 } from '@/utils/state/walletRuntimeState';
 import {
   daysUntilExpiry,
-  formatPhoneDisplay,
   getLifetimeTransactionThreshold,
   getVerifiedPhone,
   getVerifiedPhoneUserId,
@@ -29,82 +29,23 @@ import {
 import {
   useCurrentUser,
   useEvmAddress,
-  useExportEvmAccount,
-  useExportSolanaAccount,
   useIsInitialized,
   useSignOut,
   useSolanaAddress,
 } from '@coinbase/cdp-hooks';
-import Ionicons from '@expo/vector-icons/Ionicons';
-import * as Clipboard from 'expo-clipboard';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { EaseView } from 'react-native-ease';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
-  Modal,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 
-const { DARK_BG, CARD_BG, CARD_ALT, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, BORDER, WHITE, DANGER, SUCCESS } = COLORS;
-const GREEN_WASH = '#E6F0EA';
-
-function SettingsModalSurface({
-  children,
-  onRequestClose,
-  visible,
-}: {
-  children: React.ReactNode;
-  onRequestClose: () => void;
-  visible: boolean;
-}) {
-  const reducedMotionEnabled = useReducedMotion();
-  const [isPresented, setIsPresented] = useState(visible);
-
-  useEffect(() => {
-    if (visible) {
-      setIsPresented(true);
-    }
-  }, [visible]);
-
-  return (
-    <Modal visible={isPresented} transparent animationType="none" onRequestClose={onRequestClose}>
-      <View style={styles.modalOverlay}>
-        <EaseView
-          initialAnimate={{ opacity: 0 }}
-          animate={{ opacity: visible ? 1 : 0 }}
-          style={StyleSheet.absoluteFillObject}
-          transition={getEaseTransition('card', reducedMotionEnabled)}
-        >
-          <Pressable style={StyleSheet.absoluteFillObject} onPress={onRequestClose} />
-        </EaseView>
-
-        <EaseView
-          initialAnimate={{ opacity: 0, translateY: 8, scale: 0.985 }}
-          animate={{ opacity: visible ? 1 : 0, translateY: visible ? 0 : 8, scale: visible ? 1 : 0.985 }}
-          onTransitionEnd={({ finished }) => {
-            if (finished && !visible) {
-              setIsPresented(false);
-            }
-          }}
-          style={styles.modalCard}
-          transition={getEaseTransition('emphasis', reducedMotionEnabled)}
-        >
-          {children}
-        </EaseView>
-      </View>
-    </Modal>
-  );
-}
-
-type SettingsSectionKey = 'account' | 'wallet' | 'help';
+const { DARK_BG, TEXT_SECONDARY, BLUE } = COLORS;
 
 export default function SettingsScreen() {
   const { isInitialized } = useIsInitialized();
@@ -117,8 +58,6 @@ export default function SettingsScreen() {
   } = useRegentsAuth();
   const { currentUser } = useCurrentUser();
   const { signOut: signOutWallet } = useSignOut();
-  const { exportEvmAccount } = useExportEvmAccount();
-  const { exportSolanaAccount } = useExportSolanaAccount();
   const { evmAddress } = useEvmAddress();
   const { solanaAddress: cdpSolanaAddress } = useSolanaAddress();
 
@@ -150,12 +89,6 @@ export default function SettingsScreen() {
 
   const [showReverifyConfirm, setShowReverifyConfirm] = useState(false);
   const [reverifyPhone, setReverifyPhone] = useState<string | null>(null);
-  const [showWalletChoice, setShowWalletChoice] = useState(false);
-  const [showExportConfirm, setShowExportConfirm] = useState(false);
-  const [exportType, setExportType] = useState<'evm' | 'solana'>('evm');
-  const [exporting, setExporting] = useState(false);
-  const [copyNotice, setCopyNotice] = useState<string | null>(null);
-  const copyNoticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [activeSection, setActiveSection] = useState<SettingsSectionKey>('account');
 
   const isExpoGo = process.env.EXPO_PUBLIC_USE_EXPO_CRYPTO === 'true';
@@ -196,14 +129,6 @@ export default function SettingsScreen() {
   useEffect(() => {
     setLifetimeTransactionThreshold(lifetimeTxThreshold);
   }, [lifetimeTxThreshold]);
-
-  useEffect(() => {
-    return () => {
-      if (copyNoticeTimerRef.current) {
-        clearTimeout(copyNoticeTimerRef.current);
-      }
-    };
-  }, []);
 
   const openPhoneVerify = useCallback(() => {
     const cdpPhone = linkedPhone;
@@ -263,82 +188,6 @@ export default function SettingsScreen() {
     }
   }, [signOutIdentity, signOutWallet]);
 
-  const handleRequestExport = () => {
-    if (!effectiveIsSignedIn || (!evmWalletAddress && !solanaAddress)) return;
-
-    if (isExpoGo) {
-      setAlertState({
-        visible: true,
-        title: 'Export unavailable',
-        message: 'Open the installed app to export your wallet key.',
-        type: 'info',
-      });
-      return;
-    }
-
-    if (evmWalletAddress && solanaAddress) {
-      setShowWalletChoice(true);
-    } else if (evmWalletAddress) {
-      setExportType('evm');
-      setShowExportConfirm(true);
-    } else if (solanaAddress) {
-      setExportType('solana');
-      setShowExportConfirm(true);
-    }
-  };
-
-  const handleConfirmedExport = async () => {
-    const isEvmExport = exportType === 'evm';
-    const targetAddress = isEvmExport ? evmWalletAddress : solanaAddress;
-
-    if (!targetAddress) {
-      setAlertState({
-        visible: true,
-        title: 'Export failed',
-        message: `No ${isEvmExport ? 'Base and Ethereum' : 'Solana'} wallet is available to export.`,
-        type: 'error',
-      });
-      return;
-    }
-
-    setExporting(true);
-    try {
-      const result = isEvmExport
-        ? await exportEvmAccount({ evmAccount: evmWalletAddress! as `0x${string}` })
-        : await exportSolanaAccount({ solanaAccount: solanaAddress! });
-
-      await Clipboard.setStringAsync(result.privateKey);
-      runRegentHaptic('copy');
-      const copiedLabel = `${isEvmExport ? 'Base and Ethereum' : 'Solana'} wallet key copied.`;
-      setCopyNotice(copiedLabel);
-      if (copyNoticeTimerRef.current) {
-        clearTimeout(copyNoticeTimerRef.current);
-      }
-      copyNoticeTimerRef.current = setTimeout(() => {
-        setCopyNotice((current) => (current === copiedLabel ? null : current));
-        copyNoticeTimerRef.current = null;
-      }, 2200);
-      setAlertState({
-        visible: true,
-        title: 'Wallet key copied',
-        message: `Your ${isEvmExport ? 'Base and Ethereum' : 'Solana'} wallet key is now in the clipboard. Keep it somewhere safe and clear the clipboard when you are done.`,
-        type: 'info',
-      });
-    } catch (error: any) {
-      runRegentHaptic('warning');
-      setAlertState({
-        visible: true,
-        title: 'Export failed',
-        message: error.message || 'Unable to export the selected wallet.',
-        type: 'error',
-      });
-    } finally {
-      setExporting(false);
-      setShowExportConfirm(false);
-      setShowWalletChoice(false);
-    }
-  };
-
   if (!isInitialized) {
     return (
       <View style={styles.loadingContainer}>
@@ -352,189 +201,43 @@ export default function SettingsScreen() {
   const hasLinkedEmail = !!linkedEmail;
   const phoneIsVerified = verifiedPhone === cdpPhone && phoneFresh;
   const phoneIsExpired = verifiedPhone === cdpPhone && !phoneFresh;
-  const sectionOptions: {
-    key: SettingsSectionKey;
-    icon: keyof typeof Ionicons.glyphMap;
-    title: string;
-    detail: string;
-  }[] = [
-    {
-      key: 'account',
-      icon: 'person-outline',
-      title: 'Account',
-      detail: displayEmail,
-    },
-    {
-      key: 'wallet',
-      icon: 'wallet-outline',
-      title: 'Wallet',
-      detail: 'Ready for everyday use',
-    },
-    {
-      key: 'help',
-      icon: 'help-circle-outline',
-      title: 'Help',
-      detail: 'Support and quick answers',
-    },
-  ];
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView style={styles.container} contentContainerStyle={styles.content} contentInsetAdjustmentBehavior="automatic">
-        <View style={styles.hero}>
-          <View style={styles.header}>
-            <RegentPressable pressStyle="icon" onPress={() => router.back()} style={styles.backButton}>
-              <Ionicons name="chevron-back" size={20} color={TEXT_PRIMARY} />
-            </RegentPressable>
-          </View>
-          <Text style={styles.heroEyebrow}>Regents</Text>
-          <Text style={styles.title}>Settings</Text>
-          <Text style={styles.heroSubtitle}>Account, wallet, and help in one place.</Text>
-        </View>
-
-        <View style={styles.menuCard}>
-          {sectionOptions.map((section, index) => {
-            const selected = section.key === activeSection;
-
-            return (
-              <View key={section.key}>
-                <RegentPressable
-                  haptic="selection"
-                  pressStyle="card"
-                  style={[styles.menuRow, selected && styles.menuRowActive]}
-                  onPress={() => setActiveSection(section.key)}
-                >
-                  <View style={[styles.menuIcon, selected && styles.menuIconActive]}>
-                    <Ionicons
-                      name={section.icon}
-                      size={24}
-                      color={selected ? WHITE : TEXT_PRIMARY}
-                    />
-                  </View>
-                  <View style={styles.menuCopy}>
-                    <Text style={styles.menuTitle}>{section.title}</Text>
-                    <Text style={styles.menuDetail}>{section.detail}</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={20} color={TEXT_SECONDARY} />
-                </RegentPressable>
-                {index < sectionOptions.length - 1 ? <View style={styles.menuDivider} /> : null}
-              </View>
-            );
-          })}
-        </View>
+        <SettingsHero />
+        <SettingsMenu activeSection={activeSection} displayEmail={displayEmail} onSectionChange={setActiveSection} />
 
         {activeSection === 'account' ? (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Account</Text>
-
-            {signedButNoWallet ? (
-              <View style={styles.infoBlock}>
-                <Text style={styles.valueText}>Your wallet is still getting ready.</Text>
-                <Text style={styles.helperText}>Give it a moment, or sign out and try again.</Text>
-              </View>
-            ) : (
-              <>
-                <View style={styles.infoBlock}>
-                  <Text style={styles.labelText}>Email</Text>
-                  <Text style={styles.valueText}>{displayEmail}</Text>
-                  {!hasLinkedEmail ? (
-                    <RegentPressable style={styles.primaryButton} onPress={() => router.push('/email-verify?mode=link')}>
-                      <Text style={styles.primaryButtonText}>Add email</Text>
-                    </RegentPressable>
-                  ) : null}
-                </View>
-
-                <View style={styles.infoBlock}>
-                  <Text style={styles.labelText}>Phone</Text>
-                  <Text style={styles.valueText}>{cdpPhone ? formatPhoneDisplay(cdpPhone) : 'Not added yet'}</Text>
-                  <Text style={styles.helperText}>
-                    {phoneIsVerified
-                      ? `Ready for checkout. Expires in ${phoneExpiry} day${phoneExpiry === 1 ? '' : 's'}.`
-                      : phoneIsExpired
-                        ? 'Verification expired. Verify your phone again to keep using checkout.'
-                        : cdpPhone
-                          ? 'Your phone is linked. Verify it before you use checkout.'
-                          : 'Add a phone number before you use checkout.'}
-                  </Text>
-                  <RegentPressable style={styles.primaryButton} onPress={openPhoneVerify}>
-                    <Text style={styles.primaryButtonText}>
-                      {!cdpPhone ? 'Add phone' : phoneIsExpired ? 'Verify again' : phoneIsVerified ? 'Check again' : 'Verify phone'}
-                    </Text>
-                  </RegentPressable>
-                </View>
-
-                <RegentPressable
-                  haptic="warning"
-                  style={[styles.primaryButton, ((!evmWalletAddress && !solanaAddress) || exporting) && styles.disabledButton]}
-                  onPress={handleRequestExport}
-                  disabled={!evmWalletAddress && !solanaAddress}
-                >
-                  <View style={styles.buttonContent}>
-                    {copyNotice ? <Ionicons name="checkmark-circle" size={16} color={WHITE} /> : null}
-                    <Text style={styles.primaryButtonText}>
-                      {copyNotice ? 'Wallet key copied' : exporting ? 'Getting wallet key...' : isExpoGo ? 'Export unavailable here' : 'Export wallet key'}
-                    </Text>
-                  </View>
-                </RegentPressable>
-                {copyNotice ? (
-                  <View style={styles.copySuccessBanner}>
-                    <Ionicons name="checkmark-circle" size={16} color={SUCCESS} />
-                    <Text style={styles.copySuccessText}>{copyNotice}</Text>
-                  </View>
-                ) : null}
-              </>
-            )}
-          </View>
+          <AccountManagementSection
+            cdpPhone={cdpPhone}
+            displayEmail={displayEmail}
+            effectiveIsSignedIn={effectiveIsSignedIn}
+            evmWalletAddress={evmWalletAddress}
+            hasLinkedEmail={hasLinkedEmail}
+            isExpoGo={isExpoGo}
+            onOpenPhoneVerify={openPhoneVerify}
+            phoneExpiry={phoneExpiry}
+            phoneIsExpired={phoneIsExpired}
+            phoneIsVerified={phoneIsVerified}
+            setAlertState={setAlertState}
+            signedButNoWallet={signedButNoWallet}
+            solanaAddress={solanaAddress}
+          />
         ) : null}
 
         {activeSection === 'wallet' ? (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Wallet</Text>
-
-            <View style={styles.infoBlock}>
-              <Text style={styles.labelText}>Apple Pay reminder</Text>
-              <Text style={styles.helperText}>Choose when to remind someone that their Apple Pay limit is running low.</Text>
-              <TextInput
-                style={styles.numberInput}
-                value={String(lifetimeTxThreshold)}
-                onChangeText={text => {
-                  const parsed = parseInt(text, 10);
-                  if (!Number.isNaN(parsed) && parsed >= 0 && parsed <= 99) {
-                    setLifetimeTxThresholdLocal(parsed);
-                  } else if (text === '') {
-                    setLifetimeTxThresholdLocal(0);
-                  }
-                }}
-                keyboardType="number-pad"
-                maxLength={2}
-                placeholder="5"
-                placeholderTextColor={TEXT_SECONDARY}
-              />
-            </View>
-          </View>
+          <WalletSettingsSection
+            lifetimeTxThreshold={lifetimeTxThreshold}
+            setLifetimeTxThresholdLocal={setLifetimeTxThresholdLocal}
+          />
         ) : null}
 
         {activeSection === 'help' ? (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Help</Text>
-            <View style={styles.infoBlock}>
-              <Text style={styles.valueText}>Need help with money movement or account steps?</Text>
-              <Text style={styles.helperText}>Support can help with wallet questions, checkout steps, and payment issues.</Text>
-            </View>
-            <View style={styles.buttonRow}>
-              <RegentPressable style={styles.primaryButton} onPress={() => router.push('/support')}>
-                <Text style={styles.primaryButtonText}>Open support</Text>
-              </RegentPressable>
-              <RegentPressable style={styles.secondaryButton} onPress={openPhoneVerify}>
-                <Text style={styles.secondaryButtonText}>Phone help</Text>
-              </RegentPressable>
-            </View>
-          </View>
+          <HelpSupportSection onOpenPhoneVerify={openPhoneVerify} />
         ) : null}
 
-        <RegentPressable haptic="warning" style={styles.signOutCta} onPress={handleSignOut}>
-          <Text style={styles.signOutCtaText}>Sign out</Text>
-        </RegentPressable>
+        <SignOutSection onSignOut={handleSignOut} />
 
         <CoinbaseAlert
           visible={alertState.visible}
@@ -544,84 +247,11 @@ export default function SettingsScreen() {
           onConfirm={() => setAlertState(prev => ({ ...prev, visible: false }))}
         />
 
-        <SettingsModalSurface visible={showWalletChoice} onRequestClose={() => setShowWalletChoice(false)}>
-          <StaggerGroup>
-            <StaggerItem order={0}>
-              <Text style={styles.modalTitle}>Choose a wallet</Text>
-            </StaggerItem>
-            <StaggerItem order={1}>
-              <RegentPressable
-                style={styles.primaryButton}
-                onPress={() => {
-                  setExportType('evm');
-                  setShowWalletChoice(false);
-                  setShowExportConfirm(true);
-                }}
-              >
-                <Text style={styles.primaryButtonText}>Export Base and Ethereum wallet</Text>
-              </RegentPressable>
-            </StaggerItem>
-            <StaggerItem order={2}>
-              <RegentPressable
-                style={styles.primaryButton}
-                onPress={() => {
-                  setExportType('solana');
-                  setShowWalletChoice(false);
-                  setShowExportConfirm(true);
-                }}
-              >
-                <Text style={styles.primaryButtonText}>Export Solana wallet</Text>
-              </RegentPressable>
-            </StaggerItem>
-            <StaggerItem order={3}>
-              <RegentPressable style={styles.secondaryButton} onPress={() => setShowWalletChoice(false)}>
-                <Text style={styles.secondaryButtonText}>Cancel</Text>
-              </RegentPressable>
-            </StaggerItem>
-          </StaggerGroup>
-        </SettingsModalSurface>
-
-        <SettingsModalSurface visible={showExportConfirm} onRequestClose={() => setShowExportConfirm(false)}>
-          <StaggerGroup>
-            <StaggerItem order={0}>
-              <Text style={styles.modalTitle}>Export wallet key</Text>
-            </StaggerItem>
-            <StaggerItem order={1}>
-              <Text style={styles.helperText}>Anyone with this key can control this wallet. Only continue somewhere private, then clear the clipboard when you are done.</Text>
-            </StaggerItem>
-            <StaggerItem order={2}>
-              <View style={styles.buttonRow}>
-                <RegentPressable style={styles.secondaryButton} onPress={() => setShowExportConfirm(false)}>
-                  <Text style={styles.secondaryButtonText}>Cancel</Text>
-                </RegentPressable>
-                <RegentPressable haptic="warning" style={[styles.primaryButton, { flex: 1 }]} onPress={handleConfirmedExport}>
-                  <Text style={styles.primaryButtonText}>{exporting ? 'Getting key...' : 'Copy key'}</Text>
-                </RegentPressable>
-              </View>
-            </StaggerItem>
-          </StaggerGroup>
-        </SettingsModalSurface>
-
-        <SettingsModalSurface visible={showReverifyConfirm} onRequestClose={() => setShowReverifyConfirm(false)}>
-          <StaggerGroup>
-            <StaggerItem order={0}>
-              <Text style={styles.modalTitle}>Verify phone again</Text>
-            </StaggerItem>
-            <StaggerItem order={1}>
-              <Text style={styles.helperText}>We will sign you out and send a new code to your phone.</Text>
-            </StaggerItem>
-            <StaggerItem order={2}>
-              <View style={styles.buttonRow}>
-                <RegentPressable style={styles.secondaryButton} onPress={() => setShowReverifyConfirm(false)}>
-                  <Text style={styles.secondaryButtonText}>Cancel</Text>
-                </RegentPressable>
-                <RegentPressable haptic="warning" style={[styles.primaryButton, { flex: 1 }]} onPress={handleReverifyConfirm}>
-                  <Text style={styles.primaryButtonText}>Continue</Text>
-                </RegentPressable>
-              </View>
-            </StaggerItem>
-          </StaggerGroup>
-        </SettingsModalSurface>
+        <PhoneReverifyModal
+          visible={showReverifyConfirm}
+          onRequestClose={() => setShowReverifyConfirm(false)}
+          onConfirm={handleReverifyConfirm}
+        />
 
       </ScrollView>
     </KeyboardAvoidingView>
@@ -650,283 +280,5 @@ const styles = StyleSheet.create({
     color: TEXT_SECONDARY,
     fontSize: 14,
     fontFamily: FONTS.body,
-  },
-  hero: {
-    gap: 8,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-  },
-  backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: CARD_ALT,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  heroEyebrow: {
-    color: BLUE,
-    fontSize: 12,
-    fontFamily: FONTS.heading,
-  },
-  title: {
-    color: TEXT_PRIMARY,
-    fontSize: 42,
-    lineHeight: 44,
-    fontFamily: FONTS.heading,
-  },
-  heroSubtitle: {
-    color: TEXT_SECONDARY,
-    fontSize: 16,
-    lineHeight: 22,
-    fontFamily: FONTS.body,
-  },
-  menuCard: {
-    backgroundColor: CARD_BG,
-    borderRadius: 28,
-    borderWidth: 1,
-    borderColor: BORDER,
-    overflow: 'hidden',
-  },
-  menuRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-  },
-  menuRowActive: {
-    backgroundColor: CARD_ALT,
-  },
-  menuIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: DARK_BG,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  menuIconActive: {
-    backgroundColor: BLUE,
-  },
-  menuCopy: {
-    flex: 1,
-    minWidth: 0,
-    gap: 4,
-  },
-  menuTitle: {
-    color: TEXT_PRIMARY,
-    fontSize: 20,
-    fontFamily: FONTS.heading,
-  },
-  menuDetail: {
-    color: TEXT_SECONDARY,
-    fontSize: 13,
-    lineHeight: 19,
-    fontFamily: FONTS.body,
-  },
-  menuDivider: {
-    height: 1,
-    backgroundColor: BORDER,
-    marginLeft: 78,
-  },
-  card: {
-    backgroundColor: CARD_BG,
-    borderRadius: 28,
-    borderWidth: 1,
-    borderColor: BORDER,
-    padding: 20,
-    gap: 18,
-    shadowColor: BLUE,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.06,
-    shadowRadius: 16,
-    elevation: 2,
-  },
-  cardTitle: {
-    color: TEXT_PRIMARY,
-    fontSize: 24,
-    fontFamily: FONTS.heading,
-  },
-  infoBlock: {
-    gap: 8,
-  },
-  labelText: {
-    color: TEXT_SECONDARY,
-    fontSize: 13,
-    fontFamily: FONTS.body,
-  },
-  valueText: {
-    color: TEXT_PRIMARY,
-    fontSize: 18,
-    lineHeight: 24,
-    fontFamily: FONTS.body,
-  },
-  helperText: {
-    color: TEXT_SECONDARY,
-    fontSize: 13,
-    lineHeight: 18,
-    fontFamily: FONTS.body,
-  },
-  rowBetween: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  rowCopyBlock: {
-    flex: 1,
-    paddingRight: 12,
-    gap: 6,
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    gap: 12,
-    flexWrap: 'wrap',
-  },
-  buttonContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    minWidth: 0,
-  },
-  primaryButton: {
-    backgroundColor: BLUE,
-    borderRadius: 18,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 56,
-    minWidth: 120,
-  },
-  primaryButtonText: {
-    color: WHITE,
-    fontSize: 15,
-    lineHeight: 20,
-    textAlign: 'center',
-    fontFamily: FONTS.body,
-  },
-  secondaryButton: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: CARD_ALT,
-    borderRadius: 18,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 56,
-    minWidth: 120,
-  },
-  secondaryButtonText: {
-    color: TEXT_PRIMARY,
-    fontSize: 15,
-    lineHeight: 20,
-    textAlign: 'center',
-    fontFamily: FONTS.body,
-  },
-  copySuccessBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: SUCCESS,
-    backgroundColor: GREEN_WASH,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-  },
-  copySuccessText: {
-    color: SUCCESS,
-    fontSize: 13,
-    lineHeight: 18,
-    fontFamily: FONTS.body,
-  },
-  disabledButton: {
-    opacity: 0.55,
-  },
-  numberInput: {
-    borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: CARD_ALT,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    color: TEXT_PRIMARY,
-    fontSize: 16,
-    width: 90,
-    textAlign: 'center',
-    fontFamily: FONTS.body,
-  },
-  manualAddressRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  textInput: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: CARD_ALT,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    color: TEXT_PRIMARY,
-    fontSize: 14,
-    fontFamily: FONTS.body,
-  },
-  pasteButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: CARD_ALT,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  signOutCta: {
-    backgroundColor: CARD_BG,
-    borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 22,
-    paddingVertical: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 4,
-  },
-  signOutCtaText: {
-    color: DANGER,
-    fontSize: 18,
-    fontFamily: FONTS.body,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'transparent',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  modalCard: {
-    width: '100%',
-    maxWidth: 420,
-    backgroundColor: CARD_BG,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: BORDER,
-    padding: 20,
-    gap: 16,
-  },
-  modalTitle: {
-    color: BLUE,
-    fontSize: 18,
-    fontFamily: FONTS.heading,
   },
 });
