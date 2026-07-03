@@ -10,25 +10,14 @@
 import { useRouter } from 'expo-router';
 import { useEffect } from 'react';
 
-import { drainPendingRoute, peekPendingRoute, subscribePendingRoute } from '@/utils/pendingRoute';
+import { startPendingRouteDrain } from '@/utils/pendingRoute';
 
 export function PendingRouteDrainer() {
   const router = useRouter();
 
-  useEffect(() => {
-    const drain = () => {
-      const intent = drainPendingRoute();
-      if (intent) {
-        router.push(intent.href);
-      }
-    };
-
-    // Drain anything queued before mount (cold-launch race), then live updates.
-    if (peekPendingRoute()) {
-      drain();
-    }
-    return subscribePendingRoute(drain);
-  }, [router]);
+  // Drain-on-ready: anything queued before mount (cold-launch race) plus live
+  // updates. The logic lives in the store so the seam is unit-testable.
+  useEffect(() => startPendingRouteDrain((href) => router.push(href)), [router]);
 
   return null;
 }

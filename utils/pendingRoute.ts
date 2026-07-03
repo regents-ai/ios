@@ -68,6 +68,27 @@ export function subscribePendingRoute(listener: Listener): () => void {
   return () => listeners.delete(listener);
 }
 
+/**
+ * Starts draining pending routes into `navigate`. Drains anything already
+ * queued (the cold-launch race: a source fired before navigation was ready),
+ * then drains each subsequent intent once as it arrives. Returns an
+ * unsubscribe. This is the drain-on-ready logic the root drainer component
+ * runs; extracted so the cold-launch seam is testable without a renderer.
+ */
+export function startPendingRouteDrain(navigate: (href: PendingRouteIntent['href']) => void): () => void {
+  const drain = () => {
+    const intent = drainPendingRoute();
+    if (intent) {
+      navigate(intent.href);
+    }
+  };
+
+  if (peekPendingRoute()) {
+    drain();
+  }
+  return subscribePendingRoute(drain);
+}
+
 /** Test-only reset of the module singleton. */
 export function resetPendingRouteForTest(): void {
   pending = null;

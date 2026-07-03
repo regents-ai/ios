@@ -6,6 +6,7 @@ import {
   peekPendingRoute,
   resetPendingRouteForTest,
   setPendingRoute,
+  startPendingRouteDrain,
   subscribePendingRoute,
 } from '../utils/pendingRoute';
 
@@ -51,4 +52,43 @@ test('subscribers are notified on set and drain (cold-launch wiring)', () => {
   unsubscribe();
   setPendingRoute({ key: 'y', href: '/message/y' });
   assert.equal(ticks, 2, 'no longer notified after unsubscribe');
+});
+
+test('cold-launch seam: an intent queued before drain-start navigates exactly once on start', () => {
+  resetPendingRouteForTest();
+  // Source fired before navigation was ready.
+  setPendingRoute({ key: 'cold-1', href: '/message/cold-1' });
+
+  const navigated: unknown[] = [];
+  const stop = startPendingRouteDrain((href) => navigated.push(href));
+
+  assert.deepEqual(navigated, ['/message/cold-1'], 'queued intent drained on start');
+  assert.equal(peekPendingRoute(), null, 'nothing left pending');
+  stop();
+});
+
+test('drain-start with nothing queued navigates nothing until an intent arrives', () => {
+  resetPendingRouteForTest();
+  const navigated: unknown[] = [];
+  const stop = startPendingRouteDrain((href) => navigated.push(href));
+  assert.deepEqual(navigated, [], 'idle until a source fires');
+
+  // A live source (warm) arrives after navigation is ready.
+  setPendingRoute({ key: 'warm-1', href: '/message/warm-1' });
+  assert.deepEqual(navigated, ['/message/warm-1'], 'delivered once');
+
+  // Re-firing the same key is a no-op (idempotent).
+  setPendingRoute({ key: 'warm-1', href: '/message/warm-1' });
+  assert.deepEqual(navigated, ['/message/warm-1'], 'still exactly once');
+  stop();
+});
+
+test('after stop, further intents do not navigate', () => {
+  resetPendingRouteForTest();
+  const navigated: unknown[] = [];
+  const stop = startPendingRouteDrain((href) => navigated.push(href));
+  stop();
+
+  setPendingRoute({ key: 'after-stop', href: '/message/after-stop' });
+  assert.deepEqual(navigated, [], 'unsubscribed drainer navigates nothing');
 });
