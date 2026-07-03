@@ -1,0 +1,9 @@
+{
+  "//": "Type home for the jest-expo component-render lane. Kept separate so jest globals never leak into the app typecheck (the app tsconfig excludes this dir).",
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "types": ["jest", "node"]
+  },
+  "include": ["**/*.ts", "**/*.tsx"],
+  "exclude": []
+}
