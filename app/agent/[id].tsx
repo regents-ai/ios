@@ -1,6 +1,7 @@
 import { StatusPill } from '@/components/agent-surfaces/StatusPill';
 import { LiveValueFlash } from '@/components/motion/LiveValueFlash';
 import { SpinningRefreshIcon } from '@/components/motion/SpinningRefreshIcon';
+import { ApprovalOverlay } from '@/components/ui/ApprovalOverlay';
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { RegentPressable } from '@/components/ui/RegentPressable';
 import { HermesVoiceButton } from '@/components/voice/HermesVoiceButton';
@@ -15,6 +16,7 @@ import {
 } from '@/types/regents';
 import { routes } from '@/utils/navigation/routes';
 import { describeApiError } from '@/utils/apiError';
+import { mayProceedAfterConsent, requiresApproval } from '@/utils/approvalConsent';
 import { regentApi } from '@/utils/regentApi/client';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -151,6 +153,7 @@ export default function AgentDetailScreen() {
   const [agent, setAgent] = useState<RegentDetail | null>(null);
   const [regentManager, setRegentManager] = useState<RegentManagerDetail | null>(null);
   const [voiceSheetOpen, setVoiceSheetOpen] = useState(false);
+  const [approvalOpen, setApprovalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [alertState, setAlertState] = useState<{
@@ -218,7 +221,10 @@ export default function AgentDetailScreen() {
     setVoiceSheetOpen(true);
   }, []);
 
-  const openFundAgent = useCallback(() => {
+  // Existing confirm/signing rail, UNCHANGED: navigate into the wallet send
+  // flow, which owns transaction preparation and signing. The overlay only
+  // gates whether we reach this navigation; it never signs or prepares.
+  const proceedToFundConfirm = useCallback(() => {
     if (!agent) {
       return;
     }
@@ -230,6 +236,27 @@ export default function AgentDetailScreen() {
       recipientLabel: agent.name,
     }));
   }, [agent, router]);
+
+  // Per-action consent gate (ONCE + DENY): a money action opens the overlay
+  // rather than navigating straight into the confirm flow.
+  const openFundAgent = useCallback(() => {
+    if (!agent || !requiresApproval('fund-agent')) {
+      proceedToFundConfirm();
+      return;
+    }
+    setApprovalOpen(true);
+  }, [agent, proceedToFundConfirm]);
+
+  const handleApproveFund = useCallback(() => {
+    setApprovalOpen(false);
+    if (mayProceedAfterConsent('approve-once')) {
+      proceedToFundConfirm();
+    }
+  }, [proceedToFundConfirm]);
+
+  const handleDenyFund = useCallback(() => {
+    setApprovalOpen(false);
+  }, []);
 
   const runtime = runtimeTone(agent?.runtimeStatus || 'waiting');
   const topGoal = regentManager?.goals[0];
@@ -557,6 +584,14 @@ export default function AgentDetailScreen() {
         agentName={agent.name}
         visible={voiceSheetOpen}
         onClose={() => setVoiceSheetOpen(false)}
+      />
+      <ApprovalOverlay
+        visible={approvalOpen}
+        title="Approve funding this agent?"
+        body={`This opens the confirm screen to add USDC to ${agent.name}'s working balance. You review and sign on the next screen.`}
+        command={`fund-agent regent=${agent.id} to=${agent.walletAddress}`}
+        onApprove={handleApproveFund}
+        onDeny={handleDenyFund}
       />
     </SafeAreaView>
   );
