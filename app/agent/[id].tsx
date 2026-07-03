@@ -18,6 +18,7 @@ import { routes } from '@/utils/navigation/routes';
 import { describeApiError } from '@/utils/apiError';
 import { mayProceedAfterConsent, requiresApproval } from '@/utils/approvalConsent';
 import { regentApi } from '@/utils/regentApi/client';
+import { returnRequestTone, runtimeTone } from '@/utils/statusTone';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
@@ -30,13 +31,7 @@ import {
   View,
 } from 'react-native';
 
-const { DARK_BG, CARD_BG, CARD_ALT, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, BORDER, WHITE, SUCCESS, DANGER } = COLORS;
-
-const AMBER = '#A3703A';
-const AMBER_WASH = '#F2E7DA';
-const GREEN_WASH = '#E6F0EA';
-const RED_WASH = '#F3E1DD';
-const BLUE_WASH = '#E7EEF2';
+const { DARK_BG, CARD_BG, CARD_ALT, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, BORDER, WHITE, SUCCESS, DANGER, AMBER, AMBER_WASH, GREEN_WASH, RED_WASH, BLUE_WASH } = COLORS;
 
 function formatAddress(address: string) {
   return `${address.slice(0, 8)}...${address.slice(-6)}`;
@@ -78,19 +73,6 @@ function runtimeCopy(runtimeStatus: RegentSummary['runtimeStatus']) {
   }
 }
 
-function runtimeTone(runtimeStatus: RegentSummary['runtimeStatus']) {
-  switch (runtimeStatus) {
-    case 'online':
-      return { accent: SUCCESS, wash: GREEN_WASH };
-    case 'waiting':
-      return { accent: AMBER, wash: AMBER_WASH };
-    case 'offline':
-      return { accent: DANGER, wash: RED_WASH };
-    case 'unknown':
-      return { accent: BLUE, wash: BLUE_WASH };
-  }
-}
-
 function returnRequestCopy(status: RegentReturnRequest['status']) {
   switch (status) {
     case 'requested':
@@ -108,20 +90,6 @@ function returnRequestCopy(status: RegentReturnRequest['status']) {
   }
 }
 
-function statusTone(status: RegentReturnRequest['status']) {
-  switch (status) {
-    case 'requested':
-    case 'approved':
-    case 'broadcasting':
-      return { accent: AMBER, wash: AMBER_WASH };
-    case 'confirmed':
-      return { accent: SUCCESS, wash: GREEN_WASH };
-    case 'failed':
-      return { accent: DANGER, wash: RED_WASH };
-    case 'unknown':
-      return { accent: BLUE, wash: BLUE_WASH };
-  }
-}
 
 function rosterReadyCount(regentManager: RegentManagerDetail | null) {
   if (!regentManager) {
@@ -528,7 +496,7 @@ export default function AgentDetailScreen() {
             <Text style={styles.sectionHint}>Where funds were headed most recently.</Text>
             <View style={styles.timeline}>
               {agent.returnRequests.slice(0, 3).map((returnRequest) => {
-                const tone = statusTone(returnRequest.status);
+                const tone = returnRequestTone(returnRequest.status);
                 return (
                   <View key={returnRequest.id} style={styles.timelineRow}>
                     <View style={[styles.timelineDot, { backgroundColor: tone.accent }]} />

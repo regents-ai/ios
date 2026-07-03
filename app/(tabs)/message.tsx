@@ -9,6 +9,7 @@ import { MessageThreadStatus, MessageThread } from '@/types/regents';
 import { describeListLoadFailure, type ListLoadFailure } from '@/utils/listLoadFailure';
 import { routes } from '@/utils/navigation/routes';
 import { regentApi } from '@/utils/regentApi/client';
+import { messageStatusTone } from '@/utils/statusTone';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { memo, useCallback, useMemo, useState } from 'react';
@@ -23,11 +24,7 @@ import {
   View,
 } from 'react-native';
 
-const { DARK_BG, CARD_BG, CARD_ALT, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, BORDER, SUCCESS, DANGER, BLUE_WASH } = COLORS;
-const AMBER = '#A3703A';
-const AMBER_WASH = '#F2E7DA';
-const GREEN_WASH = '#E6F0EA';
-const RED_WASH = '#F3E1DD';
+const { DARK_BG, CARD_BG, CARD_ALT, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, BORDER, AMBER, AMBER_WASH } = COLORS;
 
 function formatRelativeTime(value: string) {
   const timestamp = new Date(value).getTime();
@@ -40,21 +37,6 @@ function formatRelativeTime(value: string) {
   const diffHours = Math.round(diffMinutes / 60);
   if (diffHours < 24) return `${diffHours}h ago`;
   return `${Math.round(diffHours / 24)}d ago`;
-}
-
-function statusTone(status: MessageThreadStatus) {
-  switch (status) {
-    case 'running':
-      return { label: 'Working', accent: BLUE, wash: BLUE_WASH };
-    case 'waiting':
-      return { label: 'Approval', accent: AMBER, wash: AMBER_WASH };
-    case 'failed':
-      return { label: 'Needs help', accent: DANGER, wash: RED_WASH };
-    case 'idle':
-      return { label: 'Open', accent: SUCCESS, wash: GREEN_WASH };
-    case 'unknown':
-      return { label: 'Updating', accent: BLUE, wash: BLUE_WASH };
-  }
 }
 
 function threadRank(thread: MessageThread) {
@@ -74,7 +56,7 @@ const MessageThreadRow = memo(function MessageThreadRow({
   thread,
   onPressThread,
 }: MessageThreadRowProps) {
-  const tone = statusTone(thread.status);
+  const tone = messageStatusTone(thread.status);
   const handlePress = useCallback(() => {
     onPressThread(thread);
   }, [onPressThread, thread]);

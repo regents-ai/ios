@@ -21,13 +21,7 @@ import {
   View,
 } from 'react-native';
 
-const { DARK_BG, CARD_BG, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, BORDER, WHITE, SUCCESS, DANGER } = COLORS;
-
-const AMBER = '#A3703A';
-const AMBER_WASH = '#F2E7DA';
-const GREEN_WASH = '#E6F0EA';
-const RED_WASH = '#F3E1DD';
-const BLUE_WASH = '#E7EEF2';
+const { DARK_BG, CARD_BG, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, BORDER, WHITE, SUCCESS, DANGER, AMBER, AMBER_WASH, GREEN_WASH, RED_WASH, BLUE_WASH } = COLORS;
 
 function statusTone(status: string) {
   const lower = status.toLowerCase();

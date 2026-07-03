@@ -36,12 +36,11 @@ const {
   DANGER,
   BLUE_WASH,
   ORANGE,
+  AMBER,
+  AMBER_WASH,
+  GREEN_WASH,
+  RED_WASH,
 } = COLORS;
-
-const AMBER = '#A3703A';
-const AMBER_WASH = '#F2E7DA';
-const GREEN_WASH = '#E6F0EA';
-const RED_WASH = '#F3E1DD';
 
 type CommandCenterItem = {
   id: string;
