@@ -41,12 +41,6 @@ export async function authenticatedFetch(
     Authorization: `Bearer ${token}`,
   });
 
-  // Log for debugging (in development)
-  if (__DEV__) {
-    const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
-    console.log('🔐 [AUTH FETCH] Authenticated request to:', url);
-  }
-
   // Make the request with authentication
   return fetch(input, {
     ...init,
