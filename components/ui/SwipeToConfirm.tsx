@@ -1,13 +1,10 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Animated, Easing, PanResponder, StyleSheet, Text, View } from "react-native";
 import { useReducedMotion } from "@/components/motion/useReducedMotion";
 import { runRegentHaptic } from "@/components/ui/haptics";
 import { getSwipeReleaseMotion, hasReachedSwipeThreshold } from "@/components/ui/swipeToConfirmMotion";
-import { COLORS } from "../../constants/Colors";
-import { FONTS } from "../../constants/Typography";
-
-const { BLUE, CARD_BG, TEXT_PRIMARY, SILVER } = COLORS;
+import { useTheme, type Theme } from "@/theme/ThemeProvider";
 
 type SwipeToConfirmProps = {
   label: string;
@@ -20,6 +17,9 @@ type SwipeToConfirmProps = {
 
 
 export function SwipeToConfirm({ label, disabled = false, onConfirm, isLoading = false, onSwipeStart, onSwipeEnd }: SwipeToConfirmProps) {
+  const theme = useTheme();
+  const { colors } = theme;
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const [trackWidth, setTrackWidth] = useState(0);
   const reduceMotionEnabled = useReducedMotion();
   const knobSize = 52;
@@ -219,7 +219,7 @@ export function SwipeToConfirm({ label, disabled = false, onConfirm, isLoading =
         <Animated.View style={[styles.swipeCenter, { opacity: labelOpacity }]}>
           {isLoading ? (
             <View style={styles.loadingContent}>
-              <ActivityIndicator size="small" color={TEXT_PRIMARY} />
+              <ActivityIndicator size="small" color={colors.text} />
               <Text style={styles.loadingLabel}>Preparing your purchase…</Text>
             </View>
           ) : (
@@ -230,7 +230,7 @@ export function SwipeToConfirm({ label, disabled = false, onConfirm, isLoading =
         </Animated.View>
 
         <Animated.View style={[styles.swipeKnob, { transform: [{ translateX }, { scale: knobScale }] }]}>
-          <Ionicons name={isLoading || pastThreshold ? "checkmark" : "chevron-forward"} size={22} color="#FFFFFF" />
+          <Ionicons name={isLoading || pastThreshold ? "checkmark" : "chevron-forward"} size={22} color={colors.onAccent} />
         </Animated.View>
       </View>
     </View>
@@ -238,67 +238,69 @@ export function SwipeToConfirm({ label, disabled = false, onConfirm, isLoading =
 }
 
 
-const styles = StyleSheet.create({
-  swipeContainer: {
-    marginTop: 8,
-  },
-  swipeTrack: {
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: CARD_BG, 
-    borderColor: SILVER,        
-    borderWidth: 1,           
-    overflow: "hidden",
-    justifyContent: "center",
-    position: 'relative',    
-  },
-  swipeCenter: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 64,
-  },
-  swipeProgress: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    backgroundColor: BLUE,
-    opacity: 0.15,
-    borderRadius: 30,              
-  },
-  swipeLabel: {
-    textAlign: "center",
-    color: TEXT_PRIMARY,
-    fontSize: 16,
-    fontFamily: FONTS.body,
-  },
-  swipeLabelReady: {
-    color: BLUE,
-    fontFamily: FONTS.heading,
-  },
-  loadingContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  loadingLabel: {
-    color: TEXT_PRIMARY,
-    fontSize: 14,
-    fontFamily: FONTS.body,
-  },
-  swipeKnob: {
-    position: "absolute",
-    left: 4,
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: BLUE,  
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: BLUE,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-});
+function makeStyles({ colors, fonts }: Theme) {
+  return StyleSheet.create({
+    swipeContainer: {
+      marginTop: 8,
+    },
+    swipeTrack: {
+      height: 60,
+      borderRadius: 30,
+      backgroundColor: colors.surface,
+      borderColor: colors.hairlineStrong,
+      borderWidth: 1,
+      overflow: "hidden",
+      justifyContent: "center",
+      position: 'relative',
+    },
+    swipeCenter: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 64,
+    },
+    swipeProgress: {
+      position: 'absolute',
+      left: 0,
+      top: 0,
+      bottom: 0,
+      backgroundColor: colors.accent,
+      opacity: 0.15,
+      borderRadius: 30,
+    },
+    swipeLabel: {
+      textAlign: "center",
+      color: colors.text,
+      fontSize: 16,
+      fontFamily: fonts.ui,
+    },
+    swipeLabelReady: {
+      color: colors.accent,
+      fontFamily: fonts.title,
+    },
+    loadingContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    loadingLabel: {
+      color: colors.text,
+      fontSize: 14,
+      fontFamily: fonts.ui,
+    },
+    swipeKnob: {
+      position: "absolute",
+      left: 4,
+      width: 52,
+      height: 52,
+      borderRadius: 26,
+      backgroundColor: colors.accent,
+      alignItems: "center",
+      justifyContent: "center",
+      shadowColor: colors.accent,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+      elevation: 8,
+    },
+  });
+}

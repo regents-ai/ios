@@ -9,13 +9,12 @@
 
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
-import { useCallback, useState, useSyncExternalStore } from 'react';
+import { useCallback, useMemo, useState, useSyncExternalStore } from 'react';
 import { SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ProgressToast } from '@/components/ui/ProgressToast';
 import { RegentPressable } from '@/components/ui/RegentPressable';
-import { COLORS } from '@/constants/Colors';
-import { FONTS } from '@/constants/Typography';
+import { useTheme, type Theme } from '@/theme/ThemeProvider';
 import { useWordDrain } from '@/hooks/useWordDrain';
 import {
   MOTION_KNOB_BOUNDS,
@@ -32,8 +31,6 @@ import {
   type ProgressToastState,
 } from '@/utils/progressToast';
 
-const { DARK_BG, CARD_BG, CARD_ALT, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, BORDER } = COLORS;
-
 const CANNED_REPLY =
   'Here is a canned agent reply for tuning. It has enough words to feel the ' +
   'cadence, a burst of short ones, and then a longer stretch so the ' +
@@ -46,6 +43,9 @@ const KNOB_LABELS: Record<keyof MotionKnobs, string> = {
 };
 
 function KnobRow({ knob, value }: { knob: keyof MotionKnobs; value: number }) {
+  const theme = useTheme();
+  const { colors } = theme;
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const bounds = MOTION_KNOB_BOUNDS[knob];
   return (
     <View style={styles.knobRow}>
@@ -59,14 +59,14 @@ function KnobRow({ knob, value }: { knob: keyof MotionKnobs; value: number }) {
           style={styles.stepButton}
           onPress={() => setMotionKnob(knob, value - bounds.step)}
         >
-          <Ionicons name="remove" size={18} color={TEXT_PRIMARY} />
+          <Ionicons name="remove" size={18} color={colors.text} />
         </RegentPressable>
         <RegentPressable
           pressStyle="icon"
           style={styles.stepButton}
           onPress={() => setMotionKnob(knob, value + bounds.step)}
         >
-          <Ionicons name="add" size={18} color={TEXT_PRIMARY} />
+          <Ionicons name="add" size={18} color={colors.text} />
         </RegentPressable>
       </View>
     </View>
@@ -74,6 +74,8 @@ function KnobRow({ knob, value }: { knob: keyof MotionKnobs; value: number }) {
 }
 
 function CannedReplay({ replayKey }: { replayKey: number }) {
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const revealed = useWordDrain(CANNED_REPLY, true);
   return (
     <Text key={replayKey} style={styles.replayText}>
@@ -83,6 +85,9 @@ function CannedReplay({ replayKey }: { replayKey: number }) {
 }
 
 export default function MotionLab() {
+  const theme = useTheme();
+  const { colors } = theme;
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const router = useRouter();
   const knobs = useSyncExternalStore(subscribeMotionKnobs, getMotionKnobs, getMotionKnobs);
   const [replayKey, setReplayKey] = useState(0);
@@ -101,7 +106,7 @@ export default function MotionLab() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <RegentPressable pressStyle="icon" onPress={() => router.back()} style={styles.iconButton}>
-          <Ionicons name="chevron-back" size={22} color={TEXT_PRIMARY} />
+          <Ionicons name="chevron-back" size={22} color={colors.text} />
         </RegentPressable>
         <Text style={styles.headerTitle}>Motion Lab</Text>
         <View style={styles.iconButton} />
@@ -144,10 +149,11 @@ export default function MotionLab() {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles({ colors, fonts }: Theme) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DARK_BG,
+    backgroundColor: colors.bg,
   },
   header: {
     flexDirection: 'row',
@@ -165,9 +171,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerTitle: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 20,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   content: {
     paddingHorizontal: 20,
@@ -175,23 +181,23 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   card: {
-    backgroundColor: CARD_BG,
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     borderRadius: 20,
     padding: 18,
     gap: 12,
   },
   sectionTitle: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 20,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   sectionHint: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 13,
     lineHeight: 18,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   knobRow: {
     flexDirection: 'row',
@@ -204,14 +210,14 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   knobLabel: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 14,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   knobValue: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 13,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   knobControls: {
     flexDirection: 'row',
@@ -221,9 +227,9 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: CARD_ALT,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -231,26 +237,27 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: CARD_ALT,
+    borderColor: colors.hairlineStrong,
+    backgroundColor: colors.surface,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
   resetButtonText: {
-    color: BLUE,
+    color: colors.accent,
     fontSize: 13,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   replayBox: {
     minHeight: 120,
-    backgroundColor: CARD_ALT,
+    backgroundColor: colors.surface,
     borderRadius: 14,
     padding: 14,
   },
   replayText: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 14,
     lineHeight: 20,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
-});
+  });
+}

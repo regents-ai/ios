@@ -11,7 +11,7 @@
 import { useCurrentUser, useSolanaAddress } from '@coinbase/cdp-hooks';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useLocalSearchParams, usePathname, useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -32,14 +32,14 @@ import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { RegentPressable } from '@/components/ui/RegentPressable';
 import { RecipientQuickPicks, recordRecipientUse } from '@/components/wallet/RecipientQuickPicks';
 import { SendConfirmationModal } from '@/components/wallet/SendConfirmationModal';
-import { sendScreenStyles as styles } from '@/components/wallet/sendScreenStyles';
+import { makeSendScreenStyles } from '@/components/wallet/sendScreenStyles';
 import {
   SEND_CARD_OFFSET as CARD_OFFSET,
   SEND_SCREEN_OFFSET as SCREEN_OFFSET,
   SEND_STAGGER_STEP as STAGGER_STEP,
   buildTimingTransition,
 } from '@/components/wallet/sendTransitions';
-import { COLORS } from '@/constants/Colors';
+import { useTheme } from '@/theme/ThemeProvider';
 import { useEvmTransfer } from '@/hooks/wallet/useEvmTransfer';
 import { useFundingChoices } from '@/hooks/wallet/useFundingChoices';
 import { useRecipientResolution } from '@/hooks/wallet/useRecipientResolution';
@@ -52,11 +52,13 @@ import { getEnsResolutionCopy } from '@/utils/onchain/recipient';
 import { getInsufficientBalanceError, getSelfSendError } from '@/utils/onchain/sendValidation';
 import { getTokenBalance, getUsdEstimate } from '@/utils/onchain/tokenDisplay';
 
-const { TEXT_PRIMARY, TEXT_SECONDARY, BLUE, WHITE } = COLORS;
 const AGENT_FUNDING_FLOW = 'agent-funding';
 const SEND_FLOW = 'send';
 
 export default function TransferScreen() {
+  const theme = useTheme();
+  const { colors } = theme;
+  const styles = useMemo(() => makeSendScreenStyles(theme), [theme]);
   const router = useRouter();
   const pathname = usePathname();
   const params = useLocalSearchParams();
@@ -353,7 +355,7 @@ export default function TransferScreen() {
             <View style={styles.backButtonSpacer} />
           ) : (
             <RegentPressable pressStyle="icon" onPress={() => router.back()} style={styles.backButton}>
-              <Ionicons name="chevron-back" size={24} color={TEXT_PRIMARY} />
+              <Ionicons name="chevron-back" size={24} color={colors.text} />
             </RegentPressable>
           )}
         </EaseView>
@@ -409,14 +411,14 @@ export default function TransferScreen() {
             ) : null}
             <View style={styles.inputContainer}>
               <View style={styles.fieldIcon}>
-                <Ionicons name="person-outline" size={20} color={TEXT_SECONDARY} />
+                <Ionicons name="person-outline" size={20} color={colors.textMuted} />
               </View>
               <TextInput
                 style={[styles.input, styles.recipientInput, { flex: 1 }, addressError && styles.inputError]}
                 value={recipientInput}
                 onChangeText={handleAddressChange}
                 placeholder={isSolanaNetwork(network) ? 'Solana address' : 'Ethereum address or ENS name'}
-                placeholderTextColor={TEXT_SECONDARY}
+                placeholderTextColor={colors.textMuted}
                 autoCapitalize="none"
                 autoCorrect={false}
                 editable={!isAgentFundingFlow}
@@ -428,7 +430,7 @@ export default function TransferScreen() {
                   style={styles.pasteButton}
                   onPress={resetRecipient}
                 >
-                  <Ionicons name="close-circle" size={20} color={TEXT_SECONDARY} />
+                  <Ionicons name="close-circle" size={20} color={colors.textMuted} />
                 </RegentPressable>
               ) : (
                 <View style={styles.pasteButtonSpacer} />
@@ -443,7 +445,7 @@ export default function TransferScreen() {
                   style={styles.recipientActionButton}
                   onPress={handlePasteRecipient}
                 >
-                  <Ionicons name="clipboard-outline" size={18} color={BLUE} />
+                  <Ionicons name="clipboard-outline" size={18} color={colors.accent} />
                   <Text style={styles.recipientActionText}>Paste</Text>
                 </RegentPressable>
                 <RegentPressable
@@ -454,9 +456,9 @@ export default function TransferScreen() {
                   disabled={scanningQrPhoto}
                 >
                   {scanningQrPhoto ? (
-                    <ActivityIndicator color={BLUE} size="small" />
+                    <ActivityIndicator color={colors.accent} size="small" />
                   ) : (
-                    <Ionicons name="qr-code-outline" size={18} color={BLUE} />
+                    <Ionicons name="qr-code-outline" size={18} color={colors.accent} />
                   )}
                   <Text style={styles.recipientActionText}>QR photo</Text>
                 </RegentPressable>
@@ -501,9 +503,9 @@ export default function TransferScreen() {
                 onBlur={() => setAmountFocused(false)}
                 onFocus={() => setAmountFocused(true)}
                 placeholder="0.00"
-                placeholderTextColor={TEXT_SECONDARY}
+                placeholderTextColor={colors.textMuted}
                 keyboardType="decimal-pad"
-                selectionColor={BLUE}
+                selectionColor={colors.accent}
               />
               <View style={styles.amountTokenPill}>
                 <Text style={styles.amountTokenText}>{selectedToken?.token?.symbol || 'Token'}</Text>
@@ -614,7 +616,7 @@ export default function TransferScreen() {
             transition={buildTimingTransition(reduceMotion, STAGGER_STEP * 5)}
             style={styles.reviewCard}
           >
-            <Ionicons name="shield-checkmark-outline" size={24} color={TEXT_SECONDARY} />
+            <Ionicons name="shield-checkmark-outline" size={24} color={colors.textMuted} />
             <View style={styles.reviewCopy}>
               <Text style={styles.reviewTitle}>{isAgentFundingFlow || isDefaultSendFlow ? 'Review payment' : 'Review send'}</Text>
               <Text style={styles.reviewText}>
@@ -691,7 +693,7 @@ export default function TransferScreen() {
               disabled={!canContinue}
             >
               {sending ? (
-                <ActivityIndicator color={WHITE} />
+                <ActivityIndicator color={colors.onAccent} />
               ) : (
                 <Text style={styles.mainSendButtonText}>{isAgentFundingFlow || isDefaultSendFlow ? 'Review payment' : 'Review send'}</Text>
               )}

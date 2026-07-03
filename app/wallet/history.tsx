@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { router } from "expo-router";
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
   FlatList,
   PixelRatio,
@@ -14,8 +14,7 @@ import { SpinningRefreshIcon } from "../../components/motion/SpinningRefreshIcon
 import { FailedTransactionBadge } from "../../components/ui/FailedTransactionCard";
 import { ListRetryRow } from "../../components/ui/ListRetryRow";
 import { RegentPressable } from "../../components/ui/RegentPressable";
-import { COLORS } from "../../constants/Colors";
-import { FONTS } from "../../constants/Typography";
+import { useTheme, type Theme } from "../../theme/ThemeProvider";
 import { useRegentsAuth } from "../../hooks/useRegentsAuth";
 import {
   CACHED_MODE_BANNER,
@@ -26,8 +25,6 @@ import { resolveDynamicTypeLayout } from "../../utils/dynamicTypeLayout";
 import { fetchTransactionHistory } from "../../utils/fetchTransactionHistory";
 import { describeListLoadFailure, type ListLoadFailure } from "../../utils/listLoadFailure";
 
-
-const { BLUE, DARK_BG, CARD_BG, CARD_ALT, BORDER, TEXT_PRIMARY, TEXT_SECONDARY, WHITE } = COLORS;
 
 type Transaction = {
   transaction_id: string;
@@ -50,6 +47,9 @@ type Transaction = {
 };
 
 export default function History() {
+  const theme = useTheme();
+  const { colors } = theme;
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const { getAccessToken, regentsUserId } = useRegentsAuth();
   // Row -> stacked layout for dense rows at accessibility font sizes.
   const typeLayout = resolveDynamicTypeLayout(PixelRatio.getFontScale());
@@ -135,15 +135,15 @@ export default function History() {
   const getStatusColor = (status: string) => {
     const normalizedStatus = status.toLowerCase();
     if (normalizedStatus.includes("completed") || normalizedStatus.includes("success")) {
-      return "#00D632"; // Green
+      return colors.success;
     }
     if (normalizedStatus.includes("pending") || normalizedStatus.includes("processing")) {
-      return "#FF8500"; // Orange
+      return colors.warning;
     }
     if (normalizedStatus.includes("failed") || normalizedStatus.includes("error")) {
-      return "#FF6B6B"; // Red
+      return colors.error;
     }
-    return TEXT_SECONDARY; // Default gray
+    return colors.textMuted; // Default
   };
 
   const isFailedTransaction = (status: string) => {
@@ -177,7 +177,7 @@ export default function History() {
             <Ionicons
               name={isFailed ? "alert-circle" : "swap-horizontal"}
               size={16}
-              color={isFailed ? "#FF6B6B" : WHITE}
+              color={isFailed ? colors.error : colors.onAccent}
             />
           </View>
           <View style={styles.transactionContent}>
@@ -220,7 +220,7 @@ export default function History() {
     <View style={styles.container}>
       <View style={styles.header}>
         <RegentPressable pressStyle="icon" onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="chevron-back" size={20} color={TEXT_PRIMARY} />
+          <Ionicons name="chevron-back" size={20} color={colors.text} />
         </RegentPressable>
         <Text style={styles.title}>Wallet History</Text>
         <RegentPressable
@@ -229,12 +229,12 @@ export default function History() {
           disabled={loading}
           style={[styles.refreshButton, loading && { opacity: 0.5 }]}
         >
-          <SpinningRefreshIcon refreshing={loading} size={20} color={BLUE} />
+          <SpinningRefreshIcon refreshing={loading} size={20} color={colors.accent} />
         </RegentPressable>
       </View>
       {cacheMode === 'cached' ? (
         <View style={styles.cachedBanner}>
-          <Ionicons name="cloud-offline-outline" size={16} color={TEXT_SECONDARY} />
+          <Ionicons name="cloud-offline-outline" size={16} color={colors.textMuted} />
           <Text style={styles.cachedBannerText}>{CACHED_MODE_BANNER}</Text>
         </View>
       ) : null}
@@ -253,7 +253,7 @@ export default function History() {
         loadError ? null : (
         <View style={styles.emptyState}>
           <View style={styles.emptyIcon}>
-            <Ionicons name="time-outline" size={28} color={BLUE} />
+            <Ionicons name="time-outline" size={28} color={colors.accent} />
           </View>
           <Text style={styles.emptyTitle}>No activity yet</Text>
           <Text style={styles.emptyMessage}>
@@ -282,7 +282,7 @@ export default function History() {
             ListFooterComponent={() =>
               loadingMore ? (
                 <View style={styles.footerLoader}>
-                  <SpinningRefreshIcon refreshing size={18} color={BLUE} />
+                  <SpinningRefreshIcon refreshing size={18} color={colors.accent} />
                   <Text style={styles.footerText}>Loading more...</Text>
                 </View>
               ) : nextPageKey ? (
@@ -301,10 +301,11 @@ export default function History() {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles({ colors, fonts }: Theme) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DARK_BG,    
+    backgroundColor: colors.bg,
   },
   header: {
     flexDirection: "row",
@@ -312,32 +313,32 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 20,
     paddingVertical: 16,
-    backgroundColor: CARD_BG,    
+    backgroundColor: colors.surfaceElevated,    
     borderBottomWidth: 1,
-    borderBottomColor: BORDER,
+    borderBottomColor: colors.hairlineStrong,
   },
   title: {
     flex: 1,
     minWidth: 0,
     fontSize: 20,
-    color: TEXT_PRIMARY,
-    fontFamily: FONTS.heading,
+    color: colors.text,
+    fontFamily: fonts.title,
     textAlign: 'center',
   },
   backButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: DARK_BG,
+    backgroundColor: colors.bg,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
   refreshButton: {
-    backgroundColor: CARD_BG,
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     borderRadius: 16,
     width: 44,
     height: 44,
@@ -354,9 +355,9 @@ const styles = StyleSheet.create({
   },
   transactionShell: {
     padding: 16,
-    backgroundColor: CARD_BG,
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     borderRadius: 20,
   },
   transactionItem: {
@@ -368,15 +369,15 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: WHITE,
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
   transactionIconFailed: {
-    backgroundColor: '#FEF2F2',
-    borderColor: '#FECACA',
+    backgroundColor: colors.errorWash,
+    borderColor: colors.error,
   },
   supportBadgeRow: {
     marginTop: 8,
@@ -398,21 +399,21 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: CARD_ALT,
+    borderColor: colors.hairlineStrong,
+    backgroundColor: colors.surface,
   },
   cachedBannerText: {
     flex: 1,
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 12,
     lineHeight: 16,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   transactionAmount: {
     fontSize: 16,
-    color: TEXT_PRIMARY, // Neutral white text
+    color: colors.text, // Neutral white text
     textAlign: 'right',
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   transactionAmountFlash: {
     alignSelf: 'flex-end',
@@ -430,15 +431,15 @@ const styles = StyleSheet.create({
   },
   transactionTitle: {
     fontSize: 16,
-    color: TEXT_PRIMARY,
+    color: colors.text,
     flex: 1, // Take up available space
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   transactionSubtitle: {
     fontSize: 14,
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     flex: 1,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   transactionInfo: {
     flex: 1,
@@ -461,7 +462,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: 'right',
     flexShrink: 1,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   statusBadge: {
     paddingHorizontal: 10,
@@ -483,18 +484,18 @@ const styles = StyleSheet.create({
   },
   transactionDate: {
     fontSize: 12,
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     marginBottom: 4,
   },
   transactionId: {
     fontSize: 10,
     fontFamily: "monospace",
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
   },
   transactionHash: {
     fontSize: 10,
     fontFamily: "monospace",
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     marginTop: 2,
   },
   emptyState: {
@@ -508,37 +509,37 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: CARD_BG,
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
   emptyTitle: {
     fontSize: 18,
-    color: TEXT_PRIMARY,
-    fontFamily: FONTS.heading,
+    color: colors.text,
+    fontFamily: fonts.title,
   },
   emptyMessage: {
     fontSize: 14,
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     textAlign: "center",
     lineHeight: 20,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   emptyButton: {
     marginTop: 8,
     minHeight: 50,
     paddingHorizontal: 22,
     borderRadius: 16,
-    backgroundColor: BLUE,
+    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
   emptyButtonText: {
-    color: WHITE,
+    color: colors.onAccent,
     fontSize: 14,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   footerLoader: {
     paddingVertical: 20,
@@ -548,7 +549,8 @@ const styles = StyleSheet.create({
   footerText: {
     marginTop: 8,
     fontSize: 12,
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     textAlign: 'center',
   },
-});
+  });
+}

@@ -2,16 +2,13 @@ import { FailedTransactionCard } from '@/components/ui/FailedTransactionCard';
 import { getEaseTransition } from '@/components/motion/easePresets';
 import { useReducedMotion } from '@/components/motion/useReducedMotion';
 import { RegentPressable } from '@/components/ui/RegentPressable';
-import { COLORS } from '@/constants/Colors';
-import { FONTS } from '@/constants/Typography';
+import { useTheme, type Theme } from '@/theme/ThemeProvider';
 import { openSupportEmail, type GuestCheckoutDebugInfo } from '@/utils/supportEmail';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { EaseView } from 'react-native-ease';
-
-const { BLUE, DARK_BG, CARD_BG, CARD_ALT, BORDER, TEXT_PRIMARY, TEXT_SECONDARY, WHITE } = COLORS;
 
 const SCREEN_OFFSET = 12;
 const CARD_OFFSET = 8;
@@ -66,6 +63,9 @@ const SUPPORT_ISSUES: Record<
 };
 
 export default function SupportScreen() {
+  const theme = useTheme();
+  const { colors } = theme;
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const router = useRouter();
   const reducedMotionEnabled = useReducedMotion();
   const [showFailedModal, setShowFailedModal] = useState(false);
@@ -137,7 +137,7 @@ export default function SupportScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <RegentPressable pressStyle="icon" onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={TEXT_PRIMARY} />
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
         </RegentPressable>
         <View style={styles.headerSpacer} />
       </View>
@@ -170,13 +170,13 @@ export default function SupportScreen() {
                   onPress={option.onPress}
                 >
                   <View style={styles.rowIcon}>
-                    <Ionicons name={option.icon} size={24} color={TEXT_PRIMARY} />
+                    <Ionicons name={option.icon} size={24} color={colors.text} />
                   </View>
                   <View style={styles.rowCopy}>
                     <Text style={styles.rowTitle}>{option.label}</Text>
                     <Text style={styles.rowDetail}>{option.detail}</Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={20} color={TEXT_SECONDARY} />
+                  <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
                 </RegentPressable>
                 {index < helpOptions.length - 1 ? <View style={styles.rowDivider} /> : null}
               </View>
@@ -201,7 +201,7 @@ export default function SupportScreen() {
                   onPress={question.onPress}
                 >
                   <Text style={styles.questionLabel}>{question.label}</Text>
-                  <Ionicons name="chevron-forward" size={20} color={TEXT_SECONDARY} />
+                  <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
                 </RegentPressable>
                 {index < commonQuestions.length - 1 ? <View style={styles.rowDivider} /> : null}
               </View>
@@ -260,10 +260,11 @@ export default function SupportScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles({ colors, fonts }: Theme) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DARK_BG,
+    backgroundColor: colors.bg,
   },
   header: {
     paddingHorizontal: 20,
@@ -290,30 +291,30 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   title: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 42,
     lineHeight: 44,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   subtitle: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 16,
     lineHeight: 22,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   section: {
     gap: 14,
   },
   sectionTitle: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 22,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   panel: {
-    backgroundColor: CARD_BG,
+    backgroundColor: colors.surfaceElevated,
     borderRadius: 28,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     overflow: 'hidden',
   },
   rowButton: {
@@ -327,7 +328,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: CARD_ALT,
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -336,19 +337,19 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   rowTitle: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 17,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   rowDetail: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 13,
     lineHeight: 18,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   rowDivider: {
     height: 1,
-    backgroundColor: BORDER,
+    backgroundColor: colors.hairlineStrong,
     marginLeft: 78,
   },
   questionRow: {
@@ -360,16 +361,16 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
   },
   questionLabel: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 18,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
     flex: 1,
   },
   buttonWrap: {
     paddingTop: 8,
   },
   primaryButton: {
-    backgroundColor: BLUE,
+    backgroundColor: colors.accent,
     borderRadius: 22,
     paddingVertical: 18,
     alignItems: 'center',
@@ -378,8 +379,9 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
   },
   primaryButtonText: {
-    color: WHITE,
+    color: colors.onAccent,
     fontSize: 18,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
-});
+  });
+}

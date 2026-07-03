@@ -6,10 +6,9 @@
  */
 
 import { Ionicons } from '@expo/vector-icons';
-import React from 'react';
+import React, { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { COLORS } from '../../constants/Colors';
-import { FONTS } from '../../constants/Typography';
+import { useTheme, type Theme } from '@/theme/ThemeProvider';
 import { RegentPressable } from './RegentPressable';
 import { runRegentHaptic } from './haptics';
 import {
@@ -19,8 +18,6 @@ import {
   SUPPORT_EMAIL,
   TransactionDebugInfo
 } from '../../utils/supportEmail';
-
-const { BLUE, BORDER, CARD_BG, CARD_ALT, BLUE_WASH, TEXT_PRIMARY, TEXT_SECONDARY, WHITE, DARK_BG } = COLORS;
 
 interface FailedTransactionCardProps {
   title?: string;
@@ -53,6 +50,9 @@ export function FailedTransactionCard({
   onDismiss,
   showDismiss = true,
 }: FailedTransactionCardProps) {
+  const theme = useTheme();
+  const { colors } = theme;
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   // Use provided debugInfo or create from transaction
   const finalDebugInfo = debugInfo || (transaction
     ? createDebugInfoFromTransaction(transaction, errorMessage)
@@ -108,7 +108,7 @@ export function FailedTransactionCard({
             onPress={handleContactSupport}
             style={styles.primaryButton}
           >
-            <Ionicons name="mail-outline" size={20} color={WHITE} />
+            <Ionicons name="mail-outline" size={20} color={colors.onAccent} />
             <Text style={styles.primaryButtonText}>Email support</Text>
           </RegentPressable>
 
@@ -124,7 +124,7 @@ export function FailedTransactionCard({
 
         {/* Secure flow footer */}
         <View style={styles.footer}>
-          <Ionicons name="lock-closed" size={14} color={TEXT_SECONDARY} />
+          <Ionicons name="lock-closed" size={14} color={colors.textMuted} />
           <Text style={styles.footerText}>Secure transfer flow</Text>
         </View>
       </View>
@@ -154,6 +154,9 @@ export function FailedTransactionBadge({
   };
   onPress?: () => void;
 }) {
+  const theme = useTheme();
+  const { colors } = theme;
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const handlePress = async () => {
     if (onPress) {
       onPress();
@@ -169,30 +172,31 @@ export function FailedTransactionBadge({
       pressStyle="chip"
       style={styles.badge}
     >
-      <Ionicons name="mail-outline" size={14} color={BLUE} />
+      <Ionicons name="mail-outline" size={14} color={colors.accent} />
       <Text style={styles.badgeText}>Get help</Text>
     </RegentPressable>
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles({ colors, fonts }: Theme) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
-    backgroundColor: DARK_BG,
+    backgroundColor: colors.bg,
   },
   card: {
-    backgroundColor: CARD_BG,
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     borderRadius: 16,
     padding: 24,
     width: '100%',
     maxWidth: 400,
     alignItems: 'center',
-    shadowColor: BLUE,
+    shadowColor: colors.accent,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.08,
     shadowRadius: 18,
@@ -200,9 +204,9 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 14,
-    color: BLUE,
+    color: colors.accent,
     marginBottom: 20,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   illustrationContainer: {
     marginBottom: 20,
@@ -212,58 +216,58 @@ const styles = StyleSheet.create({
     height: 104,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: WHITE,
+    backgroundColor: colors.surfaceElevated,
     borderRadius: 52,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
   },
   heading: {
     fontSize: 20,
-    color: TEXT_PRIMARY,
+    color: colors.text,
     marginBottom: 8,
     textAlign: 'center',
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   message: {
     fontSize: 14,
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     textAlign: 'center',
     lineHeight: 20,
     marginBottom: 20,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   supportSection: {
     alignItems: 'center',
     marginBottom: 20,
     padding: 14,
-    backgroundColor: BLUE_WASH,
+    backgroundColor: colors.accentWash,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     width: '100%',
   },
   contactText: {
     fontSize: 14,
-    color: TEXT_PRIMARY,
+    color: colors.text,
     textAlign: 'center',
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   emailLink: {
-    color: BLUE,
+    color: colors.accent,
     textDecorationLine: 'none',
   },
   responseTime: {
     fontSize: 12,
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     marginTop: 4,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   buttonContainer: {
     width: '100%',
     gap: 12,
   },
   primaryButton: {
-    backgroundColor: BLUE,
+    backgroundColor: colors.accent,
     paddingVertical: 15,
     paddingHorizontal: 24,
     borderRadius: 18,
@@ -275,9 +279,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   primaryButtonText: {
-    color: WHITE,
+    color: colors.onAccent,
     fontSize: 15,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   secondaryButton: {
     paddingVertical: 14,
@@ -288,13 +292,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: CARD_ALT,
+    borderColor: colors.hairlineStrong,
+    backgroundColor: colors.surface,
   },
   secondaryButtonText: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 15,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   footer: {
     flexDirection: 'row',
@@ -303,14 +307,14 @@ const styles = StyleSheet.create({
     marginTop: 24,
     paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: BORDER,
+    borderTopColor: colors.hairlineStrong,
     width: '100%',
     justifyContent: 'center',
   },
   footerText: {
     fontSize: 12,
-    color: TEXT_SECONDARY,
-    fontFamily: FONTS.body,
+    color: colors.textMuted,
+    fontFamily: fonts.ui,
   },
   // Badge styles for compact inline display
   badge: {
@@ -319,15 +323,16 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 10,
     paddingVertical: 8,
-    backgroundColor: CARD_BG,
+    backgroundColor: colors.surfaceElevated,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     marginTop: 8,
   },
   badgeText: {
     fontSize: 12,
-    color: BLUE,
-    fontFamily: FONTS.body,
+    color: colors.accent,
+    fontFamily: fonts.ui,
   },
-});
+  });
+}

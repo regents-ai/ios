@@ -2,7 +2,7 @@ import { useCurrentUser } from '@coinbase/cdp-hooks';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Linking, Platform, StyleSheet, View } from 'react-native';
 
-import { COLORS } from '@/constants/Colors';
+import { useTheme, type Theme } from '@/theme/ThemeProvider';
 import { useRegentsAuth } from '@/hooks/useRegentsAuth';
 import { fetchUserLimits, UserLimit } from '@/utils/fetchUserLimits';
 import { getAccessTokenGlobal } from '@/utils/getAccessTokenGlobal';
@@ -26,8 +26,6 @@ import {
 } from './onramp-form-sections';
 import type { OnrampFormData } from './onramp-form-types';
 import { PickerSheet } from './picker-sheet';
-
-const { DARK_BG } = COLORS;
 
 type OnrampFormProps = {
   address: string;
@@ -74,6 +72,8 @@ export function OnrampForm({
   options,
   paymentCurrencies,
 }: OnrampFormProps) {
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const { isAuthenticated, linkedEmail, linkedPhone } = useRegentsAuth();
   const { currentUser } = useCurrentUser();
   const prevNetworkRef = useRef('Base');
@@ -655,11 +655,13 @@ export function OnrampForm({
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles({ colors }: Theme) {
+  return StyleSheet.create({
   content: {
     padding: 16,
     gap: 14,
-    backgroundColor: DARK_BG,
+    backgroundColor: colors.bg,
     paddingBottom: 20,
   },
-});
+  });
+}

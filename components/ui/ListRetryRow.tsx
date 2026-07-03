@@ -10,10 +10,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { RegentPressable } from '@/components/ui/RegentPressable';
-import { COLORS } from '@/constants/Colors';
-import { FONTS } from '@/constants/Typography';
-
-const { BLUE, DANGER, TEXT_SECONDARY, WHITE } = COLORS;
+import { useTheme, type Theme } from '@/theme/ThemeProvider';
+import { useMemo } from 'react';
 
 export function ListRetryRow({
   title,
@@ -28,13 +26,16 @@ export function ListRetryRow({
   onRetry: () => void;
   retryHint: string;
 }) {
+  const theme = useTheme();
+  const { colors } = theme;
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   return (
     <View style={styles.row}>
       <View style={styles.copyRow}>
         <Ionicons
           name={offline ? 'cloud-offline-outline' : 'warning-outline'}
           size={20}
-          color={DANGER}
+          color={colors.error}
         />
         <View style={styles.copy}>
           <Text style={styles.title}>{title}</Text>
@@ -56,50 +57,52 @@ export function ListRetryRow({
   );
 }
 
-const styles = StyleSheet.create({
-  row: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: DANGER,
-    backgroundColor: '#FFF0F0',
-    padding: 14,
-    gap: 12,
-  },
-  copyRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-  },
-  copy: {
-    flex: 1,
-    minWidth: 0,
-    gap: 4,
-  },
-  title: {
-    color: DANGER,
-    fontSize: 15,
-    lineHeight: 20,
-    fontFamily: FONTS.heading,
-  },
-  message: {
-    color: TEXT_SECONDARY,
-    fontSize: 13,
-    lineHeight: 18,
-    fontFamily: FONTS.body,
-  },
-  retryButton: {
-    alignSelf: 'flex-start',
-    minHeight: 44,
-    minWidth: 88,
-    paddingHorizontal: 18,
-    borderRadius: 14,
-    backgroundColor: BLUE,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  retryText: {
-    color: WHITE,
-    fontSize: 14,
-    fontFamily: FONTS.body,
-  },
-});
+function makeStyles({ colors, fonts }: Theme) {
+  return StyleSheet.create({
+    row: {
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.error,
+      backgroundColor: colors.errorWash,
+      padding: 14,
+      gap: 12,
+    },
+    copyRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 10,
+    },
+    copy: {
+      flex: 1,
+      minWidth: 0,
+      gap: 4,
+    },
+    title: {
+      color: colors.error,
+      fontSize: 15,
+      lineHeight: 20,
+      fontFamily: fonts.title,
+    },
+    message: {
+      color: colors.textMuted,
+      fontSize: 13,
+      lineHeight: 18,
+      fontFamily: fonts.ui,
+    },
+    retryButton: {
+      alignSelf: 'flex-start',
+      minHeight: 44,
+      minWidth: 88,
+      paddingHorizontal: 18,
+      borderRadius: 14,
+      backgroundColor: colors.accent,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    retryText: {
+      color: colors.onAccent,
+      fontSize: 14,
+      fontFamily: fonts.ui,
+    },
+  });
+}

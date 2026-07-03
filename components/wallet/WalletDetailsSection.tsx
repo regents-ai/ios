@@ -1,4 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { LiveValueFlash } from '@/components/motion/LiveValueFlash';
@@ -7,11 +8,9 @@ import { SpinningRefreshIcon } from '@/components/motion/SpinningRefreshIcon';
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { CopyIconButton } from '@/components/ui/CopyIconButton';
 import { RegentPressable } from '@/components/ui/RegentPressable';
-import { COLORS } from '@/constants/Colors';
-import { FONTS } from '@/constants/Typography';
+import { useTheme, type Theme } from '@/theme/ThemeProvider';
 import { BalanceRecord, useWalletDetailsState } from '@/hooks/wallet/useWalletDetailsState';
 
-const { CARD_BG, CARD_ALT, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, BORDER, WHITE, DANGER, BLUE_WASH } = COLORS;
 export type WalletDetailsState = ReturnType<typeof useWalletDetailsState>;
 
 function formatAddress(address: string) {
@@ -49,6 +48,9 @@ function formatUsdValue(usdValue?: number) {
 }
 
 export function WalletDetailsSection({ walletDetails }: { walletDetails: WalletDetailsState }) {
+  const theme = useTheme();
+  const { colors } = theme;
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const {
     primaryAddress,
     solanaAddress,
@@ -146,7 +148,7 @@ export function WalletDetailsSection({ walletDetails }: { walletDetails: WalletD
             <Text style={styles.cardHint}>Keep your funds, recent activity, and agent payment actions in one place.</Text>
           </View>
           <RegentPressable pressStyle="icon" onPress={refreshWalletSnapshot} disabled={refreshingWallet} style={styles.iconButton}>
-            <SpinningRefreshIcon refreshing={refreshingWallet} size={18} color={TEXT_PRIMARY} />
+            <SpinningRefreshIcon refreshing={refreshingWallet} size={18} color={colors.text} />
           </RegentPressable>
         </View>
 
@@ -190,14 +192,14 @@ export function WalletDetailsSection({ walletDetails }: { walletDetails: WalletD
             style={[styles.quickActionButton, styles.quickActionPrimary]}
             onPress={handlePrimarySend}
           >
-            <Ionicons name="card-outline" size={18} color={WHITE} />
+            <Ionicons name="card-outline" size={18} color={colors.onAccent} />
             <Text style={styles.quickActionPrimaryText}>Pay</Text>
           </RegentPressable>
           <RegentPressable
             style={[styles.quickActionButton, styles.quickActionSecondary]}
             onPress={handlePrimaryCashOut}
           >
-            <Ionicons name="cash-outline" size={18} color={TEXT_PRIMARY} />
+            <Ionicons name="cash-outline" size={18} color={colors.text} />
             <Text style={styles.quickActionText}>Cash out</Text>
           </RegentPressable>
         </View>
@@ -247,7 +249,7 @@ export function WalletDetailsSection({ walletDetails }: { walletDetails: WalletD
             <Text style={styles.cardTitle}>Mainnet balances</Text>
             <Text style={styles.cardHint}>Base stays at the top, with pay and cash-out actions close to each balance.</Text>
           </View>
-          <Ionicons name={balancesExpanded ? 'chevron-up' : 'chevron-down'} size={18} color={TEXT_SECONDARY} />
+          <Ionicons name={balancesExpanded ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} />
         </RegentPressable>
 
         {balancesExpanded ? (
@@ -285,7 +287,7 @@ export function WalletDetailsSection({ walletDetails }: { walletDetails: WalletD
             <Text style={styles.cardTitle}>Testnet balances</Text>
             <Text style={styles.cardHint}>Base Sepolia, Ethereum Sepolia, and Solana Devnet balances.</Text>
           </View>
-          <Ionicons name={testnetExpanded ? 'chevron-up' : 'chevron-down'} size={18} color={TEXT_SECONDARY} />
+          <Ionicons name={testnetExpanded ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} />
         </RegentPressable>
 
         {testnetExpanded ? (
@@ -328,15 +330,16 @@ export function WalletDetailsSection({ walletDetails }: { walletDetails: WalletD
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles({ colors, fonts }: Theme) {
+  return StyleSheet.create({
   section: {
     gap: 14,
   },
   card: {
-    backgroundColor: CARD_BG,
+    backgroundColor: colors.surfaceElevated,
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     padding: 18,
     gap: 16,
   },
@@ -351,15 +354,15 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   cardTitle: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 20,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   cardHint: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 13,
     lineHeight: 18,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
     marginTop: 4,
     maxWidth: 260,
   },
@@ -367,15 +370,15 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: CARD_ALT,
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
   featuredCard: {
-    backgroundColor: BLUE_WASH,
+    backgroundColor: colors.accentWash,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     padding: 18,
     gap: 14,
   },
@@ -392,15 +395,15 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   featuredEyebrow: {
-    color: BLUE,
+    color: colors.accent,
     fontSize: 12,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   featuredTitle: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 22,
     lineHeight: 26,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   featuredBadge: {
     alignSelf: 'flex-start',
@@ -408,20 +411,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: WHITE,
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
   },
   featuredBadgeText: {
-    color: BLUE,
+    color: colors.accent,
     fontSize: 11,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   featuredBody: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 13,
     lineHeight: 19,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   featuredStats: {
     flexDirection: 'row',
@@ -431,23 +434,23 @@ const styles = StyleSheet.create({
   featuredStat: {
     flex: 1,
     minWidth: 128,
-    backgroundColor: WHITE,
+    backgroundColor: colors.surfaceElevated,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     padding: 12,
     gap: 4,
   },
   featuredStatLabel: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 12,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   featuredStatValue: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 15,
     lineHeight: 20,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   quickActionGrid: {
     gap: 10,
@@ -463,60 +466,60 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   quickActionPrimary: {
-    backgroundColor: BLUE,
-    borderColor: BLUE,
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
   },
   quickActionSecondary: {
-    backgroundColor: CARD_ALT,
-    borderColor: BORDER,
+    backgroundColor: colors.surface,
+    borderColor: colors.hairlineStrong,
   },
   quickActionPrimaryText: {
-    color: WHITE,
+    color: colors.onAccent,
     fontSize: 14,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   quickActionText: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 14,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   addressBlock: {
     padding: 14,
     borderRadius: 18,
-    backgroundColor: CARD_ALT,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     gap: 8,
   },
   addressLabel: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 12,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   addressValue: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 15,
     lineHeight: 20,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   networkSection: {
     gap: 10,
   },
   networkTitle: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 15,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   balanceRow: {
     gap: 12,
     padding: 14,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: CARD_ALT,
+    borderColor: colors.hairlineStrong,
+    backgroundColor: colors.surface,
   },
   balanceRowFeatured: {
-    backgroundColor: BLUE_WASH,
+    backgroundColor: colors.accentWash,
   },
   balanceHeader: {
     flexDirection: 'row',
@@ -530,14 +533,14 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   balanceSymbol: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 16,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   balanceName: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 12,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
     marginTop: 2,
   },
   balanceRight: {
@@ -549,17 +552,17 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-end',
   },
   balanceAmount: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 15,
     lineHeight: 20,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
     textAlign: 'right',
   },
   balanceUsd: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 12,
     lineHeight: 16,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
     textAlign: 'right',
   },
   balanceActions: {
@@ -574,19 +577,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 14,
-    backgroundColor: WHITE,
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
   },
   cashOutChip: {
     backgroundColor: '#F5ECFF',
     borderColor: '#D6BFFF',
   },
   actionChipText: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 12,
     textAlign: 'center',
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   loadingShell: {
     gap: 10,
@@ -597,9 +600,9 @@ const styles = StyleSheet.create({
     gap: 12,
     padding: 14,
     borderRadius: 18,
-    backgroundColor: CARD_ALT,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
   },
   loadingSkeletonLeft: {
     gap: 8,
@@ -634,30 +637,31 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: DANGER,
-    backgroundColor: '#FFF0F0',
+    borderColor: colors.error,
+    backgroundColor: colors.errorWash,
   },
   errorText: {
-    color: DANGER,
+    color: colors.error,
     fontSize: 13,
     lineHeight: 18,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   primaryButton: {
     alignSelf: 'flex-start',
     paddingHorizontal: 14,
     paddingVertical: 9,
     borderRadius: 14,
-    backgroundColor: BLUE,
+    backgroundColor: colors.accent,
   },
   primaryButtonText: {
-    color: WHITE,
+    color: colors.onAccent,
     fontSize: 13,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   emptyText: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 13,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
-});
+  });
+}

@@ -6,19 +6,21 @@ import { AuthGate } from "@/components/AuthGate";
 import { AuthInitializer } from "@/components/AuthInitializer";
 import { MessagePushNotificationRouter } from "@/components/MessagePushNotificationRouter";
 import { PendingRouteDrainer } from "@/components/PendingRouteDrainer";
-import { COLORS } from "@/constants/Colors";
-import { FONTS } from "@/constants/Typography";
 import { useAppBootstrap } from "@/hooks/useAppBootstrap";
 import { useRegentsAuth } from "@/hooks/useRegentsAuth";
 import { fetchCdpAuthToken } from "@/utils/fetchCdpAuthToken";
 import { hasRegentsAccountConfig, readMobilePublicConfig } from "@/utils/mobilePublicConfig";
 import { ThemeProvider } from "@/theme/ThemeProvider";
+import { FONTS, THEME_COLORS } from "@/theme/tokens";
 import { useMemo } from "react";
 import 'react-native-get-random-values';
 import 'react-native-url-polyfill/auto';
 import { StyleSheet, Text, View } from "react-native";
 
-const { DARK_BG, TEXT_PRIMARY, TEXT_SECONDARY } = COLORS;
+// This fallback screen renders before the ThemeProvider wraps the tree, so it
+// cannot read useTheme(). It uses the dark token set directly (app default is
+// follow-OS, and this pre-config screen is always shown on the dark ground).
+const c = THEME_COLORS.dark;
 const cardSlideRight = { presentation: 'card', animation: 'slide_from_right' } as const;
 const cardSlideBottom = { presentation: 'card', animation: 'slide_from_bottom' } as const;
 
@@ -158,7 +160,7 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   missingConfigContainer: {
     flex: 1,
-    backgroundColor: DARK_BG,
+    backgroundColor: c.bg,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 32,
@@ -166,13 +168,13 @@ const styles = StyleSheet.create({
   missingConfigCard: {
     width: '100%',
     maxWidth: 380,
-    backgroundColor: COLORS.CARD_BG,
+    backgroundColor: c.surfaceElevated,
     borderWidth: 1,
-    borderColor: COLORS.BORDER,
+    borderColor: c.hairlineStrong,
     borderRadius: 28,
     padding: 24,
     gap: 14,
-    shadowColor: COLORS.BLUE,
+    shadowColor: c.accent,
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.08,
     shadowRadius: 20,
@@ -180,37 +182,37 @@ const styles = StyleSheet.create({
   },
   missingConfigBadge: {
     alignSelf: 'flex-start',
-    backgroundColor: COLORS.BLUE_WASH,
+    backgroundColor: c.accentWash,
     borderWidth: 1,
-    borderColor: COLORS.BORDER,
+    borderColor: c.hairlineStrong,
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
   missingConfigBadgeText: {
-    color: COLORS.BLUE,
+    color: c.accent,
     fontSize: 12,
     letterSpacing: 0.8,
     textTransform: 'uppercase',
-    fontFamily: FONTS.body,
+    fontFamily: FONTS.ui,
   },
   missingConfigTitle: {
-    color: TEXT_PRIMARY,
+    color: c.text,
     fontSize: 28,
     lineHeight: 34,
-    fontFamily: FONTS.heading,
+    fontFamily: FONTS.title,
   },
   missingConfigText: {
-    color: TEXT_SECONDARY,
+    color: c.textMuted,
     fontSize: 16,
     lineHeight: 24,
-    fontFamily: FONTS.body,
+    fontFamily: FONTS.ui,
   },
   missingConfigChecklist: {
     marginTop: 4,
-    backgroundColor: COLORS.BLUE_WASH,
+    backgroundColor: c.accentWash,
     borderWidth: 1,
-    borderColor: COLORS.BORDER,
+    borderColor: c.hairlineStrong,
     borderRadius: 18,
     padding: 14,
     gap: 12,
@@ -225,13 +227,13 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     marginTop: 7,
-    backgroundColor: COLORS.BLUE,
+    backgroundColor: c.accent,
   },
   missingConfigItem: {
     flex: 1,
-    color: TEXT_PRIMARY,
+    color: c.text,
     fontSize: 14,
     lineHeight: 20,
-    fontFamily: FONTS.body,
+    fontFamily: FONTS.ui,
   },
 });

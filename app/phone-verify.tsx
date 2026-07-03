@@ -1,21 +1,21 @@
 import { VerificationMotion } from '@/components/auth/verification-motion';
 import { StatusBanner, type StatusBannerState } from '@/components/ui/StatusBanner';
-import { COLORS } from '@/constants/Colors';
-import { FONTS } from '@/constants/Typography';
+import { useTheme, type Theme } from '@/theme/ThemeProvider';
 import { useChatGptAuth } from '@/hooks/useChatGptAuth';
 import { useRegentsAuth } from '@/hooks/useRegentsAuth';
 import { shouldInterceptForwardNavigation } from '@/utils/onboardingGate';
 import { useLinkSMS, useLoginWithSMS } from '@privy-io/expo';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { RegentPressable } from '../components/ui/RegentPressable';
 import { PHONE_COUNTRIES } from '../constants/PhoneCountries';
 
-const { DARK_BG, CARD_BG, TEXT_PRIMARY, TEXT_SECONDARY, BORDER, BLUE, WHITE } = COLORS;
-
 export default function PhoneVerifyScreen() {
+  const theme = useTheme();
+  const { colors } = theme;
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const router = useRouter();
   const params = useLocalSearchParams();
   const initialPhone = (params.initialPhone as string) || '';
@@ -129,7 +129,7 @@ export default function PhoneVerifyScreen() {
     <SafeAreaView style={styles.container}>
       <VerificationMotion style={styles.header}>
         <RegentPressable pressStyle="icon" onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={26} color={TEXT_PRIMARY} />
+          <Ionicons name="arrow-back" size={26} color={colors.text} />
         </RegentPressable>
       </VerificationMotion>
 
@@ -163,19 +163,19 @@ export default function PhoneVerifyScreen() {
                   >
                     <Text style={styles.countryFlag}>{selectedCountry.flag}</Text>
                     <Text style={styles.countryCode}>{selectedCountry.code}</Text>
-                    <Ionicons name={countryPickerVisible ? 'chevron-up' : 'chevron-down'} size={18} color={TEXT_SECONDARY} />
+                    <Ionicons name={countryPickerVisible ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} />
                   </RegentPressable>
 
                   <View style={styles.fieldDivider} />
 
                   <View style={styles.phoneInputWrap}>
-                    <Ionicons name="phone-portrait-outline" size={20} color={TEXT_SECONDARY} />
+                    <Ionicons name="phone-portrait-outline" size={20} color={colors.textMuted} />
                     <TextInput
                       style={styles.phoneInput}
                       value={phoneNumber}
                       onChangeText={handlePhoneChange}
                       placeholder="Phone number"
-                      placeholderTextColor={TEXT_SECONDARY}
+                      placeholderTextColor={colors.textMuted}
                       keyboardType="phone-pad"
                       autoFocus
                       editable={!sending}
@@ -228,7 +228,7 @@ export default function PhoneVerifyScreen() {
                 onPress={startSms}
                 disabled={!isPhoneValid || sending}
               >
-                {sending ? <ActivityIndicator color={WHITE} /> : <Text style={styles.continueButtonText}>Continue</Text>}
+                {sending ? <ActivityIndicator color={colors.onAccent} /> : <Text style={styles.continueButtonText}>Continue</Text>}
               </RegentPressable>
             </VerificationMotion>
           </View>
@@ -238,10 +238,11 @@ export default function PhoneVerifyScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles({ colors, fonts }: Theme) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DARK_BG,
+    backgroundColor: colors.bg,
   },
   header: {
     paddingHorizontal: 16,
@@ -254,9 +255,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 22,
-    backgroundColor: CARD_BG,
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
   },
   content: {
     flex: 1,
@@ -277,18 +278,18 @@ const styles = StyleSheet.create({
     marginTop: 72,
   },
   title: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 34,
     lineHeight: 40,
     textAlign: 'center',
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   subtitle: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 18,
     lineHeight: 24,
     textAlign: 'center',
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   fieldShell: {
     width: '100%',
@@ -297,9 +298,9 @@ const styles = StyleSheet.create({
   fieldRow: {
     minHeight: 96,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     borderRadius: 18,
-    backgroundColor: CARD_BG,
+    backgroundColor: colors.surfaceElevated,
     flexDirection: 'row',
     alignItems: 'stretch',
     overflow: 'hidden',
@@ -317,14 +318,14 @@ const styles = StyleSheet.create({
     lineHeight: 32,
   },
   countryCode: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 18,
     lineHeight: 24,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   fieldDivider: {
     width: 1,
-    backgroundColor: BORDER,
+    backgroundColor: colors.hairlineStrong,
   },
   phoneInputWrap: {
     flex: 1,
@@ -335,16 +336,16 @@ const styles = StyleSheet.create({
   },
   phoneInput: {
     flex: 1,
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 18,
     lineHeight: 24,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   countryList: {
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     borderRadius: 18,
-    backgroundColor: CARD_BG,
+    backgroundColor: colors.surfaceElevated,
     overflow: 'hidden',
     maxHeight: 360,
   },
@@ -355,7 +356,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 15,
     borderBottomWidth: 1,
-    borderBottomColor: BORDER,
+    borderBottomColor: colors.hairlineStrong,
   },
   countryRowFlag: {
     fontSize: 24,
@@ -365,23 +366,23 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   countryRowName: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 16,
     lineHeight: 22,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   countryRowCode: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 14,
     lineHeight: 20,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   helperText: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 15,
     lineHeight: 22,
     textAlign: 'center',
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   buttonWrap: {
     width: '100%',
@@ -393,19 +394,20 @@ const styles = StyleSheet.create({
     width: '100%',
     minHeight: 64,
     borderRadius: 18,
-    backgroundColor: BLUE,
+    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24,
     alignSelf: 'stretch',
   },
   continueButtonText: {
-    color: WHITE,
+    color: colors.onAccent,
     fontSize: 18,
     lineHeight: 24,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   disabledButton: {
     opacity: 0.5,
   },
-});
+  });
+}

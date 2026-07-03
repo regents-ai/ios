@@ -1,14 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Image, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { SwipeToConfirm } from '@/components/ui/SwipeToConfirm';
 import { LiveValueFlash } from '@/components/motion/LiveValueFlash';
 import { RegentPressable } from '@/components/ui/RegentPressable';
-import { COLORS } from '@/constants/Colors';
-import { FONTS } from '@/constants/Typography';
-
-const { BLUE, BLUE_WASH, BORDER, CARD_ALT, CARD_BG, DANGER, ORANGE, TEXT_PRIMARY, TEXT_SECONDARY, WHITE } = COLORS;
+import { useTheme, type Theme } from '@/theme/ThemeProvider';
 
 export function FocusPathSection({
   isBaseUsdcPath,
@@ -17,6 +14,8 @@ export function FocusPathSection({
   isBaseUsdcPath: boolean;
   onPress: () => void;
 }) {
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   return (
     <RegentPressable haptic="selection" pressStyle="card" style={[styles.focusCard, isBaseUsdcPath && styles.focusCardActive]} onPress={onPress}>
       <View style={styles.focusHeader}>
@@ -73,6 +72,9 @@ export function AmountQuoteSection({
   quoteDisclaimer?: string | null;
   userLimits: { weekly: any; lifetime: any } | null;
 }) {
+  const theme = useTheme();
+  const { colors } = theme;
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const [amountFocused, setAmountFocused] = React.useState(false);
   const receiveAmount = currentQuote?.purchase_amount?.value || '0';
 
@@ -87,14 +89,14 @@ export function AmountQuoteSection({
             onBlur={() => setAmountFocused(false)}
             onFocus={() => setAmountFocused(true)}
             placeholder="0"
-            placeholderTextColor={TEXT_SECONDARY}
+            placeholderTextColor={colors.textMuted}
             keyboardType="decimal-pad"
-            selectionColor={BLUE}
+            selectionColor={colors.accent}
             style={styles.amountInput}
           />
           <RegentPressable haptic="selection" pressStyle="chip" style={styles.selectChip} onPress={onOpenPaymentCurrencyPicker}>
             <Text style={styles.selectChipText}>{paymentCurrency}</Text>
-            <Ionicons name="chevron-down" size={16} color={TEXT_SECONDARY} />
+            <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
           </RegentPressable>
         </View>
         {amountError ? (
@@ -168,6 +170,8 @@ export function AmountQuoteSection({
 }
 
 function QuoteRow({ label, total, value }: { label: string; total?: boolean; value: string }) {
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   return (
     <View style={[styles.quoteLine, total && styles.quoteTotalLine]}>
       <Text style={total ? styles.quoteTotalLabel : styles.quoteLabel}>{label}</Text>
@@ -195,6 +199,9 @@ export function AssetNetworkSection({
   onOpenAssetPicker: () => void;
   onOpenNetworkPicker: () => void;
 }) {
+  const theme = useTheme();
+  const { colors } = theme;
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   return (
     <View style={styles.card}>
       <RegentPressable haptic="selection" pressStyle="chip" style={styles.selectChipLarge} onPress={onOpenAssetPicker}>
@@ -202,7 +209,7 @@ export function AssetNetworkSection({
           {assetIconUrl ? <Image source={{ uri: assetIconUrl }} style={styles.coinIcon} /> : null}
           <Text style={styles.selectText}>{asset}</Text>
         </View>
-        <Ionicons name="chevron-down" size={16} color={TEXT_SECONDARY} />
+        <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
       </RegentPressable>
       <Text style={styles.helper}>
         {isBaseUsdcPath
@@ -216,7 +223,7 @@ export function AssetNetworkSection({
             {networkIconUrl ? <Image source={{ uri: networkIconUrl }} style={styles.coinIcon} /> : null}
             <Text style={styles.selectText}>{network}</Text>
           </View>
-          <Ionicons name="chevron-down" size={16} color={TEXT_SECONDARY} />
+          <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
         </RegentPressable>
       </View>
     </View>
@@ -230,13 +237,16 @@ export function PaymentMethodSection({
   onOpenPaymentPicker: () => void;
   paymentMethodLabel: string;
 }) {
+  const theme = useTheme();
+  const { colors } = theme;
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   return (
     <View style={styles.card}>
       <View style={styles.rowBetween}>
         <Text style={styles.label}>Pay with</Text>
         <RegentPressable haptic="selection" pressStyle="chip" style={styles.selectChipLarge} onPress={onOpenPaymentPicker}>
           <Text style={styles.selectText}>{paymentMethodLabel}</Text>
-          <Ionicons name="chevron-down" size={16} color={TEXT_SECONDARY} />
+          <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
         </RegentPressable>
       </View>
     </View>
@@ -244,6 +254,9 @@ export function PaymentMethodSection({
 }
 
 export function EligibilityNoticeSection({ notices }: { notices: { title: string; message: string; tone?: 'warning' | 'error' | 'info' }[] }) {
+  const theme = useTheme();
+  const { colors } = theme;
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   if (!notices.length) {
     return null;
   }
@@ -253,10 +266,10 @@ export function EligibilityNoticeSection({ notices }: { notices: { title: string
       {notices.map(notice => {
         const toneStyles =
           notice.tone === 'error'
-            ? { borderColor: DANGER, backgroundColor: `${DANGER}08`, icon: 'alert-circle', color: DANGER }
+            ? { borderColor: colors.error, backgroundColor: colors.errorWash, icon: 'alert-circle', color: colors.error }
             : notice.tone === 'warning'
-              ? { borderColor: ORANGE, backgroundColor: `${ORANGE}08`, icon: 'warning', color: ORANGE }
-              : { borderColor: BLUE, backgroundColor: `${BLUE}08`, icon: 'information-circle', color: BLUE };
+              ? { borderColor: colors.warning, backgroundColor: colors.warningWash, icon: 'warning', color: colors.warning }
+              : { borderColor: colors.accent, backgroundColor: colors.accentWash, icon: 'information-circle', color: colors.accent };
 
         return (
           <View key={`${notice.title}-${notice.message}`} style={[styles.alertCard, { borderLeftColor: toneStyles.borderColor, backgroundColor: toneStyles.backgroundColor }]}>
@@ -283,6 +296,9 @@ export function LocationSection({
   onOpenCountryPicker: () => void;
   onOpenSubdivisionPicker: () => void;
 }) {
+  const theme = useTheme();
+  const { colors } = theme;
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   return (
     <View style={styles.card}>
       <Text style={styles.sectionTitle}>Location</Text>
@@ -290,7 +306,7 @@ export function LocationSection({
         <Text style={styles.label}>Country</Text>
         <RegentPressable haptic="selection" pressStyle="chip" style={styles.selectChipLarge} onPress={onOpenCountryPicker}>
           <Text style={styles.selectText}>{country}</Text>
-          <Ionicons name="chevron-down" size={16} color={TEXT_SECONDARY} />
+          <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
         </RegentPressable>
       </View>
       {country === 'US' ? (
@@ -298,7 +314,7 @@ export function LocationSection({
           <Text style={styles.label}>Subdivision</Text>
           <RegentPressable haptic="selection" pressStyle="chip" style={styles.selectChipLarge} onPress={onOpenSubdivisionPicker}>
             <Text style={styles.selectText}>{subdivision || 'Select'}</Text>
-            <Ionicons name="chevron-down" size={16} color={TEXT_SECONDARY} />
+            <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
           </RegentPressable>
         </View>
       ) : null}
@@ -329,6 +345,8 @@ export function ConfirmationSection({
   onSwipeEnd: () => void;
   onSwipeStart: () => void;
 }) {
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   return (
     <>
       <SwipeToConfirm
@@ -352,25 +370,26 @@ export function ConfirmationSection({
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles({ colors, fonts }: Theme) {
+  return StyleSheet.create({
   card: {
-    backgroundColor: CARD_BG,
+    backgroundColor: colors.surfaceElevated,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     padding: 16,
     gap: 12,
   },
   focusCard: {
-    backgroundColor: BLUE_WASH,
+    backgroundColor: colors.accentWash,
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     padding: 18,
     gap: 12,
   },
   focusCardActive: {
-    backgroundColor: CARD_BG,
+    backgroundColor: colors.surfaceElevated,
   },
   focusHeader: {
     flexDirection: 'row',
@@ -383,41 +402,41 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   focusTitle: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 24,
     lineHeight: 28,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   eyebrow: {
-    color: BLUE,
+    color: colors.accent,
     fontSize: 12,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   badge: {
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: WHITE,
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
   },
   badgeActive: {
-    backgroundColor: BLUE,
-    borderColor: BLUE,
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
   },
   badgeText: {
-    color: BLUE,
+    color: colors.accent,
     fontSize: 11,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   badgeTextActive: {
-    color: WHITE,
+    color: colors.onAccent,
   },
   bodyText: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 13,
     lineHeight: 20,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   tagRow: {
     flexDirection: 'row',
@@ -428,14 +447,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 7,
     borderRadius: 999,
-    backgroundColor: CARD_ALT,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
   },
   tagText: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 11,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   rowBetween: {
     flexDirection: 'row',
@@ -444,38 +463,38 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   label: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 16,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   helper: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 12,
     lineHeight: 18,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   helperTight: {
     marginTop: 4,
   },
   sectionTitle: {
-    color: BLUE,
+    color: colors.accent,
     fontSize: 14,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: WHITE,
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     borderRadius: 22,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
   inputRowFocused: {
-    borderColor: BLUE,
-    shadowColor: BLUE,
+    borderColor: colors.accent,
+    shadowColor: colors.accent,
     shadowOpacity: 0.14,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },
@@ -484,14 +503,14 @@ const styles = StyleSheet.create({
   amountInput: {
     flex: 1,
     fontSize: 32,
-    color: TEXT_PRIMARY,
+    color: colors.text,
     padding: 0,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   selectChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: CARD_ALT,
+    backgroundColor: colors.surface,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 16,
@@ -501,7 +520,7 @@ const styles = StyleSheet.create({
   selectChipLarge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: CARD_ALT,
+    backgroundColor: colors.surface,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 16,
@@ -511,9 +530,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   selectChipText: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 14,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   receiveRow: {
     minHeight: 40,
@@ -524,8 +543,8 @@ const styles = StyleSheet.create({
   },
   receiveAmount: {
     fontSize: 32,
-    color: TEXT_PRIMARY,
-    fontFamily: FONTS.heading,
+    color: colors.text,
+    fontFamily: fonts.title,
   },
   quoteLoading: {
     gap: 6,
@@ -533,7 +552,7 @@ const styles = StyleSheet.create({
   pulse: {
     height: 12,
     borderRadius: 999,
-    backgroundColor: CARD_ALT,
+    backgroundColor: colors.surface,
   },
   pulseWide: {
     width: 112,
@@ -546,11 +565,11 @@ const styles = StyleSheet.create({
     width: 56,
   },
   quoteCard: {
-    backgroundColor: CARD_ALT,
+    backgroundColor: colors.surface,
     borderRadius: 14,
     padding: 14,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     gap: 10,
   },
   quoteLine: {
@@ -561,32 +580,32 @@ const styles = StyleSheet.create({
   quoteTotalLine: {
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: BORDER,
+    borderTopColor: colors.hairlineStrong,
   },
   quoteLabel: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 14,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
     flexShrink: 1,
     paddingRight: 12,
   },
   quoteValue: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 14,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
     textAlign: 'right',
   },
   quoteTotalLabel: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 16,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
     flexShrink: 1,
     paddingRight: 12,
   },
   quoteTotalValue: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 16,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
     textAlign: 'right',
   },
   quoteValueFlash: {
@@ -594,17 +613,17 @@ const styles = StyleSheet.create({
     maxWidth: '55%',
   },
   noticeCard: {
-    backgroundColor: `${BLUE}10`,
+    backgroundColor: colors.accentWash,
     borderLeftWidth: 3,
-    borderLeftColor: BLUE,
+    borderLeftColor: colors.accent,
     borderRadius: 12,
     padding: 12,
   },
   noticeText: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 12,
     lineHeight: 16,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   selectContent: {
     flexDirection: 'row',
@@ -613,9 +632,9 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   selectText: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 14,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   coinIcon: {
     width: 20,
@@ -625,13 +644,13 @@ const styles = StyleSheet.create({
   dividerTop: {
     paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: BORDER,
+    borderTopColor: colors.hairlineStrong,
   },
   alertCard: {
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     borderLeftWidth: 4,
     gap: 8,
   },
@@ -642,31 +661,32 @@ const styles = StyleSheet.create({
   },
   alertTitle: {
     fontSize: 15,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   alertText: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 13,
     lineHeight: 18,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   termsBlock: {
     marginBottom: 8,
     paddingTop: 2,
   },
   termsText: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 12,
     lineHeight: 18,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   termsLink: {
-    color: BLUE,
-    fontFamily: FONTS.body,
+    color: colors.accent,
+    fontFamily: fonts.ui,
   },
   errorText: {
-    color: DANGER,
+    color: colors.error,
     fontSize: 12,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
-});
+  });
+}

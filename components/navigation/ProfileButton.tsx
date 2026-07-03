@@ -3,13 +3,15 @@ import { useRouter } from 'expo-router';
 import { StyleSheet, type ViewStyle } from 'react-native';
 
 import { RegentPressable } from '@/components/ui/RegentPressable';
-import { COLORS } from '@/constants/Colors';
+import { useTheme, type Theme } from '@/theme/ThemeProvider';
 import { routes } from '@/utils/navigation/routes';
-
-const { CARD_BG, BORDER, BLUE } = COLORS;
+import { useMemo } from 'react';
 
 export function ProfileButton({ style }: { style?: ViewStyle }) {
   const router = useRouter();
+  const theme = useTheme();
+  const { colors } = theme;
+  const styles = useMemo(() => makeStyles(theme), [theme]);
 
   return (
     <RegentPressable
@@ -19,20 +21,22 @@ export function ProfileButton({ style }: { style?: ViewStyle }) {
       style={[styles.button, style]}
       onPress={() => router.push(routes.settings())}
     >
-      <Ionicons name="person-circle-outline" size={24} color={BLUE} />
+      <Ionicons name="person-circle-outline" size={24} color={colors.accent} />
     </RegentPressable>
   );
 }
 
-const styles = StyleSheet.create({
-  button: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: CARD_BG,
-    borderWidth: 1,
-    borderColor: BORDER,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
+function makeStyles({ colors }: Theme) {
+  return StyleSheet.create({
+    button: {
+      width: 42,
+      height: 42,
+      borderRadius: 21,
+      backgroundColor: colors.surfaceElevated,
+      borderWidth: 1,
+      borderColor: colors.hairlineStrong,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+  });
+}

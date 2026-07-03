@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { EaseView } from 'react-native-ease';
 import {
   Image,
@@ -11,13 +11,10 @@ import {
   View,
 } from 'react-native';
 
-import { COLORS } from '@/constants/Colors';
-import { FONTS } from '@/constants/Typography';
+import { useTheme, type Theme } from '@/theme/ThemeProvider';
 import { getEaseTransition } from '@/components/motion/easePresets';
 import { useReducedMotion } from '@/components/motion/useReducedMotion';
 import { RegentPressable } from '@/components/ui/RegentPressable';
-
-const { BLUE, BORDER, CARD_BG, CARD_ALT, TEXT_PRIMARY } = COLORS;
 
 type Item = {
   iconUrl?: string | null;
@@ -36,6 +33,9 @@ type Props = {
 };
 
 export function PickerSheet({ emptyLabel = 'No options available', items, loadingLabel, onClose, onSelect, visible }: Props) {
+  const theme = useTheme();
+  const { colors } = theme;
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const reducedMotionEnabled = useReducedMotion();
   const [isPresented, setIsPresented] = useState(visible);
 
@@ -104,7 +104,7 @@ export function PickerSheet({ emptyLabel = 'No options available', items, loadin
                         transition={getEaseTransition('card', reducedMotionEnabled)}
                         style={styles.checkIcon}
                       >
-                        <Ionicons name="checkmark" size={18} color={BLUE} />
+                        <Ionicons name="checkmark" size={18} color={colors.accent} />
                       </EaseView>
                     ) : null}
                   </View>
@@ -122,17 +122,18 @@ export function PickerSheet({ emptyLabel = 'No options available', items, loadin
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles({ colors, fonts }: Theme) {
+  return StyleSheet.create({
   root: {
     flex: 1,
     justifyContent: 'flex-end',
   },
   sheet: {
-    backgroundColor: CARD_BG,
+    backgroundColor: colors.surfaceElevated,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     maxHeight: '50%',
     width: '100%',
     minHeight: 320,
@@ -142,7 +143,7 @@ const styles = StyleSheet.create({
   handle: {
     width: 36,
     height: 4,
-    backgroundColor: BORDER,
+    backgroundColor: colors.hairlineStrong,
     borderRadius: 2,
     alignSelf: 'center',
     marginTop: 8,
@@ -153,18 +154,18 @@ const styles = StyleSheet.create({
     paddingVertical: 18,
     paddingHorizontal: 20,
     borderBottomWidth: 1,
-    borderBottomColor: BORDER,
+    borderBottomColor: colors.hairlineStrong,
   },
   selectedItem: {
-    backgroundColor: CARD_ALT,
+    backgroundColor: colors.surface,
   },
   checkIcon: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: CARD_BG,
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: BLUE,
+    borderColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 12,
@@ -187,12 +188,13 @@ const styles = StyleSheet.create({
   },
   text: {
     fontSize: 17,
-    color: TEXT_PRIMARY,
+    color: colors.text,
     flex: 1,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   selectedText: {
-    color: BLUE,
-    fontFamily: FONTS.heading,
+    color: colors.accent,
+    fontFamily: fonts.title,
   },
-});
+  });
+}

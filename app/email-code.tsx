@@ -1,14 +1,13 @@
 import { VerificationMotion } from '@/components/auth/verification-motion';
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { RegentPressable } from '@/components/ui/RegentPressable';
-import { COLORS } from '@/constants/Colors';
-import { FONTS } from '@/constants/Typography';
+import { useTheme, type Theme } from '@/theme/ThemeProvider';
 import { useChatGptAuth } from '@/hooks/useChatGptAuth';
 import { useVerificationResendTimer } from '@/hooks/useVerificationResendTimer';
 import { useLinkEmail, useLoginWithEmail } from '@privy-io/expo';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -23,9 +22,10 @@ import {
 
 import { getVerificationSuccessAction } from '../utils/authFlowState';
 
-const { DARK_BG, CARD_BG, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, WHITE, BORDER } = COLORS;
-
 export default function EmailCodeScreen() {
+  const theme = useTheme();
+  const { colors } = theme;
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const router = useRouter();
   const params = useLocalSearchParams();
   const email = params.email as string;
@@ -173,7 +173,7 @@ export default function EmailCodeScreen() {
         >
           <VerificationMotion style={styles.header}>
             <RegentPressable pressStyle="icon" onPress={() => router.back()} style={styles.backButton}>
-              <Ionicons name="arrow-back" size={24} color={TEXT_PRIMARY} />
+              <Ionicons name="arrow-back" size={24} color={colors.text} />
             </RegentPressable>
           </VerificationMotion>
 
@@ -222,7 +222,7 @@ export default function EmailCodeScreen() {
               onPress={verifyEmail}
               disabled={verifying || otp.length < 4}
             >
-              {verifying ? <ActivityIndicator color={WHITE} /> : <Text style={styles.primaryButtonText}>Continue</Text>}
+              {verifying ? <ActivityIndicator color={colors.onAccent} /> : <Text style={styles.primaryButtonText}>Continue</Text>}
             </RegentPressable>
           </VerificationMotion>
         </ScrollView>
@@ -239,10 +239,11 @@ export default function EmailCodeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles({ colors, fonts }: Theme) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DARK_BG,
+    backgroundColor: colors.bg,
   },
   keyboardWrap: {
     flex: 1,
@@ -268,54 +269,54 @@ const styles = StyleSheet.create({
     gap: 18,
   },
   title: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     textAlign: 'center',
     fontSize: 32,
     lineHeight: 38,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   subtitle: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     textAlign: 'center',
     fontSize: 17,
     lineHeight: 24,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
     marginBottom: 14,
   },
   fieldLabel: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 16,
     lineHeight: 22,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
     marginBottom: 12,
   },
   codeInput: {
     minHeight: 64,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: CARD_BG,
+    borderColor: colors.hairlineStrong,
+    backgroundColor: colors.surfaceElevated,
     paddingHorizontal: 18,
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 28,
     textAlign: 'center',
     letterSpacing: 8,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   helperText: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     textAlign: 'center',
     fontSize: 15,
     lineHeight: 22,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
     marginTop: 8,
   },
   linkText: {
-    color: BLUE,
+    color: colors.accent,
     textAlign: 'center',
     fontSize: 15,
     lineHeight: 22,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
     marginTop: 8,
   },
   footer: {
@@ -324,15 +325,15 @@ const styles = StyleSheet.create({
   primaryButton: {
     minHeight: 58,
     borderRadius: 18,
-    backgroundColor: BLUE,
+    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 20,
   },
   primaryButtonText: {
-    color: WHITE,
+    color: colors.onAccent,
     fontSize: 18,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   disabledButton: {
     opacity: 0.5,
@@ -340,4 +341,5 @@ const styles = StyleSheet.create({
   disabledText: {
     opacity: 0.45,
   },
-});
+  });
+}

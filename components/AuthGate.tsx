@@ -7,8 +7,7 @@
  *
  */
 
-import { COLORS } from '@/constants/Colors';
-import { FONTS } from '@/constants/Typography';
+import { useTheme, type Theme } from '@/theme/ThemeProvider';
 import { clearWalletInitFailureMessage, getWalletInitFailureMessage } from '@/utils/authStartupState';
 import { isAuthManagedRoute, resolveAuthGateState } from '@/utils/authFlowState';
 import { useChatGptAuth } from '@/hooks/useChatGptAuth';
@@ -19,14 +18,15 @@ import { setCountry, setSubdivision } from '@/utils/state/locationState';
 import { setCurrentSolanaAddress, setCurrentWalletAddress } from '@/utils/state/walletRuntimeState';
 import { useIsInitialized, useSignOut } from '@coinbase/cdp-hooks';
 import { router, useRootNavigationState, useSegments } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { EaseView } from 'react-native-ease';
 
-const { DARK_BG, BLUE, TEXT_PRIMARY, TEXT_SECONDARY, CARD_BG, BORDER } = COLORS;
-
 export function AuthGate({ children }: { children: React.ReactNode }) {
+  const theme = useTheme();
+  const { colors } = theme;
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const reducedMotionEnabled = useReducedMotion();
   const { isInitialized } = useIsInitialized();
   const { error: authError, isAuthenticated: isPrivyAuthenticated, isReady: isPrivyReady, signOut: signOutIdentity } = useRegentsAuth();
@@ -137,7 +137,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       <View style={styles.loadingContainer}>
         <EaseView {...getMotionPreset('card', reducedMotionEnabled)} style={styles.issueCard}>
           <View style={styles.issueBadge}>
-            <Ionicons name="shield-checkmark-outline" size={18} color={BLUE} />
+            <Ionicons name="shield-checkmark-outline" size={18} color={colors.accent} />
             <Text style={styles.issueBadgeText}>Wallet access</Text>
           </View>
           <Text style={styles.issueTitle}>{gateState.title}</Text>
@@ -183,7 +183,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     return (
       <View style={styles.loadingContainer}>
         <EaseView {...getMotionPreset('screen', reducedMotionEnabled)} style={styles.loadingBlock}>
-          <ActivityIndicator size="large" color={BLUE} />
+          <ActivityIndicator size="large" color={colors.accent} />
           <Text style={styles.loadingText}>Getting Regents ready...</Text>
         </EaseView>
       </View>
@@ -193,10 +193,11 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-const styles = StyleSheet.create({
+function makeStyles({ colors, fonts }: Theme) {
+  return StyleSheet.create({
   loadingContainer: {
     flex: 1,
-    backgroundColor: DARK_BG,
+    backgroundColor: colors.bg,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 24,
@@ -207,19 +208,19 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 16,
     fontSize: 15,
-    color: TEXT_SECONDARY,
-    fontFamily: FONTS.body,
+    color: colors.textMuted,
+    fontFamily: fonts.ui,
   },
   issueCard: {
     width: '100%',
     maxWidth: 360,
-    backgroundColor: CARD_BG,
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     borderRadius: 24,
     padding: 24,
     gap: 12,
-    shadowColor: BLUE,
+    shadowColor: colors.accent,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.08,
     shadowRadius: 18,
@@ -230,37 +231,37 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: COLORS.BLUE_WASH,
+    backgroundColor: colors.accentWash,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
   issueBadgeText: {
-    color: BLUE,
+    color: colors.accent,
     fontSize: 12,
     letterSpacing: 0.8,
     textTransform: 'uppercase',
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   issueTitle: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 24,
     textAlign: 'center',
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   issueText: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 15,
     lineHeight: 22,
     textAlign: 'center',
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   issueSteps: {
-    backgroundColor: COLORS.BLUE_WASH,
+    backgroundColor: colors.accentWash,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     borderRadius: 18,
     padding: 14,
     gap: 10,
@@ -274,38 +275,39 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: BLUE,
+    backgroundColor: colors.accent,
     marginTop: 7,
   },
   issueStepText: {
     flex: 1,
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 14,
     lineHeight: 20,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   issueActions: {
     marginTop: 4,
   },
   primaryButton: {
-    backgroundColor: BLUE,
+    backgroundColor: colors.accent,
     borderRadius: 16,
     paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: BLUE,
+    shadowColor: colors.accent,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.16,
     shadowRadius: 16,
     elevation: 3,
   },
   primaryButtonText: {
-    color: COLORS.WHITE,
+    color: colors.onAccent,
     fontSize: 16,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   buttonPressed: {
     opacity: 0.92,
     transform: [{ scale: 0.985 }],
   },
-});
+  });
+}

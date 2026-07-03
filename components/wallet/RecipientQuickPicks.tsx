@@ -8,20 +8,17 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { RegentPressable } from '@/components/ui/RegentPressable';
-import { COLORS } from '@/constants/Colors';
-import { FONTS } from '@/constants/Typography';
+import { useTheme, type Theme } from '@/theme/ThemeProvider';
 import { formatAddressPreview } from '@/utils/onchain/networkDisplay';
 import {
   createRecipientPickerStore,
   type RecipientCatalog,
   type RecipientDisplayEntry,
 } from '@/utils/recipientPickerStore';
-
-const { BLUE, BORDER, TEXT_PRIMARY, TEXT_SECONDARY, WHITE } = COLORS;
 
 const store = createRecipientPickerStore(AsyncStorage);
 
@@ -50,6 +47,9 @@ export function RecipientQuickPicks({
   onSelect: (address: string) => void;
   catalog?: RecipientCatalog;
 }) {
+  const theme = useTheme();
+  const { colors } = theme;
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const [entries, setEntries] = useState<RecipientDisplayEntry[]>([]);
 
   const reload = useCallback(async () => {
@@ -105,7 +105,7 @@ export function RecipientQuickPicks({
         accessibilityLabel={`${displayLabel}, ${entry.isFavorite ? 'pinned' : 'recent'} recipient`}
         accessibilityHint="Fills the recipient field. Double tap and hold to pin or unpin."
       >
-        <Ionicons name={entry.isFavorite ? 'star' : 'time-outline'} size={13} color={entry.isFavorite ? BLUE : TEXT_SECONDARY} />
+        <Ionicons name={entry.isFavorite ? 'star' : 'time-outline'} size={13} color={entry.isFavorite ? colors.accent : colors.textMuted} />
         <Text style={styles.chipText} numberOfLines={1}>
           {displayLabel}
         </Text>
@@ -132,44 +132,46 @@ export function RecipientQuickPicks({
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    gap: 10,
-  },
-  group: {
-    gap: 6,
-  },
-  groupTitle: {
-    color: TEXT_SECONDARY,
-    fontSize: 12,
-    fontFamily: FONTS.body,
-  },
-  chipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    maxWidth: '100%',
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    borderRadius: 14,
-    backgroundColor: WHITE,
-    borderWidth: 1,
-    borderColor: BORDER,
-  },
-  chipText: {
-    color: TEXT_PRIMARY,
-    fontSize: 13,
-    fontFamily: FONTS.body,
-    flexShrink: 1,
-  },
-  hint: {
-    color: TEXT_SECONDARY,
-    fontSize: 11,
-    fontFamily: FONTS.body,
-  },
-});
+function makeStyles({ colors, fonts }: Theme) {
+  return StyleSheet.create({
+    container: {
+      gap: 10,
+    },
+    group: {
+      gap: 6,
+    },
+    groupTitle: {
+      color: colors.textMuted,
+      fontSize: 12,
+      fontFamily: fonts.ui,
+    },
+    chipRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    chip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      maxWidth: '100%',
+      paddingHorizontal: 12,
+      paddingVertical: 9,
+      borderRadius: 14,
+      backgroundColor: colors.surfaceElevated,
+      borderWidth: 1,
+      borderColor: colors.hairlineStrong,
+    },
+    chipText: {
+      color: colors.text,
+      fontSize: 13,
+      fontFamily: fonts.ui,
+      flexShrink: 1,
+    },
+    hint: {
+      color: colors.textMuted,
+      fontSize: 11,
+      fontFamily: fonts.ui,
+    },
+  });
+}

@@ -1,21 +1,21 @@
 import { VerificationMotion } from '@/components/auth/verification-motion';
-import { COLORS } from '@/constants/Colors';
-import { FONTS } from '@/constants/Typography';
+import { useTheme, type Theme } from '@/theme/ThemeProvider';
 import { useChatGptAuth } from '@/hooks/useChatGptAuth';
 import { useRegentsAuth } from '@/hooks/useRegentsAuth';
 import { useVerificationResendTimer } from '@/hooks/useVerificationResendTimer';
 import { useLinkSMS, useLoginWithSMS } from '@privy-io/expo';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { CoinbaseAlert } from '../components/ui/CoinbaseAlerts';
 import { RegentPressable } from '../components/ui/RegentPressable';
 import { setVerifiedPhone } from '../utils/state/verificationState';
 
-const { DARK_BG, CARD_BG, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, WHITE, BORDER } = COLORS;
-
 export default function PhoneCodeScreen() {
+  const theme = useTheme();
+  const { colors } = theme;
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const router = useRouter();
   const params = useLocalSearchParams();
   const phone = params.phone as string;
@@ -161,7 +161,7 @@ export default function PhoneCodeScreen() {
     <SafeAreaView style={styles.container}>
       <VerificationMotion style={styles.header}>
         <RegentPressable pressStyle="icon" onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={26} color={TEXT_PRIMARY} />
+          <Ionicons name="arrow-back" size={26} color={colors.text} />
         </RegentPressable>
       </VerificationMotion>
 
@@ -191,7 +191,7 @@ export default function PhoneCodeScreen() {
                   value={code}
                   onChangeText={setCode}
                   placeholder="Enter code"
-                  placeholderTextColor={TEXT_SECONDARY}
+                  placeholderTextColor={colors.textMuted}
                   textContentType="oneTimeCode"
                   autoComplete="one-time-code"
                   keyboardType="number-pad"
@@ -212,7 +212,7 @@ export default function PhoneCodeScreen() {
                   onPress={verifySms}
                   disabled={verifying || code.length < 4}
                 >
-                  {verifying ? <ActivityIndicator color={WHITE} /> : <Text style={styles.continueButtonText}>Continue</Text>}
+                  {verifying ? <ActivityIndicator color={colors.onAccent} /> : <Text style={styles.continueButtonText}>Continue</Text>}
                 </RegentPressable>
               </VerificationMotion>
 
@@ -244,10 +244,11 @@ export default function PhoneCodeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles({ colors, fonts }: Theme) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DARK_BG,
+    backgroundColor: colors.bg,
   },
   header: {
     paddingHorizontal: 16,
@@ -276,36 +277,36 @@ const styles = StyleSheet.create({
     marginTop: 88,
   },
   title: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 34,
     lineHeight: 40,
     textAlign: 'center',
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   subtitle: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 18,
     lineHeight: 24,
     textAlign: 'center',
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   codeCard: {
     width: '100%',
     minHeight: 92,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     borderRadius: 18,
-    backgroundColor: CARD_BG,
+    backgroundColor: colors.surfaceElevated,
     justifyContent: 'center',
     paddingHorizontal: 18,
   },
   codeInput: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 26,
     lineHeight: 32,
     textAlign: 'center',
     letterSpacing: 6,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   footerBlock: {
     gap: 20,
@@ -317,16 +318,16 @@ const styles = StyleSheet.create({
     width: '100%',
     minHeight: 62,
     borderRadius: 18,
-    backgroundColor: BLUE,
+    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24,
   },
   continueButtonText: {
-    color: WHITE,
+    color: colors.onAccent,
     fontSize: 18,
     lineHeight: 24,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   disabledButton: {
     opacity: 0.5,
@@ -335,18 +336,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   resendText: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 15,
     lineHeight: 22,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   resendButton: {
-    color: BLUE,
+    color: colors.accent,
     fontSize: 16,
     lineHeight: 22,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   disabledText: {
     opacity: 0.4,
   },
-});
+  });
+}

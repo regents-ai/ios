@@ -1,10 +1,8 @@
+import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { RegentPressable } from '@/components/ui/RegentPressable';
-import { COLORS } from '@/constants/Colors';
-import { FONTS } from '@/constants/Typography';
-
-const { BORDER, CARD_BG, DANGER, TEXT_PRIMARY, TEXT_SECONDARY } = COLORS;
+import { useTheme, type Theme } from '@/theme/ThemeProvider';
 
 type Props = {
   message: string;
@@ -12,6 +10,8 @@ type Props = {
 };
 
 export function WalletOptionsError({ message, onRetry }: Props) {
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   return (
     <View style={styles.errorBanner}>
       <View style={styles.copy}>
@@ -25,42 +25,44 @@ export function WalletOptionsError({ message, onRetry }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  errorBanner: {
-    margin: 16,
-    marginBottom: 0,
-    backgroundColor: CARD_BG,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: BORDER,
-    padding: 16,
-    gap: 14,
-  },
-  copy: {
-    gap: 4,
-  },
-  errorTitle: {
-    color: TEXT_PRIMARY,
-    fontSize: 15,
-    fontFamily: FONTS.heading,
-  },
-  errorMessage: {
-    color: TEXT_SECONDARY,
-    fontSize: 13,
-    lineHeight: 18,
-    fontFamily: FONTS.body,
-  },
-  retryButton: {
-    backgroundColor: DANGER,
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    alignItems: 'center',
-    width: '100%',
-  },
-  retryText: {
-    color: '#fff',
-    fontSize: 13,
-    fontFamily: FONTS.body,
-  },
-});
+function makeStyles({ colors, fonts }: Theme) {
+  return StyleSheet.create({
+    errorBanner: {
+      margin: 16,
+      marginBottom: 0,
+      backgroundColor: colors.surfaceElevated,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.hairlineStrong,
+      padding: 16,
+      gap: 14,
+    },
+    copy: {
+      gap: 4,
+    },
+    errorTitle: {
+      color: colors.text,
+      fontSize: 15,
+      fontFamily: fonts.title,
+    },
+    errorMessage: {
+      color: colors.textMuted,
+      fontSize: 13,
+      lineHeight: 18,
+      fontFamily: fonts.ui,
+    },
+    retryButton: {
+      backgroundColor: colors.error,
+      borderRadius: 14,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      alignItems: 'center',
+      width: '100%',
+    },
+    retryText: {
+      color: '#fff',
+      fontSize: 13,
+      fontFamily: fonts.ui,
+    },
+  });
+}

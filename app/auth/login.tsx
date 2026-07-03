@@ -1,6 +1,5 @@
 import { RegentPressable } from '@/components/ui/RegentPressable';
-import { COLORS } from '@/constants/Colors';
-import { FONTS } from '@/constants/Typography';
+import { FONTS, THEME_COLORS } from '@/theme/tokens';
 import { useChatGptAuth } from '@/hooks/useChatGptAuth';
 import { useRegentsAuth } from '@/hooks/useRegentsAuth';
 import { hasRegentsAccountConfig } from '@/utils/mobilePublicConfig';
@@ -21,7 +20,10 @@ import {
   View,
 } from 'react-native';
 
-const { DARK_BG, CARD_BG, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, WHITE, BORDER } = COLORS;
+// This route can render before the ThemeProvider wraps the tree (see
+// app/_layout.tsx), so it cannot read useTheme(). It uses the dark token set
+// directly, mirroring the pre-config fallback screen in _layout.tsx.
+const c = THEME_COLORS.dark;
 const SCREEN_OFFSET = 12;
 const CARD_OFFSET = 8;
 const STAGGER_STEP = 50;
@@ -114,7 +116,7 @@ export default function LoginScreen() {
             transition={buildEntryTransition(reduceMotion)}
             style={styles.loadingCard}
           >
-            <ActivityIndicator color={BLUE} style={styles.loadingSpinner} />
+            <ActivityIndicator color={c.accent} style={styles.loadingSpinner} />
             <Text style={styles.loadingTitle}>Regents</Text>
             <Text style={styles.loadingText}>Getting sign-in ready...</Text>
           </EaseView>
@@ -209,9 +211,9 @@ export default function LoginScreen() {
             >
               <RegentPressable style={[styles.chatGptButton, isChatGptLoading && styles.disabledButton]} onPress={handleChatGptSignIn} disabled={isChatGptLoading}>
                 <View style={styles.chatGptButtonContent}>
-                  <Ionicons name="sparkles-outline" size={20} color={WHITE} />
-                  {isChatGptLoading ? <ActivityIndicator color={WHITE} /> : <Text style={styles.chatGptButtonText}>Sign in with ChatGPT</Text>}
-                  <Ionicons name="arrow-forward" size={22} color={WHITE} />
+                  <Ionicons name="sparkles-outline" size={20} color={c.text} />
+                  {isChatGptLoading ? <ActivityIndicator color={c.text} /> : <Text style={styles.chatGptButtonText}>Sign in with ChatGPT</Text>}
+                  <Ionicons name="arrow-forward" size={22} color={c.text} />
                 </View>
               </RegentPressable>
             </EaseView>
@@ -231,7 +233,7 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DARK_BG,
+    backgroundColor: c.bg,
   },
   keyboardWrap: {
     flex: 1,
@@ -248,35 +250,35 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   brand: {
-    color: TEXT_PRIMARY,
+    color: c.text,
     fontSize: 44,
     lineHeight: 48,
-    fontFamily: FONTS.heading,
+    fontFamily: FONTS.title,
   },
   title: {
-    color: TEXT_PRIMARY,
+    color: c.text,
     textAlign: 'center',
     fontSize: 32,
     lineHeight: 38,
-    fontFamily: FONTS.heading,
+    fontFamily: FONTS.title,
   },
   subtitle: {
-    color: TEXT_SECONDARY,
+    color: c.textMuted,
     textAlign: 'center',
     fontSize: 18,
     lineHeight: 24,
-    fontFamily: FONTS.body,
+    fontFamily: FONTS.ui,
     marginBottom: 26,
   },
   actionWrap: {
     width: '100%',
   },
   accountTitle: {
-    color: TEXT_PRIMARY,
+    color: c.text,
     textAlign: 'center',
     fontSize: 22,
     lineHeight: 28,
-    fontFamily: FONTS.heading,
+    fontFamily: FONTS.title,
     marginBottom: 2,
   },
   chatGptButton: {
@@ -295,65 +297,65 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   chatGptButtonText: {
-    color: WHITE,
+    color: c.text,
     fontSize: 18,
-    fontFamily: FONTS.body,
+    fontFamily: FONTS.ui,
     flex: 1,
     textAlign: 'center',
   },
   primaryButton: {
     minHeight: 58,
     borderRadius: 18,
-    backgroundColor: BLUE,
+    backgroundColor: c.accent,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 20,
   },
   primaryButtonText: {
-    color: WHITE,
+    color: c.onAccent,
     fontSize: 18,
-    fontFamily: FONTS.body,
+    fontFamily: FONTS.ui,
   },
   secondaryButton: {
     minHeight: 58,
     borderRadius: 18,
-    backgroundColor: CARD_BG,
+    backgroundColor: c.surfaceElevated,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: c.hairlineStrong,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 20,
   },
   secondaryButtonText: {
-    color: TEXT_PRIMARY,
+    color: c.text,
     fontSize: 18,
-    fontFamily: FONTS.body,
+    fontFamily: FONTS.ui,
   },
   disabledButton: {
     opacity: 0.65,
   },
   helperText: {
-    color: TEXT_SECONDARY,
+    color: c.textMuted,
     textAlign: 'center',
     fontSize: 14,
     lineHeight: 20,
-    fontFamily: FONTS.body,
+    fontFamily: FONTS.ui,
     marginTop: 8,
   },
   errorText: {
-    color: '#FFB4A8',
+    color: c.error,
     textAlign: 'center',
     fontSize: 14,
     lineHeight: 20,
-    fontFamily: FONTS.body,
+    fontFamily: FONTS.ui,
     marginTop: 8,
   },
   accountSetupText: {
-    color: TEXT_SECONDARY,
+    color: c.textMuted,
     textAlign: 'center',
     fontSize: 15,
     lineHeight: 22,
-    fontFamily: FONTS.body,
+    fontFamily: FONTS.ui,
   },
   loadingWrap: {
     flex: 1,
@@ -361,10 +363,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   loadingCard: {
-    backgroundColor: CARD_BG,
+    backgroundColor: c.surfaceElevated,
     borderRadius: 28,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: c.hairlineStrong,
     paddingHorizontal: 28,
     paddingVertical: 36,
     alignItems: 'center',
@@ -375,16 +377,16 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   loadingTitle: {
-    color: TEXT_PRIMARY,
+    color: c.text,
     fontSize: 24,
     lineHeight: 30,
-    fontFamily: FONTS.heading,
+    fontFamily: FONTS.title,
   },
   loadingText: {
-    color: TEXT_SECONDARY,
+    color: c.textMuted,
     textAlign: 'center',
     fontSize: 15,
     lineHeight: 22,
-    fontFamily: FONTS.body,
+    fontFamily: FONTS.ui,
   },
 });

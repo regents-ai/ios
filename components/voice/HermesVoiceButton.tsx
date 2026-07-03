@@ -1,8 +1,8 @@
 import { RegentPressable } from '@/components/ui/RegentPressable';
-import { COLORS } from '@/constants/Colors';
-import { FONTS } from '@/constants/Typography';
+import { useTheme, type Theme } from '@/theme/ThemeProvider';
 import type { MobileRegentVoice } from '@/types/regents';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 type HermesVoiceButtonProps = {
@@ -11,6 +11,10 @@ type HermesVoiceButtonProps = {
 };
 
 export function HermesVoiceButton({ voice, onPress }: HermesVoiceButtonProps) {
+  const theme = useTheme();
+  const { colors } = theme;
+  const styles = useMemo(() => makeStyles(theme), [theme]);
+
   if (!voice.enabled && voice.health === 'unavailable' && voice.account.satisfied) {
     return null;
   }
@@ -26,24 +30,25 @@ export function HermesVoiceButton({ voice, onPress }: HermesVoiceButtonProps) {
       onPress={onPress}
     >
       <View style={styles.iconWrap}>
-        <Ionicons name={needsAccount ? 'link-outline' : 'mic-outline'} size={18} color={COLORS.textOnColor} />
+        <Ionicons name={needsAccount ? 'link-outline' : 'mic-outline'} size={18} color={colors.onAccent} />
       </View>
       <View style={styles.copy}>
         <Text style={styles.label}>{label}</Text>
         <Text style={styles.detail}>{detail}</Text>
       </View>
-      <Ionicons name="chevron-forward" size={18} color={COLORS.TEXT_SECONDARY} />
+      <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
     </RegentPressable>
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles({ colors, fonts }: Theme) {
+  return StyleSheet.create({
   button: {
     minHeight: 58,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: COLORS.BORDER,
-    backgroundColor: COLORS.CARD_ALT,
+    borderColor: colors.hairlineStrong,
+    backgroundColor: colors.surface,
     paddingHorizontal: 14,
     paddingVertical: 10,
     flexDirection: 'row',
@@ -51,7 +56,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   accountButton: {
-    backgroundColor: COLORS.BLUE_WASH,
+    backgroundColor: colors.accentWash,
   },
   iconWrap: {
     width: 34,
@@ -59,21 +64,22 @@ const styles = StyleSheet.create({
     borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.BLUE,
+    backgroundColor: colors.accent,
   },
   copy: {
     flex: 1,
     minWidth: 0,
   },
   label: {
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
     fontSize: 15,
-    color: COLORS.TEXT_PRIMARY,
+    color: colors.text,
   },
   detail: {
     marginTop: 2,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
     fontSize: 12,
-    color: COLORS.TEXT_SECONDARY,
+    color: colors.textMuted,
   },
-});
+  });
+}

@@ -1,8 +1,7 @@
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
-import { COLORS } from '@/constants/Colors';
-import { FONTS } from '@/constants/Typography';
+import { useTheme, type Theme } from '@/theme/ThemeProvider';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Linking,
   Pressable,
@@ -12,8 +11,6 @@ import {
   Text,
   View,
 } from 'react-native';
-
-const { DARK_BG, CARD_BG, CARD_ALT, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, BORDER, WHITE, BLUE_WASH } = COLORS;
 
 type InformationalHubScreenProps = {
   title: string;
@@ -42,6 +39,9 @@ export function InformationalHubScreen({
   resourceLabel,
   resourceUrl,
 }: InformationalHubScreenProps) {
+  const theme = useTheme();
+  const { colors } = theme;
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const [alertState, setAlertState] = useState<{
     visible: boolean;
     title: string;
@@ -102,7 +102,7 @@ export function InformationalHubScreen({
           <Text style={styles.sectionTitle}>{resourceTitle}</Text>
           <Text style={styles.sectionHint}>{resourceBody}</Text>
           <Pressable style={styles.secondaryButton} onPress={() => openUrl(resourceUrl)}>
-            <Ionicons name="open-outline" size={16} color={TEXT_PRIMARY} />
+            <Ionicons name="open-outline" size={16} color={colors.text} />
             <Text style={styles.secondaryButtonText}>{resourceLabel}</Text>
           </Pressable>
         </View>
@@ -119,10 +119,11 @@ export function InformationalHubScreen({
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles({ colors, fonts }: Theme) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DARK_BG,
+    backgroundColor: colors.bg,
   },
   scrollContent: {
     paddingHorizontal: 20,
@@ -130,31 +131,31 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   heroCard: {
-    backgroundColor: CARD_BG,
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     borderRadius: 24,
     padding: 22,
     gap: 12,
   },
   eyebrow: {
-    color: BLUE,
+    color: colors.accent,
     fontSize: 12,
     letterSpacing: 1,
     textTransform: 'uppercase',
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   heroTitle: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 30,
     lineHeight: 34,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   heroBody: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 15,
     lineHeight: 22,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   heroActions: {
     flexDirection: 'row',
@@ -162,30 +163,30 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   card: {
-    backgroundColor: CARD_ALT,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     borderRadius: 22,
     padding: 18,
     gap: 14,
   },
   sectionTitle: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 22,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   sectionBody: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 14,
     lineHeight: 20,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   sectionHint: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 13,
     lineHeight: 18,
     marginTop: -4,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   reasonList: {
     gap: 12,
@@ -199,37 +200,37 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: BLUE,
+    backgroundColor: colors.accent,
     marginTop: 7,
   },
   reasonText: {
     flex: 1,
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 14,
     lineHeight: 20,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   commandCard: {
-    backgroundColor: WHITE,
+    backgroundColor: colors.surfaceElevated,
     borderRadius: 18,
     padding: 16,
     gap: 10,
   },
   commandLabel: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 12,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
   },
   commandText: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 16,
     lineHeight: 22,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   primaryButton: {
-    backgroundColor: BLUE,
+    backgroundColor: colors.accent,
     borderRadius: 14,
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -237,12 +238,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   primaryButtonText: {
-    color: WHITE,
+    color: colors.onAccent,
     fontSize: 14,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   secondaryButton: {
-    backgroundColor: BLUE_WASH,
+    backgroundColor: colors.accentWash,
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -251,11 +252,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
   },
   secondaryButtonText: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 14,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
-});
+  });
+}

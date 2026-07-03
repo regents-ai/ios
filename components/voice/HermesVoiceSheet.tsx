@@ -1,12 +1,11 @@
 import { RegentPressable } from '@/components/ui/RegentPressable';
-import { COLORS } from '@/constants/Colors';
-import { FONTS } from '@/constants/Typography';
+import { useTheme, type Theme } from '@/theme/ThemeProvider';
 import { useHermesVoiceSession } from '@/hooks/useHermesVoiceSession';
 import { routes } from '@/utils/navigation/routes';
 import { gatewayDisplayLabel } from '@/utils/voice/localGateway';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -38,6 +37,9 @@ function statusCopy(value: string) {
 }
 
 export function HermesVoiceSheet({ agentId, agentName, visible, onClose }: HermesVoiceSheetProps) {
+  const theme = useTheme();
+  const { colors } = theme;
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const router = useRouter();
   const voice = useHermesVoiceSession(agentId, agentName);
   const refreshStatus = voice.refreshStatus;
@@ -87,16 +89,16 @@ export function HermesVoiceSheet({ agentId, agentName, visible, onClose }: Herme
             <Text style={styles.title}>{agentName}</Text>
           </View>
           <RegentPressable pressStyle="icon" onPress={close} style={styles.iconButton}>
-            <Ionicons name="close" size={22} color={COLORS.TEXT_PRIMARY} />
+            <Ionicons name="close" size={22} color={colors.text} />
           </RegentPressable>
         </View>
 
         <View style={styles.statusPanel}>
           <View style={[styles.micCircle, connected && styles.micCircleActive]}>
             {busy ? (
-              <ActivityIndicator color={COLORS.textOnColor} />
+              <ActivityIndicator color={colors.onAccent} />
             ) : (
-              <Ionicons name={connected ? 'mic' : 'mic-outline'} size={34} color={COLORS.textOnColor} />
+              <Ionicons name={connected ? 'mic' : 'mic-outline'} size={34} color={colors.onAccent} />
             )}
           </View>
           <Text style={styles.statusTitle}>{needsAccount ? 'Connect ChatGPT' : statusCopy(voice.connectionState)}</Text>
@@ -148,7 +150,7 @@ export function HermesVoiceSheet({ agentId, agentName, visible, onClose }: Herme
 
         {!connected && !busy ? (
           <RegentPressable style={styles.localLink} onPress={openLocalPairing}>
-            <Ionicons name="qr-code-outline" size={16} color={COLORS.BLUE} />
+            <Ionicons name="qr-code-outline" size={16} color={colors.accent} />
             <Text style={styles.localLinkText}>
               {usingLocal ? 'Manage local Hermes' : 'Connect to local Hermes'}
             </Text>
@@ -159,10 +161,11 @@ export function HermesVoiceSheet({ agentId, agentName, visible, onClose }: Herme
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles({ colors, fonts }: Theme) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.DARK_BG,
+    backgroundColor: colors.bg,
     padding: 20,
     gap: 18,
   },
@@ -173,14 +176,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   eyebrow: {
-    fontFamily: FONTS.body,
-    color: COLORS.TEXT_SECONDARY,
+    fontFamily: fonts.ui,
+    color: colors.textMuted,
     fontSize: 12,
   },
   title: {
     marginTop: 4,
-    fontFamily: FONTS.heading,
-    color: COLORS.TEXT_PRIMARY,
+    fontFamily: fonts.title,
+    color: colors.text,
     fontSize: 24,
   },
   iconButton: {
@@ -189,7 +192,7 @@ const styles = StyleSheet.create({
     borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.CARD_BG,
+    backgroundColor: colors.surfaceElevated,
   },
   statusPanel: {
     flex: 1,
@@ -203,35 +206,35 @@ const styles = StyleSheet.create({
     borderRadius: 52,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.BLUE,
+    backgroundColor: colors.accent,
   },
   micCircleActive: {
-    backgroundColor: COLORS.SUCCESS,
+    backgroundColor: colors.success,
   },
   statusTitle: {
-    fontFamily: FONTS.heading,
-    color: COLORS.TEXT_PRIMARY,
+    fontFamily: fonts.title,
+    color: colors.text,
     fontSize: 25,
     textAlign: 'center',
   },
   statusBody: {
     maxWidth: 310,
-    fontFamily: FONTS.body,
-    color: COLORS.TEXT_SECONDARY,
+    fontFamily: fonts.ui,
+    color: colors.textMuted,
     fontSize: 15,
     lineHeight: 22,
     textAlign: 'center',
   },
   errorText: {
     maxWidth: 320,
-    fontFamily: FONTS.body,
-    color: COLORS.DANGER,
+    fontFamily: fonts.ui,
+    color: colors.error,
     fontSize: 14,
     textAlign: 'center',
   },
   sourceLabel: {
-    fontFamily: FONTS.body,
-    color: COLORS.TEXT_SECONDARY,
+    fontFamily: fonts.ui,
+    color: colors.textMuted,
     fontSize: 12,
     textAlign: 'center',
   },
@@ -243,27 +246,27 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   localLinkText: {
-    fontFamily: FONTS.body,
-    color: COLORS.BLUE,
+    fontFamily: fonts.ui,
+    color: colors.accent,
     fontSize: 14,
   },
   approvalPanel: {
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: COLORS.BORDER,
-    backgroundColor: COLORS.CARD_BG,
+    borderColor: colors.hairlineStrong,
+    backgroundColor: colors.surfaceElevated,
     padding: 16,
     gap: 10,
   },
   approvalTitle: {
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
     fontSize: 18,
-    color: COLORS.TEXT_PRIMARY,
+    color: colors.text,
   },
   approvalBody: {
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
     fontSize: 14,
-    color: COLORS.TEXT_SECONDARY,
+    color: colors.textMuted,
     lineHeight: 20,
   },
   approvalActions: {
@@ -276,30 +279,31 @@ const styles = StyleSheet.create({
   primaryButton: {
     minHeight: 50,
     borderRadius: 12,
-    backgroundColor: COLORS.BLUE,
+    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 18,
   },
   primaryButtonText: {
-    fontFamily: FONTS.heading,
-    color: COLORS.textOnColor,
+    fontFamily: fonts.title,
+    color: colors.onAccent,
     fontSize: 16,
   },
   secondaryButton: {
     minHeight: 50,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: COLORS.BORDER,
-    backgroundColor: COLORS.CARD_BG,
+    borderColor: colors.hairlineStrong,
+    backgroundColor: colors.surfaceElevated,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 18,
     flex: 1,
   },
   secondaryButtonText: {
-    fontFamily: FONTS.heading,
-    color: COLORS.TEXT_PRIMARY,
+    fontFamily: fonts.title,
+    color: colors.text,
     fontSize: 16,
   },
-});
+  });
+}

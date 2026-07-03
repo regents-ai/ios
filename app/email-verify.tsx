@@ -1,15 +1,14 @@
 import { VerificationMotion } from '@/components/auth/verification-motion';
 import { RegentPressable } from '@/components/ui/RegentPressable';
 import { StatusBanner, type StatusBannerState } from '@/components/ui/StatusBanner';
-import { COLORS } from '@/constants/Colors';
-import { FONTS } from '@/constants/Typography';
+import { useTheme, type Theme } from '@/theme/ThemeProvider';
 import { useChatGptAuth } from '@/hooks/useChatGptAuth';
 import { useRegentsAuth } from '@/hooks/useRegentsAuth';
 import { shouldInterceptForwardNavigation } from '@/utils/onboardingGate';
 import { useLinkEmail, useLoginWithEmail } from '@privy-io/expo';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -22,9 +21,10 @@ import {
   View,
 } from 'react-native';
 
-const { DARK_BG, CARD_BG, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, WHITE, BORDER } = COLORS;
-
 export default function EmailVerifyScreen() {
+  const theme = useTheme();
+  const { colors } = theme;
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const router = useRouter();
   const params = useLocalSearchParams();
   const initialEmail = (params.initialEmail as string) || '';
@@ -108,7 +108,7 @@ export default function EmailVerifyScreen() {
         >
           <VerificationMotion style={styles.header}>
             <RegentPressable pressStyle="icon" onPress={() => router.back()} style={styles.backButton}>
-              <Ionicons name="arrow-back" size={24} color={TEXT_PRIMARY} />
+              <Ionicons name="arrow-back" size={24} color={colors.text} />
             </RegentPressable>
           </VerificationMotion>
 
@@ -128,7 +128,7 @@ export default function EmailVerifyScreen() {
                 value={email}
                 onChangeText={setEmail}
                 placeholder="name@example.com"
-                placeholderTextColor={TEXT_SECONDARY}
+                placeholderTextColor={colors.textMuted}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -156,7 +156,7 @@ export default function EmailVerifyScreen() {
               onPress={startEmailVerification}
               disabled={!isEmailValid || sending}
             >
-              {sending ? <ActivityIndicator color={WHITE} /> : <Text style={styles.primaryButtonText}>Send code</Text>}
+              {sending ? <ActivityIndicator color={colors.onAccent} /> : <Text style={styles.primaryButtonText}>Send code</Text>}
             </RegentPressable>
           </VerificationMotion>
         </ScrollView>
@@ -165,10 +165,11 @@ export default function EmailVerifyScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles({ colors, fonts }: Theme) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DARK_BG,
+    backgroundColor: colors.bg,
   },
   keyboardWrap: {
     flex: 1,
@@ -194,44 +195,44 @@ const styles = StyleSheet.create({
     gap: 18,
   },
   title: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     textAlign: 'center',
     fontSize: 32,
     lineHeight: 38,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   subtitle: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     textAlign: 'center',
     fontSize: 18,
     lineHeight: 24,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
     marginBottom: 14,
   },
   fieldLabel: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 16,
     lineHeight: 22,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
     marginBottom: 12,
   },
   input: {
     minHeight: 60,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: CARD_BG,
+    borderColor: colors.hairlineStrong,
+    backgroundColor: colors.surfaceElevated,
     paddingHorizontal: 18,
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 18,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   helperText: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     textAlign: 'center',
     fontSize: 15,
     lineHeight: 22,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
     marginTop: 8,
   },
   footer: {
@@ -243,17 +244,18 @@ const styles = StyleSheet.create({
   primaryButton: {
     minHeight: 58,
     borderRadius: 18,
-    backgroundColor: BLUE,
+    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 20,
   },
   primaryButtonText: {
-    color: WHITE,
+    color: colors.onAccent,
     fontSize: 18,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   disabledButton: {
     opacity: 0.5,
   },
-});
+  });
+}

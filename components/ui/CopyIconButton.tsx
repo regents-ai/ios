@@ -8,17 +8,14 @@
 
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Clipboard from 'expo-clipboard';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 
 import { useReducedMotion } from '@/components/motion/useReducedMotion';
 import { runRegentHaptic } from '@/components/ui/haptics';
 import { RegentPressable } from '@/components/ui/RegentPressable';
-import { COLORS } from '@/constants/Colors';
-import { FONTS } from '@/constants/Typography';
+import { useTheme, type Theme } from '@/theme/ThemeProvider';
 
-const { BORDER, SUCCESS, TEXT_PRIMARY, WHITE } = COLORS;
-const GREEN_WASH = '#E6F0EA';
 const COPIED_HOLD_MS = 1400;
 const MORPH_DURATION_MS = 160;
 const ICON_SIZE = 15;
@@ -34,6 +31,9 @@ export function CopyIconButton({
   contentLabel: string;
   onCopyError?: () => void;
 }) {
+  const theme = useTheme();
+  const { colors } = theme;
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const reduceMotion = useReducedMotion();
   const [copied, setCopied] = useState(false);
   const progress = useRef(new Animated.Value(0)).current;
@@ -122,7 +122,7 @@ export function CopyIconButton({
               },
             ]}
           >
-            <Ionicons name="copy-outline" size={ICON_SIZE} color={TEXT_PRIMARY} />
+            <Ionicons name="copy-outline" size={ICON_SIZE} color={colors.text} />
           </Animated.View>
           <Animated.View
             style={[
@@ -133,7 +133,7 @@ export function CopyIconButton({
               },
             ]}
           >
-            <Ionicons name="checkmark-circle" size={ICON_SIZE} color={SUCCESS} />
+            <Ionicons name="checkmark-circle" size={ICON_SIZE} color={colors.success} />
           </Animated.View>
         </View>
         <Text style={[styles.label, copied && styles.labelCopied]}>{copied ? 'Copied' : 'Copy address'}</Text>
@@ -142,47 +142,49 @@ export function CopyIconButton({
   );
 }
 
-const styles = StyleSheet.create({
-  button: {
-    alignSelf: 'flex-start',
-    maxWidth: '100%',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 14,
-    backgroundColor: WHITE,
-    borderWidth: 1,
-    borderColor: BORDER,
-  },
-  buttonCopied: {
-    backgroundColor: GREEN_WASH,
-    borderColor: SUCCESS,
-  },
-  content: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    minWidth: 0,
-  },
-  iconSlot: {
-    width: ICON_SIZE + 2,
-    height: ICON_SIZE + 2,
-  },
-  iconLayer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  label: {
-    color: TEXT_PRIMARY,
-    fontSize: 13,
-    fontFamily: FONTS.body,
-  },
-  labelCopied: {
-    color: SUCCESS,
-  },
-});
+function makeStyles({ colors, fonts }: Theme) {
+  return StyleSheet.create({
+    button: {
+      alignSelf: 'flex-start',
+      maxWidth: '100%',
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 14,
+      backgroundColor: colors.surfaceElevated,
+      borderWidth: 1,
+      borderColor: colors.hairlineStrong,
+    },
+    buttonCopied: {
+      backgroundColor: colors.successWash,
+      borderColor: colors.success,
+    },
+    content: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      minWidth: 0,
+    },
+    iconSlot: {
+      width: ICON_SIZE + 2,
+      height: ICON_SIZE + 2,
+    },
+    iconLayer: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    label: {
+      color: colors.text,
+      fontSize: 13,
+      fontFamily: fonts.ui,
+    },
+    labelCopied: {
+      color: colors.success,
+    },
+  });
+}
