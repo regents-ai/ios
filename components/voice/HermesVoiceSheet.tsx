@@ -2,7 +2,10 @@ import { RegentPressable } from '@/components/ui/RegentPressable';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
 import { useHermesVoiceSession } from '@/hooks/useHermesVoiceSession';
+import { routes } from '@/utils/navigation/routes';
+import { gatewayDisplayLabel } from '@/utils/voice/localGateway';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useRouter } from 'expo-router';
 import { useEffect } from 'react';
 import {
   ActivityIndicator,
@@ -35,19 +38,30 @@ function statusCopy(value: string) {
 }
 
 export function HermesVoiceSheet({ agentId, agentName, visible, onClose }: HermesVoiceSheetProps) {
+  const router = useRouter();
   const voice = useHermesVoiceSession(agentId, agentName);
   const refreshStatus = voice.refreshStatus;
   const prewarm = voice.prewarm;
-  const needsAccount = voice.status?.account.satisfied === false;
+  const usingLocal = voice.localGateway !== null;
+  // A paired local gateway holds its own OpenAI key, so the hosted ChatGPT gate
+  // does not apply when local.
+  const needsAccount = !usingLocal && voice.status?.account.satisfied === false;
   const connected = voice.connectionState === 'connected';
   const busy = voice.connectionState === 'checking' || voice.connectionState === 'connecting';
 
+  const openLocalPairing = () => {
+    void voice.disconnect();
+    router.push(routes.localVoicePairing());
+  };
+
+  const refreshLocalGateway = voice.refreshLocalGateway;
   useEffect(() => {
     if (!visible) {
       return;
     }
 
     let mounted = true;
+    void refreshLocalGateway();
     refreshStatus().then((nextStatus) => {
       if (mounted) {
         void prewarm(nextStatus);
@@ -57,7 +71,7 @@ export function HermesVoiceSheet({ agentId, agentName, visible, onClose }: Herme
     return () => {
       mounted = false;
     };
-  }, [visible, refreshStatus, prewarm]);
+  }, [visible, refreshStatus, prewarm, refreshLocalGateway]);
 
   const close = () => {
     void voice.disconnect();
@@ -94,6 +108,11 @@ export function HermesVoiceSheet({ agentId, agentName, visible, onClose }: Herme
                 : 'Start voice when you are ready.'}
           </Text>
           {voice.errorMessage ? <Text style={styles.errorText}>{voice.errorMessage}</Text> : null}
+          <Text style={styles.sourceLabel}>
+            {usingLocal
+              ? `Using local Hermes (${gatewayDisplayLabel(voice.localGateway!)})`
+              : 'Using hosted Hermes'}
+          </Text>
         </View>
 
         {voice.approvalRequest ? (
@@ -126,6 +145,15 @@ export function HermesVoiceSheet({ agentId, agentName, visible, onClose }: Herme
             </RegentPressable>
           )}
         </View>
+
+        {!connected && !busy ? (
+          <RegentPressable style={styles.localLink} onPress={openLocalPairing}>
+            <Ionicons name="qr-code-outline" size={16} color={COLORS.BLUE} />
+            <Text style={styles.localLinkText}>
+              {usingLocal ? 'Manage local Hermes' : 'Connect to local Hermes'}
+            </Text>
+          </RegentPressable>
+        ) : null}
       </View>
     </Modal>
   );
@@ -200,6 +228,24 @@ const styles = StyleSheet.create({
     color: COLORS.DANGER,
     fontSize: 14,
     textAlign: 'center',
+  },
+  sourceLabel: {
+    fontFamily: FONTS.body,
+    color: COLORS.TEXT_SECONDARY,
+    fontSize: 12,
+    textAlign: 'center',
+  },
+  localLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+  },
+  localLinkText: {
+    fontFamily: FONTS.body,
+    color: COLORS.BLUE,
+    fontSize: 14,
   },
   approvalPanel: {
     borderRadius: 14,

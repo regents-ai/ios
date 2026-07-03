@@ -1,7 +1,13 @@
 import type { HermesVoiceSession, HermesVoiceStatus } from '@/types/regents';
+import { describeApiError } from '@/utils/apiError';
 import { regentApi } from '@/utils/regentApi/client';
 import { isIosOwnedTool, runDeviceTool, type VoiceApprovalRequest } from '@/utils/voice/deviceTools';
 import { forwardHermesToolCall, isHermesOwnedTool } from '@/utils/voice/hermesVoiceTools';
+import {
+  createLocalHermesVoiceSession,
+  type LocalVoiceGateway,
+} from '@/utils/voice/localGateway';
+import { readPairedGateway } from '@/utils/voice/localGatewayStore';
 import { createHermesRealtimeClient, type HermesRealtimeClient, type RealtimeToolCall } from '@/utils/voice/realtimeClient';
 import { clearCurrentVoiceSession, saveCurrentVoiceSession } from '@/utils/voice/voiceSessionStore';
 import { getCalendars, getLocales } from 'expo-localization';
@@ -29,6 +35,7 @@ export function useHermesVoiceSession(agentId: string, agentName = 'Hermes') {
   const [connectionState, setConnectionState] = useState<VoiceConnectionState>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [approvalRequest, setApprovalRequest] = useState<VoiceApprovalRequest | null>(null);
+  const [localGateway, setLocalGateway] = useState<LocalVoiceGateway | null>(null);
   const realtimeClient = useRef<HermesRealtimeClient | null>(null);
   const sessionRef = useRef<HermesVoiceSession | null>(null);
   const transcriptTurns = useRef<VoiceTranscriptTurn[]>([]);
@@ -37,6 +44,18 @@ export function useHermesVoiceSession(agentId: string, agentName = 'Hermes') {
   useEffect(() => {
     sessionRef.current = session;
   }, [session]);
+
+  // Load any paired local gateway so voice can target it instead of the hosted
+  // sprite. Refreshed when the pairing screen changes it via refreshLocalGateway.
+  const refreshLocalGateway = useCallback(async () => {
+    const paired = await readPairedGateway().catch(() => null);
+    setLocalGateway(paired);
+    return paired;
+  }, []);
+
+  useEffect(() => {
+    void refreshLocalGateway();
+  }, [refreshLocalGateway]);
 
   const submitToolOutput = useCallback(async (input: {
     toolCall: RealtimeToolCall;
@@ -168,16 +187,23 @@ export function useHermesVoiceSession(agentId: string, agentName = 'Hermes') {
   }, [agentId, persistVoiceSummary]);
 
   const start = useCallback(async () => {
-    const nextStatus = status || await refreshStatus();
-    if (!nextStatus) {
-      return;
-    }
+    // Prefer the freshest paired-gateway state at start time.
+    const paired = await refreshLocalGateway();
 
-    if (!nextStatus.account.satisfied) {
-      if (nextStatus.account.connect_url) {
-        await Linking.openURL(nextStatus.account.connect_url);
+    // Hosted path gates on the ChatGPT account. A paired LOCAL gateway holds its
+    // own OpenAI key, so that gate does not apply — skip it when local.
+    if (!paired) {
+      const nextStatus = status || await refreshStatus();
+      if (!nextStatus) {
+        return;
       }
-      return;
+
+      if (!nextStatus.account.satisfied) {
+        if (nextStatus.account.connect_url) {
+          await Linking.openURL(nextStatus.account.connect_url);
+        }
+        return;
+      }
     }
 
     setConnectionState('connecting');
@@ -186,17 +212,20 @@ export function useHermesVoiceSession(agentId: string, agentName = 'Hermes') {
     try {
       const locale = getLocales()[0]?.languageTag;
       const timezone = getCalendars()[0]?.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone;
-      const nextSession = await regentApi.createHermesVoiceSession({
-        agentId,
-        session: {
-          voice: 'marin',
-          locale,
-          timezone,
-          reasoning_effort: 'low',
-          preferred_transport: 'webrtc',
-          device_capabilities: ['ios_status', 'ios_approval_request', 'ios_tool_result'],
-        },
-      });
+      const sessionRequest = {
+        voice: 'marin',
+        locale,
+        timezone,
+        reasoning_effort: 'low' as const,
+        preferred_transport: 'webrtc' as const,
+        device_capabilities: ['ios_status', 'ios_approval_request', 'ios_tool_result'],
+      };
+      // Same HermesVoiceSession shape either way, so the realtime client below
+      // is identical. Only the mint SOURCE differs: paired local gateway
+      // (Bearer token) vs the hosted platform projection session_url.
+      const nextSession = paired
+        ? await createLocalHermesVoiceSession({ gateway: paired, session: sessionRequest })
+        : await regentApi.createHermesVoiceSession({ agentId, session: sessionRequest });
 
       setSession(nextSession);
       sessionRef.current = nextSession;
@@ -216,10 +245,10 @@ export function useHermesVoiceSession(agentId: string, agentName = 'Hermes') {
       realtimeClient.current = client;
       await client.connect();
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Voice could not start.');
+      setErrorMessage(describeApiError(error).message);
       setConnectionState('error');
     }
-  }, [agentId, handleToolCall, refreshStatus, status]);
+  }, [agentId, handleToolCall, refreshLocalGateway, refreshStatus, status]);
 
   const resolveApproval = useCallback(async (approved: boolean) => {
     if (!approvalRequest) {
@@ -265,5 +294,7 @@ export function useHermesVoiceSession(agentId: string, agentName = 'Hermes') {
     disconnect,
     openAccountConnection,
     resolveApproval,
+    localGateway,
+    refreshLocalGateway,
   };
 }

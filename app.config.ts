@@ -63,6 +63,10 @@ const config: ExpoConfig = {
         cameraPermission: false,
         microphonePermission: false,
       }],
+      ['expo-camera', {
+        cameraPermission: 'Scan the pairing QR code shown by your local Hermes to connect voice.',
+        recordAudioAndroid: false,
+      }],
       withGooglePayWebView,
     ],
 

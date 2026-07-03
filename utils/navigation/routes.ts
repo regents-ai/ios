@@ -33,6 +33,10 @@ export const routes = {
     return '/settings';
   },
 
+  localVoicePairing(): Href {
+    return '/settings/local-voice';
+  },
+
   message(): Href {
     return '/message';
   },
