@@ -46,6 +46,20 @@ npm run start
 
 Use `npm run ios` for an iOS simulator build, `npm run android` for Android, and `npm run web` for the web target when needed.
 
+### Native builds (adding native modules)
+
+When you add a native module (for example `npx expo install expo-blur`), the iOS
+dev client must be rebuilt so CocoaPods links it. Run `pod install` with a UTF-8
+locale — otherwise CocoaPods crashes on some Ruby versions with an
+`Encoding::CompatibilityError` / `ASCII-8BIT` error before it does any work:
+
+```sh
+cd ios && LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 pod install
+```
+
+Then rebuild the dev client (`npm run ios`, or drive `xcodebuild` against a
+simulator directly if `expo run:ios` routes to a physical-device signing path).
+
 ## Checks
 
 The app-level checks are:
