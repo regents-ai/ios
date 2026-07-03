@@ -5,13 +5,13 @@ import { LiveValueFlash } from '@/components/motion/LiveValueFlash';
 import { ShimmerBlock } from '@/components/motion/ShimmerBlock';
 import { SpinningRefreshIcon } from '@/components/motion/SpinningRefreshIcon';
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
+import { CopyIconButton } from '@/components/ui/CopyIconButton';
 import { RegentPressable } from '@/components/ui/RegentPressable';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
 import { BalanceRecord, useWalletDetailsState } from '@/hooks/wallet/useWalletDetailsState';
 
-const { CARD_BG, CARD_ALT, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, BORDER, WHITE, DANGER, BLUE_WASH, SUCCESS } = COLORS;
-const GREEN_WASH = '#E6F0EA';
+const { CARD_BG, CARD_ALT, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, BORDER, WHITE, DANGER, BLUE_WASH } = COLORS;
 export type WalletDetailsState = ReturnType<typeof useWalletDetailsState>;
 
 function formatAddress(address: string) {
@@ -60,7 +60,6 @@ export function WalletDetailsSection({ walletDetails }: { walletDetails: WalletD
     testnetBalancesError,
     testnetExpanded,
     setTestnetExpanded,
-    recentCopyKey,
     alertState,
     setAlertState,
     groupedMainnetBalances,
@@ -68,7 +67,6 @@ export function WalletDetailsSection({ walletDetails }: { walletDetails: WalletD
     featuredBaseUsdc,
     walletUsdTotal,
     hasAnyWalletBalance,
-    copyAddress,
     refreshWalletSnapshot,
     handleTransfer,
     handleCashOut,
@@ -208,19 +206,18 @@ export function WalletDetailsSection({ walletDetails }: { walletDetails: WalletD
           <View style={styles.addressBlock}>
             <Text style={styles.addressLabel}>Base and Ethereum address</Text>
             <Text style={styles.addressValue}>{formatAddress(primaryAddress)}</Text>
-            <RegentPressable
-              haptic="none"
-              pressStyle="chip"
-              style={[styles.secondaryButton, recentCopyKey === 'base' && styles.copySuccessButton]}
-              onPress={() => copyAddress(primaryAddress, 'Base and Ethereum address', 'base')}
-            >
-              <View style={styles.copyButtonContent}>
-                {recentCopyKey === 'base' ? <Ionicons name="checkmark-circle" size={15} color={SUCCESS} /> : null}
-                <Text style={[styles.secondaryButtonText, recentCopyKey === 'base' && styles.copySuccessText]}>
-                  {recentCopyKey === 'base' ? 'Copied' : 'Copy address'}
-                </Text>
-              </View>
-            </RegentPressable>
+            <CopyIconButton
+              value={primaryAddress}
+              contentLabel="Base and Ethereum address"
+              onCopyError={() =>
+                setAlertState({
+                  visible: true,
+                  title: 'Copy failed',
+                  message: 'Unable to copy your Base and Ethereum address.',
+                  type: 'error',
+                })
+              }
+            />
           </View>
         ) : null}
 
@@ -228,19 +225,18 @@ export function WalletDetailsSection({ walletDetails }: { walletDetails: WalletD
           <View style={styles.addressBlock}>
             <Text style={styles.addressLabel}>Solana address</Text>
             <Text style={styles.addressValue}>{formatAddress(solanaAddress)}</Text>
-            <RegentPressable
-              haptic="none"
-              pressStyle="chip"
-              style={[styles.secondaryButton, recentCopyKey === 'solana' && styles.copySuccessButton]}
-              onPress={() => copyAddress(solanaAddress, 'Solana address', 'solana')}
-            >
-              <View style={styles.copyButtonContent}>
-                {recentCopyKey === 'solana' ? <Ionicons name="checkmark-circle" size={15} color={SUCCESS} /> : null}
-                <Text style={[styles.secondaryButtonText, recentCopyKey === 'solana' && styles.copySuccessText]}>
-                  {recentCopyKey === 'solana' ? 'Copied' : 'Copy address'}
-                </Text>
-              </View>
-            </RegentPressable>
+            <CopyIconButton
+              value={solanaAddress}
+              contentLabel="Solana address"
+              onCopyError={() =>
+                setAlertState({
+                  visible: true,
+                  title: 'Copy failed',
+                  message: 'Unable to copy your Solana address.',
+                  type: 'error',
+                })
+              }
+            />
           </View>
         ) : null}
       </View>
@@ -502,35 +498,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 20,
     fontFamily: FONTS.heading,
-  },
-  secondaryButton: {
-    alignSelf: 'flex-start',
-    maxWidth: '100%',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 14,
-    backgroundColor: WHITE,
-    borderWidth: 1,
-    borderColor: BORDER,
-  },
-  secondaryButtonText: {
-    color: TEXT_PRIMARY,
-    fontSize: 13,
-    fontFamily: FONTS.body,
-  },
-  copySuccessButton: {
-    backgroundColor: GREEN_WASH,
-    borderColor: SUCCESS,
-  },
-  copyButtonContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    minWidth: 0,
-  },
-  copySuccessText: {
-    color: SUCCESS,
   },
   networkSection: {
     gap: 10,

@@ -1,14 +1,15 @@
 import { VerificationMotion } from '@/components/auth/verification-motion';
+import { StatusBanner, type StatusBannerState } from '@/components/ui/StatusBanner';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
 import { useChatGptAuth } from '@/hooks/useChatGptAuth';
 import { useRegentsAuth } from '@/hooks/useRegentsAuth';
+import { shouldInterceptForwardNavigation } from '@/utils/onboardingGate';
 import { useLinkSMS, useLoginWithSMS } from '@privy-io/expo';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { CoinbaseAlert } from '../components/ui/CoinbaseAlerts';
 import { RegentPressable } from '../components/ui/RegentPressable';
 import { PHONE_COUNTRIES } from '../constants/PhoneCountries';
 
@@ -26,12 +27,7 @@ export default function PhoneVerifyScreen() {
   const [sending, setSending] = useState(false);
   const [countryPickerVisible, setCountryPickerVisible] = useState(false);
   const [hasAutoSent, setHasAutoSent] = useState(false);
-  const [alert, setAlert] = useState<{ visible: boolean; title: string; message: string; type: 'success' | 'error' | 'info' }>({
-    visible: false,
-    title: '',
-    message: '',
-    type: 'info',
-  });
+  const [banner, setBanner] = useState<{ state: StatusBannerState; message: string } | null>(null);
 
   const { isAuthenticated } = useRegentsAuth();
   const { isReady: isChatGptReady, session: chatGptSession } = useChatGptAuth();
@@ -67,36 +63,25 @@ export default function PhoneVerifyScreen() {
 
   const startSms = useCallback(async () => {
     if (!isChatGptReady || !chatGptSession) {
-      setAlert({
-        visible: true,
-        title: 'Sign in with ChatGPT',
-        message: 'Finish ChatGPT sign-in before you continue.',
-        type: 'error',
-      });
+      setBanner({ state: 'error', message: 'Finish ChatGPT sign-in before you continue.' });
       return;
     }
 
     if (!isPhoneValid) {
-      setAlert({
-        visible: true,
-        title: 'Enter a phone number',
+      setBanner({
+        state: 'error',
         message: `Use at least ${selectedCountry.minDigits} digits for ${selectedCountry.name}.`,
-        type: 'error',
       });
       return;
     }
 
     if (mode === 'link' && !isAuthenticated) {
-      setAlert({
-        visible: true,
-        title: 'Sign in first',
-        message: 'Sign in before you add a phone number.',
-        type: 'error',
-      });
+      setBanner({ state: 'error', message: 'Sign in before you add a phone number.' });
       return;
     }
 
     setSending(true);
+    setBanner({ state: 'working', message: 'Sending your code…' });
     try {
       if (mode === 'signin' || mode === 'reverify') {
         await sendLoginCode({ phone: phoneE164 });
@@ -104,17 +89,23 @@ export default function PhoneVerifyScreen() {
         await sendLinkCode({ phone: phoneE164 });
       }
 
-      router.push({
-        pathname: '/phone-code',
-        params: { phone: phoneE164, mode },
+      setBanner({ state: 'success', message: `Code sent to ${phoneE164}.` });
+
+      // The code-entry screen only opens once the code really went out.
+      const intercept = shouldInterceptForwardNavigation({
+        from: '/phone-verify',
+        to: '/phone-code',
+        hasCompletedCriticalAction: true,
+        hasBypassed: false,
       });
+      if (!intercept) {
+        router.push({
+          pathname: '/phone-code',
+          params: { phone: phoneE164, mode },
+        });
+      }
     } catch (error: any) {
-      setAlert({
-        visible: true,
-        title: 'Could not send the code',
-        message: error.message || 'Please try again.',
-        type: 'error',
-      });
+      setBanner({ state: 'error', message: error.message || 'We could not send the code. Please try again.' });
     } finally {
       setSending(false);
     }
@@ -227,6 +218,11 @@ export default function PhoneVerifyScreen() {
               order={5}
               style={styles.buttonWrap}
             >
+              {banner ? (
+                <View style={styles.bannerWrap}>
+                  <StatusBanner state={banner.state} message={banner.message} />
+                </View>
+              ) : null}
               <RegentPressable
                 style={[styles.continueButton, (!isPhoneValid || sending) && styles.disabledButton]}
                 onPress={startSms}
@@ -238,14 +234,6 @@ export default function PhoneVerifyScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-
-      <CoinbaseAlert
-        visible={alert.visible}
-        title={alert.title}
-        message={alert.message}
-        type={alert.type}
-        onConfirm={() => setAlert((current) => ({ ...current, visible: false }))}
-      />
     </SafeAreaView>
   );
 }
@@ -397,6 +385,9 @@ const styles = StyleSheet.create({
   },
   buttonWrap: {
     width: '100%',
+  },
+  bannerWrap: {
+    marginBottom: 12,
   },
   continueButton: {
     width: '100%',

@@ -16,6 +16,7 @@
 
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { RegentPressable } from '@/components/ui/RegentPressable';
+import { StatusBanner, type StatusBannerState } from '@/components/ui/StatusBanner';
 import { COLORS } from '@/constants/Colors';
 import { fetchOfframpTransaction, OfframpTransaction } from '@/utils/fetchOfframpTransaction';
 import { buildEvmTransferCall, isNativeEvmToken } from '@/utils/onchain/buildTransferCall';
@@ -73,11 +74,10 @@ export default function OfframpSendScreen() {
   const [transaction, setTransaction] = useState<OfframpTransaction | null>(null);
   const [sending, setSending] = useState(false);
 
-  const [alertVisible, setAlertVisible] = useState(false);
-  const [alertTitle, setAlertTitle] = useState('');
-  const [alertMessage, setAlertMessage] = useState('');
-  const [alertType, setAlertType] = useState<'success' | 'error' | 'info'>('info');
-  const [alertHideButton, setAlertHideButton] = useState(false);
+  // Progress and errors show inline under the form; the popup alert is kept
+  // only for the success confirmation because dismissing it leaves the screen.
+  const [banner, setBanner] = useState<{ state: StatusBannerState; message: string } | null>(null);
+  const [successAlert, setSuccessAlert] = useState<{ title: string; message: string } | null>(null);
 
   const { sendUserOperation, status: userOpStatus, data: userOpData, error: userOpError } = useSendUserOperation();
   const { sendSolanaTransaction } = useSendSolanaTransaction();
@@ -87,12 +87,9 @@ export default function OfframpSendScreen() {
   const smartAccountAddress = currentUser?.evmSmartAccounts?.[0] ?? null;
   const storedBalance = getPendingOfframpBalance();
 
-  const showAlert = useCallback((title: string, message: string, type: 'success' | 'error' | 'info', hideButton: boolean) => {
-    setAlertTitle(title);
-    setAlertMessage(message);
-    setAlertType(type);
-    setAlertHideButton(hideButton);
-    setAlertVisible(true);
+  const showSuccessAlert = useCallback((title: string, message: string) => {
+    setBanner(null);
+    setSuccessAlert({ title, message });
   }, []);
 
   // Fetch transaction details on mount, retrying a few times since Coinbase
@@ -174,7 +171,7 @@ export default function OfframpSendScreen() {
     if (!transaction) return;
 
     if (userOpStatus === 'pending' && userOpData?.userOpHash) {
-      showAlert('Sending ⏳', 'Transaction submitted — waiting for confirmation.\n\nDo not close this screen.', 'info', true);
+      setBanner({ state: 'working', message: 'Sending your funds to Coinbase. Keep this screen open.' });
     } else if (userOpStatus === 'success' && userOpData) {
       const hash = userOpData.transactionHash || userOpData.userOpHash;
       const network = transaction.network;
@@ -182,27 +179,24 @@ export default function OfframpSendScreen() {
       if (network === 'base') explorerLine = `\n\nView on Basescan:\nhttps://basescan.org/tx/${hash}`;
       else if (network === 'ethereum') explorerLine = `\n\nView on Etherscan:\nhttps://etherscan.io/tx/${hash}`;
 
-      showAlert(
+      showSuccessAlert(
         'Sent! ✨',
-        `Successfully sent ${transaction.sell_amount.value} ${transaction.asset} to Coinbase.\n\nCoinbase will process your cash-out and deposit fiat to your account.${explorerLine}`,
-        'success',
-        false
+        `Successfully sent ${transaction.sell_amount.value} ${transaction.asset} to Coinbase.\n\nCoinbase will process your cash-out and deposit fiat to your account.${explorerLine}`
       );
     } else if (userOpStatus === 'error' && userOpError) {
-      showAlert('Send Failed ❌', `Error: ${userOpError.message}\n\nPlease try again.`, 'error', false);
+      setBanner({ state: 'error', message: `${userOpError.message} Please try again.` });
     }
-  }, [showAlert, userOpStatus, userOpData, userOpError, transaction]);
+  }, [showSuccessAlert, userOpStatus, userOpData, userOpError, transaction]);
 
   const handleAlertConfirm = () => {
-    setAlertVisible(false);
-    if (alertType === 'success') {
-      router.back();
-    }
+    setSuccessAlert(null);
+    router.back();
   };
 
   const handleSend = async () => {
     if (!transaction) return;
     setSending(true);
+    setBanner({ state: 'working', message: 'Sending your funds to Coinbase. Keep this screen open.' });
 
     try {
       const isSolana = transaction.network === 'solana';
@@ -212,7 +206,7 @@ export default function OfframpSendScreen() {
         await handleEvmOfframpSend();
       }
     } catch (err) {
-      showAlert('Send Failed ❌', err instanceof Error ? err.message : 'Unknown error occurred.', 'error', false);
+      setBanner({ state: 'error', message: err instanceof Error ? `${err.message} Please try again.` : 'Something went wrong. Please try again.' });
     } finally {
       setSending(false);
     }
@@ -220,7 +214,7 @@ export default function OfframpSendScreen() {
 
   const handleEvmOfframpSend = async () => {
     if (!transaction || !smartAccountAddress) {
-      showAlert('Wallet not ready', 'Your wallet is still getting ready. Try again in a moment.', 'error', false);
+      setBanner({ state: 'error', message: 'Your wallet is still getting ready. Try again in a moment.' });
       return;
     }
 
@@ -262,7 +256,7 @@ export default function OfframpSendScreen() {
 
   const handleSolanaOfframpSend = async () => {
     if (!transaction || !solanaAddress) {
-      showAlert('Error', 'Solana wallet not found.', 'error', false);
+      setBanner({ state: 'error', message: 'Your Solana wallet is not ready. Try again in a moment.' });
       return;
     }
 
@@ -273,7 +267,7 @@ export default function OfframpSendScreen() {
     const amountRaw = parseSolanaAmountToBaseUnits(sellAmountValue, decimals);
     const isSPL = !!mintAddress && asset.toUpperCase() !== 'SOL';
 
-    showAlert('Sending ⏳', 'Your transfer is on the way. This can take a few moments.\n\nDo not close this screen.', 'info', true);
+    setBanner({ state: 'working', message: 'Sending your funds to Coinbase. This can take a few moments — keep this screen open.' });
 
     console.log('💸 [OFFRAMP SEND] Solana transfer:', { asset, isSPL, hasMintAddress: !!mintAddress });
 
@@ -316,11 +310,9 @@ export default function OfframpSendScreen() {
     });
 
     const explorerUrl = `https://solscan.io/tx/${result.transactionSignature}`;
-    showAlert(
+    showSuccessAlert(
       'Sent! ✨',
-      `Successfully sent ${sellAmountValue} ${asset} to Coinbase.\n\nCoinbase will process your cash-out and deposit fiat to your account.\n\nView on Solscan:\n${explorerUrl}`,
-      'success',
-      false
+      `Successfully sent ${sellAmountValue} ${asset} to Coinbase.\n\nCoinbase will process your cash-out and deposit fiat to your account.\n\nView on Solscan:\n${explorerUrl}`
     );
   };
 
@@ -414,6 +406,8 @@ export default function OfframpSendScreen() {
               )}
             </RegentPressable>
 
+            {banner ? <StatusBanner state={banner.state} message={banner.message} /> : null}
+
             <Text style={styles.disclaimer}>
               Once this transfer is confirmed, Coinbase will validate and process your cash-out. Fiat will be deposited to your linked account.
             </Text>
@@ -422,12 +416,11 @@ export default function OfframpSendScreen() {
       </ScrollView>
 
       <CoinbaseAlert
-        visible={alertVisible}
-        title={alertTitle}
-        message={alertMessage}
-        type={alertType}
+        visible={!!successAlert}
+        title={successAlert?.title || ''}
+        message={successAlert?.message || ''}
+        type="success"
         onConfirm={handleAlertConfirm}
-        hideButton={alertHideButton}
       />
     </SafeAreaView>
   );

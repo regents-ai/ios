@@ -7,6 +7,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 
+import { createScopedSecureStore, environmentScope } from './scopedSecureStore';
+
+// Our own (non-credential) secure-store writes are scope-namespaced by
+// environment so they can never collide with another environment's values.
+// The CDP key reads below stay raw on purpose: they diagnose SDK-owned keys
+// this app does not control.
+const scopedDebugStore = createScopedSecureStore(environmentScope());
+
 // CDP SDK likely uses keys like these (common patterns)
 // Note: SecureStore only allows alphanumeric, ".", "-", "_" in key names
 const CDP_KEYS = [
@@ -65,9 +73,9 @@ export async function debugSecureStoreSession(): Promise<string> {
   const testValue = `test_${Date.now()}`;
 
   try {
-    await SecureStore.setItemAsync(testKey, testValue);
-    const readBack = await SecureStore.getItemAsync(testKey);
-    await SecureStore.deleteItemAsync(testKey);
+    await scopedDebugStore.setItem(testKey, testValue);
+    const readBack = await scopedDebugStore.getItem(testKey);
+    await scopedDebugStore.deleteItem(testKey);
 
     if (readBack === testValue) {
       results.push('✅ SecureStore: WORKING\n');
@@ -159,7 +167,7 @@ export async function testSecureStoreFunctionality(): Promise<string> {
 
   // Write test
   try {
-    await SecureStore.setItemAsync(testKey, testValue);
+    await scopedDebugStore.setItem(testKey, testValue);
     results.push('✅ Write: SUCCESS');
   } catch (error: any) {
     results.push(`❌ Write: FAILED\n${error.message}`);
@@ -168,7 +176,7 @@ export async function testSecureStoreFunctionality(): Promise<string> {
 
   // Read test
   try {
-    const value = await SecureStore.getItemAsync(testKey);
+    const value = await scopedDebugStore.getItem(testKey);
     if (value === testValue) {
       results.push('✅ Read: SUCCESS (match)');
     } else {
@@ -180,8 +188,8 @@ export async function testSecureStoreFunctionality(): Promise<string> {
 
   // Delete test
   try {
-    await SecureStore.deleteItemAsync(testKey);
-    const afterDelete = await SecureStore.getItemAsync(testKey);
+    await scopedDebugStore.deleteItem(testKey);
+    const afterDelete = await scopedDebugStore.getItem(testKey);
     if (afterDelete === null) {
       results.push('✅ Delete: SUCCESS');
     } else {

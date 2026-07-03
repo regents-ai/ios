@@ -30,6 +30,7 @@ import { useReducedMotion } from '@/components/motion/useReducedMotion';
 import { ProfileButton } from '@/components/navigation/ProfileButton';
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { RegentPressable } from '@/components/ui/RegentPressable';
+import { RecipientQuickPicks, recordRecipientUse } from '@/components/wallet/RecipientQuickPicks';
 import { SendConfirmationModal } from '@/components/wallet/SendConfirmationModal';
 import { sendScreenStyles as styles } from '@/components/wallet/sendScreenStyles';
 import {
@@ -282,6 +283,11 @@ export default function TransferScreen() {
 
   const handleConfirmedSend = async () => {
     setShowConfirmation(false);
+    if (!isAgentFundingFlow && recipientAddress) {
+      // Remember this recipient for the quick picks. Fire-and-forget: it can
+      // never block or alter the transfer itself.
+      void recordRecipientUse(recipientAddress);
+    }
     resetUserOpTracking();
     setSending(true);
     try {
@@ -455,6 +461,10 @@ export default function TransferScreen() {
                   <Text style={styles.recipientActionText}>QR photo</Text>
                 </RegentPressable>
               </View>
+            ) : null}
+
+            {!isAgentFundingFlow ? (
+              <RecipientQuickPicks onSelect={handleAddressChange} />
             ) : null}
 
             {resolvingRecipient ? (

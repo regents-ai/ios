@@ -1,11 +1,12 @@
 import { StatusPill } from '@/components/agent-surfaces/StatusPill';
 import { SpinningRefreshIcon } from '@/components/motion/SpinningRefreshIcon';
 import { ProfileButton } from '@/components/navigation/ProfileButton';
-import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
+import { ListRetryRow } from '@/components/ui/ListRetryRow';
 import { RegentPressable } from '@/components/ui/RegentPressable';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
 import { MessageThreadStatus, MessageThread } from '@/types/regents';
+import { describeListLoadFailure, type ListLoadFailure } from '@/utils/listLoadFailure';
 import { routes } from '@/utils/navigation/routes';
 import { regentApi } from '@/utils/regentApi/client';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -75,12 +76,19 @@ const MessageThreadRow = memo(function MessageThreadRow({
   const handlePress = useCallback(() => {
     onPressThread(thread);
   }, [onPressThread, thread]);
+  const needsApproval = !!thread.pendingApproval && !thread.pendingApproval.resolved;
+  // One flattened accessibility element per row, state words included.
+  const rowAccessibilityLabel = `${thread.agentName}, ${thread.title}, ${tone.label}, ${formatRelativeTime(thread.lastUpdatedAt)}${needsApproval ? ', needs your approval' : ''}`;
 
   return (
     <RegentPressable
       pressStyle="card"
       style={styles.sessionCard}
       onPress={handlePress}
+      accessible
+      accessibilityRole="button"
+      accessibilityLabel={rowAccessibilityLabel}
+      accessibilityHint="Opens this conversation"
     >
       <View style={styles.sessionHeader}>
         <View style={styles.sessionTitleGroup}>
@@ -121,17 +129,7 @@ export default function MessageTab() {
   const [threads, setThreads] = useState<MessageThread[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [alertState, setAlertState] = useState<{
-    visible: boolean;
-    title: string;
-    message: string;
-    type: 'success' | 'error' | 'info';
-  }>({
-    visible: false,
-    title: '',
-    message: '',
-    type: 'info',
-  });
+  const [loadError, setLoadError] = useState<ListLoadFailure | null>(null);
 
   const loadThreads = useCallback(async (refresh = false) => {
     try {
@@ -143,13 +141,9 @@ export default function MessageTab() {
 
       const nextThreads = await regentApi.listMessageThreads();
       setThreads(nextThreads);
+      setLoadError(null);
     } catch (error) {
-      setAlertState({
-        visible: true,
-        title: 'Could not load messages',
-        message: error instanceof Error ? error.message : 'Try again in a moment.',
-        type: 'error',
-      });
+      setLoadError(describeListLoadFailure(error, 'Unable to load messages right now.'));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -221,8 +215,18 @@ export default function MessageTab() {
           <Text style={styles.summaryLabel}>Needs approval</Text>
         </View>
       </View>
+
+      {loadError ? (
+        <ListRetryRow
+          title={loadError.title}
+          message={loadError.message}
+          offline={loadError.offline}
+          onRetry={() => loadThreads()}
+          retryHint="Tries loading your messages again"
+        />
+      ) : null}
     </View>
-  ), [loadThreads, refreshing, threads.length, waitingCount]);
+  ), [loadError, loadThreads, refreshing, threads.length, waitingCount]);
 
   const listEmpty = useMemo(() => {
     if (loading) {
@@ -234,6 +238,12 @@ export default function MessageTab() {
       );
     }
 
+    // The retry row in the header already explains a failed load; showing
+    // "No messages yet" under it would be misleading.
+    if (loadError) {
+      return null;
+    }
+
     return (
       <View style={styles.emptyState}>
         <View style={styles.emptyIcon}>
@@ -243,7 +253,7 @@ export default function MessageTab() {
         <Text style={styles.emptyBody}>Agent messages, payment requests, and work updates can appear here when they need you.</Text>
       </View>
     );
-  }, [loading]);
+  }, [loading, loadError]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -264,15 +274,6 @@ export default function MessageTab() {
             onRefresh={() => loadThreads(true)}
           />
         }
-      />
-
-      <CoinbaseAlert
-        visible={alertState.visible}
-        type={alertState.type}
-        title={alertState.title}
-        message={alertState.message}
-        confirmText="OK"
-        onConfirm={() => setAlertState((current) => ({ ...current, visible: false }))}
       />
     </SafeAreaView>
   );

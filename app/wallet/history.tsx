@@ -10,13 +10,14 @@ import {
 } from "react-native";
 import { LiveValueFlash } from "../../components/motion/LiveValueFlash";
 import { SpinningRefreshIcon } from "../../components/motion/SpinningRefreshIcon";
-import { CoinbaseAlert } from "../../components/ui/CoinbaseAlerts";
 import { FailedTransactionBadge } from "../../components/ui/FailedTransactionCard";
+import { ListRetryRow } from "../../components/ui/ListRetryRow";
 import { RegentPressable } from "../../components/ui/RegentPressable";
 import { COLORS } from "../../constants/Colors";
 import { FONTS } from "../../constants/Typography";
 import { useRegentsAuth } from "../../hooks/useRegentsAuth";
 import { fetchTransactionHistory } from "../../utils/fetchTransactionHistory";
+import { describeListLoadFailure, type ListLoadFailure } from "../../utils/listLoadFailure";
 
 
 const { BLUE, DARK_BG, CARD_BG, BORDER, TEXT_PRIMARY, TEXT_SECONDARY, WHITE } = COLORS;
@@ -47,18 +48,7 @@ export default function History() {
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [nextPageKey, setNextPageKey] = useState<string | null>(null);
-
-  const [alertState, setAlertState] = useState<{
-    visible: boolean;
-    title: string;
-    message: string;
-    type: 'success' | 'error' | 'info';
-  }>({
-    visible: false,
-    title: '',
-    message: '',
-    type: 'info'
-  });
+  const [loadError, setLoadError] = useState<ListLoadFailure | null>(null);
 
   const loadTransactions = useCallback(async (pageKey?: string, append: boolean = false) => {
     const userId = regentsUserId;
@@ -84,14 +74,10 @@ export default function History() {
       }
 
       setNextPageKey(result.nextPageKey || null);
+      setLoadError(null);
     } catch (error) {
       console.error("Failed to load transaction history:", error);
-      setAlertState({
-        visible: true,
-        title: "Error",
-        message: "Failed to load transaction history",
-        type: 'error'
-      });
+      setLoadError(describeListLoadFailure(error, "We couldn't load your wallet activity."));
     } finally {
       if (append) {
         setLoadingMore(false);
@@ -149,48 +135,58 @@ export default function History() {
     });
   };
 
+  const formatStatusLabel = (status: string) =>
+    status.replace(/ONRAMP_TRANSACTION_STATUS_/g, '').replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
+
   const renderTransaction = ({ item }: { item: Transaction }) => {
     const isFailed = isFailedTransaction(item.status);
+    const statusLabel = formatStatusLabel(item.status);
+    // One flattened accessibility element per row, with the state included in
+    // the label. The interactive support badge stays a separate element.
+    const rowAccessibilityLabel = `${item.purchase_currency} purchase of $${item.payment_total.value}, ${statusLabel}, ${item.purchase_network}, ${formatDate(item.created_at)}`;
 
     return (
-      <View style={styles.transactionItem}>
-        <View style={[styles.transactionIcon, isFailed && styles.transactionIconFailed]}>
-          <Ionicons
-            name={isFailed ? "alert-circle" : "swap-horizontal"}
-            size={16}
-            color={isFailed ? "#FF6B6B" : WHITE}
-          />
-        </View>
-        <View style={styles.transactionContent}>
-          <View style={styles.transactionInfo}>
-            <Text style={styles.transactionTitle}>
-              {item.purchase_currency} Purchase
-            </Text>
-            <Text style={styles.transactionSubtitle}>
-              {item.purchase_network} • {formatDate(item.created_at)}
-            </Text>
+      <View style={styles.transactionShell}>
+        <View style={styles.transactionItem} accessible accessibilityLabel={rowAccessibilityLabel}>
+          <View style={[styles.transactionIcon, isFailed && styles.transactionIconFailed]}>
+            <Ionicons
+              name={isFailed ? "alert-circle" : "swap-horizontal"}
+              size={16}
+              color={isFailed ? "#FF6B6B" : WHITE}
+            />
           </View>
-
-          <View style={styles.transactionMeta}>
-            <LiveValueFlash value={`${item.transaction_id}-${item.payment_total.value}`} style={styles.transactionAmountFlash}>
-              <Text style={styles.transactionAmount}>
-                ${item.payment_total.value}
+          <View style={styles.transactionContent}>
+            <View style={styles.transactionInfo}>
+              <Text style={styles.transactionTitle}>
+                {item.purchase_currency} Purchase
               </Text>
-            </LiveValueFlash>
-            <View style={[styles.statusBadge, { borderColor: getStatusColor(item.status), backgroundColor: `${getStatusColor(item.status)}15` }]}>
-              <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
-                {item.status.replace(/ONRAMP_TRANSACTION_STATUS_/g, '').replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase())}
+              <Text style={styles.transactionSubtitle}>
+                {item.purchase_network} • {formatDate(item.created_at)}
               </Text>
             </View>
-          </View>
 
-          {/* Show support badge for failed transactions */}
-          {isFailed && (
-            <View style={styles.supportBadgeRow}>
-              <FailedTransactionBadge transaction={item} />
+            <View style={styles.transactionMeta}>
+              <LiveValueFlash value={`${item.transaction_id}-${item.payment_total.value}`} style={styles.transactionAmountFlash}>
+                <Text style={styles.transactionAmount}>
+                  ${item.payment_total.value}
+                </Text>
+              </LiveValueFlash>
+              <View style={[styles.statusBadge, { borderColor: getStatusColor(item.status), backgroundColor: `${getStatusColor(item.status)}15` }]}>
+                <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
+                  {statusLabel}
+                </Text>
+              </View>
             </View>
-          )}
+          </View>
         </View>
+
+        {/* Show support badge for failed transactions. It sits outside the
+            flattened row so it stays reachable as its own control. */}
+        {isFailed && (
+          <View style={styles.supportBadgeRow}>
+            <FailedTransactionBadge transaction={item} />
+          </View>
+        )}
       </View>
     );
   };
@@ -211,7 +207,19 @@ export default function History() {
           <SpinningRefreshIcon refreshing={loading} size={20} color={BLUE} />
         </RegentPressable>
       </View>
+      {loadError ? (
+        <View style={styles.errorRowWrap}>
+          <ListRetryRow
+            title={loadError.title}
+            message={loadError.message}
+            offline={loadError.offline}
+            onRetry={() => loadTransactions()}
+            retryHint="Tries loading your wallet activity again"
+          />
+        </View>
+      ) : null}
       {transactions.length === 0 ? (
+        loadError ? null : (
         <View style={styles.emptyState}>
           <View style={styles.emptyIcon}>
             <Ionicons name="time-outline" size={28} color={BLUE} />
@@ -229,6 +237,7 @@ export default function History() {
             <Text style={styles.emptyButtonText}>{regentsUserId ? 'Open Wallet' : 'Sign in'}</Text>
           </RegentPressable>
         </View>
+        )
       ) : (
           <FlatList
             data={transactions}
@@ -257,13 +266,6 @@ export default function History() {
             }
           />
         )}
-          <CoinbaseAlert
-            visible={alertState.visible}
-            title={alertState.title}
-            message={alertState.message}
-            type={alertState.type}
-            onConfirm={() => setAlertState(prev => ({ ...prev, visible: false }))}
-          />
     </View>
   );
 }
@@ -319,14 +321,16 @@ const styles = StyleSheet.create({
   listContainer: {
     padding: 20,
   },
-  transactionItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+  transactionShell: {
     padding: 16,
     backgroundColor: CARD_BG,
     borderWidth: 1,
     borderColor: BORDER,
     borderRadius: 20,
+  },
+  transactionItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     gap: 12,
   },
   transactionIcon: {
@@ -345,7 +349,13 @@ const styles = StyleSheet.create({
   },
   supportBadgeRow: {
     marginTop: 8,
+    // Align the badge under the row copy (icon width 40 + row gap 12).
+    paddingLeft: 52,
     alignItems: 'flex-start',
+  },
+  errorRowWrap: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
   },
   transactionAmount: {
     fontSize: 16,

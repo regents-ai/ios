@@ -1,10 +1,11 @@
 import { VerificationMotion } from '@/components/auth/verification-motion';
-import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { RegentPressable } from '@/components/ui/RegentPressable';
+import { StatusBanner, type StatusBannerState } from '@/components/ui/StatusBanner';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
 import { useChatGptAuth } from '@/hooks/useChatGptAuth';
 import { useRegentsAuth } from '@/hooks/useRegentsAuth';
+import { shouldInterceptForwardNavigation } from '@/utils/onboardingGate';
 import { useLinkEmail, useLoginWithEmail } from '@privy-io/expo';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -31,12 +32,7 @@ export default function EmailVerifyScreen() {
 
   const [email, setEmail] = useState(initialEmail);
   const [sending, setSending] = useState(false);
-  const [alert, setAlert] = useState<{ visible: boolean; title: string; message: string; type: 'success' | 'error' | 'info' }>({
-    visible: false,
-    title: '',
-    message: '',
-    type: 'info',
-  });
+  const [banner, setBanner] = useState<{ state: StatusBannerState; message: string } | null>(null);
 
   const { sendCode: sendLoginCode } = useLoginWithEmail();
   const { sendCode: sendLinkCode } = useLinkEmail();
@@ -53,31 +49,22 @@ export default function EmailVerifyScreen() {
 
   const startEmailVerification = async () => {
     if (!isChatGptReady || !chatGptSession) {
-      setAlert({
-        visible: true,
-        title: 'Sign in with ChatGPT',
-        message: 'Finish ChatGPT sign-in before you continue.',
-        type: 'error',
-      });
+      setBanner({ state: 'error', message: 'Finish ChatGPT sign-in before you continue.' });
       return;
     }
 
     if (!isEmailValid) {
-      setAlert({ visible: true, title: 'Enter an email address', message: 'Please add a valid email address to continue.', type: 'error' });
+      setBanner({ state: 'error', message: 'Please add a valid email address to continue.' });
       return;
     }
 
     if (mode === 'link' && !isAuthenticated) {
-      setAlert({
-        visible: true,
-        title: 'Sign in first',
-        message: 'Sign in before you add a new email address.',
-        type: 'error',
-      });
+      setBanner({ state: 'error', message: 'Sign in before you add a new email address.' });
       return;
     }
 
     setSending(true);
+    setBanner({ state: 'working', message: 'Sending your code…' });
     try {
       if (mode === 'signin') {
         await sendLoginCode({ email });
@@ -85,17 +72,23 @@ export default function EmailVerifyScreen() {
         await sendLinkCode({ email });
       }
 
-      router.push({
-        pathname: '/email-code',
-        params: { email, mode },
+      setBanner({ state: 'success', message: `Code sent to ${email}.` });
+
+      // The code-entry screen only opens once the code really went out.
+      const intercept = shouldInterceptForwardNavigation({
+        from: '/email-verify',
+        to: '/email-code',
+        hasCompletedCriticalAction: true,
+        hasBypassed: false,
       });
+      if (!intercept) {
+        router.push({
+          pathname: '/email-code',
+          params: { email, mode },
+        });
+      }
     } catch (error: any) {
-      setAlert({
-        visible: true,
-        title: 'Code not sent',
-        message: error.message || 'Please try again.',
-        type: 'error',
-      });
+      setBanner({ state: 'error', message: error.message || 'We could not send the code. Please try again.' });
     } finally {
       setSending(false);
     }
@@ -153,6 +146,11 @@ export default function EmailVerifyScreen() {
             order={5}
             style={styles.footer}
           >
+            {banner ? (
+              <View style={styles.bannerWrap}>
+                <StatusBanner state={banner.state} message={banner.message} />
+              </View>
+            ) : null}
             <RegentPressable
               style={[styles.primaryButton, (!isEmailValid || sending) && styles.disabledButton]}
               onPress={startEmailVerification}
@@ -163,14 +161,6 @@ export default function EmailVerifyScreen() {
           </VerificationMotion>
         </ScrollView>
       </KeyboardAvoidingView>
-
-      <CoinbaseAlert
-        visible={alert.visible}
-        title={alert.title}
-        message={alert.message}
-        type={alert.type}
-        onConfirm={() => setAlert((current) => ({ ...current, visible: false }))}
-      />
     </SafeAreaView>
   );
 }
@@ -246,6 +236,9 @@ const styles = StyleSheet.create({
   },
   footer: {
     paddingTop: 24,
+  },
+  bannerWrap: {
+    marginBottom: 12,
   },
   primaryButton: {
     minHeight: 58,

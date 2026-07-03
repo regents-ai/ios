@@ -15,31 +15,30 @@
  * const response = await authenticatedFetch(url, options);
  * ```
  *
- * Features:
- * - Automatically retrieves and injects the current app access token
- * - Merges with existing headers (won't overwrite Content-Type, etc.)
- * - Throws helpful errors if token unavailable
- * - Works with both string URLs and Request objects
+ * Header precedence: caller-supplied headers merge UNDERNEATH the auth
+ * header, so caller configuration can never override the Authorization
+ * value this wrapper owns (see utils/requestHeaderPrecedence.ts).
  */
 
 import { getAccessTokenGlobal } from './getAccessTokenGlobal';
+import { mergeHeadersUnderSecurity } from './requestHeaderPrecedence';
 
 export async function authenticatedFetch(
   input: RequestInfo | URL,
   init?: RequestInit
 ): Promise<Response> {
-  // Prepare headers
-  const headers = new Headers(init?.headers || {});
-
+  // Request-time snapshot: the token is read fresh for every request rather
+  // than captured once, so a rotated session is picked up immediately.
   const token = await getAccessTokenGlobal();
 
   if (!token) {
     throw new Error('Authentication required. Please connect your wallet first.');
   }
 
-  if (!headers.has('Authorization')) {
-    headers.set('Authorization', `Bearer ${token}`);
-  }
+  // Caller headers first, security headers on top — security always wins.
+  const headers = mergeHeadersUnderSecurity(init?.headers, {
+    Authorization: `Bearer ${token}`,
+  });
 
   // Log for debugging (in development)
   if (__DEV__) {
