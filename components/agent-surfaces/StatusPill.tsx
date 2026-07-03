@@ -1,5 +1,5 @@
-import { FONTS } from '@/constants/Typography';
 import { useReducedMotion } from '@/components/motion/useReducedMotion';
+import { useTheme } from '@/theme/ThemeProvider';
 import { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 
@@ -82,6 +82,7 @@ function StatusDot({ color, pulsing }: { color: string; pulsing: boolean }) {
 }
 
 export function StatusPill({ label, color, backgroundColor, borderColor, showDot = false, compact = false, pulseDot }: StatusPillProps) {
+  const { fonts } = useTheme();
   const shouldPulse = pulseDot ?? shouldPulseDot(label);
 
   return (
@@ -96,7 +97,7 @@ export function StatusPill({ label, color, backgroundColor, borderColor, showDot
       ]}
     >
       {showDot ? <StatusDot color={color} pulsing={shouldPulse} /> : null}
-      <Text style={[styles.label, compact && styles.compactLabel, { color }]}>{label}</Text>
+      <Text style={[styles.label, compact && styles.compactLabel, { color, fontFamily: fonts.ui }]}>{label}</Text>
     </View>
   );
 }
@@ -136,7 +137,6 @@ const styles = StyleSheet.create({
   label: {
     flexShrink: 1,
     fontSize: 12,
-    fontFamily: FONTS.body,
   },
   compactLabel: {
     fontSize: 11,

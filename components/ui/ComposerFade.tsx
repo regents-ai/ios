@@ -12,6 +12,7 @@ import MaskedView from '@react-native-masked-view/masked-view';
 import { BlurView } from 'expo-blur';
 import { StyleSheet, View } from 'react-native';
 
+import { useTheme } from '@/theme/ThemeProvider';
 import { COMPOSER_FADE_HEIGHT, composerFadeSlices } from '@/utils/composerFade';
 
 export { COMPOSER_FADE_HEIGHT };
@@ -29,9 +30,10 @@ function FadeMask() {
 }
 
 export function ComposerFade() {
+  const { name } = useTheme();
   return (
     <MaskedView pointerEvents="none" style={styles.wrap} maskElement={<FadeMask />}>
-      <BlurView intensity={40} tint="light" style={styles.fill} />
+      <BlurView intensity={40} tint={name === 'dark' ? 'dark' : 'light'} style={styles.fill} />
     </MaskedView>
   );
 }

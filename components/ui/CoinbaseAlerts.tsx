@@ -1,14 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { EaseView } from 'react-native-ease';
-import { COLORS } from '../../constants/Colors';
-import { FONTS } from '../../constants/Typography';
 import { getEaseTransition } from '@/components/motion/easePresets';
 import { useReducedMotion } from '@/components/motion/useReducedMotion';
 import { RegentPressable } from '@/components/ui/RegentPressable';
-
-const { BLUE, CARD_BG, CARD_ALT, BORDER, TEXT_PRIMARY, TEXT_SECONDARY, WHITE, SUCCESS, DANGER, BACKDROP } = COLORS;
+import { useTheme, type Theme } from '@/theme/ThemeProvider';
 
 type AlertType = 'success' | 'error' | 'info';
 
@@ -35,14 +32,17 @@ export function CoinbaseAlert({
   cancelText = "Cancel",
   hideButton = false
 }: CoinbaseAlertProps) {
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
+  const { colors } = theme;
   const reducedMotionEnabled = useReducedMotion();
   const [isPresented, setIsPresented] = useState(visible);
 
   const getIcon = () => {
     switch (type) {
-      case 'success': return { name: 'checkmark-circle' as const, color: SUCCESS };
-      case 'error': return { name: 'close-circle' as const, color: DANGER };
-      case 'info': return { name: 'information-circle' as const, color: BLUE };
+      case 'success': return { name: 'checkmark-circle' as const, color: colors.success };
+      case 'error': return { name: 'close-circle' as const, color: colors.error };
+      case 'info': return { name: 'information-circle' as const, color: colors.accent };
     }
   };
 
@@ -67,7 +67,7 @@ export function CoinbaseAlert({
         <EaseView
           initialAnimate={{ opacity: 0 }}
           animate={{ opacity: visible ? 1 : 0 }}
-          style={[StyleSheet.absoluteFillObject, { backgroundColor: BACKDROP }]}
+          style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0, 0, 0, 0.45)' }]}
           transition={getEaseTransition('card', reducedMotionEnabled)}
         >
           <Pressable style={StyleSheet.absoluteFillObject} onPress={onConfirm} />
@@ -136,95 +136,97 @@ export function showCoinbaseAlert(
   });
 }
 
-const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  alertCard: {
-    backgroundColor: CARD_BG,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    borderWidth: 1,
-    borderColor: BORDER,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 34,
-    minHeight: 220,
-    maxHeight: '85%',
-  },
-  handle: {
-    width: 36,
-    height: 4,
-    backgroundColor: CARD_ALT,
-    borderRadius: 2,
-    marginBottom: 20,
-    alignSelf: 'center',
-  },
-  iconContainer: {
-    marginBottom: 16,
-    alignItems: 'center',
-  },
-  title: {
-    fontSize: 24,
-    color: TEXT_PRIMARY,
-    marginBottom: 8,
-    textAlign: 'center',
-    fontFamily: FONTS.heading,
-  },
-  message: {
-    fontSize: 16,
-    color: TEXT_SECONDARY,
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 32,
-    paddingHorizontal: 16,
-    fontFamily: FONTS.body,
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    gap: 12,
-    width: '100%',
-    paddingHorizontal: 16,
-    justifyContent: 'space-between',
-  },
-  button: {
-    backgroundColor: BLUE,
-    paddingHorizontal: 48,
-    paddingVertical: 16,
-    borderRadius: 16,
-    minWidth: 200,
-    alignSelf: 'center',
-  },
-  buttonInRow: {
-    backgroundColor: BLUE,
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    borderRadius: 16,
-    flex: 1,
-    minWidth: 120,
-  },
-  buttonSecondary: {
-    backgroundColor: CARD_ALT,
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: BORDER,
-    flex: 1,
-    minWidth: 120,
-  },
-  buttonText: {
-    color: WHITE,
-    fontSize: 18,
-    textAlign: 'center',
-    fontFamily: FONTS.body,
-  },
-  buttonTextSecondary: {
-    color: TEXT_PRIMARY,
-    fontSize: 18,
-    textAlign: 'center',
-    fontFamily: FONTS.body,
-  },
-});
+function makeStyles({ colors, fonts, type }: Theme) {
+  return StyleSheet.create({
+    backdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'flex-end',
+    },
+    alertCard: {
+      backgroundColor: colors.surfaceElevated,
+      borderTopLeftRadius: 28,
+      borderTopRightRadius: 28,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.hairlineStrong,
+      paddingHorizontal: 20,
+      paddingTop: 16,
+      paddingBottom: 34,
+      minHeight: 220,
+      maxHeight: '85%',
+    },
+    handle: {
+      width: 36,
+      height: 4,
+      backgroundColor: colors.border,
+      borderRadius: 2,
+      marginBottom: 20,
+      alignSelf: 'center',
+    },
+    iconContainer: {
+      marginBottom: 16,
+      alignItems: 'center',
+    },
+    title: {
+      fontSize: type.title.size,
+      color: colors.text,
+      marginBottom: 8,
+      textAlign: 'center',
+      fontFamily: fonts.title,
+    },
+    message: {
+      fontSize: type.body.size,
+      color: colors.textMuted,
+      textAlign: 'center',
+      lineHeight: type.body.line,
+      marginBottom: 32,
+      paddingHorizontal: 16,
+      fontFamily: fonts.ui,
+    },
+    buttonRow: {
+      flexDirection: 'row',
+      gap: 12,
+      width: '100%',
+      paddingHorizontal: 16,
+      justifyContent: 'space-between',
+    },
+    button: {
+      backgroundColor: colors.accent,
+      paddingHorizontal: 48,
+      paddingVertical: 16,
+      borderRadius: 16,
+      minWidth: 200,
+      alignSelf: 'center',
+    },
+    buttonInRow: {
+      backgroundColor: colors.accent,
+      paddingHorizontal: 24,
+      paddingVertical: 16,
+      borderRadius: 16,
+      flex: 1,
+      minWidth: 120,
+    },
+    buttonSecondary: {
+      backgroundColor: colors.surface,
+      paddingHorizontal: 24,
+      paddingVertical: 16,
+      borderRadius: 16,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.hairlineStrong,
+      flex: 1,
+      minWidth: 120,
+    },
+    buttonText: {
+      color: colors.onAccent,
+      fontSize: 18,
+      textAlign: 'center',
+      fontFamily: fonts.ui,
+    },
+    buttonTextSecondary: {
+      color: colors.text,
+      fontSize: 18,
+      textAlign: 'center',
+      fontFamily: fonts.ui,
+    },
+  });
+}

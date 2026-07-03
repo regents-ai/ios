@@ -45,7 +45,18 @@ export type ThemeColors = {
   // Glass card treatment over artwork.
   glassSurface: string;
   glassBorder: string;
+  // Stronger stroke for opaque glass (Reduce Transparency) and contrast edges.
+  contrastStroke: string;
 };
+
+/** "#rrggbb" -> "r, g, b" for rgba() washes. */
+export function hexToRgb(hex: string): string {
+  const value = hex.replace('#', '');
+  const r = parseInt(value.slice(0, 2), 16);
+  const g = parseInt(value.slice(2, 4), 16);
+  const b = parseInt(value.slice(4, 6), 16);
+  return `${r}, ${g}, ${b}`;
+}
 
 // Platform-brand neutral scale + accents, sRGB hex from the oklch source.
 const DARK: ThemeColors = {
@@ -71,6 +82,7 @@ const DARK: ThemeColors = {
   // Glass: elevated surface at ~92% over artwork, subtle border.
   glassSurface: 'rgba(23, 23, 23, 0.92)',
   glassBorder: 'rgba(51, 51, 51, 0.55)',
+  contrastStroke: 'rgba(245, 245, 245, 0.4)',
 };
 
 const LIGHT: ThemeColors = {
@@ -95,6 +107,7 @@ const LIGHT: ThemeColors = {
   warningWash: 'rgba(138, 87, 0, 0.10)',
   glassSurface: 'rgba(253, 253, 253, 0.92)',
   glassBorder: 'rgba(209, 209, 209, 0.55)',
+  contrastStroke: 'rgba(27, 27, 27, 0.4)',
 };
 
 export const THEME_COLORS: Record<ThemeName, ThemeColors> = { light: LIGHT, dark: DARK };

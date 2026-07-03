@@ -10,7 +10,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { useReducedMotion } from '@/components/motion/useReducedMotion';
-import { COLORS } from '@/constants/Colors';
+import { useTheme } from '@/theme/ThemeProvider';
 
 const DOT_MIN_SCALE = 0.86;
 const DOT_MAX_SCALE = 1.16;
@@ -30,10 +30,12 @@ type TypingIndicatorProps = {
  * Under reduced motion the dot holds still at a muted opacity.
  */
 export function TypingIndicator({
-  color = COLORS.TEXT_SECONDARY,
+  color,
   size = 8,
   style,
 }: TypingIndicatorProps) {
+  const { colors } = useTheme();
+  const dotColor = color ?? colors.textMuted;
   const reducedMotionEnabled = useReducedMotion();
   const phase = useSharedValue(0);
 
@@ -63,7 +65,7 @@ export function TypingIndicator({
     width: size,
     height: size,
     borderRadius: size / 2,
-    backgroundColor: color,
+    backgroundColor: dotColor,
   };
 
   return (

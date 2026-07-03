@@ -1,6 +1,7 @@
-import { fireEvent, render } from '@testing-library/react-native';
+import { fireEvent } from '@testing-library/react-native';
 import React from 'react';
 
+import { renderThemed } from './helpers/renderThemed';
 import { ApprovalOverlay } from '@/components/ui/ApprovalOverlay';
 
 const baseProps = {
@@ -14,7 +15,7 @@ const baseProps = {
 
 describe('ApprovalOverlay', () => {
   it('renders exactly the two choices: Approve once and Deny', () => {
-    const { getByText, queryByText } = render(<ApprovalOverlay {...baseProps} />);
+    const { getByText, queryByText } = renderThemed(<ApprovalOverlay {...baseProps} />);
 
     expect(getByText('Approve once')).toBeTruthy();
     expect(getByText('Deny')).toBeTruthy();
@@ -24,14 +25,14 @@ describe('ApprovalOverlay', () => {
   });
 
   it('shows the exact command for review', () => {
-    const { getByText } = render(<ApprovalOverlay {...baseProps} />);
+    const { getByText } = renderThemed(<ApprovalOverlay {...baseProps} />);
     expect(getByText('fund-agent regent=r1 to=0xabc')).toBeTruthy();
   });
 
   it('calls onApprove (and not onDeny) when Approve once is pressed', () => {
     const onApprove = jest.fn();
     const onDeny = jest.fn();
-    const { getByText } = render(
+    const { getByText } = renderThemed(
       <ApprovalOverlay {...baseProps} onApprove={onApprove} onDeny={onDeny} />
     );
 
@@ -43,7 +44,7 @@ describe('ApprovalOverlay', () => {
   it('calls onDeny (and not onApprove) when Deny is pressed', () => {
     const onApprove = jest.fn();
     const onDeny = jest.fn();
-    const { getByText } = render(
+    const { getByText } = renderThemed(
       <ApprovalOverlay {...baseProps} onApprove={onApprove} onDeny={onDeny} />
     );
 

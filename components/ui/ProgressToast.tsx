@@ -8,18 +8,15 @@
  */
 
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { ActivityIndicator, Animated, Easing, StyleSheet, Text } from 'react-native';
 
 import { useReducedMotion } from '@/components/motion/useReducedMotion';
 import { GlassSurface } from '@/components/ui/GlassSurface';
 import { RegentPressable } from '@/components/ui/RegentPressable';
-import { COLORS } from '@/constants/Colors';
-import { FONTS } from '@/constants/Typography';
+import { useTheme, type Theme } from '@/theme/ThemeProvider';
 import { getMotionKnobs } from '@/utils/motionKnobs';
 import type { ProgressToastState } from '@/utils/progressToast';
-
-const { TEXT_PRIMARY, SUCCESS, BLUE } = COLORS;
 
 type ProgressToastProps = {
   toast: ProgressToastState | null;
@@ -27,6 +24,8 @@ type ProgressToastProps = {
 };
 
 function ToastPill({ toast, onDismiss }: { toast: ProgressToastState; onDismiss: () => void }) {
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const reducedMotion = useReducedMotion();
   const entry = useRef(new Animated.Value(reducedMotion ? 1 : 0)).current;
 
@@ -68,9 +67,9 @@ function ToastPill({ toast, onDismiss }: { toast: ProgressToastState; onDismiss:
       >
         <GlassSurface level="pill" style={styles.pill}>
           {toast.phase === 'progress' ? (
-            <ActivityIndicator size="small" color={BLUE} />
+            <ActivityIndicator size="small" color={theme.colors.accent} />
           ) : (
-            <Ionicons name="checkmark-circle" size={20} color={SUCCESS} />
+            <Ionicons name="checkmark-circle" size={20} color={theme.colors.success} />
           )}
           <Text numberOfLines={2} style={styles.label}>
             {toast.label}
@@ -90,33 +89,35 @@ export function ProgressToast({ toast, onDismiss }: ProgressToastProps) {
   return <ToastPill key={toast.id} toast={toast} onDismiss={onDismiss} />;
 }
 
-const styles = StyleSheet.create({
-  wrap: {
-    position: 'absolute',
-    left: 20,
-    right: 20,
-    bottom: 24,
-    alignItems: 'center',
-  },
-  pill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    maxWidth: '100%',
-    borderRadius: 999,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.18,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
-  },
-  label: {
-    flexShrink: 1,
-    color: TEXT_PRIMARY,
-    fontSize: 14,
-    lineHeight: 19,
-    fontFamily: FONTS.body,
-  },
-});
+function makeStyles({ colors, fonts, type }: Theme) {
+  return StyleSheet.create({
+    wrap: {
+      position: 'absolute',
+      left: 20,
+      right: 20,
+      bottom: 24,
+      alignItems: 'center',
+    },
+    pill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      maxWidth: '100%',
+      borderRadius: 999,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      shadowColor: '#000',
+      shadowOpacity: 0.18,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 4 },
+      elevation: 4,
+    },
+    label: {
+      flexShrink: 1,
+      color: colors.text,
+      fontSize: type.label.size,
+      lineHeight: type.caption.line,
+      fontFamily: fonts.ui,
+    },
+  });
+}

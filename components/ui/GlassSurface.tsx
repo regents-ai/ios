@@ -10,6 +10,8 @@ import { BlurView } from 'expo-blur';
 import { useEffect, useState } from 'react';
 import { AccessibilityInfo, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
+import { useTheme } from '@/theme/ThemeProvider';
+import { hexToRgb } from '@/theme/tokens';
 import { resolveGlassSurface, type GlassLevel } from '@/utils/glassSurface';
 
 export function useReduceTransparency() {
@@ -43,7 +45,14 @@ type GlassSurfaceProps = {
 
 export function GlassSurface({ level = 'pill', style, children }: GlassSurfaceProps) {
   const reduceTransparency = useReduceTransparency();
-  const resolution = resolveGlassSurface(level, reduceTransparency);
+  const { name, colors } = useTheme();
+  const resolution = resolveGlassSurface(level, reduceTransparency, {
+    tint: name === 'dark' ? 'dark' : 'light',
+    surfaceRgb: hexToRgb(colors.surfaceElevated),
+    opaqueSurface: colors.surfaceElevated,
+    stroke: colors.hairlineStrong,
+    contrastStroke: colors.contrastStroke,
+  });
 
   if (resolution.mode === 'opaque') {
     return (

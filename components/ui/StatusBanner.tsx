@@ -9,18 +9,17 @@
  */
 
 import { Ionicons } from '@expo/vector-icons';
+import { useMemo } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
-import { COLORS } from '@/constants/Colors';
-import { FONTS } from '@/constants/Typography';
-
-const { BLUE, BLUE_WASH, BORDER, DANGER, SUCCESS, TEXT_PRIMARY } = COLORS;
-const GREEN_WASH = '#E6F0EA';
-const RED_WASH = '#FFF0F0';
+import { useTheme, type Theme } from '@/theme/ThemeProvider';
 
 export type StatusBannerState = 'working' | 'success' | 'error';
 
 export function StatusBanner({ state, message }: { state: StatusBannerState; message: string }) {
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
+  const { colors } = theme;
   return (
     <View
       style={[styles.banner, styles[state]]}
@@ -28,11 +27,11 @@ export function StatusBanner({ state, message }: { state: StatusBannerState; mes
       accessibilityLiveRegion="polite"
     >
       {state === 'working' ? (
-        <ActivityIndicator size="small" color={BLUE} />
+        <ActivityIndicator size="small" color={colors.accent} />
       ) : state === 'success' ? (
-        <Ionicons name="checkmark-circle" size={18} color={SUCCESS} />
+        <Ionicons name="checkmark-circle" size={18} color={colors.success} />
       ) : (
-        <Ionicons name="warning-outline" size={18} color={DANGER} />
+        <Ionicons name="warning-outline" size={18} color={colors.error} />
       )}
       <Text style={styles.message} selectable={state === 'error'}>
         {message}
@@ -41,34 +40,36 @@ export function StatusBanner({ state, message }: { state: StatusBannerState; mes
   );
 }
 
-const styles = StyleSheet.create({
-  banner: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    borderRadius: 14,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  working: {
-    backgroundColor: BLUE_WASH,
-    borderColor: BORDER,
-  },
-  success: {
-    backgroundColor: GREEN_WASH,
-    borderColor: SUCCESS,
-  },
-  error: {
-    backgroundColor: RED_WASH,
-    borderColor: DANGER,
-  },
-  message: {
-    flex: 1,
-    minWidth: 0,
-    color: TEXT_PRIMARY,
-    fontSize: 14,
-    lineHeight: 20,
-    fontFamily: FONTS.body,
-  },
-});
+function makeStyles({ colors, fonts, type }: Theme) {
+  return StyleSheet.create({
+    banner: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 10,
+      borderRadius: 14,
+      borderWidth: StyleSheet.hairlineWidth,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+    },
+    working: {
+      backgroundColor: colors.accentWash,
+      borderColor: colors.hairlineStrong,
+    },
+    success: {
+      backgroundColor: colors.successWash,
+      borderColor: colors.success,
+    },
+    error: {
+      backgroundColor: colors.errorWash,
+      borderColor: colors.error,
+    },
+    message: {
+      flex: 1,
+      minWidth: 0,
+      color: colors.text,
+      fontSize: type.label.size,
+      lineHeight: type.body.line,
+      fontFamily: fonts.ui,
+    },
+  });
+}

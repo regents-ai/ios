@@ -7,21 +7,16 @@
  * never runs them; the composer routes selection.
  */
 
+import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { RegentPressable } from '@/components/ui/RegentPressable';
-import { COLORS } from '@/constants/Colors';
-import { FONTS } from '@/constants/Typography';
+import { useTheme, type Theme } from '@/theme/ThemeProvider';
 import {
   filterCommands,
   type SlashCommand,
   type SlashParse,
 } from '@/utils/slashCommands';
-
-const { CARD_BG, CARD_ALT, BORDER, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, AMBER } = {
-  ...COLORS,
-  AMBER: '#A3703A',
-};
 
 type SlashCommandPanelProps = {
   parse: SlashParse;
@@ -29,6 +24,8 @@ type SlashCommandPanelProps = {
 };
 
 export function SlashCommandPanel({ parse, onPick }: SlashCommandPanelProps) {
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   if (parse.mode === 'none') {
     return null;
   }
@@ -66,60 +63,63 @@ export function SlashCommandPanel({ parse, onPick }: SlashCommandPanelProps) {
   );
 }
 
-const styles = StyleSheet.create({
-  panel: {
-    marginHorizontal: 16,
-    marginBottom: 8,
-    backgroundColor: CARD_BG,
-    borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 16,
-    padding: 6,
-    gap: 4,
-  },
-  row: {
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 3,
-  },
-  rowHead: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  rowName: {
-    color: TEXT_PRIMARY,
-    fontSize: 15,
-    fontFamily: FONTS.heading,
-  },
-  rowDescription: {
-    color: TEXT_SECONDARY,
-    fontSize: 13,
-    fontFamily: FONTS.body,
-  },
-  argRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: CARD_ALT,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  argCommand: {
-    color: BLUE,
-    fontSize: 15,
-    fontFamily: FONTS.heading,
-  },
-  argHint: {
-    color: TEXT_SECONDARY,
-    fontSize: 13,
-    fontFamily: FONTS.body,
-  },
-  confirmBadge: {
-    color: AMBER,
-    fontSize: 11,
-    fontFamily: FONTS.body,
-  },
-});
+function makeStyles({ colors, fonts, type }: Theme) {
+  return StyleSheet.create({
+    panel: {
+      marginHorizontal: 16,
+      marginBottom: 8,
+      backgroundColor: colors.surfaceElevated,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.hairlineStrong,
+      borderRadius: 16,
+      padding: 6,
+      gap: 4,
+    },
+    row: {
+      borderRadius: 12,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      gap: 3,
+    },
+    rowHead: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    rowName: {
+      color: colors.text,
+      fontSize: type.label.size,
+      fontFamily: fonts.title,
+    },
+    rowDescription: {
+      color: colors.textMuted,
+      fontSize: type.caption.size,
+      fontFamily: fonts.ui,
+    },
+    argRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      backgroundColor: colors.surface,
+      borderRadius: 12,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+    },
+    argCommand: {
+      color: colors.accent,
+      fontSize: type.label.size,
+      fontFamily: fonts.title,
+    },
+    argHint: {
+      color: colors.textMuted,
+      fontSize: type.caption.size,
+      fontFamily: fonts.ui,
+    },
+    // Money commands are badged in the warning tone (opens the confirm flow).
+    confirmBadge: {
+      color: colors.warning,
+      fontSize: 11,
+      fontFamily: fonts.ui,
+    },
+  });
+}

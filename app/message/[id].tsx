@@ -13,6 +13,7 @@ import { StreamRecoveryPill } from '@/components/ui/StreamRecoveryPill';
 import { TurnChangesCard } from '@/components/ui/TurnChangesCard';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
+import { useTheme } from '@/theme/ThemeProvider';
 import {
   PendingMessageApproval,
   MessageThreadEvent,
@@ -377,7 +378,8 @@ export default function MessageDetailScreen() {
     return () => subscription.remove();
   }, []);
 
-  const tone = messageStatusTone(thread?.status || 'idle');
+  const { colors } = useTheme();
+  const tone = messageStatusTone(thread?.status || 'idle', colors);
   const allEvents = useMemo(
     () => events.filter((event) => !!eventCopy(event)),
     [events]

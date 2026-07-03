@@ -7,16 +7,16 @@
  * adaptive GlassSurface so it reads over the transcript.
  */
 
+import { useMemo } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 import { GlassSurface } from '@/components/ui/GlassSurface';
-import { COLORS } from '@/constants/Colors';
-import { FONTS } from '@/constants/Typography';
+import { useTheme, type Theme } from '@/theme/ThemeProvider';
 import { streamRecoveryLabel, type StreamRecoveryState } from '@/utils/streamRecovery';
 
-const { TEXT_SECONDARY, BLUE } = COLORS;
-
 export function StreamRecoveryPill({ state }: { state: StreamRecoveryState }) {
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const label = streamRecoveryLabel(state);
   if (!label) {
     return null;
@@ -25,32 +25,34 @@ export function StreamRecoveryPill({ state }: { state: StreamRecoveryState }) {
   return (
     <View pointerEvents="none" style={styles.wrap}>
       <GlassSurface level="pill" style={styles.pill}>
-        <ActivityIndicator size="small" color={BLUE} />
+        <ActivityIndicator size="small" color={theme.colors.accent} />
         <Text style={styles.label}>{label}</Text>
       </GlassSurface>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  wrap: {
-    position: 'absolute',
-    top: 10,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-  },
-  pill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  label: {
-    color: TEXT_SECONDARY,
-    fontSize: 13,
-    fontFamily: FONTS.body,
-  },
-});
+function makeStyles({ colors, fonts, type }: Theme) {
+  return StyleSheet.create({
+    wrap: {
+      position: 'absolute',
+      top: 10,
+      left: 0,
+      right: 0,
+      alignItems: 'center',
+    },
+    pill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      borderRadius: 999,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+    },
+    label: {
+      color: colors.textMuted,
+      fontSize: type.caption.size,
+      fontFamily: fonts.ui,
+    },
+  });
+}

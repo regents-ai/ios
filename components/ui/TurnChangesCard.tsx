@@ -7,18 +7,17 @@
  */
 
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { LayoutAnimation, StyleSheet, Text, View } from 'react-native';
 
 import { RegentPressable } from '@/components/ui/RegentPressable';
-import { COLORS } from '@/constants/Colors';
-import { FONTS } from '@/constants/Typography';
+import { useTheme, type Theme } from '@/theme/ThemeProvider';
 import { summarizeTurnChanges, turnChangesSummary } from '@/utils/turnChangesRecap';
 import type { MessageThreadEvent } from '@/types/regents';
 
-const { CARD_BG, CARD_ALT, BORDER, TEXT_PRIMARY, TEXT_SECONDARY, BLUE } = COLORS;
-
 export function TurnChangesCard({ events }: { events: MessageThreadEvent[] }) {
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const rows = summarizeTurnChanges(events);
   const summary = turnChangesSummary(rows);
   const [expanded, setExpanded] = useState(false);
@@ -42,7 +41,7 @@ export function TurnChangesCard({ events }: { events: MessageThreadEvent[] }) {
     <View style={styles.card}>
       <RegentPressable style={styles.header} onPress={toggle}>
         <Text style={styles.summary}>{summary}</Text>
-        <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color={TEXT_SECONDARY} />
+        <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color={theme.colors.textMuted} />
       </RegentPressable>
 
       {expanded ? (
@@ -58,7 +57,7 @@ export function TurnChangesCard({ events }: { events: MessageThreadEvent[] }) {
                   <Ionicons
                     name={open ? 'chevron-up' : 'chevron-forward'}
                     size={15}
-                    color={BLUE}
+                    color={theme.colors.accent}
                   />
                 </View>
                 {open && detail ? <Text style={styles.rowDetail}>{detail}</Text> : null}
@@ -71,55 +70,57 @@ export function TurnChangesCard({ events }: { events: MessageThreadEvent[] }) {
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: CARD_BG,
-    borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 18,
-    padding: 14,
-    marginTop: 14,
-    gap: 10,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  summary: {
-    color: TEXT_PRIMARY,
-    fontSize: 15,
-    fontFamily: FONTS.heading,
-  },
-  rows: {
-    gap: 8,
-  },
-  row: {
-    backgroundColor: CARD_ALT,
-    borderRadius: 12,
-    padding: 12,
-    gap: 6,
-  },
-  rowHead: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  rowAction: {
-    flex: 1,
-    color: TEXT_PRIMARY,
-    fontSize: 14,
-    fontFamily: FONTS.body,
-  },
-  rowAmount: {
-    color: TEXT_SECONDARY,
-    fontSize: 13,
-    fontFamily: FONTS.body,
-  },
-  rowDetail: {
-    color: TEXT_SECONDARY,
-    fontSize: 13,
-    lineHeight: 18,
-    fontFamily: FONTS.body,
-  },
-});
+function makeStyles({ colors, fonts, type }: Theme) {
+  return StyleSheet.create({
+    card: {
+      backgroundColor: colors.surfaceElevated,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.hairlineStrong,
+      borderRadius: 18,
+      padding: 14,
+      marginTop: 14,
+      gap: 10,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    summary: {
+      color: colors.text,
+      fontSize: type.label.size,
+      fontFamily: fonts.title,
+    },
+    rows: {
+      gap: 8,
+    },
+    row: {
+      backgroundColor: colors.surface,
+      borderRadius: 12,
+      padding: 12,
+      gap: 6,
+    },
+    rowHead: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    rowAction: {
+      flex: 1,
+      color: colors.text,
+      fontSize: type.label.size,
+      fontFamily: fonts.ui,
+    },
+    rowAmount: {
+      color: colors.textMuted,
+      fontSize: type.caption.size,
+      fontFamily: fonts.ui,
+    },
+    rowDetail: {
+      color: colors.textMuted,
+      fontSize: type.caption.size,
+      lineHeight: type.caption.line,
+      fontFamily: fonts.ui,
+    },
+  });
+}

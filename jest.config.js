@@ -4,6 +4,7 @@
 module.exports = {
   preset: 'jest-expo',
   testMatch: ['<rootDir>/component-tests/**/*.test.tsx'],
+  setupFiles: ['<rootDir>/jest.setup.js'],
   moduleNameMapper: {
     // Mirror the tsconfig "@/*" -> "./*" path alias.
     '^@/(.*)$': '<rootDir>/$1',

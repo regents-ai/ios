@@ -9,6 +9,7 @@ import { HermesVoiceButton } from '@/components/voice/HermesVoiceButton';
 import { HermesVoiceSheet } from '@/components/voice/HermesVoiceSheet';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
+import { useTheme } from '@/theme/ThemeProvider';
 import {
   RegentDetail,
   RegentManagerDetail,
@@ -216,7 +217,8 @@ export default function AgentDetailScreen() {
     setApprovalOpen(false);
   }, []);
 
-  const runtime = runtimeTone(agent?.runtimeStatus || 'waiting');
+  const { colors } = useTheme();
+  const runtime = runtimeTone(agent?.runtimeStatus || 'waiting', colors);
   const topGoal = regentManager?.goals[0];
   const nextTask = regentManager?.activeTasks[0];
   const latestEvent = regentManager?.recentEvents[0];
@@ -486,7 +488,7 @@ export default function AgentDetailScreen() {
             <Text style={styles.sectionHint}>Where funds were headed most recently.</Text>
             <View style={styles.timeline}>
               {agent.returnRequests.slice(0, 3).map((returnRequest) => {
-                const tone = returnRequestTone(returnRequest.status);
+                const tone = returnRequestTone(returnRequest.status, colors);
                 return (
                   <View key={returnRequest.id} style={styles.timelineRow}>
                     <View style={[styles.timelineDot, { backgroundColor: tone.accent }]} />

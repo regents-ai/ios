@@ -10,14 +10,12 @@
  * signs, prepares, or routes a transaction itself.
  */
 
+import { useMemo } from 'react';
 import { Modal, StyleSheet, Text, View } from 'react-native';
 
 import { RegentPressable } from '@/components/ui/RegentPressable';
-import { COLORS } from '@/constants/Colors';
-import { FONTS } from '@/constants/Typography';
+import { useTheme, type Theme } from '@/theme/ThemeProvider';
 import { CONSENT_CHOICES } from '@/utils/approvalConsent';
-
-const { DARK_BG, CARD_BG, CARD_ALT, BORDER, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, WHITE } = COLORS;
 
 type ApprovalOverlayProps = {
   visible: boolean;
@@ -38,6 +36,8 @@ export function ApprovalOverlay({
   onApprove,
   onDeny,
 }: ApprovalOverlayProps) {
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onDeny}>
       <View style={styles.scrim}>
@@ -77,88 +77,93 @@ export function ApprovalOverlay({
   );
 }
 
-const styles = StyleSheet.create({
-  scrim: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
-  card: {
-    width: '100%',
-    maxWidth: 420,
-    backgroundColor: DARK_BG,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: BORDER,
-    padding: 22,
-    gap: 14,
-  },
-  title: {
-    color: TEXT_PRIMARY,
-    fontSize: 22,
-    fontFamily: FONTS.heading,
-  },
-  body: {
-    color: TEXT_PRIMARY,
-    fontSize: 15,
-    lineHeight: 21,
-    fontFamily: FONTS.body,
-  },
-  commandBox: {
-    backgroundColor: CARD_BG,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: BORDER,
-    padding: 14,
-    gap: 6,
-  },
-  commandLabel: {
-    color: TEXT_SECONDARY,
-    fontSize: 12,
-    textTransform: 'uppercase',
-    fontFamily: FONTS.body,
-  },
-  command: {
-    color: TEXT_PRIMARY,
-    fontSize: 14,
-    lineHeight: 20,
-    fontFamily: 'Courier',
-  },
-  note: {
-    color: TEXT_SECONDARY,
-    fontSize: 13,
-    lineHeight: 18,
-    fontFamily: FONTS.body,
-  },
-  actions: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  button: {
-    flex: 1,
-    minHeight: 48,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  approveButton: {
-    backgroundColor: BLUE,
-  },
-  denyButton: {
-    backgroundColor: CARD_ALT,
-    borderWidth: 1,
-    borderColor: BORDER,
-  },
-  approveText: {
-    color: WHITE,
-    fontSize: 15,
-    fontFamily: FONTS.heading,
-  },
-  denyText: {
-    color: TEXT_PRIMARY,
-    fontSize: 15,
-    fontFamily: FONTS.heading,
-  },
-});
+function makeStyles({ colors, fonts, type }: Theme) {
+  return StyleSheet.create({
+    scrim: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.45)',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 24,
+    },
+    // Modal card = elevated surface (not the page ground), hairline ring.
+    card: {
+      width: '100%',
+      maxWidth: 420,
+      backgroundColor: colors.surfaceElevated,
+      borderRadius: 24,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.hairlineStrong,
+      padding: 22,
+      gap: 14,
+    },
+    title: {
+      color: colors.text,
+      fontSize: type.title.size,
+      fontFamily: fonts.title,
+    },
+    body: {
+      color: colors.text,
+      fontSize: type.body.size,
+      lineHeight: type.body.line,
+      fontFamily: fonts.ui,
+    },
+    // The exact command sits in a recessed surface with a mono readout.
+    commandBox: {
+      backgroundColor: colors.surface,
+      borderRadius: 14,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.hairline,
+      padding: 14,
+      gap: 6,
+    },
+    commandLabel: {
+      color: colors.textMuted,
+      fontSize: type.caption.size,
+      letterSpacing: 1,
+      textTransform: 'uppercase',
+      fontFamily: fonts.ui,
+    },
+    command: {
+      color: colors.text,
+      fontSize: type.code.size,
+      lineHeight: type.code.line,
+      fontFamily: 'Courier',
+    },
+    note: {
+      color: colors.textMuted,
+      fontSize: type.caption.size,
+      lineHeight: type.caption.line,
+      fontFamily: fonts.ui,
+    },
+    actions: {
+      flexDirection: 'row',
+      gap: 10,
+    },
+    button: {
+      flex: 1,
+      minHeight: 48,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    approveButton: {
+      backgroundColor: colors.accent,
+    },
+    denyButton: {
+      backgroundColor: colors.surface,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.hairlineStrong,
+    },
+    approveText: {
+      color: colors.onAccent,
+      fontSize: type.label.size,
+      fontFamily: fonts.title,
+    },
+    denyText: {
+      color: colors.text,
+      fontSize: type.label.size,
+      fontFamily: fonts.title,
+    },
+  });
+}

@@ -5,6 +5,7 @@ import { ListRetryRow } from '@/components/ui/ListRetryRow';
 import { RegentPressable } from '@/components/ui/RegentPressable';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
+import { useTheme } from '@/theme/ThemeProvider';
 import { MessageThreadStatus, MessageThread } from '@/types/regents';
 import { describeListLoadFailure, type ListLoadFailure } from '@/utils/listLoadFailure';
 import { routes } from '@/utils/navigation/routes';
@@ -56,7 +57,8 @@ const MessageThreadRow = memo(function MessageThreadRow({
   thread,
   onPressThread,
 }: MessageThreadRowProps) {
-  const tone = messageStatusTone(thread.status);
+  const { colors } = useTheme();
+  const tone = messageStatusTone(thread.status, colors);
   const handlePress = useCallback(() => {
     onPressThread(thread);
   }, [onPressThread, thread]);
