@@ -7,9 +7,7 @@ import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { RegentPressable } from '@/components/ui/RegentPressable';
 import { HermesVoiceButton } from '@/components/voice/HermesVoiceButton';
 import { HermesVoiceSheet } from '@/components/voice/HermesVoiceSheet';
-import { COLORS } from '@/constants/Colors';
-import { FONTS } from '@/constants/Typography';
-import { useTheme } from '@/theme/ThemeProvider';
+import { useTheme, type Theme } from '@/theme/ThemeProvider';
 import {
   RegentDetail,
   RegentManagerDetail,
@@ -32,8 +30,6 @@ import {
   Text,
   View,
 } from 'react-native';
-
-const { DARK_BG, CARD_BG, CARD_ALT, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, BORDER, WHITE, SUCCESS, DANGER, AMBER, AMBER_WASH, GREEN_WASH, RED_WASH, BLUE_WASH } = COLORS;
 
 function formatAddress(address: string) {
   return `${address.slice(0, 8)}...${address.slice(-6)}`;
@@ -217,7 +213,9 @@ export default function AgentDetailScreen() {
     setApprovalOpen(false);
   }, []);
 
-  const { colors } = useTheme();
+  const theme = useTheme();
+  const { colors } = theme;
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const runtime = runtimeTone(agent?.runtimeStatus || 'waiting', colors);
   const topGoal = regentManager?.goals[0];
   const nextTask = regentManager?.activeTasks[0];
@@ -233,8 +231,8 @@ export default function AgentDetailScreen() {
         body: 'The agent brief gives the quickest read on what changed and what needs attention.',
         cta: 'Open Agent Brief',
         disabled: true,
-        accent: BLUE,
-        wash: BLUE_WASH,
+        accent: colors.accent,
+        wash: colors.accentWash,
       };
     }
 
@@ -245,8 +243,8 @@ export default function AgentDetailScreen() {
         body: 'Read the brief, then decide whether this agent needs follow-up.',
         cta: 'Open Agent Brief',
         onPress: openRegentManager,
-        accent: DANGER,
-        wash: RED_WASH,
+        accent: colors.error,
+        wash: colors.errorWash,
       };
     }
 
@@ -257,8 +255,8 @@ export default function AgentDetailScreen() {
         body: 'Reply to messages, payment requests, and decisions for this agent.',
         cta: 'Message',
         onPress: openTalk,
-        accent: AMBER,
-        wash: AMBER_WASH,
+        accent: colors.warning,
+        wash: colors.warningWash,
       };
     }
 
@@ -268,16 +266,16 @@ export default function AgentDetailScreen() {
       body: 'Add USDC to the working balance so this agent can pay for tools, services, and work.',
       cta: 'Fund Agent',
       onPress: openFundAgent,
-      accent: SUCCESS,
-      wash: GREEN_WASH,
+      accent: colors.success,
+      wash: colors.successWash,
     };
-  }, [agent, openFundAgent, openRegentManager, openTalk]);
+  }, [agent, colors, openFundAgent, openRegentManager, openTalk]);
 
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.centerState}>
-          <ActivityIndicator size="large" color={BLUE} />
+          <ActivityIndicator size="large" color={colors.accent} />
           <Text style={styles.loadingText}>Loading agent view...</Text>
         </View>
       </SafeAreaView>
@@ -301,11 +299,11 @@ export default function AgentDetailScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <RegentPressable pressStyle="icon" onPress={() => router.back()} style={styles.iconButton}>
-          <Ionicons name="chevron-back" size={22} color={TEXT_PRIMARY} />
+          <Ionicons name="chevron-back" size={22} color={colors.text} />
         </RegentPressable>
         <Text style={styles.headerTitle}>{agent.name}</Text>
         <RegentPressable pressStyle="icon" onPress={() => loadAgent(true)} disabled={refreshing} style={styles.iconButton}>
-          <SpinningRefreshIcon refreshing={refreshing} size={18} color={BLUE} />
+          <SpinningRefreshIcon refreshing={refreshing} size={18} color={colors.accent} />
         </RegentPressable>
       </View>
 
@@ -551,10 +549,11 @@ export default function AgentDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles({ colors, fonts }: Theme) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DARK_BG,
+    backgroundColor: colors.bg,
   },
   header: {
     flexDirection: 'row',
@@ -568,20 +567,20 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: CARD_BG,
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerTitle: {
     flex: 1,
     minWidth: 0,
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 20,
     lineHeight: 24,
     textAlign: 'center',
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   scrollContent: {
     paddingHorizontal: 20,
@@ -596,20 +595,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   loadingText: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 15,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   emptyTitle: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 26,
     textAlign: 'center',
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   heroCard: {
-    backgroundColor: CARD_BG,
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     borderRadius: 24,
     padding: 22,
     gap: 14,
@@ -627,28 +626,28 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   eyebrow: {
-    color: BLUE,
+    color: colors.accent,
     fontSize: 12,
     letterSpacing: 1,
     textTransform: 'uppercase',
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   heroTitle: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 30,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   heroIntro: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 16,
     lineHeight: 22,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   heroMeta: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 14,
     lineHeight: 20,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   heroActions: {
     flexDirection: 'row',
@@ -657,7 +656,7 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     minWidth: 120,
-    backgroundColor: BLUE,
+    backgroundColor: colors.accent,
     borderRadius: 16,
     paddingHorizontal: 18,
     paddingVertical: 13,
@@ -665,25 +664,25 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   primaryButtonText: {
-    color: WHITE,
+    color: colors.onAccent,
     fontSize: 14,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   secondaryButton: {
     minWidth: 120,
-    backgroundColor: WHITE,
+    backgroundColor: colors.surface,
     borderRadius: 16,
     paddingHorizontal: 18,
     paddingVertical: 13,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
   secondaryButtonText: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 14,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   priorityCard: {
     borderRadius: 24,
@@ -693,18 +692,18 @@ const styles = StyleSheet.create({
   priorityEyebrow: {
     fontSize: 12,
     textTransform: 'uppercase',
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   priorityTitle: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 24,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   priorityBody: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 14,
     lineHeight: 20,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   priorityButton: {
     alignSelf: 'flex-start',
@@ -716,14 +715,14 @@ const styles = StyleSheet.create({
     opacity: 0.72,
   },
   priorityButtonText: {
-    color: WHITE,
+    color: colors.onAccent,
     fontSize: 14,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   card: {
-    backgroundColor: CARD_BG,
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     borderRadius: 24,
     padding: 20,
     gap: 14,
@@ -739,20 +738,20 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   sectionTitle: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 22,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   sectionHint: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 13,
     lineHeight: 19,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   sectionNote: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 12,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   overviewGrid: {
     flexDirection: 'row',
@@ -763,46 +762,46 @@ const styles = StyleSheet.create({
     flexBasis: '47%',
     flexGrow: 1,
     minWidth: 142,
-    backgroundColor: CARD_ALT,
+    backgroundColor: colors.surface,
     borderRadius: 18,
     padding: 16,
     gap: 6,
   },
   overviewLabel: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 12,
     textTransform: 'uppercase',
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   overviewValue: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 16,
     lineHeight: 22,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   overviewMeta: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 13,
     lineHeight: 18,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   regentManagerLeadCard: {
-    backgroundColor: CARD_ALT,
+    backgroundColor: colors.surface,
     borderRadius: 18,
     padding: 16,
     gap: 8,
   },
   regentManagerHeadline: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 18,
     lineHeight: 24,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   regentManagerSummary: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 14,
     lineHeight: 20,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   regentManagerGrid: {
     flexDirection: 'row',
@@ -813,38 +812,38 @@ const styles = StyleSheet.create({
     flexBasis: '47%',
     flexGrow: 1,
     minWidth: 142,
-    backgroundColor: CARD_ALT,
+    backgroundColor: colors.surface,
     borderRadius: 18,
     padding: 16,
     gap: 6,
   },
   regentManagerSignalLabel: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 12,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   regentManagerSignalTitle: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 16,
     lineHeight: 22,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   regentManagerSignalBody: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 13,
     lineHeight: 18,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   emptyPanel: {
-    backgroundColor: CARD_ALT,
+    backgroundColor: colors.surface,
     borderRadius: 18,
     padding: 16,
   },
   emptyPanelText: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 14,
     lineHeight: 20,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   timeline: {
     gap: 12,
@@ -858,11 +857,11 @@ const styles = StyleSheet.create({
     height: 10,
     borderRadius: 5,
     marginTop: 8,
-    backgroundColor: BLUE,
+    backgroundColor: colors.accent,
   },
   timelineCard: {
     flex: 1,
-    backgroundColor: CARD_ALT,
+    backgroundColor: colors.surface,
     borderRadius: 18,
     padding: 14,
     gap: 4,
@@ -877,20 +876,20 @@ const styles = StyleSheet.create({
   timelineTitle: {
     flex: 1,
     minWidth: 0,
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 15,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   timelineSubtitle: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 12,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   timelineBody: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 13,
     lineHeight: 18,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   timelinePill: {
     borderRadius: 999,
@@ -899,6 +898,7 @@ const styles = StyleSheet.create({
   },
   timelinePillText: {
     fontSize: 11,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
-});
+  });
+}

@@ -11,9 +11,7 @@ import { PinnedNoticeStrip } from '@/components/ui/PinnedNoticeStrip';
 import { SlashCommandPanel } from '@/components/ui/SlashCommandPanel';
 import { StreamRecoveryPill } from '@/components/ui/StreamRecoveryPill';
 import { TurnChangesCard } from '@/components/ui/TurnChangesCard';
-import { COLORS } from '@/constants/Colors';
-import { FONTS } from '@/constants/Typography';
-import { useTheme } from '@/theme/ThemeProvider';
+import { useTheme, type Theme } from '@/theme/ThemeProvider';
 import {
   PendingMessageApproval,
   MessageThreadEvent,
@@ -85,8 +83,6 @@ import {
   TextInput,
   View,
 } from 'react-native';
-
-const { DARK_BG, CARD_BG, CARD_ALT, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, BORDER, WHITE, DANGER, AMBER, AMBER_WASH, BLUE_WASH } = COLORS;
 
 function formatEventTime(value: string) {
   const date = new Date(value);
@@ -196,6 +192,8 @@ const MessageEventRow = memo(function MessageEventRow({
   drain,
   onReveal,
 }: MessageEventRowProps) {
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   return (
     <View style={[
       styles.eventCard,
@@ -216,7 +214,7 @@ const MessageEventRow = memo(function MessageEventRow({
 });
 
 function EventSeparator() {
-  return <View style={styles.eventSeparator} />;
+  return <View style={{ height: 10 }} />;
 }
 
 function keyEvent(event: MessageThreadEvent) {
@@ -378,7 +376,9 @@ export default function MessageDetailScreen() {
     return () => subscription.remove();
   }, []);
 
-  const { colors } = useTheme();
+  const theme = useTheme();
+  const { colors } = theme;
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const tone = messageStatusTone(thread?.status || 'idle', colors);
   const allEvents = useMemo(
     () => events.filter((event) => !!eventCopy(event)),
@@ -627,7 +627,7 @@ export default function MessageDetailScreen() {
       <View style={styles.listHeader}>
         {tail.hasOlder ? (
           <RegentPressable style={styles.loadOlderCapsule} onPress={handleLoadOlder}>
-            <Ionicons name="arrow-up" size={14} color={BLUE} />
+            <Ionicons name="arrow-up" size={14} color={colors.accent} />
             <Text style={styles.loadOlderText}>Load {tail.hiddenOlderCount} older</Text>
           </RegentPressable>
         ) : null}
@@ -646,7 +646,7 @@ export default function MessageDetailScreen() {
           <View style={styles.approvalCard}>
             <View style={styles.approvalHeader}>
               <View style={styles.approvalIcon}>
-                <Ionicons name="eye-outline" size={18} color={AMBER} />
+                <Ionicons name="eye-outline" size={18} color={colors.warning} />
               </View>
               <View style={styles.approvalTitleGroup}>
                 <Text style={styles.approvalTitle}>{approvalTitle(pendingApproval)}</Text>
@@ -716,6 +716,7 @@ export default function MessageDetailScreen() {
     );
   }, [
     approvalExpired,
+    colors,
     handleLoadOlder,
     isPaymentApproval,
     loading,
@@ -723,6 +724,7 @@ export default function MessageDetailScreen() {
     pendingApproval,
     resolveApproval,
     resolvingDecision,
+    styles,
     tail.hasOlder,
     tail.hiddenOlderCount,
     thread,
@@ -742,7 +744,7 @@ export default function MessageDetailScreen() {
         <Text style={styles.emptyBody}>Send a note to start the conversation.</Text>
       </View>
     );
-  }, [loading, thread]);
+  }, [loading, styles, thread]);
 
   const listFooter = useMemo(() => {
     if (loading || !thread) {
@@ -773,7 +775,7 @@ export default function MessageDetailScreen() {
         </View>
       </>
     );
-  }, [awaitingReply, handleRefreshNewEventsPress, loading, notices.flushed, thread, visibleEvents]);
+  }, [awaitingReply, handleRefreshNewEventsPress, loading, notices.flushed, styles, thread, visibleEvents]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -783,7 +785,7 @@ export default function MessageDetailScreen() {
       >
         <View style={styles.header}>
           <RegentPressable pressStyle="icon" onPress={() => router.back()} style={styles.iconButton}>
-            <Ionicons name="chevron-back" size={22} color={TEXT_PRIMARY} />
+            <Ionicons name="chevron-back" size={22} color={colors.text} />
           </RegentPressable>
           <View style={styles.headerTitleGroup}>
             <Text style={styles.headerEyebrow}>Message</Text>
@@ -795,7 +797,7 @@ export default function MessageDetailScreen() {
             disabled={refreshing}
             style={styles.iconButton}
           >
-            <SpinningRefreshIcon refreshing={refreshing} size={18} color={BLUE} />
+            <SpinningRefreshIcon refreshing={refreshing} size={18} color={colors.accent} />
           </RegentPressable>
         </View>
 
@@ -819,7 +821,7 @@ export default function MessageDetailScreen() {
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
-                tintColor={BLUE}
+                tintColor={colors.accent}
                 onRefresh={() => loadThread(true)}
               />
             }
@@ -840,7 +842,7 @@ export default function MessageDetailScreen() {
               value={draft}
               onChangeText={setDraft}
               placeholder={thread.composerPlaceholder || 'Message this agent...'}
-              placeholderTextColor={TEXT_SECONDARY}
+              placeholderTextColor={colors.textMuted}
               multiline
               style={styles.composerInput}
             />
@@ -851,9 +853,9 @@ export default function MessageDetailScreen() {
               onPress={sendMessage}
             >
               {sending ? (
-                <ActivityIndicator color={WHITE} size="small" />
+                <ActivityIndicator color={colors.onAccent} size="small" />
               ) : (
-                <Ionicons name="paper-plane-outline" size={18} color={WHITE} />
+                <Ionicons name="paper-plane-outline" size={18} color={colors.onAccent} />
               )}
             </RegentPressable>
           </View>
@@ -865,10 +867,11 @@ export default function MessageDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles({ colors, fonts }: Theme) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DARK_BG,
+    backgroundColor: colors.bg,
   },
   keyboardWrap: {
     flex: 1,
@@ -885,9 +888,9 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: CARD_BG,
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -898,16 +901,16 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   headerEyebrow: {
-    color: BLUE,
+    color: colors.accent,
     fontSize: 11,
     textTransform: 'uppercase',
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   headerTitle: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 20,
     lineHeight: 24,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   listWrap: {
     flex: 1,
@@ -936,9 +939,9 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   sessionCard: {
-    backgroundColor: CARD_BG,
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     borderRadius: 20,
     padding: 16,
   },
@@ -954,21 +957,21 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   sessionTitle: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 22,
     lineHeight: 26,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   sessionNote: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 14,
     lineHeight: 20,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   approvalCard: {
-    backgroundColor: AMBER_WASH,
+    backgroundColor: colors.warningWash,
     borderWidth: 1,
-    borderColor: '#D4B68A',
+    borderColor: colors.warning,
     borderRadius: 20,
     padding: 16,
     gap: 12,
@@ -984,25 +987,25 @@ const styles = StyleSheet.create({
     borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: WHITE,
+    backgroundColor: colors.surfaceElevated,
   },
   approvalTitleGroup: {
     flex: 1,
     minWidth: 0,
   },
   approvalTitle: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 18,
     lineHeight: 22,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   approvalAgent: {
-    color: AMBER,
+    color: colors.warning,
     fontSize: 12,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   approvalDetails: {
-    backgroundColor: WHITE,
+    backgroundColor: colors.surfaceElevated,
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -1015,33 +1018,33 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   approvalDetailLabel: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 13,
     lineHeight: 19,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   approvalDetailValue: {
     flex: 1,
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 13,
     lineHeight: 19,
     textAlign: 'right',
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   approvalDetailValueExpired: {
-    color: DANGER,
+    color: colors.error,
   },
   approvalBody: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 14,
     lineHeight: 20,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   approvalExpiredNote: {
-    color: DANGER,
+    color: colors.error,
     fontSize: 13,
     lineHeight: 19,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   approvalActions: {
     flexDirection: 'row',
@@ -1053,12 +1056,12 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: BLUE,
+    backgroundColor: colors.accent,
   },
   primaryButtonText: {
-    color: WHITE,
+    color: colors.onAccent,
     fontSize: 14,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   secondaryButton: {
     flex: 1,
@@ -1066,28 +1069,25 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: WHITE,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
   },
   secondaryButtonText: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 14,
-    fontFamily: FONTS.heading,
-  },
-  eventSeparator: {
-    height: 10,
+    fontFamily: fonts.title,
   },
   eventCard: {
-    backgroundColor: CARD_BG,
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     borderRadius: 18,
     padding: 14,
     gap: 8,
   },
   userEventCard: {
-    backgroundColor: CARD_ALT,
+    backgroundColor: colors.surface,
   },
   eventHeader: {
     flexDirection: 'row',
@@ -1097,34 +1097,34 @@ const styles = StyleSheet.create({
   },
   eventTitle: {
     flex: 1,
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 14,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   eventTime: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 12,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   eventBody: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 14,
     lineHeight: 20,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   refreshSmallButton: {
     alignSelf: 'center',
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: CARD_BG,
+    borderColor: colors.hairlineStrong,
+    backgroundColor: colors.surfaceElevated,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
   refreshSmallText: {
-    color: BLUE,
+    color: colors.accent,
     fontSize: 13,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   loadOlderCapsule: {
     flexDirection: 'row',
@@ -1133,30 +1133,30 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: CARD_BG,
+    borderColor: colors.hairlineStrong,
+    backgroundColor: colors.surfaceElevated,
     paddingHorizontal: 14,
     paddingVertical: 9,
   },
   loadOlderText: {
-    color: BLUE,
+    color: colors.accent,
     fontSize: 13,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   flushedNotice: {
     alignSelf: 'center',
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 12,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
     marginTop: 12,
   },
   emptyState: {
     minHeight: 260,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: CARD_BG,
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     borderRadius: 24,
     padding: 24,
     gap: 10,
@@ -1164,9 +1164,9 @@ const styles = StyleSheet.create({
   emptyEventState: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: CARD_BG,
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     borderRadius: 20,
     padding: 22,
     gap: 6,
@@ -1176,16 +1176,16 @@ const styles = StyleSheet.create({
     marginTop: 14,
   },
   emptyTitle: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 21,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   emptyBody: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 14,
     lineHeight: 20,
     textAlign: 'center',
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   composer: {
     flexDirection: 'row',
@@ -1194,7 +1194,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 10,
     paddingBottom: Platform.OS === 'ios' ? 18 : 12,
-    backgroundColor: DARK_BG,
+    backgroundColor: colors.bg,
   },
   composerInput: {
     flex: 1,
@@ -1202,24 +1202,25 @@ const styles = StyleSheet.create({
     maxHeight: 120,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: CARD_BG,
-    color: TEXT_PRIMARY,
+    borderColor: colors.hairlineStrong,
+    backgroundColor: colors.surfaceElevated,
+    color: colors.text,
     paddingHorizontal: 14,
     paddingVertical: 11,
     fontSize: 14,
     lineHeight: 20,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   sendButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: BLUE,
+    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
   sendButtonDisabled: {
     opacity: 0.5,
   },
-});
+  });
+}

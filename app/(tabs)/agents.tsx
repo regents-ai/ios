@@ -2,8 +2,8 @@ import { StatusPill } from '@/components/agent-surfaces/StatusPill';
 import { LiveValueFlash } from '@/components/motion/LiveValueFlash';
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { RegentPressable } from '@/components/ui/RegentPressable';
-import { COLORS } from '@/constants/Colors';
-import { FONTS } from '@/constants/Typography';
+import { useTheme, type Theme } from '@/theme/ThemeProvider';
+import type { ThemeColors } from '@/theme/tokens';
 import { RegentStakingState, RegentSummary } from '@/types/regents';
 import { formatCurrencyAmount, formatRelativeTime, formatWalletAddress } from '@/utils/agent-surfaces/formatters';
 import { routes } from '@/utils/navigation/routes';
@@ -23,25 +23,6 @@ import {
   Text,
   View,
 } from 'react-native';
-
-const {
-  DARK_BG,
-  CARD_BG,
-  CARD_ALT,
-  TEXT_PRIMARY,
-  TEXT_SECONDARY,
-  BLUE,
-  BORDER,
-  WHITE,
-  SUCCESS,
-  DANGER,
-  BLUE_WASH,
-  ORANGE,
-  AMBER,
-  AMBER_WASH,
-  GREEN_WASH,
-  RED_WASH,
-} = COLORS;
 
 type CommandCenterItem = {
   id: string;
@@ -63,12 +44,12 @@ function regentPriority(agent: RegentSummary) {
   return 4;
 }
 
-function regentTone(agent: RegentSummary) {
+function regentTone(agent: RegentSummary, colors: ThemeColors) {
   if (agent.runtimeStatus === 'offline') {
     return {
       label: 'Needs you',
-      accent: DANGER,
-      wash: RED_WASH,
+      accent: colors.error,
+      wash: colors.errorWash,
       summary: agent.treasuryNote || 'This agent has gone quiet and needs a closer look.',
     };
   }
@@ -76,8 +57,8 @@ function regentTone(agent: RegentSummary) {
   if (agent.status === 'attention') {
     return {
       label: 'Approval',
-      accent: AMBER,
-      wash: AMBER_WASH,
+      accent: colors.warning,
+      wash: colors.warningWash,
       summary: agent.treasuryNote || 'A decision is waiting before this agent can keep moving.',
     };
   }
@@ -85,16 +66,16 @@ function regentTone(agent: RegentSummary) {
   if (agent.runtimeStatus === 'waiting') {
     return {
       label: 'Waiting',
-      accent: AMBER,
-      wash: AMBER_WASH,
+      accent: colors.warning,
+      wash: colors.warningWash,
       summary: agent.treasuryNote || 'The next handoff is clear, but it still needs your nudge.',
     };
   }
 
   return {
     label: 'Steady',
-    accent: SUCCESS,
-    wash: GREEN_WASH,
+    accent: colors.success,
+    wash: colors.successWash,
     summary: agent.treasuryNote || 'This agent is moving without needing much from you right now.',
   };
 }
@@ -128,6 +109,9 @@ function stakingCommandBody(staking: RegentStakingState) {
 
 export default function AgentsTab() {
   const router = useRouter();
+  const theme = useTheme();
+  const { colors } = theme;
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const { currentUser } = useCurrentUser();
   const smartAccount = smartWalletAddress(currentUser?.evmSmartAccounts?.[0] as string | undefined);
   const [agents, setAgents] = useState<RegentSummary[]>([]);
@@ -197,7 +181,7 @@ export default function AgentsTab() {
           body: stakingCommandBody(staking),
           meta: staking.paused ? 'Paused' : staking.chain_label,
           icon: 'sparkles-outline',
-          accent: SUCCESS,
+          accent: colors.success,
           onPress: () => router.push(routes.staking()),
         }]
       : [];
@@ -209,7 +193,7 @@ export default function AgentsTab() {
       body: 'Reply to messages, payment requests, and decisions before work continues.',
       meta: 'Message',
       icon: 'chatbubble-ellipses-outline',
-      accent: BLUE,
+      accent: colors.accent,
       onPress: () => router.push(routes.message()),
     };
 
@@ -227,7 +211,7 @@ export default function AgentsTab() {
             body: `Working balance is ${workingBalanceCopy(agent)}.`,
             meta: 'Fund agent',
             icon: 'wallet-outline',
-            accent: DANGER,
+            accent: colors.error,
             onPress: () => router.push(routes.agent(agent.id)),
           });
         }
@@ -239,7 +223,7 @@ export default function AgentsTab() {
           body: `Working balance is ${workingBalanceCopy(agent)}.`,
           meta: formatWalletAddress(agent.walletAddress),
           icon: 'speedometer-outline',
-          accent: creditValue(agent) <= 10 ? ORANGE : SUCCESS,
+          accent: creditValue(agent) <= 10 ? colors.warning : colors.success,
           onPress: () => router.push(routes.agent(agent.id)),
         });
 
@@ -248,7 +232,7 @@ export default function AgentsTab() {
     ]
       .sort((left, right) => left.rank - right.rank || left.title.localeCompare(right.title))
       .slice(0, 8);
-  }, [agents, router, staking]);
+  }, [agents, colors, router, staking]);
 
   const summary = useMemo(() => {
     const needsYou = agents.filter((agent) => agent.runtimeStatus === 'offline' || agent.status === 'attention').length;
@@ -261,14 +245,14 @@ export default function AgentsTab() {
     <View style={styles.container}>
       {loading ? (
         <View style={styles.centerState}>
-          <ActivityIndicator size="large" color={BLUE} />
+          <ActivityIndicator size="large" color={colors.accent} />
           <Text style={styles.loadingText}>Loading Regents…</Text>
         </View>
       ) : (
         <ScrollView
           contentInsetAdjustmentBehavior="automatic"
           contentContainerStyle={styles.content}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadAgents(true)} tintColor={BLUE} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadAgents(true)} tintColor={colors.accent} />}
         >
           <View style={styles.heroCard}>
             <Text style={styles.eyebrow}>Agents</Text>
@@ -350,7 +334,7 @@ export default function AgentsTab() {
                     {item.disabled ? (
                       <Text style={styles.commandStatus}>Soon</Text>
                     ) : (
-                      <Ionicons name="chevron-forward" size={18} color={TEXT_SECONDARY} />
+                      <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
                     )}
                   </RegentPressable>
                 ))}
@@ -368,12 +352,12 @@ export default function AgentsTab() {
                 <View style={styles.focusCopy}>
                   <Text style={styles.focusEyebrow}>Start here</Text>
                   <Text style={styles.focusTitle}>{leadRegent.name}</Text>
-                  <Text style={styles.focusBody} numberOfLines={3}>{regentTone(leadRegent).summary}</Text>
+                  <Text style={styles.focusBody} numberOfLines={3}>{regentTone(leadRegent, colors).summary}</Text>
                 </View>
                 <StatusPill
-                  label={regentTone(leadRegent).label}
-                  color={regentTone(leadRegent).accent}
-                  backgroundColor={regentTone(leadRegent).wash}
+                  label={regentTone(leadRegent, colors).label}
+                  color={regentTone(leadRegent, colors).accent}
+                  backgroundColor={regentTone(leadRegent, colors).wash}
                   showDot={shouldShowRegentDot(leadRegent)}
                 />
               </View>
@@ -395,12 +379,12 @@ export default function AgentsTab() {
 
               <View style={styles.focusFooter}>
                 <Text style={styles.footerLink}>Open Agent</Text>
-                <Ionicons name="arrow-forward" size={18} color={BLUE} />
+                <Ionicons name="arrow-forward" size={18} color={colors.accent} />
               </View>
             </RegentPressable>
           ) : (
             <View style={styles.emptyCard}>
-              <Ionicons name="sparkles-outline" size={28} color={BLUE} />
+              <Ionicons name="sparkles-outline" size={28} color={colors.accent} />
               <Text style={styles.emptyTitle}>No agents yet</Text>
               <Text style={styles.emptyText}>Your agents will show up here when they are ready to fund, pay, and track.</Text>
             </View>
@@ -411,7 +395,7 @@ export default function AgentsTab() {
               <Text style={styles.sectionTitle}>All Agents</Text>
               <View style={styles.regentList}>
                 {supportingRegents.map((agent) => {
-                  const tone = regentTone(agent);
+                  const tone = regentTone(agent, colors);
 
                   return (
                     <RegentPressable
@@ -449,7 +433,7 @@ export default function AgentsTab() {
                 style={styles.quickCard}
                 onPress={() => router.push(routes.message())}
               >
-                <Ionicons name="chatbubble-ellipses-outline" size={18} color={BLUE} />
+                <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.accent} />
                 <Text style={styles.quickTitle}>Message</Text>
                 <Text style={styles.quickBody} numberOfLines={2}>Messages, payment requests, and approvals stay together.</Text>
                 <Text style={styles.quickMeta}>Message</Text>
@@ -460,7 +444,7 @@ export default function AgentsTab() {
                 pressStyle="card"
                 style={styles.quickCard}
               >
-                <Ionicons name="wallet-outline" size={18} color={BLUE} />
+                <Ionicons name="wallet-outline" size={18} color={colors.accent} />
                 <Text style={styles.quickTitle}>Fund</Text>
                 <Text style={styles.quickBody} numberOfLines={2}>Add USDC for agent work or move money back when work is done.</Text>
               </RegentPressable>
@@ -470,7 +454,7 @@ export default function AgentsTab() {
                 pressStyle="card"
                 style={styles.quickCard}
               >
-                <Ionicons name="trending-up-outline" size={18} color={BLUE} />
+                <Ionicons name="trending-up-outline" size={18} color={colors.accent} />
                 <Text style={styles.quickTitle}>Buy</Text>
                 <Text style={styles.quickBody} numberOfLines={2}>Open Autolaunch when a story is ready for outside support.</Text>
               </RegentPressable>
@@ -484,10 +468,11 @@ export default function AgentsTab() {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles({ colors, fonts }: Theme) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DARK_BG,
+    backgroundColor: colors.bg,
   },
   content: {
     paddingHorizontal: 20,
@@ -502,36 +487,36 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   loadingText: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 15,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   heroCard: {
-    backgroundColor: CARD_BG,
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     borderRadius: 28,
     padding: 22,
     gap: 14,
   },
   eyebrow: {
-    color: BLUE,
+    color: colors.accent,
     fontSize: 12,
     letterSpacing: 1,
     textTransform: 'uppercase',
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   heroTitle: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 32,
     lineHeight: 38,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   heroBody: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 15,
     lineHeight: 22,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   heroActions: {
     flexDirection: 'column',
@@ -539,7 +524,7 @@ const styles = StyleSheet.create({
     alignItems: 'stretch',
   },
   primaryButton: {
-    backgroundColor: BLUE,
+    backgroundColor: colors.accent,
     borderRadius: 16,
     paddingHorizontal: 18,
     paddingVertical: 13,
@@ -547,24 +532,24 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
   },
   primaryButtonText: {
-    color: WHITE,
+    color: colors.onAccent,
     fontSize: 14,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   secondaryButton: {
-    backgroundColor: WHITE,
+    backgroundColor: colors.surface,
     borderRadius: 16,
     paddingHorizontal: 18,
     paddingVertical: 13,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     alignItems: 'center',
     alignSelf: 'stretch',
   },
   secondaryButtonText: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 14,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   summaryRow: {
     flexDirection: 'row',
@@ -574,32 +559,32 @@ const styles = StyleSheet.create({
   summaryTile: {
     flex: 1,
     minWidth: 96,
-    backgroundColor: WHITE,
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     borderRadius: 18,
     paddingVertical: 14,
     paddingHorizontal: 12,
     gap: 4,
   },
   summaryValue: {
-    color: BLUE,
+    color: colors.accent,
     fontSize: 22,
     lineHeight: 26,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   summaryValueFlash: {
     alignSelf: 'flex-start',
   },
   summaryLabel: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 12,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   focusCard: {
-    backgroundColor: CARD_BG,
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     borderRadius: 24,
     padding: 20,
     gap: 14,
@@ -616,21 +601,21 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   focusEyebrow: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 12,
     textTransform: 'uppercase',
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   focusTitle: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 26,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   focusBody: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 14,
     lineHeight: 20,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   focusMetaRow: {
     flexDirection: 'row',
@@ -640,43 +625,43 @@ const styles = StyleSheet.create({
   focusMetaTile: {
     flex: 1,
     minWidth: 130,
-    backgroundColor: WHITE,
+    backgroundColor: colors.surface,
     borderRadius: 18,
     padding: 14,
     gap: 5,
   },
   metaLabel: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 12,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   metaValue: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 16,
     lineHeight: 22,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   focusFooter: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: BLUE_WASH,
+    backgroundColor: colors.accentWash,
     borderRadius: 18,
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
   footerLink: {
-    color: BLUE,
+    color: colors.accent,
     fontSize: 15,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   section: {
     gap: 12,
   },
   sectionTitle: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 22,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   commandList: {
     gap: 10,
@@ -685,14 +670,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: CARD_ALT,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     borderRadius: 20,
     padding: 14,
   },
   commandRowDisabled: {
-    backgroundColor: BLUE_WASH,
+    backgroundColor: colors.accentWash,
   },
   commandIcon: {
     width: 38,
@@ -707,34 +692,34 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   commandTitle: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 16,
     lineHeight: 20,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   commandBody: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 13,
     lineHeight: 18,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   commandMeta: {
-    color: BLUE,
+    color: colors.accent,
     fontSize: 12,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   commandStatus: {
-    color: BLUE,
+    color: colors.accent,
     fontSize: 12,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   regentList: {
     gap: 10,
   },
   regentRow: {
-    backgroundColor: CARD_ALT,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     borderRadius: 20,
     padding: 16,
     gap: 10,
@@ -751,15 +736,15 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   regentName: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 18,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   regentSummary: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 13,
     lineHeight: 19,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   regentRowBottom: {
     flexDirection: 'row',
@@ -768,10 +753,10 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   regentMeta: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 12,
     lineHeight: 17,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   regentMetaFlash: {
     alignSelf: 'flex-start',
@@ -780,48 +765,49 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   quickCard: {
-    backgroundColor: CARD_BG,
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     borderRadius: 20,
     padding: 16,
     gap: 8,
   },
   quickTitle: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 18,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   quickBody: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 13,
     lineHeight: 19,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   quickMeta: {
-    color: BLUE,
+    color: colors.accent,
     fontSize: 12,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   emptyCard: {
-    backgroundColor: CARD_BG,
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     borderRadius: 24,
     padding: 28,
     alignItems: 'center',
     gap: 12,
   },
   emptyTitle: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 24,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   emptyText: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 14,
     lineHeight: 20,
     textAlign: 'center',
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
-});
+  });
+}

@@ -1,8 +1,7 @@
 import { LiveValueFlash } from '@/components/motion/LiveValueFlash';
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { RegentPressable } from '@/components/ui/RegentPressable';
-import { COLORS } from '@/constants/Colors';
-import { FONTS } from '@/constants/Typography';
+import { useTheme, type Theme } from '@/theme/ThemeProvider';
 import { useCoinbaseAlert } from '@/hooks/useCoinbaseAlert';
 import { RegentStakingAction, RegentStakingState } from '@/types/regents';
 import { ProgressToast } from '@/components/ui/ProgressToast';
@@ -37,19 +36,6 @@ import {
   TextInput,
   View,
 } from 'react-native';
-
-const {
-  DARK_BG,
-  CARD_BG,
-  CARD_ALT,
-  TEXT_PRIMARY,
-  TEXT_SECONDARY,
-  BLUE,
-  BORDER,
-  WHITE,
-  SUCCESS,
-  ORANGE,
-} = COLORS;
 
 function smartWalletAddress(value?: string | null): `0x${string}` | null {
   const trimmed = value?.trim();
@@ -109,6 +95,9 @@ function positiveDecimal(value: string) {
 
 export default function RegentStakingScreen() {
   const router = useRouter();
+  const theme = useTheme();
+  const { colors } = theme;
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const { currentUser } = useCurrentUser();
   const { sendUserOperation } = useSendUserOperation();
   const smartAccount = smartWalletAddress(currentUser?.evmSmartAccounts?.[0] as string | undefined);
@@ -263,11 +252,11 @@ export default function RegentStakingScreen() {
           contentContainerStyle={styles.content}
           contentInsetAdjustmentBehavior="automatic"
           keyboardShouldPersistTaps="handled"
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadStaking(true)} tintColor={BLUE} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadStaking(true)} tintColor={colors.accent} />}
         >
           <View style={styles.headerRow}>
             <RegentPressable pressStyle="icon" style={styles.backButton} onPress={() => router.back()}>
-              <Ionicons name="chevron-back" size={22} color={TEXT_PRIMARY} />
+              <Ionicons name="chevron-back" size={22} color={colors.text} />
             </RegentPressable>
             <View style={styles.headerCopy}>
               <Text style={styles.eyebrow}>REGENT staking</Text>
@@ -277,12 +266,12 @@ export default function RegentStakingScreen() {
 
           {loading ? (
             <View style={styles.centerState}>
-              <ActivityIndicator size="large" color={BLUE} />
+              <ActivityIndicator size="large" color={colors.accent} />
               <Text style={styles.loadingText}>Loading staking...</Text>
             </View>
           ) : !smartAccount ? (
             <View style={styles.emptyState}>
-              <Ionicons name="wallet-outline" size={30} color={BLUE} />
+              <Ionicons name="wallet-outline" size={30} color={colors.accent} />
               <Text style={styles.emptyTitle}>Open Wallet first</Text>
               <Text style={styles.emptyText}>Your staking controls appear after your mobile wallet is ready.</Text>
               <RegentPressable style={styles.primaryButton} onPress={() => router.push('/wallet')}>
@@ -322,7 +311,7 @@ export default function RegentStakingScreen() {
 
               {pendingCopy ? (
                 <View style={styles.noticeRow}>
-                  <ActivityIndicator size="small" color={BLUE} />
+                  <ActivityIndicator size="small" color={colors.accent} />
                   <Text style={styles.noticeText}>{pendingCopy}</Text>
                 </View>
               ) : null}
@@ -333,7 +322,7 @@ export default function RegentStakingScreen() {
                   value={amount}
                   onChangeText={setAmount}
                   placeholder="0.00"
-                  placeholderTextColor={TEXT_SECONDARY}
+                  placeholderTextColor={colors.textMuted}
                   keyboardType="decimal-pad"
                   style={styles.amountInput}
                 />
@@ -345,8 +334,8 @@ export default function RegentStakingScreen() {
                   <Switch
                     value={stakeForDifferentWallet}
                     onValueChange={setStakeForDifferentWallet}
-                    trackColor={{ false: CARD_ALT, true: BLUE }}
-                    thumbColor={WHITE}
+                    trackColor={{ false: colors.border, true: colors.accent }}
+                    thumbColor={colors.surfaceElevated}
                   />
                 </View>
                 {stakeForDifferentWallet ? (
@@ -354,7 +343,7 @@ export default function RegentStakingScreen() {
                     value={receiver}
                     onChangeText={setReceiver}
                     placeholder="0x... or name.eth"
-                    placeholderTextColor={TEXT_SECONDARY}
+                    placeholderTextColor={colors.textMuted}
                     autoCapitalize="none"
                     autoCorrect={false}
                     style={styles.receiverInput}
@@ -394,7 +383,7 @@ export default function RegentStakingScreen() {
                 disabled={!canClaimRegent || !!pendingAction}
                 onPress={() => void runStakingAction('claim_and_restake_regent')}
               >
-                <Ionicons name="sync-outline" size={18} color={WHITE} />
+                <Ionicons name="sync-outline" size={18} color={colors.onAccent} />
                 <Text style={styles.compoundButtonText}>Claim and restake REGENT</Text>
               </RegentPressable>
             </>
@@ -419,6 +408,9 @@ function ActionButton({
   label: string;
   onPress: () => void;
 }) {
+  const theme = useTheme();
+  const { colors } = theme;
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   return (
     <RegentPressable
       disabled={disabled}
@@ -426,16 +418,17 @@ function ActionButton({
       style={[styles.actionButton, disabled && styles.disabledButton]}
       onPress={onPress}
     >
-      <Ionicons name={icon} size={18} color={disabled ? TEXT_SECONDARY : BLUE} />
+      <Ionicons name={icon} size={18} color={disabled ? colors.textMuted : colors.accent} />
       <Text style={[styles.actionButtonText, disabled && styles.disabledText]}>{label}</Text>
     </RegentPressable>
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles({ colors, fonts }: Theme) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DARK_BG,
+    backgroundColor: colors.bg,
   },
   keyboardWrap: {
     flex: 1,
@@ -456,8 +449,8 @@ const styles = StyleSheet.create({
     height: 42,
     borderRadius: 21,
     borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: CARD_BG,
+    borderColor: colors.hairlineStrong,
+    backgroundColor: colors.surfaceElevated,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -466,16 +459,16 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   eyebrow: {
-    color: BLUE,
+    color: colors.accent,
     fontSize: 12,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
     textTransform: 'uppercase',
   },
   title: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 25,
     lineHeight: 30,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   centerState: {
     minHeight: 420,
@@ -484,9 +477,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   loadingText: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 14,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   emptyState: {
     minHeight: 420,
@@ -496,27 +489,27 @@ const styles = StyleSheet.create({
     padding: 24,
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: CARD_BG,
+    borderColor: colors.hairlineStrong,
+    backgroundColor: colors.surfaceElevated,
   },
   emptyTitle: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 22,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   emptyText: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 14,
     lineHeight: 20,
     textAlign: 'center',
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   heroPanel: {
     padding: 20,
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: CARD_BG,
+    borderColor: colors.hairlineStrong,
+    backgroundColor: colors.surfaceElevated,
     gap: 14,
   },
   heroTopRow: {
@@ -531,21 +524,21 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   heroLabel: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 13,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   heroValue: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 28,
     lineHeight: 33,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   heroBody: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 14,
     lineHeight: 20,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   statusPill: {
     flexDirection: 'row',
@@ -554,26 +547,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: WHITE,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
   },
   statusPillWarning: {
-    backgroundColor: '#F2E7DA',
+    backgroundColor: colors.warningWash,
   },
   statusDot: {
     width: 8,
     height: 8,
     borderRadius: 99,
-    backgroundColor: SUCCESS,
+    backgroundColor: colors.success,
   },
   statusDotWarning: {
-    backgroundColor: ORANGE,
+    backgroundColor: colors.warning,
   },
   statusText: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 12,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   metricGrid: {
     flexDirection: 'row',
@@ -586,21 +579,21 @@ const styles = StyleSheet.create({
     minHeight: 92,
     padding: 14,
     borderRadius: 18,
-    backgroundColor: CARD_BG,
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     gap: 6,
   },
   metricLabel: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 12,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   metricValue: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 17,
     lineHeight: 22,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   noticeRow: {
     flexDirection: 'row',
@@ -608,38 +601,38 @@ const styles = StyleSheet.create({
     gap: 10,
     padding: 14,
     borderRadius: 18,
-    backgroundColor: WHITE,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
   },
   noticeText: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 13,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   formSection: {
     gap: 12,
     padding: 18,
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: CARD_BG,
+    borderColor: colors.hairlineStrong,
+    backgroundColor: colors.surfaceElevated,
   },
   sectionTitle: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 19,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   amountInput: {
     minHeight: 58,
     paddingHorizontal: 16,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: WHITE,
-    color: TEXT_PRIMARY,
+    borderColor: colors.hairlineStrong,
+    backgroundColor: colors.surface,
+    color: colors.text,
     fontSize: 22,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   switchRow: {
     flexDirection: 'row',
@@ -652,26 +645,26 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   switchTitle: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 14,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   switchText: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 12,
     lineHeight: 17,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   receiverInput: {
     minHeight: 50,
     paddingHorizontal: 14,
     borderRadius: 15,
     borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: WHITE,
-    color: TEXT_PRIMARY,
+    borderColor: colors.hairlineStrong,
+    backgroundColor: colors.surface,
+    color: colors.text,
     fontSize: 14,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   actionGrid: {
     flexDirection: 'row',
@@ -689,13 +682,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 17,
     borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: WHITE,
+    borderColor: colors.hairlineStrong,
+    backgroundColor: colors.surface,
   },
   actionButtonText: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 14,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   compoundButton: {
     minHeight: 58,
@@ -705,30 +698,31 @@ const styles = StyleSheet.create({
     gap: 9,
     paddingHorizontal: 16,
     borderRadius: 18,
-    backgroundColor: BLUE,
+    backgroundColor: colors.accent,
   },
   compoundButtonText: {
-    color: WHITE,
+    color: colors.onAccent,
     fontSize: 15,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   disabledButton: {
     opacity: 0.48,
   },
   disabledText: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
   },
   primaryButton: {
     minHeight: 48,
     paddingHorizontal: 18,
     borderRadius: 16,
-    backgroundColor: BLUE,
+    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
   primaryButtonText: {
-    color: WHITE,
+    color: colors.onAccent,
     fontSize: 14,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
-});
+  });
+}
