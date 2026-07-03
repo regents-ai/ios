@@ -1,6 +1,10 @@
 import { StatusPill } from '@/components/agent-surfaces/StatusPill';
 import { SpinningRefreshIcon } from '@/components/motion/SpinningRefreshIcon';
+import { ThreadSkeleton } from '@/components/motion/ThreadSkeleton';
+import { TypingIndicator } from '@/components/motion/TypingIndicator';
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
+import { runRegentEventHaptic } from '@/components/ui/haptics';
+import { JumpToLatestButton } from '@/components/ui/JumpToLatestButton';
 import { RegentPressable } from '@/components/ui/RegentPressable';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
@@ -12,6 +16,14 @@ import {
 } from '@/types/regents';
 import { routes } from '@/utils/navigation/routes';
 import { regentApi } from '@/utils/regentApi/client';
+import {
+  createChatScrollState,
+  jumpToLatest,
+  noteUserScrollStart,
+  shouldAutoScroll,
+  shouldShowJumpToLatest,
+  trackChatScroll,
+} from '@/utils/chatScrollPolicy';
 import {
   adoptMessageThreadId,
   completeMessagePoll,
@@ -27,6 +39,8 @@ import {
   FlatList,
   KeyboardAvoidingView,
   type ListRenderItem,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
   Platform,
   RefreshControl,
   SafeAreaView,
@@ -187,6 +201,10 @@ export default function MessageDetailScreen() {
   const eventListRef = useRef<FlatList<MessageThreadEvent>>(null);
   const previousEventCountRef = useRef(0);
   const previousThreadScrollKeyRef = useRef('');
+  const scrollPolicyRef = useRef(createChatScrollState());
+  const jumpPillVisibleRef = useRef(false);
+  const streamingRef = useRef(false);
+  const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [effectiveThreadId, setEffectiveThreadId] = useState(routeThreadId);
   const [thread, setThread] = useState<MessageThreadDetail | null>(null);
   const [events, setEvents] = useState<MessageThreadEvent[]>([]);
@@ -322,6 +340,36 @@ export default function MessageDetailScreen() {
     [events]
   );
   const currentThreadScrollKey = thread?.id || effectiveThreadId;
+  const awaitingReply = thread?.status === 'running';
+  streamingRef.current = sending || awaitingReply;
+
+  const syncJumpPill = useCallback(() => {
+    const visible = shouldShowJumpToLatest(scrollPolicyRef.current);
+    if (visible !== jumpPillVisibleRef.current) {
+      jumpPillVisibleRef.current = visible;
+      setShowJumpToLatest(visible);
+    }
+  }, []);
+
+  const handleListScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+    const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
+    scrollPolicyRef.current = trackChatScroll(scrollPolicyRef.current, {
+      distanceFromBottom,
+      streaming: streamingRef.current,
+    });
+    syncJumpPill();
+  }, [syncJumpPill]);
+
+  const handleListScrollBeginDrag = useCallback(() => {
+    scrollPolicyRef.current = noteUserScrollStart(scrollPolicyRef.current, Date.now());
+  }, []);
+
+  const handleJumpToLatest = useCallback(() => {
+    scrollPolicyRef.current = jumpToLatest(scrollPolicyRef.current);
+    syncJumpPill();
+    eventListRef.current?.scrollToEnd({ animated: true });
+  }, [syncJumpPill]);
 
   const sendMessage = useCallback(async () => {
     const text = draft.trim();
@@ -338,6 +386,7 @@ export default function MessageDetailScreen() {
       setThread(nextThread);
       moveToThread(nextThreadId);
       setDraft('');
+      runRegentEventHaptic('messageSent');
 
       await loadThread(true, nextThreadId);
     } catch (error) {
@@ -367,6 +416,7 @@ export default function MessageDetailScreen() {
       setResolvingDecision(decision);
       const nextThread = await regentApi.resolveMessageThreadApproval({ threadId: requestThreadId, requestId, decision });
       const nextThreadId = adoptMessageThreadId(requestThreadId, nextThread.id);
+      runRegentEventHaptic(decision === 'approved' ? 'approvalGranted' : 'approvalDenied');
       setThread(nextThread);
       moveToThread(nextThreadId);
       setPollBurstUntilMs(extendMessagePollBurst());
@@ -404,6 +454,8 @@ export default function MessageDetailScreen() {
     if (threadChanged) {
       previousThreadScrollKeyRef.current = currentThreadScrollKey;
       previousEventCountRef.current = 0;
+      scrollPolicyRef.current = createChatScrollState();
+      syncJumpPill();
     }
 
     if (visibleEvents.length === 0) {
@@ -415,11 +467,15 @@ export default function MessageDetailScreen() {
     previousEventCountRef.current = visibleEvents.length;
 
     if (threadChanged || visibleEvents.length > previousCount) {
+      if (!threadChanged && !shouldAutoScroll(scrollPolicyRef.current, Date.now())) {
+        return;
+      }
+
       requestAnimationFrame(() => {
         eventListRef.current?.scrollToEnd({ animated: !threadChanged && previousCount > 0 });
       });
     }
-  }, [currentThreadScrollKey, visibleEvents.length]);
+  }, [currentThreadScrollKey, syncJumpPill, visibleEvents.length]);
 
   const renderEvent = useCallback<ListRenderItem<MessageThreadEvent>>(
     ({ item }) => <MessageEventRow event={item} />,
@@ -432,12 +488,7 @@ export default function MessageDetailScreen() {
 
   const listHeader = useMemo(() => {
     if (loading) {
-      return (
-        <View style={styles.emptyState}>
-          <ActivityIndicator color={BLUE} />
-          <Text style={styles.emptyTitle}>Loading messages</Text>
-        </View>
-      );
+      return <ThreadSkeleton />;
     }
 
     if (!thread) {
@@ -566,16 +617,23 @@ export default function MessageDetailScreen() {
     }
 
     return (
-      <View style={styles.refreshFooter}>
-        <RegentPressable
-          style={styles.refreshSmallButton}
-          onPress={handleRefreshNewEventsPress}
-        >
-          <Text style={styles.refreshSmallText}>Check for new messages</Text>
-        </RegentPressable>
-      </View>
+      <>
+        {awaitingReply ? (
+          <View style={styles.typingRow}>
+            <TypingIndicator />
+          </View>
+        ) : null}
+        <View style={styles.refreshFooter}>
+          <RegentPressable
+            style={styles.refreshSmallButton}
+            onPress={handleRefreshNewEventsPress}
+          >
+            <Text style={styles.refreshSmallText}>Check for new messages</Text>
+          </RegentPressable>
+        </View>
+      </>
     );
-  }, [handleRefreshNewEventsPress, loading, thread]);
+  }, [awaitingReply, handleRefreshNewEventsPress, loading, thread]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -601,27 +659,35 @@ export default function MessageDetailScreen() {
           </RegentPressable>
         </View>
 
-        <FlatList
-          ref={eventListRef}
-          style={styles.scroller}
-          data={loading || !thread ? [] : visibleEvents}
-          renderItem={renderEvent}
-          keyExtractor={keyEvent}
-          ItemSeparatorComponent={EventSeparator}
-          ListHeaderComponent={listHeader}
-          ListEmptyComponent={listEmpty}
-          ListFooterComponent={listFooter}
-          contentContainerStyle={styles.content}
-          contentInsetAdjustmentBehavior="automatic"
-          keyboardShouldPersistTaps="handled"
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              tintColor={BLUE}
-              onRefresh={() => loadThread(true)}
-            />
-          }
-        />
+        <View style={styles.listWrap}>
+          <FlatList
+            ref={eventListRef}
+            style={styles.scroller}
+            data={loading || !thread ? [] : visibleEvents}
+            renderItem={renderEvent}
+            keyExtractor={keyEvent}
+            ItemSeparatorComponent={EventSeparator}
+            ListHeaderComponent={listHeader}
+            ListEmptyComponent={listEmpty}
+            ListFooterComponent={listFooter}
+            contentContainerStyle={styles.content}
+            contentInsetAdjustmentBehavior="automatic"
+            keyboardShouldPersistTaps="handled"
+            onScroll={handleListScroll}
+            onScrollBeginDrag={handleListScrollBeginDrag}
+            scrollEventThrottle={32}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                tintColor={BLUE}
+                onRefresh={() => loadThread(true)}
+              />
+            }
+          />
+          {showJumpToLatest ? (
+            <JumpToLatestButton onPress={handleJumpToLatest} style={styles.jumpToLatest} />
+          ) : null}
+        </View>
 
         {thread ? (
           <View style={styles.composer}>
@@ -705,8 +771,21 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     fontFamily: FONTS.heading,
   },
+  listWrap: {
+    flex: 1,
+  },
   scroller: {
     flex: 1,
+  },
+  jumpToLatest: {
+    position: 'absolute',
+    right: 20,
+    bottom: 14,
+  },
+  typingRow: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 6,
+    paddingTop: 12,
   },
   content: {
     paddingHorizontal: 20,

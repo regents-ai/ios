@@ -1,5 +1,33 @@
 export type RegentHapticKind = 'tap' | 'selection' | 'copy' | 'success' | 'warning' | 'none';
 
+/**
+ * Named product events layered on top of the style-level haptic kinds.
+ * Destructive or deny paths intentionally map to the warning notification
+ * haptic rather than a light impact.
+ */
+export type RegentHapticEvent =
+  | 'txSubmitted'
+  | 'txConfirmed'
+  | 'sendCancelled'
+  | 'approvalGranted'
+  | 'approvalDenied'
+  | 'swipeConfirmCompleted'
+  | 'messageSent';
+
+const REGENT_EVENT_HAPTIC_KINDS: Record<RegentHapticEvent, RegentHapticKind> = {
+  txSubmitted: 'tap',
+  txConfirmed: 'success',
+  sendCancelled: 'warning',
+  approvalGranted: 'success',
+  approvalDenied: 'warning',
+  swipeConfirmCompleted: 'success',
+  messageSent: 'tap',
+};
+
+export function getRegentEventHapticKind(event: RegentHapticEvent): RegentHapticKind {
+  return REGENT_EVENT_HAPTIC_KINDS[event];
+}
+
 export type RegentHapticPattern =
   | { type: 'impact'; style: 'light' }
   | { type: 'selection' }

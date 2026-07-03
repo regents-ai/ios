@@ -2,12 +2,7 @@ import { type ReactNode } from 'react';
 import { type StyleProp, type ViewStyle } from 'react-native';
 import { EaseView } from 'react-native-ease';
 
-import {
-  getEaseAnimate,
-  getEaseInitialAnimate,
-  getEaseTransition,
-  type MotionVariant,
-} from '@/components/motion/easePresets';
+import { getMotionPreset, type MotionVariant } from '@/components/motion/easePresets';
 import { useReducedMotion } from '@/components/motion/useReducedMotion';
 
 const VERIFICATION_STAGGER_STEP = 50;
@@ -29,9 +24,7 @@ export function VerificationMotion({
 
   return (
     <EaseView
-      initialAnimate={getEaseInitialAnimate(variant)}
-      animate={getEaseAnimate(variant)}
-      transition={getEaseTransition(variant, reducedMotionEnabled, order * VERIFICATION_STAGGER_STEP)}
+      {...getMotionPreset(variant, reducedMotionEnabled, order * VERIFICATION_STAGGER_STEP)}
       style={style}
     >
       {children}

@@ -2,7 +2,7 @@ import { type ReactNode } from 'react';
 import { EaseView } from 'react-native-ease';
 import type { StyleProp, ViewStyle } from 'react-native';
 
-import { MotionVariant, getEaseAnimate, getEaseInitialAnimate, getEaseTransition } from './easePresets';
+import { MotionVariant, getMotionPreset } from './easePresets';
 import { useStaggerGroup } from './StaggerGroup';
 
 type StaggerItemProps = {
@@ -22,12 +22,7 @@ export function StaggerItem({
   const delay = order * step;
 
   return (
-    <EaseView
-      initialAnimate={getEaseInitialAnimate(variant)}
-      animate={getEaseAnimate(variant)}
-      transition={getEaseTransition(variant, reducedMotionEnabled, delay)}
-      style={style}
-    >
+    <EaseView {...getMotionPreset(variant, reducedMotionEnabled, delay)} style={style}>
       {children}
     </EaseView>
   );

@@ -13,7 +13,7 @@ import { clearWalletInitFailureMessage, getWalletInitFailureMessage } from '@/ut
 import { isAuthManagedRoute, resolveAuthGateState } from '@/utils/authFlowState';
 import { useChatGptAuth } from '@/hooks/useChatGptAuth';
 import { useRegentsAuth } from '@/hooks/useRegentsAuth';
-import { getEaseAnimate, getEaseInitialAnimate, getEaseTransition } from '@/components/motion/easePresets';
+import { getMotionPreset } from '@/components/motion/easePresets';
 import { useReducedMotion } from '@/components/motion/useReducedMotion';
 import { setCountry, setSubdivision } from '@/utils/state/locationState';
 import { setCurrentSolanaAddress, setCurrentWalletAddress } from '@/utils/state/walletRuntimeState';
@@ -135,12 +135,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   if (gateState.mode === 'issue') {
     return (
       <View style={styles.loadingContainer}>
-        <EaseView
-          initialAnimate={getEaseInitialAnimate('card')}
-          animate={getEaseAnimate('card')}
-          transition={getEaseTransition('card', reducedMotionEnabled)}
-          style={styles.issueCard}
-        >
+        <EaseView {...getMotionPreset('card', reducedMotionEnabled)} style={styles.issueCard}>
           <View style={styles.issueBadge}>
             <Ionicons name="shield-checkmark-outline" size={18} color={BLUE} />
             <Text style={styles.issueBadgeText}>Wallet access</Text>
@@ -187,12 +182,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   if (gateState.mode === 'loading') {
     return (
       <View style={styles.loadingContainer}>
-        <EaseView
-          initialAnimate={getEaseInitialAnimate('screen')}
-          animate={getEaseAnimate('screen')}
-          transition={getEaseTransition('screen', reducedMotionEnabled)}
-          style={styles.loadingBlock}
-        >
+        <EaseView {...getMotionPreset('screen', reducedMotionEnabled)} style={styles.loadingBlock}>
           <ActivityIndicator size="large" color={BLUE} />
           <Text style={styles.loadingText}>Getting Regents ready...</Text>
         </EaseView>
