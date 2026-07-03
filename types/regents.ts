@@ -243,7 +243,7 @@ export type CreateHermesVoiceSessionRequest = {
   voice?: string;
   locale?: string;
   timezone?: string;
-  reasoning_effort?: 'low' | 'medium' | 'high';
+  reasoning_effort?: 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
   device_capabilities: string[];
   preferred_transport?: 'webrtc';
 };

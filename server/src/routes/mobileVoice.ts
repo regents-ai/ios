@@ -24,7 +24,7 @@ const createVoiceSessionBodySchema = z.object({
   voice: z.string().min(1).optional(),
   locale: z.string().min(1).optional(),
   timezone: z.string().min(1).optional(),
-  reasoning_effort: z.enum(['low', 'medium', 'high']).optional(),
+  reasoning_effort: z.enum(['minimal', 'low', 'medium', 'high', 'xhigh']).optional(),
   device_capabilities: z.array(z.string().min(1)),
   preferred_transport: z.literal('webrtc').optional(),
 });

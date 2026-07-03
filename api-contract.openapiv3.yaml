@@ -2552,7 +2552,7 @@ components:
           type: string
         reasoning_effort:
           type: string
-          enum: [low, medium, high]
+          enum: [minimal, low, medium, high, xhigh]
           default: low
         device_capabilities:
           type: array
