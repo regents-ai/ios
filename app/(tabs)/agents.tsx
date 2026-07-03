@@ -8,6 +8,7 @@ import { RegentStakingState, RegentSummary } from '@/types/regents';
 import { formatCurrencyAmount, formatRelativeTime, formatWalletAddress } from '@/utils/agent-surfaces/formatters';
 import { routes } from '@/utils/navigation/routes';
 import { hasPositiveRawAmount } from '@/utils/onchain/stakingWalletAction';
+import { useCoinbaseAlert } from '@/hooks/useCoinbaseAlert';
 import { describeApiError } from '@/utils/apiError';
 import { regentApi } from '@/utils/regentApi/client';
 import { useCurrentUser } from '@coinbase/cdp-hooks';
@@ -133,17 +134,7 @@ export default function AgentsTab() {
   const [staking, setStaking] = useState<RegentStakingState | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [alertState, setAlertState] = useState<{
-    visible: boolean;
-    title: string;
-    message: string;
-    type: 'success' | 'error' | 'info';
-  }>({
-    visible: false,
-    title: '',
-    message: '',
-    type: 'info',
-  });
+  const { alertProps, showAlert } = useCoinbaseAlert();
 
   const loadAgents = useCallback(async (refresh = false) => {
     try {
@@ -160,8 +151,7 @@ export default function AgentsTab() {
       setAgents(nextAgents);
       setStaking(nextStaking);
     } catch (error) {
-      setAlertState({
-        visible: true,
+      showAlert({
         title: 'Could not load agents',
         message: describeApiError(error).message,
         type: 'error',
@@ -489,13 +479,7 @@ export default function AgentsTab() {
         </ScrollView>
       )}
 
-      <CoinbaseAlert
-        visible={alertState.visible}
-        title={alertState.title}
-        message={alertState.message}
-        type={alertState.type}
-        onConfirm={() => setAlertState((current) => ({ ...current, visible: false }))}
-      />
+      <CoinbaseAlert {...alertProps} />
     </View>
   );
 }

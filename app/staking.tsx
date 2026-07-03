@@ -3,6 +3,7 @@ import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { RegentPressable } from '@/components/ui/RegentPressable';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
+import { useCoinbaseAlert } from '@/hooks/useCoinbaseAlert';
 import { RegentStakingAction, RegentStakingState } from '@/types/regents';
 import { ProgressToast } from '@/components/ui/ProgressToast';
 import { describeApiError } from '@/utils/apiError';
@@ -119,12 +120,7 @@ export default function RegentStakingScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [pendingAction, setPendingAction] = useState<RegentStakingAction | null>(null);
   const [approvalStep, setApprovalStep] = useState(false);
-  const [alertState, setAlertState] = useState({
-    visible: false,
-    title: '',
-    message: '',
-    type: 'info' as 'success' | 'error' | 'info',
-  });
+  const { alertProps, showAlert, dismissAlert } = useCoinbaseAlert();
   const [toast, setToast] = useState<ProgressToastState | null>(null);
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -156,8 +152,7 @@ export default function RegentStakingScreen() {
 
       setStaking(await regentApi.getRegentStaking({ walletAddress: smartAccount }));
     } catch (error) {
-      setAlertState({
-        visible: true,
+      showAlert({
         title: 'Staking is not available',
         message: describeApiError(error).message,
         type: 'error',
@@ -190,8 +185,7 @@ export default function RegentStakingScreen() {
 
   const runStakingAction = useCallback(async (action: RegentStakingAction) => {
     if (!smartAccount) {
-      setAlertState({
-        visible: true,
+      showAlert({
         title: 'Wallet is not ready',
         message: 'Open Wallet first, then come back to staking.',
         type: 'error',
@@ -251,8 +245,7 @@ export default function RegentStakingScreen() {
       }, 2200);
     } catch (error) {
       setToast(dismissToast());
-      setAlertState({
-        visible: true,
+      showAlert({
         title: 'Staking did not finish',
         message: describeApiError(error).message,
         type: 'error',
@@ -410,14 +403,7 @@ export default function RegentStakingScreen() {
       </KeyboardAvoidingView>
 
       <ProgressToast toast={toast} onDismiss={handleToastDismiss} />
-      <CoinbaseAlert
-        visible={alertState.visible}
-        title={alertState.title}
-        message={alertState.message}
-        type={alertState.type}
-        onConfirm={() => setAlertState((current) => ({ ...current, visible: false }))}
-        onCancel={() => setAlertState((current) => ({ ...current, visible: false }))}
-      />
+      <CoinbaseAlert {...alertProps} onCancel={dismissAlert} />
     </View>
   );
 }

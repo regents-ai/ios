@@ -1,6 +1,7 @@
 import { StatusPill } from '@/components/agent-surfaces/StatusPill';
 import { LiveValueFlash } from '@/components/motion/LiveValueFlash';
 import { SpinningRefreshIcon } from '@/components/motion/SpinningRefreshIcon';
+import { useCoinbaseAlert } from '@/hooks/useCoinbaseAlert';
 import { ApprovalOverlay } from '@/components/ui/ApprovalOverlay';
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { RegentPressable } from '@/components/ui/RegentPressable';
@@ -124,17 +125,7 @@ export default function AgentDetailScreen() {
   const [approvalOpen, setApprovalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [alertState, setAlertState] = useState<{
-    visible: boolean;
-    title: string;
-    message: string;
-    type: 'success' | 'error' | 'info';
-  }>({
-    visible: false,
-    title: '',
-    message: '',
-    type: 'info',
-  });
+  const { alertProps, showAlert } = useCoinbaseAlert();
 
   const loadAgent = useCallback(async (refresh = false) => {
     if (!agentId) {
@@ -155,8 +146,7 @@ export default function AgentDetailScreen() {
       setAgent(detail);
       setRegentManager(nextRegentManager);
     } catch (error) {
-      setAlertState({
-        visible: true,
+      showAlert({
         title: 'This agent is unavailable right now',
         message: describeApiError(error).message,
         type: 'error',
@@ -540,13 +530,7 @@ export default function AgentDetailScreen() {
         </View>
       </ScrollView>
 
-      <CoinbaseAlert
-        visible={alertState.visible}
-        title={alertState.title}
-        message={alertState.message}
-        type={alertState.type}
-        onConfirm={() => setAlertState((current) => ({ ...current, visible: false }))}
-      />
+      <CoinbaseAlert {...alertProps} />
       <HermesVoiceSheet
         agentId={agent.id}
         agentName={agent.name}
