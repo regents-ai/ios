@@ -1,6 +1,8 @@
 export type RegentStatus = 'active' | 'attention' | 'paused';
-export type RegentRuntimeStatus = 'online' | 'waiting' | 'offline';
-export type RegentReturnStatus = 'requested' | 'approved' | 'broadcasting' | 'confirmed' | 'failed';
+// 'unknown' is the tolerant-decode case: any unrecognized wire value maps to
+// it instead of crashing an exhaustive switch (see utils/regentApi/tolerantDecode).
+export type RegentRuntimeStatus = 'online' | 'waiting' | 'offline' | 'unknown';
+export type RegentReturnStatus = 'requested' | 'approved' | 'broadcasting' | 'confirmed' | 'failed' | 'unknown';
 
 export type PlatformFormationStatus = 'pending' | 'blocked' | 'provisioning' | 'ready';
 export type PlatformBillingStatus = 'trial' | 'free-day' | 'prepaid' | 'paused' | 'zero' | 'failed';
@@ -176,7 +178,8 @@ export type RegentStakingActionResponse = {
   wallet_action: PlatformWalletAction;
 };
 
-export type MessageThreadStatus = 'idle' | 'running' | 'waiting' | 'failed';
+// 'unknown' is the tolerant-decode case for unrecognized wire values.
+export type MessageThreadStatus = 'idle' | 'running' | 'waiting' | 'failed' | 'unknown';
 
 export type PendingMessageApproval = {
   requestId: string;

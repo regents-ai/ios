@@ -12,7 +12,15 @@ import {
   RegentStakingState,
   RegentSummary,
 } from '@/types/regents';
+import { ApiError, apiFailureKindForStatus, privacySafeLogCategory } from '@/utils/apiError';
 import { authenticatedFetch } from '@/utils/authenticatedFetch';
+import {
+  normalizeMessageThread,
+  normalizeMessageThreadEvents,
+  normalizeRegentDetail,
+  normalizeRegentSummary,
+  normalizeReturnRequest,
+} from '@/utils/regentApi/tolerantDecode';
 import { createHermesVoiceApi, type MobileHermesVoicePath } from '@/utils/regentApi/voice';
 
 const mobileRegentsPath = '/mobile/regents';
@@ -67,7 +75,13 @@ async function requestJson<T>(path: RegentApiPath, init?: RequestInit, errorMess
   const response = await authenticatedFetch(`${getBaseUrl()}${path}`, init);
 
   if (!response.ok) {
-    throw new Error(await readErrorMessage(response, errorMessage));
+    const failure = new ApiError(
+      apiFailureKindForStatus(response.status),
+      await readErrorMessage(response, errorMessage),
+      response.status
+    );
+    console.warn('[api]', privacySafeLogCategory(failure));
+    throw failure;
   }
 
   return response.json() as Promise<T>;
@@ -146,11 +160,12 @@ export const regentApi = {
       undefined,
       'Unable to load Regents right now.'
     );
-    return payload.regents;
+    return payload.regents.map(normalizeRegentSummary);
   },
 
-  getRegent(regentId: string): Promise<RegentDetail> {
-    return requestJson<RegentDetail>(regentPath(regentId), undefined, 'Unable to load this Regent right now.');
+  async getRegent(regentId: string): Promise<RegentDetail> {
+    const detail = await requestJson<RegentDetail>(regentPath(regentId), undefined, 'Unable to load this Regent right now.');
+    return normalizeRegentDetail(detail);
   },
 
   getRegentManager(regentId: string): Promise<RegentManagerDetail> {
@@ -195,7 +210,7 @@ export const regentApi = {
       'Unable to start this return right now.'
     );
 
-    return payload.returnRequest;
+    return normalizeReturnRequest(payload.returnRequest);
   },
 
   async confirmReturnRequest(input: {
@@ -222,7 +237,7 @@ export const regentApi = {
       'Unable to confirm this return right now.'
     );
 
-    return payload.returnRequest;
+    return normalizeReturnRequest(payload.returnRequest);
   },
 
   async getReturnRequest(input: {
@@ -235,7 +250,7 @@ export const regentApi = {
       'Unable to load this return right now.'
     );
 
-    return payload.returnRequest;
+    return normalizeReturnRequest(payload.returnRequest);
   },
 
   async createFundingIntent(input: {
@@ -484,7 +499,7 @@ export const regentApi = {
       'Unable to start this message thread right now.'
     );
 
-    return payload.thread;
+    return normalizeMessageThread(payload.thread);
   },
 
   async getMessageThread(threadId: string): Promise<MessageThreadDetail> {
@@ -494,18 +509,22 @@ export const regentApi = {
       'Unable to load this message thread right now.'
     );
 
-    return payload.thread;
+    return normalizeMessageThread(payload.thread);
   },
 
   async getMessageThreadEvents(input: { threadId: string; sinceEventId?: string }): Promise<{
     events: MessageThreadEvent[];
     latestEventId: string;
   }> {
-    return requestJson<{ events: MessageThreadEvent[]; latestEventId: string }>(
+    const payload = await requestJson<{ events: MessageThreadEvent[]; latestEventId: string }>(
       messageThreadEventsPath(input.threadId, input.sinceEventId),
       undefined,
       'Unable to load messages right now.'
     );
+    return {
+      events: normalizeMessageThreadEvents(payload.events),
+      latestEventId: payload.latestEventId,
+    };
   },
 
   async sendMessageThreadMessage(input: { threadId: string; text: string; source?: 'text' | 'voice_summary' }): Promise<MessageThreadDetail> {
@@ -524,7 +543,7 @@ export const regentApi = {
       'Unable to send this message right now.'
     );
 
-    return payload.thread;
+    return normalizeMessageThread(payload.thread);
   },
 
   async resolveMessageThreadApproval(input: {
@@ -544,7 +563,7 @@ export const regentApi = {
       'Unable to update this review right now.'
     );
 
-    return payload.thread;
+    return normalizeMessageThread(payload.thread);
   },
 
   async listMessageThreads(): Promise<MessageThread[]> {
@@ -554,6 +573,6 @@ export const regentApi = {
       'Unable to load messages right now.'
     );
 
-    return payload.threads;
+    return payload.threads.map(normalizeMessageThread);
   },
 };

@@ -8,6 +8,7 @@ import { RegentStakingState, RegentSummary } from '@/types/regents';
 import { formatCurrencyAmount, formatRelativeTime, formatWalletAddress } from '@/utils/agent-surfaces/formatters';
 import { routes } from '@/utils/navigation/routes';
 import { hasPositiveRawAmount } from '@/utils/onchain/stakingWalletAction';
+import { describeApiError } from '@/utils/apiError';
 import { regentApi } from '@/utils/regentApi/client';
 import { useCurrentUser } from '@coinbase/cdp-hooks';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -163,7 +164,7 @@ export default function AgentsTab() {
       setAlertState({
         visible: true,
         title: 'Could not load agents',
-        message: error instanceof Error ? error.message : 'Please try again in a moment.',
+        message: describeApiError(error).message,
         type: 'error',
       });
     } finally {

@@ -20,6 +20,7 @@
  * value this wrapper owns (see utils/requestHeaderPrecedence.ts).
  */
 
+import { ApiError } from './apiError';
 import { getAccessTokenGlobal } from './getAccessTokenGlobal';
 import { mergeHeadersUnderSecurity } from './requestHeaderPrecedence';
 
@@ -32,7 +33,7 @@ export async function authenticatedFetch(
   const token = await getAccessTokenGlobal();
 
   if (!token) {
-    throw new Error('Authentication required. Please connect your wallet first.');
+    throw new ApiError('auth', 'Your session ended. Sign in again to pick up where you left off.');
   }
 
   // Caller headers first, security headers on top — security always wins.

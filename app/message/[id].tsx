@@ -3,6 +3,7 @@ import { SpinningRefreshIcon } from '@/components/motion/SpinningRefreshIcon';
 import { ThreadSkeleton } from '@/components/motion/ThreadSkeleton';
 import { TypingIndicator } from '@/components/motion/TypingIndicator';
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
+import { ComposerFade } from '@/components/ui/ComposerFade';
 import { runRegentEventHaptic } from '@/components/ui/haptics';
 import { JumpToLatestButton } from '@/components/ui/JumpToLatestButton';
 import { RegentPressable } from '@/components/ui/RegentPressable';
@@ -15,6 +16,7 @@ import {
   MessageThreadStatus,
 } from '@/types/regents';
 import { routes } from '@/utils/navigation/routes';
+import { describeApiError } from '@/utils/apiError';
 import { regentApi } from '@/utils/regentApi/client';
 import {
   createChatScrollState,
@@ -24,6 +26,11 @@ import {
   shouldShowJumpToLatest,
   trackChatScroll,
 } from '@/utils/chatScrollPolicy';
+import { useWordDrain } from '@/hooks/useWordDrain';
+import {
+  createScrollMetricsCoalescer,
+  type ScrollMetricsCoalescer,
+} from '@/utils/scrollMetricsDelivery';
 import {
   adoptMessageThreadId,
   completeMessagePoll,
@@ -78,6 +85,8 @@ function statusTone(status: MessageThreadStatus) {
       return { label: 'Needs help', accent: DANGER, wash: RED_WASH };
     case 'idle':
       return { label: 'Open', accent: SUCCESS, wash: GREEN_WASH };
+    case 'unknown':
+      return { label: 'Updating', accent: BLUE, wash: BLUE_WASH };
   }
 }
 
@@ -167,11 +176,17 @@ function approvalExpiryLabel(approval: PendingMessageApproval, nowMs: number) {
 
 type MessageEventRowProps = {
   event: MessageThreadEvent;
+  drain: boolean;
+  onReveal?: () => void;
 };
 
 const MessageEventRow = memo(function MessageEventRow({
   event,
+  drain,
+  onReveal,
 }: MessageEventRowProps) {
+  const body = useWordDrain(eventCopy(event), drain, onReveal);
+
   return (
     <View style={[
       styles.eventCard,
@@ -181,7 +196,7 @@ const MessageEventRow = memo(function MessageEventRow({
         <Text style={styles.eventTitle}>{eventTitle(event)}</Text>
         <Text style={styles.eventTime}>{formatEventTime(event.ts)}</Text>
       </View>
-      <Text style={styles.eventBody}>{eventCopy(event)}</Text>
+      <Text style={styles.eventBody}>{body}</Text>
     </View>
   );
 });
@@ -209,6 +224,7 @@ export default function MessageDetailScreen() {
   const [thread, setThread] = useState<MessageThreadDetail | null>(null);
   const [events, setEvents] = useState<MessageThreadEvent[]>([]);
   const [latestEventId, setLatestEventId] = useState('');
+  const [drainEventId, setDrainEventId] = useState('');
   const [pollBurstUntilMs, setPollBurstUntilMs] = useState(0);
   const [pollTick, setPollTick] = useState(0);
   const [draft, setDraft] = useState('');
@@ -231,6 +247,7 @@ export default function MessageDetailScreen() {
   useEffect(() => {
     setEffectiveThreadId(routeThreadId);
     setLatestEventId('');
+    setDrainEventId('');
     setPollBurstUntilMs(0);
     setPollTick((current) => current + 1);
   }, [routeThreadId]);
@@ -266,7 +283,7 @@ export default function MessageDetailScreen() {
       setAlertState({
         visible: true,
         title: 'Could not load messages',
-        message: error instanceof Error ? error.message : 'Try again in a moment.',
+        message: describeApiError(error).message,
         type: 'error',
       });
     } finally {
@@ -284,6 +301,13 @@ export default function MessageDetailScreen() {
     const nextEvents = await regentApi.getMessageThreadEvents({ threadId: requestThreadId, sinceEventId: latestEventId || undefined });
     if (nextEvents.events.length > 0) {
       setEvents((current) => mergeMessageThreadEvents(current, nextEvents.events));
+
+      const newestAssistantEvent = [...nextEvents.events]
+        .reverse()
+        .find((event) => event.role === 'assistant' && !!eventCopy(event));
+      if (newestAssistantEvent) {
+        setDrainEventId(newestAssistantEvent.eventId);
+      }
     }
     setLatestEventId(nextEvents.latestEventId);
     return nextEvents.events.length;
@@ -351,15 +375,27 @@ export default function MessageDetailScreen() {
     }
   }, []);
 
+  // Coalesced delivery: metrics land at most once per frame and only when
+  // changed; follow-state lives in scrollPolicyRef, not component state.
+  const scrollMetricsRef = useRef<ScrollMetricsCoalescer | null>(null);
+  if (scrollMetricsRef.current === null) {
+    scrollMetricsRef.current = createScrollMetricsCoalescer((metrics) => {
+      scrollPolicyRef.current = trackChatScroll(scrollPolicyRef.current, {
+        distanceFromBottom: metrics.distanceFromBottom,
+        streaming: streamingRef.current,
+      });
+      syncJumpPill();
+    });
+  }
+
+  useEffect(() => () => scrollMetricsRef.current?.cancel(), []);
+
   const handleListScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-    const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
-    scrollPolicyRef.current = trackChatScroll(scrollPolicyRef.current, {
-      distanceFromBottom,
-      streaming: streamingRef.current,
+    scrollMetricsRef.current?.push({
+      distanceFromBottom: contentSize.height - layoutMeasurement.height - contentOffset.y,
     });
-    syncJumpPill();
-  }, [syncJumpPill]);
+  }, []);
 
   const handleListScrollBeginDrag = useCallback(() => {
     scrollPolicyRef.current = noteUserScrollStart(scrollPolicyRef.current, Date.now());
@@ -393,7 +429,7 @@ export default function MessageDetailScreen() {
       setAlertState({
         visible: true,
         title: 'Could not send message',
-        message: error instanceof Error ? error.message : 'Try again in a moment.',
+        message: describeApiError(error).message,
         type: 'error',
       });
     } finally {
@@ -425,7 +461,7 @@ export default function MessageDetailScreen() {
       setAlertState({
         visible: true,
         title: 'Could not update approval',
-        message: error instanceof Error ? error.message : 'Try again in a moment.',
+        message: describeApiError(error).message,
         type: 'error',
       });
     } finally {
@@ -477,9 +513,21 @@ export default function MessageDetailScreen() {
     }
   }, [currentThreadScrollKey, syncJumpPill, visibleEvents.length]);
 
+  const handleDrainReveal = useCallback(() => {
+    if (shouldAutoScroll(scrollPolicyRef.current, Date.now())) {
+      eventListRef.current?.scrollToEnd({ animated: false });
+    }
+  }, []);
+
   const renderEvent = useCallback<ListRenderItem<MessageThreadEvent>>(
-    ({ item }) => <MessageEventRow event={item} />,
-    []
+    ({ item }) => (
+      <MessageEventRow
+        event={item}
+        drain={item.eventId === drainEventId}
+        onReveal={handleDrainReveal}
+      />
+    ),
+    [drainEventId, handleDrainReveal]
   );
 
   const handleRefreshNewEventsPress = useCallback(() => {
@@ -684,6 +732,7 @@ export default function MessageDetailScreen() {
               />
             }
           />
+          <ComposerFade />
           {showJumpToLatest ? (
             <JumpToLatestButton onPress={handleJumpToLatest} style={styles.jumpToLatest} />
           ) : null}
@@ -1031,8 +1080,6 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     paddingBottom: Platform.OS === 'ios' ? 18 : 12,
     backgroundColor: DARK_BG,
-    borderTopWidth: 1,
-    borderTopColor: BORDER,
   },
   composerInput: {
     flex: 1,

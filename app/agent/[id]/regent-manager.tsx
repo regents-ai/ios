@@ -7,6 +7,7 @@ import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
 import { RegentManagerDetail } from '@/types/regents';
 import { formatRelativeTime } from '@/utils/agent-surfaces/formatters';
+import { describeApiError } from '@/utils/apiError';
 import { regentApi } from '@/utils/regentApi/client';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -97,7 +98,7 @@ export default function AgentRegentManagerScreen() {
       setAlertState({
         visible: true,
         title: 'Agent Brief is unavailable right now',
-        message: error instanceof Error ? error.message : 'Try again in a moment.',
+        message: describeApiError(error).message,
         type: 'error',
       });
     } finally {

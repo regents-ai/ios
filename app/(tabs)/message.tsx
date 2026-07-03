@@ -52,6 +52,8 @@ function statusTone(status: MessageThreadStatus) {
       return { label: 'Needs help', accent: DANGER, wash: RED_WASH };
     case 'idle':
       return { label: 'Open', accent: SUCCESS, wash: GREEN_WASH };
+    case 'unknown':
+      return { label: 'Updating', accent: BLUE, wash: BLUE_WASH };
   }
 }
 

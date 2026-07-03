@@ -14,6 +14,7 @@ import {
   RegentSummary,
 } from '@/types/regents';
 import { routes } from '@/utils/navigation/routes';
+import { describeApiError } from '@/utils/apiError';
 import { regentApi } from '@/utils/regentApi/client';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -70,6 +71,8 @@ function runtimeCopy(runtimeStatus: RegentSummary['runtimeStatus']) {
       return 'Needs approval';
     case 'offline':
       return 'Offline';
+    case 'unknown':
+      return 'Updating';
   }
 }
 
@@ -81,6 +84,8 @@ function runtimeTone(runtimeStatus: RegentSummary['runtimeStatus']) {
       return { accent: AMBER, wash: AMBER_WASH };
     case 'offline':
       return { accent: DANGER, wash: RED_WASH };
+    case 'unknown':
+      return { accent: BLUE, wash: BLUE_WASH };
   }
 }
 
@@ -96,6 +101,8 @@ function returnRequestCopy(status: RegentReturnRequest['status']) {
       return 'Arrived';
     case 'failed':
       return 'Stopped';
+    case 'unknown':
+      return 'Updating';
   }
 }
 
@@ -109,6 +116,8 @@ function statusTone(status: RegentReturnRequest['status']) {
       return { accent: SUCCESS, wash: GREEN_WASH };
     case 'failed':
       return { accent: DANGER, wash: RED_WASH };
+    case 'unknown':
+      return { accent: BLUE, wash: BLUE_WASH };
   }
 }
 
@@ -178,7 +187,7 @@ export default function AgentDetailScreen() {
       setAlertState({
         visible: true,
         title: 'This agent is unavailable right now',
-        message: error instanceof Error ? error.message : 'Try again in a moment.',
+        message: describeApiError(error).message,
         type: 'error',
       });
     } finally {

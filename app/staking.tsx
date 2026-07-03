@@ -4,6 +4,14 @@ import { RegentPressable } from '@/components/ui/RegentPressable';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
 import { RegentStakingAction, RegentStakingState } from '@/types/regents';
+import { ProgressToast } from '@/components/ui/ProgressToast';
+import { describeApiError } from '@/utils/apiError';
+import {
+  dismissToast,
+  resolveToastSuccess,
+  showProgressToast,
+  type ProgressToastState,
+} from '@/utils/progressToast';
 import { regentApi } from '@/utils/regentApi/client';
 import {
   hasPositiveRawAmount,
@@ -117,7 +125,12 @@ export default function RegentStakingScreen() {
     message: '',
     type: 'info' as 'success' | 'error' | 'info',
   });
+  const [toast, setToast] = useState<ProgressToastState | null>(null);
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleToastDismiss = useCallback(() => {
+    setToast(dismissToast());
+  }, []);
 
   const clearScheduledRefresh = useCallback(() => {
     if (refreshTimerRef.current) {
@@ -146,7 +159,7 @@ export default function RegentStakingScreen() {
       setAlertState({
         visible: true,
         title: 'Staking is not available',
-        message: error instanceof Error ? error.message : 'Try again in a moment.',
+        message: describeApiError(error).message,
         type: 'error',
       });
     } finally {
@@ -189,6 +202,7 @@ export default function RegentStakingScreen() {
     try {
       setPendingAction(action);
       setApprovalStep(false);
+      setToast(showProgressToast(actionLoadingCopy(action)));
       const walletAddress = smartAccount;
       const response =
         action === 'stake'
@@ -228,12 +242,7 @@ export default function RegentStakingScreen() {
         useCdpPaymaster: false,
       });
 
-      setAlertState({
-        visible: true,
-        title: actionTitle(action),
-        message: 'Your staking numbers will refresh after Base catches up.',
-        type: 'success',
-      });
+      setToast((current) => resolveToastSuccess(current, actionTitle(action), Date.now()));
       setAmount('');
       clearScheduledRefresh();
       refreshTimerRef.current = setTimeout(() => {
@@ -241,10 +250,11 @@ export default function RegentStakingScreen() {
         void loadStaking(true);
       }, 2200);
     } catch (error) {
+      setToast(dismissToast());
       setAlertState({
         visible: true,
         title: 'Staking did not finish',
-        message: error instanceof Error ? error.message : 'Try again in a moment.',
+        message: describeApiError(error).message,
         type: 'error',
       });
     } finally {
@@ -399,6 +409,7 @@ export default function RegentStakingScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
+      <ProgressToast toast={toast} onDismiss={handleToastDismiss} />
       <CoinbaseAlert
         visible={alertState.visible}
         title={alertState.title}
