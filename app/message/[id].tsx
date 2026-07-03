@@ -3,7 +3,7 @@ import { SpinningRefreshIcon } from '@/components/motion/SpinningRefreshIcon';
 import { ThreadSkeleton } from '@/components/motion/ThreadSkeleton';
 import { TypingIndicator } from '@/components/motion/TypingIndicator';
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
-import { ComposerFade } from '@/components/ui/ComposerFade';
+import { ComposerFade, COMPOSER_FADE_HEIGHT } from '@/components/ui/ComposerFade';
 import { runRegentEventHaptic } from '@/components/ui/haptics';
 import { JumpToLatestButton } from '@/components/ui/JumpToLatestButton';
 import { RegentPressable } from '@/components/ui/RegentPressable';
@@ -36,6 +36,7 @@ import {
   type ScrollMetricsCoalescer,
 } from '@/utils/scrollMetricsDelivery';
 import { messageStatusTone } from '@/utils/statusTone';
+import { useCoinbaseAlert } from '@/hooks/useCoinbaseAlert';
 import {
   initialStreamRecovery,
   onForegroundResume,
@@ -246,17 +247,7 @@ export default function MessageDetailScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [sending, setSending] = useState(false);
   const [resolvingDecision, setResolvingDecision] = useState<'approved' | 'denied' | null>(null);
-  const [alertState, setAlertState] = useState<{
-    visible: boolean;
-    title: string;
-    message: string;
-    type: 'success' | 'error' | 'info';
-  }>({
-    visible: false,
-    title: '',
-    message: '',
-    type: 'info',
-  });
+  const { alertProps, showAlert } = useCoinbaseAlert();
 
   useEffect(() => {
     setEffectiveThreadId(routeThreadId);
@@ -294,8 +285,7 @@ export default function MessageDetailScreen() {
       setEvents(mergeMessageThreadEvents([], nextEvents.events));
       setLatestEventId(nextEvents.latestEventId);
     } catch (error) {
-      setAlertState({
-        visible: true,
+      showAlert({
         title: 'Could not load messages',
         message: describeApiError(error).message,
         type: 'error',
@@ -483,8 +473,7 @@ export default function MessageDetailScreen() {
       await loadThread(true, nextThreadId);
     } catch (error) {
       setNotices((current) => failNotice(current, noticeId));
-      setAlertState({
-        visible: true,
+      showAlert({
         title: 'Could not send message',
         message: describeApiError(error).message,
         type: 'error',
@@ -541,8 +530,7 @@ export default function MessageDetailScreen() {
       setPollBurstUntilMs(extendMessagePollBurst());
       await loadThread(true, nextThreadId);
     } catch (error) {
-      setAlertState({
-        visible: true,
+      showAlert({
         title: 'Could not update approval',
         message: describeApiError(error).message,
         type: 'error',
@@ -870,14 +858,7 @@ export default function MessageDetailScreen() {
         ) : null}
       </KeyboardAvoidingView>
 
-      <CoinbaseAlert
-        visible={alertState.visible}
-        type={alertState.type}
-        title={alertState.title}
-        message={alertState.message}
-        confirmText="OK"
-        onConfirm={() => setAlertState((current) => ({ ...current, visible: false }))}
-      />
+      <CoinbaseAlert {...alertProps} confirmText="OK" />
     </SafeAreaView>
   );
 }
@@ -944,7 +925,9 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 20,
-    paddingBottom: 18,
+    // Clear the frosted composer fade so the newest message's last line is
+    // never hidden under the overlay (fade is bottom-anchored, height 28).
+    paddingBottom: 18 + COMPOSER_FADE_HEIGHT,
   },
   listHeader: {
     gap: 14,
