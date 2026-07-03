@@ -18,8 +18,33 @@ import type {
   RegentSummary,
 } from '@/types/regents';
 
+declare const __DEV__: boolean | undefined;
+
 function logDecodeFailure(category: string) {
   console.warn('[decode]', category);
+}
+
+// Contract-drift signal: the first time a field decodes to 'unknown' in a dev
+// session, warn loudly that the backend is sending an enum value the app does
+// not know — an early "the OpenAPI contract drifted" cue. Warn-once per field
+// so a stream of unknowns does not spam the console. Dev-only and
+// visibility-only: this never changes decoding, and the canonical enum sets
+// stay the sole known shape (no legacy-shape branch).
+const driftWarnedFields = new Set<string>();
+
+function warnEnumDriftOnce(field: string) {
+  if (typeof __DEV__ !== 'undefined' && __DEV__ && !driftWarnedFields.has(field)) {
+    driftWarnedFields.add(field);
+    console.warn(
+      `[decode] contract drift: '${field}' received an unrecognized enum value ` +
+        `and was mapped to 'unknown'. Check api-contract.openapiv3.yaml against the backend.`
+    );
+  }
+}
+
+/** Test-only reset of the warn-once drift state. */
+export function resetEnumDriftWarningsForTest() {
+  driftWarnedFields.clear();
 }
 
 /**
@@ -35,6 +60,7 @@ export function tolerantEnum<T extends string>(
       return value as T;
     }
     logDecodeFailure(`decode.enum.${field}`);
+    warnEnumDriftOnce(field);
     return 'unknown';
   };
 }

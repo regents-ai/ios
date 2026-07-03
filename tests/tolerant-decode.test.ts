@@ -9,8 +9,26 @@ import {
   normalizeMessageThreadEvents,
   normalizeRegentDetail,
   normalizeReturnRequest,
+  resetEnumDriftWarningsForTest,
   tolerantEnum,
 } from '../utils/regentApi/tolerantDecode';
+
+const globalWithDev = globalThis as { __DEV__?: boolean };
+
+/** Runs `fn` capturing console.warn calls. */
+function captureWarnings(fn: () => void): string[] {
+  const warnings: string[] = [];
+  const original = console.warn;
+  console.warn = (...args: unknown[]) => {
+    warnings.push(args.join(' '));
+  };
+  try {
+    fn();
+  } finally {
+    console.warn = original;
+  }
+  return warnings;
+}
 
 function contractEnums(): string[][] {
   const contract = readFileSync(join(__dirname, '..', 'api-contract.openapiv3.yaml'), 'utf8');
@@ -109,4 +127,49 @@ test('regent detail normalizes runtime and return request enums', () => {
 test('return request known statuses survive unchanged', () => {
   const wire = { id: 'rr2', status: 'broadcasting' } as unknown as RegentReturnRequest;
   assert.equal(normalizeReturnRequest(wire).status, 'broadcasting');
+});
+
+test('contract-drift: an unknown enum value warns once per field in dev', () => {
+  const prevDev = globalWithDev.__DEV__;
+  globalWithDev.__DEV__ = true;
+  resetEnumDriftWarningsForTest();
+
+  const decode = tolerantEnum(['online', 'offline'], 'regent.runtimeStatus');
+  const warnings = captureWarnings(() => {
+    decode('hibernating');
+    decode('warp-speed');
+    decode('another-unknown');
+  });
+
+  const driftWarnings = warnings.filter((line) => line.includes('contract drift'));
+  assert.equal(driftWarnings.length, 1, 'warns once, not per unknown value');
+  assert.match(driftWarnings[0], /regent\.runtimeStatus/);
+  assert.match(driftWarnings[0], /api-contract\.openapiv3\.yaml/, 'points at the contract');
+
+  globalWithDev.__DEV__ = prevDev;
+});
+
+test('contract-drift: known values never warn', () => {
+  globalWithDev.__DEV__ = true;
+  resetEnumDriftWarningsForTest();
+
+  const decode = tolerantEnum(['online', 'offline'], 'regent.runtimeStatus');
+  const warnings = captureWarnings(() => {
+    decode('online');
+    decode('offline');
+  });
+  assert.equal(warnings.filter((line) => line.includes('contract drift')).length, 0);
+  globalWithDev.__DEV__ = undefined;
+});
+
+test('contract-drift: production builds emit no drift warning', () => {
+  globalWithDev.__DEV__ = false;
+  resetEnumDriftWarningsForTest();
+
+  const decode = tolerantEnum(['online', 'offline'], 'regent.runtimeStatus');
+  const warnings = captureWarnings(() => {
+    decode('unheard-of');
+  });
+  assert.equal(warnings.filter((line) => line.includes('contract drift')).length, 0);
+  globalWithDev.__DEV__ = undefined;
 });
