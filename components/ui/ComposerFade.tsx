@@ -1,41 +1,38 @@
 /**
- * ComposerFade - material fade above the bottom composer.
+ * ComposerFade - real frosted material fade above the bottom composer.
  *
  * Adapted from hermex ChatTranscriptSupportingViews.swift:435-471: thread
- * content dissolves into the composer instead of hitting a hard border.
- * Rendered as a stack of background-color slices with a smoothstep alpha
- * ramp — no native blur/mask modules are in this app's dev client, so the
- * dissolve is pure RN views.
+ * content dissolves into the composer instead of hitting a hard border. A
+ * MaskedView applies a smoothstep alpha ramp (transparent at the top, opaque
+ * at the bottom) over a real expo-blur BlurView, so the bottom of the list
+ * frosts into the composer.
  */
 
+import MaskedView from '@react-native-masked-view/masked-view';
+import { BlurView } from 'expo-blur';
 import { StyleSheet, View } from 'react-native';
 
-export const COMPOSER_FADE_HEIGHT = 28;
+import { COMPOSER_FADE_HEIGHT, composerFadeSlices } from '@/utils/composerFade';
 
-const SLICE_COUNT = 8;
+export { COMPOSER_FADE_HEIGHT };
 
-// #FBF4DE (COLORS.DARK_BG) as rgb components for the alpha ramp.
-const BG_RGB = '251, 244, 222';
+const SLICES = composerFadeSlices();
 
-function smoothstep(t: number) {
-  return t * t * (3 - 2 * t);
+function FadeMask() {
+  return (
+    <View style={styles.fill}>
+      {SLICES.map((slice) => (
+        <View key={slice.key} style={[styles.slice, { opacity: slice.alpha }]} />
+      ))}
+    </View>
+  );
 }
-
-const SLICES = Array.from({ length: SLICE_COUNT }, (_, index) => {
-  const t = (index + 1) / SLICE_COUNT;
-  return { key: index, alpha: smoothstep(t) };
-});
 
 export function ComposerFade() {
   return (
-    <View pointerEvents="none" style={styles.wrap}>
-      {SLICES.map((slice) => (
-        <View
-          key={slice.key}
-          style={[styles.slice, { backgroundColor: `rgba(${BG_RGB}, ${slice.alpha.toFixed(3)})` }]}
-        />
-      ))}
-    </View>
+    <MaskedView pointerEvents="none" style={styles.wrap} maskElement={<FadeMask />}>
+      <BlurView intensity={40} tint="light" style={styles.fill} />
+    </MaskedView>
   );
 }
 
@@ -47,7 +44,12 @@ const styles = StyleSheet.create({
     bottom: 0,
     height: COMPOSER_FADE_HEIGHT,
   },
+  fill: {
+    flex: 1,
+  },
   slice: {
     flex: 1,
+    // Any solid color works: MaskedView uses the mask's alpha, not its hue.
+    backgroundColor: '#000',
   },
 });
