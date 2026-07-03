@@ -1,11 +1,9 @@
 import { getEaseTransition } from '@/components/motion/easePresets';
 import { useReducedMotion } from '@/components/motion/useReducedMotion';
-import { COLORS } from '@/constants/Colors';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useTheme, type Theme } from '@/theme/ThemeProvider';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Modal, Pressable, StyleSheet, View } from 'react-native';
 import { EaseView } from 'react-native-ease';
-
-const { CARD_BG, BORDER } = COLORS;
 
 type SettingsModalSurfaceProps = {
   children: ReactNode;
@@ -18,6 +16,8 @@ export function SettingsModalSurface({
   onRequestClose,
   visible,
 }: SettingsModalSurfaceProps) {
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const reducedMotionEnabled = useReducedMotion();
   const [isPresented, setIsPresented] = useState(visible);
 
@@ -57,22 +57,24 @@ export function SettingsModalSurface({
   );
 }
 
-const styles = StyleSheet.create({
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'transparent',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  modalCard: {
-    width: '100%',
-    maxWidth: 420,
-    backgroundColor: CARD_BG,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: BORDER,
-    padding: 20,
-    gap: 16,
-  },
-});
+function makeStyles({ colors }: Theme) {
+  return StyleSheet.create({
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'transparent',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 20,
+    },
+    modalCard: {
+      width: '100%',
+      maxWidth: 420,
+      backgroundColor: colors.surfaceElevated,
+      borderRadius: 24,
+      borderWidth: 1,
+      borderColor: colors.hairlineStrong,
+      padding: 20,
+      gap: 16,
+    },
+  });
+}

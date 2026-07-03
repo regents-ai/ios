@@ -6,16 +6,17 @@
 
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
+import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { RegentPressable } from '@/components/ui/RegentPressable';
-import { COLORS } from '@/constants/Colors';
-import { FONTS } from '@/constants/Typography';
-
-const { DARK_BG, CARD_BG, TEXT_PRIMARY, TEXT_SECONDARY, BORDER, BLUE } = COLORS;
+import { useTheme, type Theme } from '@/theme/ThemeProvider';
 
 export function ConnectSection() {
   const router = useRouter();
+  const theme = useTheme();
+  const { colors } = theme;
+  const styles = useMemo(() => makeStyles(theme), [theme]);
 
   const rows: {
     icon: keyof typeof Ionicons.glyphMap;
@@ -49,13 +50,13 @@ export function ConnectSection() {
         <View key={row.title}>
           <RegentPressable haptic="selection" pressStyle="card" style={styles.row} onPress={row.onPress}>
             <View style={styles.icon}>
-              <Ionicons name={row.icon} size={22} color={BLUE} />
+              <Ionicons name={row.icon} size={22} color={colors.accent} />
             </View>
             <View style={styles.copy}>
               <Text style={styles.title}>{row.title}</Text>
               <Text style={styles.detail}>{row.detail}</Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color={TEXT_SECONDARY} />
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </RegentPressable>
           {index < rows.length - 1 ? <View style={styles.divider} /> : null}
         </View>
@@ -64,48 +65,50 @@ export function ConnectSection() {
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: CARD_BG,
-    borderRadius: 28,
-    borderWidth: 1,
-    borderColor: BORDER,
-    overflow: 'hidden',
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    paddingHorizontal: 20,
-    paddingVertical: 18,
-  },
-  icon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: DARK_BG,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  copy: {
-    flex: 1,
-    minWidth: 0,
-    gap: 3,
-  },
-  title: {
-    color: TEXT_PRIMARY,
-    fontSize: 18,
-    fontFamily: FONTS.heading,
-  },
-  detail: {
-    color: TEXT_SECONDARY,
-    fontSize: 13,
-    lineHeight: 18,
-    fontFamily: FONTS.body,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: BORDER,
-    marginLeft: 78,
-  },
-});
+function makeStyles({ colors, fonts }: Theme) {
+  return StyleSheet.create({
+    card: {
+      backgroundColor: colors.surfaceElevated,
+      borderRadius: 28,
+      borderWidth: 1,
+      borderColor: colors.hairlineStrong,
+      overflow: 'hidden',
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 14,
+      paddingHorizontal: 20,
+      paddingVertical: 18,
+    },
+    icon: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: colors.bg,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    copy: {
+      flex: 1,
+      minWidth: 0,
+      gap: 3,
+    },
+    title: {
+      color: colors.text,
+      fontSize: 18,
+      fontFamily: fonts.title,
+    },
+    detail: {
+      color: colors.textMuted,
+      fontSize: 13,
+      lineHeight: 18,
+      fontFamily: fonts.ui,
+    },
+    divider: {
+      height: 1,
+      backgroundColor: colors.hairlineStrong,
+      marginLeft: 78,
+    },
+  });
+}

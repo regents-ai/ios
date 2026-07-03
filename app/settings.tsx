@@ -1,15 +1,10 @@
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
-import { AccountManagementSection } from '@/components/settings/AccountManagementSection';
+import { AccountManagementSection, PhoneReverifyModal } from '@/components/settings/AccountSection';
 import { AppearanceToggle } from '@/components/settings/AppearanceToggle';
 import { ConnectSection } from '@/components/settings/ConnectSection';
-import { HelpSupportSection } from '@/components/settings/HelpSupportSection';
-import { PhoneReverifyModal } from '@/components/settings/PhoneReverifyModal';
-import { SettingsHero } from '@/components/settings/SettingsHero';
-import { SettingsMenu, type SettingsSectionKey } from '@/components/settings/SettingsMenu';
-import { SignOutSection } from '@/components/settings/SignOutSection';
-import { WalletSettingsSection } from '@/components/settings/WalletSettingsSection';
-import { COLORS } from '@/constants/Colors';
-import { FONTS } from '@/constants/Typography';
+import { SettingsHero, SettingsMenu, type SettingsSectionKey } from '@/components/settings/SettingsShell';
+import { HelpSupportSection, SignOutSection, WalletSettingsSection } from '@/components/settings/SettingsSections';
+import { useTheme, type Theme } from '@/theme/ThemeProvider';
 import { useRegentsAuth } from '@/hooks/useRegentsAuth';
 import {
   setCountry,
@@ -37,6 +32,7 @@ import {
 } from '@coinbase/cdp-hooks';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
+import { useMemo } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -47,9 +43,10 @@ import {
   View,
 } from 'react-native';
 
-const { DARK_BG, TEXT_SECONDARY, BLUE } = COLORS;
-
 export default function SettingsScreen() {
+  const theme = useTheme();
+  const { colors } = theme;
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const { isInitialized } = useIsInitialized();
   const {
     linkedEmail,
@@ -65,8 +62,8 @@ export default function SettingsScreen() {
 
   const explicitEOAAddress = currentUser?.evmAccounts?.[0] as string | undefined;
   const smartAccountAddress = currentUser?.evmSmartAccounts?.[0] as string | undefined;
-  const solanaAddress = cdpSolanaAddress;
-  const evmWalletAddress = explicitEOAAddress || evmAddress || smartAccountAddress;
+  const solanaAddress = cdpSolanaAddress ?? undefined;
+  const evmWalletAddress = explicitEOAAddress || evmAddress || smartAccountAddress || undefined;
 
   const effectiveIsSignedIn = isAuthenticated;
   const displayEmail = linkedEmail || 'No email linked';
@@ -193,13 +190,13 @@ export default function SettingsScreen() {
   if (!isInitialized) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={BLUE} />
+        <ActivityIndicator size="large" color={colors.accent} />
         <Text style={styles.loadingText}>Preparing settings...</Text>
       </View>
     );
   }
 
-  const cdpPhone = linkedPhone;
+  const cdpPhone = linkedPhone ?? undefined;
   const hasLinkedEmail = !!linkedEmail;
   const phoneIsVerified = verifiedPhone === cdpPhone && phoneFresh;
   const phoneIsExpired = verifiedPhone === cdpPhone && !phoneFresh;
@@ -263,27 +260,29 @@ export default function SettingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: DARK_BG,
-  },
-  content: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    gap: 20,
-    paddingBottom: 40,
-  },
-  loadingContainer: {
-    flex: 1,
-    backgroundColor: DARK_BG,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-  },
-  loadingText: {
-    color: TEXT_SECONDARY,
-    fontSize: 14,
-    fontFamily: FONTS.body,
-  },
-});
+function makeStyles({ colors, fonts }: Theme) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.bg,
+    },
+    content: {
+      paddingHorizontal: 20,
+      paddingTop: 12,
+      gap: 20,
+      paddingBottom: 40,
+    },
+    loadingContainer: {
+      flex: 1,
+      backgroundColor: colors.bg,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 12,
+    },
+    loadingText: {
+      color: colors.textMuted,
+      fontSize: 14,
+      fontFamily: fonts.ui,
+    },
+  });
+}

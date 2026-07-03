@@ -4,12 +4,6 @@
  * Simplifies imports across the app
  */
 
-// UI Components
-export { FailedTransactionBadge, FailedTransactionCard } from './ui/FailedTransactionCard';
-export { SupportEmailButton } from './ui/SupportEmailButton';
-export { SwipeToConfirm } from './ui/SwipeToConfirm';
-
-
 // Onramp Components
 export { APIGuestCheckoutWidget } from './onramp/APIGuestCheckoutWidget';
 export { OnrampForm } from './onramp/OnrampForm';
