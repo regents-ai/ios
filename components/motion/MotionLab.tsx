@@ -1,0 +1,256 @@
+/**
+ * MotionLab - debug-only screen with live-tunable motion knobs.
+ *
+ * Adapted from hermex StreamingLabView.swift: steppers tune the real motion
+ * pipeline (word drain, toast entry) against a canned replay, so cadence can
+ * be felt, not guessed. Only reachable in debug builds via /motion-lab; the
+ * shipped app reads frozen constants (see utils/motionKnobs).
+ */
+
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { useRouter } from 'expo-router';
+import { useCallback, useState, useSyncExternalStore } from 'react';
+import { SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+
+import { ProgressToast } from '@/components/ui/ProgressToast';
+import { RegentPressable } from '@/components/ui/RegentPressable';
+import { COLORS } from '@/constants/Colors';
+import { FONTS } from '@/constants/Typography';
+import { useWordDrain } from '@/hooks/useWordDrain';
+import {
+  MOTION_KNOB_BOUNDS,
+  getMotionKnobs,
+  resetMotionKnobs,
+  setMotionKnob,
+  subscribeMotionKnobs,
+  type MotionKnobs,
+} from '@/utils/motionKnobs';
+import {
+  dismissToast,
+  resolveToastSuccess,
+  showProgressToast,
+  type ProgressToastState,
+} from '@/utils/progressToast';
+
+const { DARK_BG, CARD_BG, CARD_ALT, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, BORDER } = COLORS;
+
+const CANNED_REPLY =
+  'Here is a canned agent reply for tuning. It has enough words to feel the ' +
+  'cadence, a burst of short ones, and then a longer stretch so the ' +
+  'lag-bounded catch-up can kick in when the backlog grows past the budget.';
+
+const KNOB_LABELS: Record<keyof MotionKnobs, string> = {
+  wordDrainCadenceMs: 'Word cadence (ms/tick)',
+  wordDrainMaxLagMs: 'Drain lag bound (ms)',
+  toastEntryMs: 'Toast entry (ms)',
+};
+
+function KnobRow({ knob, value }: { knob: keyof MotionKnobs; value: number }) {
+  const bounds = MOTION_KNOB_BOUNDS[knob];
+  return (
+    <View style={styles.knobRow}>
+      <View style={styles.knobCopy}>
+        <Text style={styles.knobLabel}>{KNOB_LABELS[knob]}</Text>
+        <Text style={styles.knobValue}>{value}</Text>
+      </View>
+      <View style={styles.knobControls}>
+        <RegentPressable
+          pressStyle="icon"
+          style={styles.stepButton}
+          onPress={() => setMotionKnob(knob, value - bounds.step)}
+        >
+          <Ionicons name="remove" size={18} color={TEXT_PRIMARY} />
+        </RegentPressable>
+        <RegentPressable
+          pressStyle="icon"
+          style={styles.stepButton}
+          onPress={() => setMotionKnob(knob, value + bounds.step)}
+        >
+          <Ionicons name="add" size={18} color={TEXT_PRIMARY} />
+        </RegentPressable>
+      </View>
+    </View>
+  );
+}
+
+function CannedReplay({ replayKey }: { replayKey: number }) {
+  const revealed = useWordDrain(CANNED_REPLY, true);
+  return (
+    <Text key={replayKey} style={styles.replayText}>
+      {revealed}
+    </Text>
+  );
+}
+
+export default function MotionLab() {
+  const router = useRouter();
+  const knobs = useSyncExternalStore(subscribeMotionKnobs, getMotionKnobs, getMotionKnobs);
+  const [replayKey, setReplayKey] = useState(0);
+  const [toast, setToast] = useState<ProgressToastState | null>(null);
+
+  const restartReplay = useCallback(() => setReplayKey((current) => current + 1), []);
+
+  const runToastDemo = useCallback(() => {
+    setToast(showProgressToast('Doing lab work...'));
+    setTimeout(() => {
+      setToast((current) => resolveToastSuccess(current, 'Lab work done', Date.now()));
+    }, 1500);
+  }, []);
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <RegentPressable pressStyle="icon" onPress={() => router.back()} style={styles.iconButton}>
+          <Ionicons name="chevron-back" size={22} color={TEXT_PRIMARY} />
+        </RegentPressable>
+        <Text style={styles.headerTitle}>Motion Lab</Text>
+        <View style={styles.iconButton} />
+      </View>
+
+      <ScrollView contentContainerStyle={styles.content}>
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Knobs</Text>
+          <Text style={styles.sectionHint}>Debug builds only. Release ships frozen defaults.</Text>
+          {(Object.keys(KNOB_LABELS) as (keyof MotionKnobs)[]).map((knob) => (
+            <KnobRow key={knob} knob={knob} value={knobs[knob]} />
+          ))}
+          <RegentPressable style={styles.resetButton} onPress={resetMotionKnobs}>
+            <Text style={styles.resetButtonText}>Reset to defaults</Text>
+          </RegentPressable>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Canned replay</Text>
+          <Text style={styles.sectionHint}>The real word-drain pipeline replaying a fixed reply.</Text>
+          <View style={styles.replayBox}>
+            <CannedReplay key={replayKey} replayKey={replayKey} />
+          </View>
+          <RegentPressable style={styles.resetButton} onPress={restartReplay}>
+            <Text style={styles.resetButtonText}>Replay</Text>
+          </RegentPressable>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Toast</Text>
+          <Text style={styles.sectionHint}>Progress morphs into success after 1.5s.</Text>
+          <RegentPressable style={styles.resetButton} onPress={runToastDemo}>
+            <Text style={styles.resetButtonText}>Run toast demo</Text>
+          </RegentPressable>
+        </View>
+      </ScrollView>
+
+      <ProgressToast toast={toast} onDismiss={() => setToast(dismissToast())} />
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: DARK_BG,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 8,
+  },
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    color: TEXT_PRIMARY,
+    fontSize: 20,
+    fontFamily: FONTS.heading,
+  },
+  content: {
+    paddingHorizontal: 20,
+    paddingBottom: 32,
+    gap: 16,
+  },
+  card: {
+    backgroundColor: CARD_BG,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 20,
+    padding: 18,
+    gap: 12,
+  },
+  sectionTitle: {
+    color: TEXT_PRIMARY,
+    fontSize: 20,
+    fontFamily: FONTS.heading,
+  },
+  sectionHint: {
+    color: TEXT_SECONDARY,
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: FONTS.body,
+  },
+  knobRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  knobCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  knobLabel: {
+    color: TEXT_PRIMARY,
+    fontSize: 14,
+    fontFamily: FONTS.body,
+  },
+  knobValue: {
+    color: TEXT_SECONDARY,
+    fontSize: 13,
+    fontFamily: FONTS.body,
+  },
+  knobControls: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  stepButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: CARD_ALT,
+    borderWidth: 1,
+    borderColor: BORDER,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  resetButton: {
+    alignSelf: 'flex-start',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: BORDER,
+    backgroundColor: CARD_ALT,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  resetButtonText: {
+    color: BLUE,
+    fontSize: 13,
+    fontFamily: FONTS.body,
+  },
+  replayBox: {
+    minHeight: 120,
+    backgroundColor: CARD_ALT,
+    borderRadius: 14,
+    padding: 14,
+  },
+  replayText: {
+    color: TEXT_PRIMARY,
+    fontSize: 14,
+    lineHeight: 20,
+    fontFamily: FONTS.body,
+  },
+});
