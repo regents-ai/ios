@@ -3,10 +3,8 @@ import { SpinningRefreshIcon } from '@/components/motion/SpinningRefreshIcon';
 import { ProfileButton } from '@/components/navigation/ProfileButton';
 import { ListRetryRow } from '@/components/ui/ListRetryRow';
 import { RegentPressable } from '@/components/ui/RegentPressable';
-import { COLORS } from '@/constants/Colors';
-import { FONTS } from '@/constants/Typography';
-import { useTheme } from '@/theme/ThemeProvider';
-import { MessageThreadStatus, MessageThread } from '@/types/regents';
+import { useTheme, type Theme } from '@/theme/ThemeProvider';
+import { MessageThread } from '@/types/regents';
 import { describeListLoadFailure, type ListLoadFailure } from '@/utils/listLoadFailure';
 import { routes } from '@/utils/navigation/routes';
 import { regentApi } from '@/utils/regentApi/client';
@@ -24,8 +22,6 @@ import {
   Text,
   View,
 } from 'react-native';
-
-const { DARK_BG, CARD_BG, CARD_ALT, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, BORDER, AMBER, AMBER_WASH } = COLORS;
 
 function formatRelativeTime(value: string) {
   const timestamp = new Date(value).getTime();
@@ -57,7 +53,9 @@ const MessageThreadRow = memo(function MessageThreadRow({
   thread,
   onPressThread,
 }: MessageThreadRowProps) {
-  const { colors } = useTheme();
+  const theme = useTheme();
+  const { colors } = theme;
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const tone = messageStatusTone(thread.status, colors);
   const handlePress = useCallback(() => {
     onPressThread(thread);
@@ -90,20 +88,20 @@ const MessageThreadRow = memo(function MessageThreadRow({
         <Text style={styles.sessionMeta}>{formatRelativeTime(thread.lastUpdatedAt)}</Text>
         {thread.pendingApproval && !thread.pendingApproval.resolved ? (
           <View style={styles.reviewChip}>
-            <Ionicons name="eye-outline" size={14} color={AMBER} />
+            <Ionicons name="eye-outline" size={14} color={colors.warning} />
             <Text style={styles.reviewText}>
               {thread.pendingApproval.amount && thread.pendingApproval.currency ? 'Payment approval' : 'Reply waiting'}
             </Text>
           </View>
         ) : null}
-        <Ionicons name="chevron-forward" size={18} color={TEXT_SECONDARY} />
+        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
       </View>
     </RegentPressable>
   );
 });
 
 function ThreadSeparator() {
-  return <View style={styles.threadSeparator} />;
+  return <View style={{ height: 12 }} />;
 }
 
 function keyThread(thread: MessageThread) {
@@ -112,6 +110,9 @@ function keyThread(thread: MessageThread) {
 
 export default function MessageTab() {
   const router = useRouter();
+  const theme = useTheme();
+  const { colors } = theme;
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const [threads, setThreads] = useState<MessageThread[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -185,7 +186,7 @@ export default function MessageTab() {
             disabled={refreshing}
             style={styles.iconButton}
           >
-            <SpinningRefreshIcon refreshing={refreshing} size={18} color={BLUE} />
+            <SpinningRefreshIcon refreshing={refreshing} size={18} color={colors.accent} />
           </RegentPressable>
           <ProfileButton />
         </View>
@@ -212,13 +213,13 @@ export default function MessageTab() {
         />
       ) : null}
     </View>
-  ), [loadError, loadThreads, refreshing, threads.length, waitingCount]);
+  ), [colors, styles, loadError, loadThreads, refreshing, threads.length, waitingCount]);
 
   const listEmpty = useMemo(() => {
     if (loading) {
       return (
         <View style={styles.emptyState}>
-          <ActivityIndicator color={BLUE} />
+          <ActivityIndicator color={colors.accent} />
           <Text style={styles.emptyTitle}>Loading messages</Text>
         </View>
       );
@@ -233,13 +234,13 @@ export default function MessageTab() {
     return (
       <View style={styles.emptyState}>
         <View style={styles.emptyIcon}>
-          <Ionicons name="chatbubble-ellipses-outline" size={24} color={BLUE} />
+          <Ionicons name="chatbubble-ellipses-outline" size={24} color={colors.accent} />
         </View>
         <Text style={styles.emptyTitle}>No messages yet</Text>
         <Text style={styles.emptyBody}>Agent messages, payment requests, and work updates can appear here when they need you.</Text>
       </View>
     );
-  }, [loading, loadError]);
+  }, [colors, styles, loading, loadError]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -256,7 +257,7 @@ export default function MessageTab() {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            tintColor={BLUE}
+            tintColor={colors.accent}
             onRefresh={() => loadThreads(true)}
           />
         }
@@ -265,10 +266,11 @@ export default function MessageTab() {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles({ colors, fonts }: Theme) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DARK_BG,
+    backgroundColor: colors.bg,
   },
   scroller: {
     flex: 1,
@@ -294,22 +296,22 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   eyebrow: {
-    color: BLUE,
+    color: colors.accent,
     fontSize: 12,
     textTransform: 'uppercase',
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   title: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 32,
     lineHeight: 38,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   subtitle: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 15,
     lineHeight: 21,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   headerActions: {
     flexDirection: 'row',
@@ -320,9 +322,9 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: CARD_BG,
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -332,30 +334,30 @@ const styles = StyleSheet.create({
   },
   summaryCard: {
     flex: 1,
-    backgroundColor: CARD_BG,
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     borderRadius: 18,
     padding: 16,
     gap: 4,
   },
   summaryValue: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 26,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   summaryLabel: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 13,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   threadSeparator: {
     height: 12,
   },
   sessionCard: {
-    backgroundColor: CARD_BG,
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     borderRadius: 20,
     padding: 16,
     gap: 12,
@@ -372,22 +374,22 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   sessionAgent: {
-    color: BLUE,
+    color: colors.accent,
     fontSize: 12,
     textTransform: 'uppercase',
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   sessionTitle: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 20,
     lineHeight: 24,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   sessionNote: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 14,
     lineHeight: 20,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   sessionFooter: {
     flexDirection: 'row',
@@ -396,31 +398,31 @@ const styles = StyleSheet.create({
   },
   sessionMeta: {
     flex: 1,
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 12,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   reviewChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     borderRadius: 999,
-    backgroundColor: AMBER_WASH,
+    backgroundColor: colors.warningWash,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
   reviewText: {
-    color: AMBER,
+    color: colors.warning,
     fontSize: 12,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   emptyState: {
     minHeight: 260,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: CARD_BG,
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     borderRadius: 24,
     padding: 24,
     gap: 10,
@@ -431,20 +433,21 @@ const styles = StyleSheet.create({
     borderRadius: 26,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: CARD_ALT,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
   },
   emptyTitle: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 21,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   emptyBody: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 14,
     lineHeight: 20,
     textAlign: 'center',
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
-});
+  });
+}

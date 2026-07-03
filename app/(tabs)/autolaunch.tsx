@@ -1,10 +1,8 @@
-import { COLORS } from '@/constants/Colors';
-import { FONTS } from '@/constants/Typography';
+import { useTheme, type Theme } from '@/theme/ThemeProvider';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
+import { useMemo } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-
-const { DARK_BG, CARD_BG, CARD_ALT, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, BORDER, WHITE, BLUE_WASH } = COLORS;
 
 const BUY_STEPS = [
   'Open the current launch page in Autolaunch.',
@@ -14,6 +12,9 @@ const BUY_STEPS = [
 
 export default function AutolaunchTab() {
   const router = useRouter();
+  const theme = useTheme();
+  const { colors } = theme;
+  const styles = useMemo(() => makeStyles(theme), [theme]);
 
   return (
     <ScrollView
@@ -50,7 +51,7 @@ export default function AutolaunchTab() {
         <Text style={styles.sectionTitle}>How this fits</Text>
         <View style={styles.featureList}>
           <View style={styles.featureCard}>
-            <Ionicons name="sparkles-outline" size={18} color={BLUE} />
+            <Ionicons name="sparkles-outline" size={18} color={colors.accent} />
             <View style={styles.featureCopy}>
               <Text style={styles.featureTitle}>Keep the story short</Text>
               <Text style={styles.featureBody}>
@@ -60,7 +61,7 @@ export default function AutolaunchTab() {
           </View>
 
           <View style={styles.featureCard}>
-            <Ionicons name="chatbubble-ellipses-outline" size={18} color={BLUE} />
+            <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.accent} />
             <View style={styles.featureCopy}>
               <Text style={styles.featureTitle}>Agent Brief first</Text>
               <Text style={styles.featureBody}>
@@ -70,7 +71,7 @@ export default function AutolaunchTab() {
           </View>
 
           <View style={styles.featureCard}>
-            <Ionicons name="wallet-outline" size={18} color={BLUE} />
+            <Ionicons name="wallet-outline" size={18} color={colors.accent} />
             <View style={styles.featureCopy}>
               <Text style={styles.featureTitle}>Wallet stays close</Text>
               <Text style={styles.featureBody}>
@@ -106,10 +107,11 @@ export default function AutolaunchTab() {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles({ colors, fonts }: Theme) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DARK_BG,
+    backgroundColor: colors.bg,
   },
   content: {
     paddingHorizontal: 20,
@@ -117,31 +119,31 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   heroCard: {
-    backgroundColor: CARD_BG,
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     borderRadius: 28,
     padding: 22,
     gap: 14,
   },
   eyebrow: {
-    color: BLUE,
+    color: colors.accent,
     fontSize: 12,
     letterSpacing: 1,
     textTransform: 'uppercase',
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   heroTitle: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 32,
     lineHeight: 38,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   heroBody: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 15,
     lineHeight: 22,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   heroActions: {
     flexDirection: 'row',
@@ -149,7 +151,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   primaryButton: {
-    backgroundColor: BLUE,
+    backgroundColor: colors.accent,
     borderRadius: 16,
     paddingHorizontal: 18,
     paddingVertical: 13,
@@ -159,38 +161,38 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.985 }],
   },
   primaryButtonText: {
-    color: WHITE,
+    color: colors.onAccent,
     fontSize: 14,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   secondaryButton: {
-    backgroundColor: WHITE,
+    backgroundColor: colors.surfaceElevated,
     borderRadius: 16,
     paddingHorizontal: 18,
     paddingVertical: 13,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
   },
   secondaryButtonPressed: {
     opacity: 0.95,
   },
   secondaryButtonText: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 14,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   card: {
-    backgroundColor: CARD_BG,
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     borderRadius: 24,
     padding: 20,
     gap: 14,
   },
   sectionTitle: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 22,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   featureList: {
     gap: 10,
@@ -198,7 +200,7 @@ const styles = StyleSheet.create({
   featureCard: {
     flexDirection: 'row',
     gap: 12,
-    backgroundColor: CARD_ALT,
+    backgroundColor: colors.surface,
     borderRadius: 18,
     padding: 16,
   },
@@ -207,15 +209,15 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   featureTitle: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 16,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   featureBody: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 13,
     lineHeight: 19,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   steps: {
     gap: 10,
@@ -224,7 +226,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 12,
-    backgroundColor: WHITE,
+    backgroundColor: colors.surfaceElevated,
     borderRadius: 18,
     padding: 14,
   },
@@ -232,39 +234,40 @@ const styles = StyleSheet.create({
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: BLUE_WASH,
+    backgroundColor: colors.accentWash,
     alignItems: 'center',
     justifyContent: 'center',
   },
   stepBadgeText: {
-    color: BLUE,
+    color: colors.accent,
     fontSize: 12,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   stepText: {
     flex: 1,
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 14,
     lineHeight: 20,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   noteCard: {
-    backgroundColor: BLUE_WASH,
+    backgroundColor: colors.accentWash,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     borderRadius: 24,
     padding: 20,
     gap: 8,
   },
   noteTitle: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 22,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   noteBody: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 14,
     lineHeight: 20,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
-});
+  });
+}

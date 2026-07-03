@@ -2,23 +2,23 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Tabs } from 'expo-router';
 import { View } from 'react-native';
 
-import { COLORS } from '../../constants/Colors';
-import { FONTS } from '../../constants/Typography';
+import { useTheme } from '@/theme/ThemeProvider';
 
 export default function TabLayout() {
+  const { colors, fonts } = useTheme();
   return (
-    <View style={{ flex: 1, backgroundColor: COLORS.DARK_BG }}>
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <Tabs
         screenOptions={{
           headerShown: false,
           tabBarHideOnKeyboard: true,
           sceneStyle: {
-            backgroundColor: COLORS.DARK_BG,
+            backgroundColor: colors.bg,
           },
-          tabBarActiveTintColor: COLORS.BLUE,
-          tabBarInactiveTintColor: COLORS.TEXT_SECONDARY,
+          tabBarActiveTintColor: colors.accent,
+          tabBarInactiveTintColor: colors.textMuted,
           tabBarLabelStyle: {
-            fontFamily: FONTS.body,
+            fontFamily: fonts.ui,
             fontSize: 10,
             marginTop: 1,
           },
@@ -27,8 +27,8 @@ export default function TabLayout() {
             paddingBottom: 4,
           },
           tabBarStyle: {
-            backgroundColor: COLORS.WHITE,
-            borderTopColor: COLORS.BORDER,
+            backgroundColor: colors.surfaceElevated,
+            borderTopColor: colors.hairlineStrong,
             borderTopWidth: 1,
             borderRadius: 28,
             marginHorizontal: 16,
@@ -37,7 +37,7 @@ export default function TabLayout() {
             paddingBottom: 8,
             paddingTop: 8,
             position: 'absolute',
-            shadowColor: COLORS.BLACK,
+            shadowColor: '#000',
             shadowOffset: { width: 0, height: 8 },
             shadowOpacity: 0.08,
             shadowRadius: 18,

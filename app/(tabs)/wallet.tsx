@@ -1,7 +1,7 @@
 import { useCurrentUser, useEvmAddress, useSignOut, useSolanaAddress } from '@coinbase/cdp-hooks';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Platform, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { APIGuestCheckoutWidget, OnrampForm, useOnramp } from '@/components';
@@ -13,8 +13,7 @@ import { RegentPressable } from '@/components/ui/RegentPressable';
 import { WalletOptionsError } from '@/components/wallet/home/wallet-options-error';
 import { WalletScreenHeader } from '@/components/wallet/home/wallet-screen-header';
 import { WalletDetailsSection } from '@/components/wallet/WalletDetailsSection';
-import { COLORS } from '@/constants/Colors';
-import { FONTS } from '@/constants/Typography';
+import { useTheme, type Theme } from '@/theme/ThemeProvider';
 import { useRegentsAuth } from '@/hooks/useRegentsAuth';
 import { usePendingOnrampResume } from '@/hooks/onramp/use-pending-onramp-resume';
 import { useWalletAddresses } from '@/hooks/onramp/use-wallet-addresses';
@@ -27,7 +26,6 @@ import {
 } from '@/utils/state/flowRuntimeState';
 import { getCountry, getSubdivision } from '@/utils/state/locationState';
 
-const { DARK_BG, CARD_BG, CARD_ALT, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, BORDER, WHITE, SUCCESS } = COLORS;
 
 function formatAddress(address: string) {
   if (address.length <= 16) return address;
@@ -36,6 +34,9 @@ function formatAddress(address: string) {
 
 export default function WalletScreen() {
   const router = useRouter();
+  const theme = useTheme();
+  const { colors } = theme;
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const [amount, setAmount] = useState('');
   const [regionKey, setRegionKey] = useState(() => `${getCountry()}-${getSubdivision()}`);
   const [isSwipeActive, setIsSwipeActive] = useState(false);
@@ -184,7 +185,7 @@ export default function WalletScreen() {
             <RefreshControl
               refreshing={refreshingWallet}
               onRefresh={() => void walletDetails.refreshWalletSnapshot()}
-              tintColor={BLUE}
+              tintColor={colors.accent}
             />
           }
           scrollEnabled={!isSwipeActive}
@@ -234,13 +235,13 @@ export default function WalletScreen() {
                   >
                     <View style={styles.quickActionRow}>
                       <View style={styles.quickActionIcon}>
-                        <Ionicons name={action.icon} size={20} color={BLUE} />
+                        <Ionicons name={action.icon} size={20} color={colors.accent} />
                       </View>
                       <View style={styles.quickActionCopy}>
                         <Text style={styles.quickActionLabel}>{action.label}</Text>
                         <Text style={styles.quickActionDetail}>{action.detail}</Text>
                       </View>
-                      <Ionicons name="chevron-forward" size={18} color={TEXT_SECONDARY} />
+                      <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
                     </View>
                   </RegentPressable>
                 ))}
@@ -336,10 +337,11 @@ export default function WalletScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles({ colors, fonts }: Theme) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DARK_BG,
+    backgroundColor: colors.bg,
   },
   keyboardWrap: {
     flex: 1,
@@ -351,10 +353,10 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginTop: 16,
     padding: 20,
-    backgroundColor: CARD_BG,
+    backgroundColor: colors.surfaceElevated,
     borderRadius: 28,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     gap: 18,
   },
   summaryTopRow: {
@@ -369,21 +371,21 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   summaryEyebrow: {
-    color: BLUE,
+    color: colors.accent,
     fontSize: 12,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   summaryTitle: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 28,
     lineHeight: 31,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   summaryBody: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 13,
     lineHeight: 19,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   statusPill: {
     flexDirection: 'row',
@@ -393,23 +395,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: WHITE,
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
   },
   statusDot: {
     width: 8,
     height: 8,
     borderRadius: 999,
-    backgroundColor: SUCCESS,
+    backgroundColor: colors.success,
   },
   statusDotIdle: {
-    backgroundColor: BORDER,
+    backgroundColor: colors.border,
   },
   statusText: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 11,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   summaryStats: {
     gap: 10,
@@ -417,19 +419,19 @@ const styles = StyleSheet.create({
   summaryStat: {
     padding: 14,
     borderRadius: 18,
-    backgroundColor: CARD_ALT,
+    backgroundColor: colors.surface,
     gap: 4,
   },
   summaryStatLabel: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 12,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   summaryStatValue: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 15,
     lineHeight: 20,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   quickActionList: {
     marginHorizontal: 16,
@@ -438,9 +440,9 @@ const styles = StyleSheet.create({
   quickActionCard: {
     padding: 16,
     borderRadius: 22,
-    backgroundColor: CARD_BG,
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     minHeight: 84,
     alignSelf: 'stretch',
   },
@@ -453,7 +455,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: WHITE,
+    backgroundColor: colors.surfaceElevated,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -463,15 +465,15 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   quickActionLabel: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 16,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   quickActionDetail: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 12,
     lineHeight: 18,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   sectionIntro: {
     marginHorizontal: 16,
@@ -479,14 +481,15 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   sectionTitle: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 22,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   sectionBody: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 13,
     lineHeight: 19,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
-});
+  });
+}

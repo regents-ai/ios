@@ -1,13 +1,11 @@
 import { ProfileButton } from '@/components/navigation/ProfileButton';
 import { RegentPressable } from '@/components/ui/RegentPressable';
-import { COLORS } from '@/constants/Colors';
-import { FONTS } from '@/constants/Typography';
+import { useTheme, type Theme } from '@/theme/ThemeProvider';
 import { routes } from '@/utils/navigation/routes';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
+import { useMemo } from 'react';
 import { Linking, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
-
-const { DARK_BG, CARD_BG, CARD_ALT, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, BORDER, WHITE, BLUE_WASH, SUCCESS } = COLORS;
 
 const EARN_PATHS = [
   {
@@ -35,6 +33,9 @@ const EARN_PATHS = [
 
 export default function EarnTab() {
   const router = useRouter();
+  const theme = useTheme();
+  const { colors } = theme;
+  const styles = useMemo(() => makeStyles(theme), [theme]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -56,7 +57,7 @@ export default function EarnTab() {
 
         <View style={styles.heroCard}>
           <View style={styles.heroIcon}>
-            <Ionicons name="sparkles-outline" size={22} color={BLUE} />
+            <Ionicons name="sparkles-outline" size={22} color={colors.accent} />
           </View>
           <Text style={styles.heroTitle}>Earn by growing the agent network</Text>
           <Text style={styles.heroBody}>
@@ -81,21 +82,21 @@ export default function EarnTab() {
               onPress={() => router.push(path.route)}
             >
               <View style={styles.pathIcon}>
-                <Ionicons name={path.icon} size={19} color={BLUE} />
+                <Ionicons name={path.icon} size={19} color={colors.accent} />
               </View>
               <View style={styles.pathCopy}>
                 <Text style={styles.pathTitle}>{path.title}</Text>
                 <Text style={styles.pathBody}>{path.body}</Text>
                 <Text style={styles.pathAction}>{path.action}</Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color={TEXT_SECONDARY} />
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
             </RegentPressable>
           ))}
         </View>
 
         <View style={styles.noteCard}>
           <View style={styles.noteBadge}>
-            <Ionicons name="checkmark-circle-outline" size={16} color={SUCCESS} />
+            <Ionicons name="checkmark-circle-outline" size={16} color={colors.success} />
             <Text style={styles.noteBadgeText}>Keep it useful</Text>
           </View>
           <Text style={styles.noteText}>
@@ -107,10 +108,11 @@ export default function EarnTab() {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles({ colors, fonts }: Theme) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DARK_BG,
+    backgroundColor: colors.bg,
   },
   scroller: {
     flex: 1,
@@ -133,27 +135,27 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   eyebrow: {
-    color: BLUE,
+    color: colors.accent,
     fontSize: 12,
     textTransform: 'uppercase',
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   title: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 32,
     lineHeight: 38,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   subtitle: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 15,
     lineHeight: 21,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   heroCard: {
-    backgroundColor: CARD_BG,
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     borderRadius: 24,
     padding: 20,
     gap: 13,
@@ -162,23 +164,23 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: BLUE_WASH,
+    backgroundColor: colors.accentWash,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
   heroTitle: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 24,
     lineHeight: 29,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   heroBody: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 14,
     lineHeight: 21,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   heroActions: {
     flexDirection: 'row',
@@ -186,28 +188,28 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   primaryButton: {
-    backgroundColor: BLUE,
+    backgroundColor: colors.accent,
     borderRadius: 16,
     paddingHorizontal: 18,
     paddingVertical: 13,
   },
   primaryButtonText: {
-    color: WHITE,
+    color: colors.onAccent,
     fontSize: 14,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   secondaryButton: {
-    backgroundColor: WHITE,
+    backgroundColor: colors.surfaceElevated,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     paddingHorizontal: 18,
     paddingVertical: 13,
   },
   secondaryButtonText: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 14,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   pathList: {
     gap: 12,
@@ -216,9 +218,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 13,
-    backgroundColor: CARD_BG,
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     borderRadius: 20,
     padding: 16,
   },
@@ -226,7 +228,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: CARD_ALT,
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -236,26 +238,26 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   pathTitle: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 18,
     lineHeight: 22,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   pathBody: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 13,
     lineHeight: 19,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   pathAction: {
-    color: BLUE,
+    color: colors.accent,
     fontSize: 13,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
   noteCard: {
-    backgroundColor: BLUE_WASH,
+    backgroundColor: colors.accentWash,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.hairlineStrong,
     borderRadius: 20,
     padding: 16,
     gap: 9,
@@ -266,14 +268,15 @@ const styles = StyleSheet.create({
     gap: 7,
   },
   noteBadgeText: {
-    color: TEXT_PRIMARY,
+    color: colors.text,
     fontSize: 14,
-    fontFamily: FONTS.heading,
+    fontFamily: fonts.title,
   },
   noteText: {
-    color: TEXT_SECONDARY,
+    color: colors.textMuted,
     fontSize: 14,
     lineHeight: 20,
-    fontFamily: FONTS.body,
+    fontFamily: fonts.ui,
   },
-});
+  });
+}
