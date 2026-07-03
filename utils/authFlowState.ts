@@ -42,5 +42,5 @@ export function getVerificationSuccessAction(mode: 'signin' | 'link' | 'reverify
 }
 
 export function isAuthManagedRoute(segment?: string) {
-  return segment === 'auth' || PUBLIC_ROUTES.has(segment || '');
+  return segment === 'auth' || segment === 'onboarding' || PUBLIC_ROUTES.has(segment || '');
 }

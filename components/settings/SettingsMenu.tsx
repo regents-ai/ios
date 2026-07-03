@@ -6,7 +6,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 const { DARK_BG, CARD_BG, CARD_ALT, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, BORDER, WHITE } = COLORS;
 
-export type SettingsSectionKey = 'account' | 'wallet' | 'help';
+export type SettingsSectionKey = 'account' | 'connect' | 'wallet' | 'help';
 
 type SettingsMenuProps = {
   activeSection: SettingsSectionKey;
@@ -30,6 +30,12 @@ export function SettingsMenu({
       icon: 'person-outline',
       title: 'Account',
       detail: displayEmail,
+    },
+    {
+      key: 'connect',
+      icon: 'link-outline',
+      title: 'Connect',
+      detail: 'Agents and funding',
     },
     {
       key: 'wallet',

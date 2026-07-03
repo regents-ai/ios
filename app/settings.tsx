@@ -1,6 +1,7 @@
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { AccountManagementSection } from '@/components/settings/AccountManagementSection';
 import { AppearanceToggle } from '@/components/settings/AppearanceToggle';
+import { ConnectSection } from '@/components/settings/ConnectSection';
 import { HelpSupportSection } from '@/components/settings/HelpSupportSection';
 import { PhoneReverifyModal } from '@/components/settings/PhoneReverifyModal';
 import { SettingsHero } from '@/components/settings/SettingsHero';
@@ -227,6 +228,8 @@ export default function SettingsScreen() {
             solanaAddress={solanaAddress}
           />
         ) : null}
+
+        {activeSection === 'connect' ? <ConnectSection /> : null}
 
         {activeSection === 'wallet' ? (
           <WalletSettingsSection

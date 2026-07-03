@@ -4,6 +4,7 @@ import { FONTS } from '@/constants/Typography';
 import { useChatGptAuth } from '@/hooks/useChatGptAuth';
 import { useRegentsAuth } from '@/hooks/useRegentsAuth';
 import { hasRegentsAccountConfig } from '@/utils/mobilePublicConfig';
+import { hasSeenOnboarding } from '@/utils/onboardingState';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -49,8 +50,33 @@ export default function LoginScreen() {
   const { error: chatGptError, isLoading: isChatGptLoading, isReady: isChatGptReady, session: chatGptSession, signIn } = useChatGptAuth();
   const router = useRouter();
   const [reduceMotion, setReduceMotion] = useState(false);
+  const [firstRunChecked, setFirstRunChecked] = useState(false);
   const hasChatGptSession = !!chatGptSession;
   const canUseRegentsAccount = hasRegentsAccountConfig();
+
+  // Brand-new installs see the welcome screen once before sign-in.
+  useEffect(() => {
+    let mounted = true;
+    hasSeenOnboarding()
+      .then((seen) => {
+        if (!mounted) {
+          return;
+        }
+        if (seen) {
+          setFirstRunChecked(true);
+        } else {
+          router.replace('/onboarding');
+        }
+      })
+      .catch(() => {
+        if (mounted) {
+          setFirstRunChecked(true);
+        }
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [router]);
 
   useEffect(() => {
     let mounted = true;
@@ -78,7 +104,7 @@ export default function LoginScreen() {
     }
   };
 
-  if (!isChatGptReady) {
+  if (!isChatGptReady || !firstRunChecked) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingWrap}>
