@@ -7,6 +7,10 @@ import { ComposerFade } from '@/components/ui/ComposerFade';
 import { runRegentEventHaptic } from '@/components/ui/haptics';
 import { JumpToLatestButton } from '@/components/ui/JumpToLatestButton';
 import { RegentPressable } from '@/components/ui/RegentPressable';
+import { PinnedNoticeStrip } from '@/components/ui/PinnedNoticeStrip';
+import { SlashCommandPanel } from '@/components/ui/SlashCommandPanel';
+import { StreamRecoveryPill } from '@/components/ui/StreamRecoveryPill';
+import { TurnChangesCard } from '@/components/ui/TurnChangesCard';
 import { COLORS } from '@/constants/Colors';
 import { FONTS } from '@/constants/Typography';
 import {
@@ -26,11 +30,32 @@ import {
   shouldShowJumpToLatest,
   trackChatScroll,
 } from '@/utils/chatScrollPolicy';
-import { useWordDrain } from '@/hooks/useWordDrain';
+import { StreamingTextFade } from '@/components/motion/StreamingTextFade';
 import {
   createScrollMetricsCoalescer,
   type ScrollMetricsCoalescer,
 } from '@/utils/scrollMetricsDelivery';
+import {
+  initialStreamRecovery,
+  onForegroundResume,
+  onPollFailure,
+  onPollSuccess,
+  type StreamRecoveryStatus,
+} from '@/utils/streamRecovery';
+import {
+  initialTailWindow,
+  loadOlder,
+  reconcileAppend,
+  resolveTailWindow,
+} from '@/utils/tailWindow';
+import {
+  confirmNotice,
+  failNotice,
+  initialLocalNotices,
+  pinNotice,
+  type LocalNoticeState,
+} from '@/utils/localNotices';
+import { parseSlashInput, type SlashCommand } from '@/utils/slashCommands';
 import {
   adoptMessageThreadId,
   completeMessagePoll,
@@ -43,6 +68,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  AppState,
   FlatList,
   KeyboardAvoidingView,
   type ListRenderItem,
@@ -185,8 +211,6 @@ const MessageEventRow = memo(function MessageEventRow({
   drain,
   onReveal,
 }: MessageEventRowProps) {
-  const body = useWordDrain(eventCopy(event), drain, onReveal);
-
   return (
     <View style={[
       styles.eventCard,
@@ -196,7 +220,12 @@ const MessageEventRow = memo(function MessageEventRow({
         <Text style={styles.eventTitle}>{eventTitle(event)}</Text>
         <Text style={styles.eventTime}>{formatEventTime(event.ts)}</Text>
       </View>
-      <Text style={styles.eventBody}>{body}</Text>
+      <StreamingTextFade
+        text={eventCopy(event)}
+        streaming={drain}
+        style={styles.eventBody}
+        onReveal={onReveal}
+      />
     </View>
   );
 });
@@ -227,6 +256,8 @@ export default function MessageDetailScreen() {
   const [drainEventId, setDrainEventId] = useState('');
   const [pollBurstUntilMs, setPollBurstUntilMs] = useState(0);
   const [pollTick, setPollTick] = useState(0);
+  const [recovery, setRecovery] = useState<StreamRecoveryStatus>(initialStreamRecovery);
+  const [notices, setNotices] = useState<LocalNoticeState>(initialLocalNotices);
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -341,6 +372,7 @@ export default function MessageDetailScreen() {
             setPollBurstUntilMs(completed.burstUntilMs);
           }
           setPollTick(completed.nextTick);
+          setRecovery(onPollSuccess());
         })
         .catch(() => {
           if (!cancelled) {
@@ -348,6 +380,7 @@ export default function MessageDetailScreen() {
               currentTick: current,
               receivedEventCount: 0,
             }).nextTick);
+            setRecovery((current) => onPollFailure(current));
           }
         });
     }, nextMessagePollDelay({ burstUntilMs: pollBurstUntilMs }));
@@ -358,11 +391,39 @@ export default function MessageDetailScreen() {
     };
   }, [effectiveThreadId, loading, pollBurstUntilMs, pollTick, refreshNewEvents, routeThreadId]);
 
+  // Resume-from-cursor on foreground: show a "Checking..." pill and kick an
+  // immediate poll from the last cursor when the app comes back to the front.
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState !== 'active') {
+        return;
+      }
+      setRecovery((current) => onForegroundResume(current));
+      setPollTick((current) => current + 1);
+    });
+    return () => subscription.remove();
+  }, []);
+
   const tone = statusTone(thread?.status || 'idle');
-  const visibleEvents = useMemo(
+  const allEvents = useMemo(
     () => events.filter((event) => !!eventCopy(event)),
     [events]
   );
+
+  // Tail-window pagination: render only the newest window; a top capsule loads
+  // older batches. New tail events grow the window so the live tail stays put.
+  const [tailWindow, setTailWindow] = useState(initialTailWindow);
+  const previousAllCountRef = useRef(0);
+  useEffect(() => {
+    setTailWindow((current) => reconcileAppend(current, previousAllCountRef.current, allEvents.length));
+    previousAllCountRef.current = allEvents.length;
+  }, [allEvents.length]);
+
+  const tail = useMemo(() => resolveTailWindow(allEvents, tailWindow), [allEvents, tailWindow]);
+  const visibleEvents = tail.items;
+  const handleLoadOlder = useCallback(() => {
+    setTailWindow((current) => loadOlder(current, allEvents.length));
+  }, [allEvents.length]);
   const currentThreadScrollKey = thread?.id || effectiveThreadId;
   const awaitingReply = thread?.status === 'running';
   streamingRef.current = sending || awaitingReply;
@@ -414,6 +475,18 @@ export default function MessageDetailScreen() {
       return;
     }
 
+    // Pin an ephemeral local notice above the composer; it flushes into the
+    // transcript when the agent picks the message up, or clears if send fails.
+    const noticeId = `sent-${Date.now()}`;
+    setNotices((current) =>
+      pinNotice(current, {
+        id: noticeId,
+        pendingLabel: 'Message sent, waiting for the agent...',
+        confirmedLabel: 'Agent picked up your message',
+        createdAtMs: Date.now(),
+      })
+    );
+
     try {
       setSending(true);
       setPollBurstUntilMs(extendMessagePollBurst());
@@ -426,6 +499,7 @@ export default function MessageDetailScreen() {
 
       await loadThread(true, nextThreadId);
     } catch (error) {
+      setNotices((current) => failNotice(current, noticeId));
       setAlertState({
         visible: true,
         title: 'Could not send message',
@@ -436,6 +510,32 @@ export default function MessageDetailScreen() {
       setSending(false);
     }
   }, [draft, effectiveThreadId, loadThread, moveToThread, routeThreadId, sending]);
+
+  // Slash-command autocomplete. Money commands never send inline text: they
+  // route into the app's existing confirm screens.
+  const slashParse = useMemo(() => parseSlashInput(draft), [draft]);
+  const handleSlashPick = useCallback((command: SlashCommand) => {
+    if (command.confirms) {
+      setDraft('');
+      if (command.name === 'send') {
+        router.push(routes.walletSend());
+      } else if (command.name === 'stake') {
+        router.push(routes.staking());
+      }
+      return;
+    }
+    // Non-money command: complete the token in the draft for the person to run.
+    setDraft(`/${command.name} `);
+  }, [router]);
+
+  // A pinned notice confirms and flushes into the transcript once the agent
+  // starts working the turn (the thread goes to running).
+  useEffect(() => {
+    if (awaitingReply && notices.pinned.length > 0) {
+      const oldest = notices.pinned[0];
+      setNotices((current) => confirmNotice(current, oldest.id, Date.now()));
+    }
+  }, [awaitingReply, notices.pinned]);
 
   const resolveApproval = useCallback(async (decision: 'approved' | 'denied') => {
     const approval = thread?.pendingApproval;
@@ -491,6 +591,8 @@ export default function MessageDetailScreen() {
       previousThreadScrollKeyRef.current = currentThreadScrollKey;
       previousEventCountRef.current = 0;
       scrollPolicyRef.current = createChatScrollState();
+      setTailWindow(initialTailWindow());
+      setNotices(initialLocalNotices);
       syncJumpPill();
     }
 
@@ -550,6 +652,13 @@ export default function MessageDetailScreen() {
 
     return (
       <View style={styles.listHeader}>
+        {tail.hasOlder ? (
+          <RegentPressable style={styles.loadOlderCapsule} onPress={handleLoadOlder}>
+            <Ionicons name="arrow-up" size={14} color={BLUE} />
+            <Text style={styles.loadOlderText}>Load {tail.hiddenOlderCount} older</Text>
+          </RegentPressable>
+        ) : null}
+
         <View style={styles.sessionCard}>
           <View style={styles.sessionHeader}>
             <View style={styles.sessionTitleGroup}>
@@ -634,12 +743,15 @@ export default function MessageDetailScreen() {
     );
   }, [
     approvalExpired,
+    handleLoadOlder,
     isPaymentApproval,
     loading,
     nowMs,
     pendingApproval,
     resolveApproval,
     resolvingDecision,
+    tail.hasOlder,
+    tail.hiddenOlderCount,
     thread,
     tone.accent,
     tone.label,
@@ -666,11 +778,18 @@ export default function MessageDetailScreen() {
 
     return (
       <>
+        {notices.flushed.map((flushed) => (
+          <Text key={flushed.id} style={styles.flushedNotice}>
+            {flushed.label}
+          </Text>
+        ))}
         {awaitingReply ? (
           <View style={styles.typingRow}>
             <TypingIndicator />
           </View>
-        ) : null}
+        ) : (
+          <TurnChangesCard events={visibleEvents} />
+        )}
         <View style={styles.refreshFooter}>
           <RegentPressable
             style={styles.refreshSmallButton}
@@ -681,7 +800,7 @@ export default function MessageDetailScreen() {
         </View>
       </>
     );
-  }, [awaitingReply, handleRefreshNewEventsPress, loading, thread]);
+  }, [awaitingReply, handleRefreshNewEventsPress, loading, notices.flushed, thread, visibleEvents]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -733,10 +852,14 @@ export default function MessageDetailScreen() {
             }
           />
           <ComposerFade />
+          {thread ? <StreamRecoveryPill state={recovery.state} /> : null}
           {showJumpToLatest ? (
             <JumpToLatestButton onPress={handleJumpToLatest} style={styles.jumpToLatest} />
           ) : null}
         </View>
+
+        {thread ? <SlashCommandPanel parse={slashParse} onPick={handleSlashPick} /> : null}
+        {thread ? <PinnedNoticeStrip notices={notices.pinned} /> : null}
 
         {thread ? (
           <View style={styles.composer}>
@@ -1034,6 +1157,30 @@ const styles = StyleSheet.create({
     color: BLUE,
     fontSize: 13,
     fontFamily: FONTS.body,
+  },
+  loadOlderCapsule: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'center',
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: BORDER,
+    backgroundColor: CARD_BG,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+  },
+  loadOlderText: {
+    color: BLUE,
+    fontSize: 13,
+    fontFamily: FONTS.body,
+  },
+  flushedNotice: {
+    alignSelf: 'center',
+    color: TEXT_SECONDARY,
+    fontSize: 12,
+    fontFamily: FONTS.body,
+    marginTop: 12,
   },
   emptyState: {
     minHeight: 260,

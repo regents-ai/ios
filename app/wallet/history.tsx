@@ -1,9 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { router } from "expo-router";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import {
   FlatList,
+  PixelRatio,
   StyleSheet,
   Text,
   View
@@ -16,11 +17,17 @@ import { RegentPressable } from "../../components/ui/RegentPressable";
 import { COLORS } from "../../constants/Colors";
 import { FONTS } from "../../constants/Typography";
 import { useRegentsAuth } from "../../hooks/useRegentsAuth";
+import {
+  CACHED_MODE_BANNER,
+  resolveCacheGate,
+  type CacheMode,
+} from "../../utils/cacheFallbackPolicy";
+import { resolveDynamicTypeLayout } from "../../utils/dynamicTypeLayout";
 import { fetchTransactionHistory } from "../../utils/fetchTransactionHistory";
 import { describeListLoadFailure, type ListLoadFailure } from "../../utils/listLoadFailure";
 
 
-const { BLUE, DARK_BG, CARD_BG, BORDER, TEXT_PRIMARY, TEXT_SECONDARY, WHITE } = COLORS;
+const { BLUE, DARK_BG, CARD_BG, CARD_ALT, BORDER, TEXT_PRIMARY, TEXT_SECONDARY, WHITE } = COLORS;
 
 type Transaction = {
   transaction_id: string;
@@ -44,11 +51,15 @@ type Transaction = {
 
 export default function History() {
   const { getAccessToken, regentsUserId } = useRegentsAuth();
+  // Row -> stacked layout for dense rows at accessibility font sizes.
+  const typeLayout = resolveDynamicTypeLayout(PixelRatio.getFontScale());
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [nextPageKey, setNextPageKey] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<ListLoadFailure | null>(null);
+  const [cacheMode, setCacheMode] = useState<CacheMode>('live');
+  const cachedTransactionsRef = useRef<Transaction[] | null>(null);
 
   const loadTransactions = useCallback(async (pageKey?: string, append: boolean = false) => {
     const userId = regentsUserId;
@@ -71,13 +82,27 @@ export default function History() {
         setTransactions(prev => [...prev, ...(result.transactions || [])]);
       } else {
         setTransactions(result.transactions || []);
+        cachedTransactionsRef.current = result.transactions || [];
+        setCacheMode('live');
       }
 
       setNextPageKey(result.nextPageKey || null);
       setLoadError(null);
     } catch (error) {
       console.error("Failed to load transaction history:", error);
-      setLoadError(describeListLoadFailure(error, "We couldn't load your wallet activity."));
+
+      // Read-only cache fallback: only on connectivity/transient 5xx, and only
+      // for the primary load. A cached snapshot stands in, clearly labeled.
+      const gated = append
+        ? null
+        : resolveCacheGate({ ok: false, error }, cachedTransactionsRef.current);
+      if (gated) {
+        setTransactions(gated.data);
+        setCacheMode(gated.mode);
+        setLoadError(null);
+      } else {
+        setLoadError(describeListLoadFailure(error, "We couldn't load your wallet activity."));
+      }
     } finally {
       if (append) {
         setLoadingMore(false);
@@ -165,7 +190,7 @@ export default function History() {
               </Text>
             </View>
 
-            <View style={styles.transactionMeta}>
+            <View style={[styles.transactionMeta, typeLayout.direction === 'stacked' && styles.transactionMetaStacked]}>
               <LiveValueFlash value={`${item.transaction_id}-${item.payment_total.value}`} style={styles.transactionAmountFlash}>
                 <Text style={styles.transactionAmount}>
                   ${item.payment_total.value}
@@ -207,6 +232,12 @@ export default function History() {
           <SpinningRefreshIcon refreshing={loading} size={20} color={BLUE} />
         </RegentPressable>
       </View>
+      {cacheMode === 'cached' ? (
+        <View style={styles.cachedBanner}>
+          <Ionicons name="cloud-offline-outline" size={16} color={TEXT_SECONDARY} />
+          <Text style={styles.cachedBannerText}>{CACHED_MODE_BANNER}</Text>
+        </View>
+      ) : null}
       {loadError ? (
         <View style={styles.errorRowWrap}>
           <ListRetryRow
@@ -357,6 +388,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 16,
   },
+  cachedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 20,
+    marginTop: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: BORDER,
+    backgroundColor: CARD_ALT,
+  },
+  cachedBannerText: {
+    flex: 1,
+    color: TEXT_SECONDARY,
+    fontSize: 12,
+    lineHeight: 16,
+    fontFamily: FONTS.body,
+  },
   transactionAmount: {
     fontSize: 16,
     color: TEXT_PRIMARY, // Neutral white text
@@ -392,6 +443,11 @@ const styles = StyleSheet.create({
   transactionInfo: {
     flex: 1,
     gap: 4,
+  },
+  transactionMetaStacked: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 6,
   },
   transactionMeta: {
     flexDirection: 'row',

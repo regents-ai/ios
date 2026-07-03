@@ -1,8 +1,8 @@
-import { useRouter } from 'expo-router';
 import type { NotificationResponse } from 'expo-notifications';
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { Platform } from 'react-native';
 
+import { setPendingRoute } from '@/utils/pendingRoute';
 import { messageThreadRouteFromNotificationData } from '@/utils/pushNotificationRouting';
 
 async function getNotificationsModule() {
@@ -24,9 +24,6 @@ function responseKey(response: NotificationResponse) {
 }
 
 export function MessagePushNotificationRouter() {
-  const router = useRouter();
-  const handledResponses = useRef(new Set<string>());
-
   useEffect(() => {
     if (Platform.OS === 'web') {
       return;
@@ -45,15 +42,10 @@ export function MessagePushNotificationRouter() {
         return;
       }
 
+      // Write into the shared pending-route store; the root drains it once
+      // navigation is ready (dedupe by the notification key lives in the store).
       const key = responseKey(response);
-      if (key) {
-        if (handledResponses.current.has(key)) {
-          return;
-        }
-        handledResponses.current.add(key);
-      }
-
-      router.push(route);
+      setPendingRoute({ key: key ?? `notif-${Date.now()}`, href: route });
     };
 
     getNotificationsModule()
@@ -76,7 +68,7 @@ export function MessagePushNotificationRouter() {
       active = false;
       subscription?.remove();
     };
-  }, [router]);
+  }, []);
 
   return null;
 }
