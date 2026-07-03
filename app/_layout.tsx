@@ -12,6 +12,7 @@ import { useAppBootstrap } from "@/hooks/useAppBootstrap";
 import { useRegentsAuth } from "@/hooks/useRegentsAuth";
 import { fetchCdpAuthToken } from "@/utils/fetchCdpAuthToken";
 import { hasRegentsAccountConfig, readMobilePublicConfig } from "@/utils/mobilePublicConfig";
+import { ThemeProvider } from "@/theme/ThemeProvider";
 import { useMemo } from "react";
 import 'react-native-get-random-values';
 import 'react-native-url-polyfill/auto';
@@ -123,6 +124,7 @@ export default function RootLayout() {
   }
 
   return (
+    <ThemeProvider>
     <PrivyProvider appId={config.privyAppId} clientId={config.privyClientId}>
       <WalletProviders cdpProjectId={config.cdpProjectId}>
         <Stack screenOptions={{ headerShown: false }}>
@@ -149,6 +151,7 @@ export default function RootLayout() {
         </Stack>
       </WalletProviders>
     </PrivyProvider>
+    </ThemeProvider>
   );
 }
 

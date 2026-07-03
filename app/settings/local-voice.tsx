@@ -1,8 +1,7 @@
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { RegentPressable } from '@/components/ui/RegentPressable';
-import { COLORS } from '@/constants/Colors';
-import { FONTS } from '@/constants/Typography';
 import { useCoinbaseAlert } from '@/hooks/useCoinbaseAlert';
+import { useTheme, type Theme } from '@/theme/ThemeProvider';
 import {
   gatewayDisplayLabel,
   parsePairingPayload,
@@ -16,13 +15,14 @@ import {
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, SafeAreaView, StyleSheet, Text, View } from 'react-native';
-
-const { DARK_BG, CARD_BG, CARD_ALT, TEXT_PRIMARY, TEXT_SECONDARY, BLUE, BORDER, WHITE, SUCCESS } = COLORS;
 
 export default function LocalVoicePairingScreen() {
   const router = useRouter();
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
+  const { colors } = theme;
   const { alertProps, showAlert } = useCoinbaseAlert();
   const [permission, requestPermission] = useCameraPermissions();
   const [paired, setPaired] = useState<LocalVoiceGateway | null>(null);
@@ -92,7 +92,7 @@ export default function LocalVoicePairingScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <RegentPressable pressStyle="icon" onPress={() => router.back()} style={styles.iconButton}>
-          <Ionicons name="chevron-back" size={22} color={TEXT_PRIMARY} />
+          <Ionicons name="chevron-back" size={22} color={colors.text} />
         </RegentPressable>
         <Text style={styles.headerTitle}>Local Hermes voice</Text>
         <View style={styles.iconButton} />
@@ -119,7 +119,7 @@ export default function LocalVoicePairingScreen() {
         ) : paired ? (
           <View style={styles.statusCard}>
             <View style={styles.statusRow}>
-              <Ionicons name="checkmark-circle" size={20} color={SUCCESS} />
+              <Ionicons name="checkmark-circle" size={20} color={colors.success} />
               <Text style={styles.statusText}>Connected to {gatewayDisplayLabel(paired)}</Text>
             </View>
             <Text style={styles.statusHint}>Voice uses this local Hermes until you disconnect.</Text>
@@ -137,7 +137,7 @@ export default function LocalVoicePairingScreen() {
             <Text style={styles.statusHint}>No local Hermes paired. Voice uses your hosted Hermes.</Text>
             <RegentPressable style={styles.primaryButton} onPress={beginScan}>
               {permission === null ? (
-                <ActivityIndicator color={WHITE} size="small" />
+                <ActivityIndicator color={colors.onAccent} size="small" />
               ) : (
                 <Text style={styles.primaryButtonText}>Scan pairing code</Text>
               )}
@@ -151,67 +151,92 @@ export default function LocalVoicePairingScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: DARK_BG },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 8,
-  },
-  iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: { color: TEXT_PRIMARY, fontSize: 20, fontFamily: FONTS.heading },
-  body: { paddingHorizontal: 20, gap: 16 },
-  intro: { color: TEXT_SECONDARY, fontSize: 14, lineHeight: 20, fontFamily: FONTS.body },
-  scannerCard: {
-    backgroundColor: CARD_BG,
-    borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 20,
-    padding: 16,
-    gap: 12,
-  },
-  camera: { width: '100%', aspectRatio: 1, borderRadius: 16, overflow: 'hidden' },
-  statusCard: {
-    backgroundColor: CARD_BG,
-    borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 20,
-    padding: 18,
-    gap: 12,
-  },
-  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  statusText: { color: TEXT_PRIMARY, fontSize: 16, fontFamily: FONTS.heading },
-  statusHint: { color: TEXT_SECONDARY, fontSize: 14, lineHeight: 20, fontFamily: FONTS.body },
-  actions: { flexDirection: 'row', gap: 10 },
-  primaryButton: {
-    minWidth: 140,
-    backgroundColor: BLUE,
-    borderRadius: 16,
-    paddingHorizontal: 18,
-    paddingVertical: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primaryButtonText: { color: WHITE, fontSize: 14, fontFamily: FONTS.body },
-  secondaryButton: {
-    minWidth: 120,
-    backgroundColor: CARD_ALT,
-    borderRadius: 16,
-    paddingHorizontal: 18,
-    paddingVertical: 13,
-    borderWidth: 1,
-    borderColor: BORDER,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  secondaryButtonText: { color: TEXT_PRIMARY, fontSize: 14, fontFamily: FONTS.body },
-});
+/**
+ * Theme-derived styles. Recomputed only when the theme changes (memoized by
+ * the caller). This is the canonical pattern for the rollout: a makeStyles(theme)
+ * factory reading semantic tokens, never raw hex.
+ */
+function makeStyles({ colors, fonts, type, space, radius }: Theme) {
+  return StyleSheet.create({
+    // Near-black ground in dark; hueless near-white in light. Never tinted.
+    container: { flex: 1, backgroundColor: colors.bg },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: space.s5,
+      paddingTop: space.s3,
+      paddingBottom: space.s2,
+      // Hairline separator mixed from the foreground, not a solid border.
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.hairline,
+    },
+    iconButton: {
+      width: 40,
+      height: 40,
+      borderRadius: radius.full,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    // Pixel display face for the header.
+    headerTitle: { color: colors.text, fontSize: type.headline.size, fontFamily: fonts.title },
+    body: { paddingHorizontal: space.s5, paddingTop: space.s4, gap: space.s4 },
+    intro: {
+      color: colors.textMuted,
+      fontSize: type.label.size,
+      lineHeight: type.label.line,
+      fontFamily: fonts.ui,
+    },
+    // Glass card that sits over the near-black ground: elevated surface,
+    // hairline inset ring.
+    scannerCard: {
+      backgroundColor: colors.surfaceElevated,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.hairlineStrong,
+      borderRadius: radius.lg,
+      padding: space.s4,
+      gap: space.s3,
+    },
+    camera: { width: '100%', aspectRatio: 1, borderRadius: radius.md, overflow: 'hidden' },
+    statusCard: {
+      backgroundColor: colors.surfaceElevated,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.hairlineStrong,
+      borderRadius: radius.lg,
+      padding: space.s4,
+      gap: space.s3,
+    },
+    statusRow: { flexDirection: 'row', alignItems: 'center', gap: space.s2 },
+    statusText: { color: colors.text, fontSize: type.body.size, fontFamily: fonts.title },
+    statusHint: {
+      color: colors.textMuted,
+      fontSize: type.label.size,
+      lineHeight: type.label.line,
+      fontFamily: fonts.ui,
+    },
+    actions: { flexDirection: 'row', gap: space.s2 },
+    // One accent per surface (regent blue).
+    primaryButton: {
+      minWidth: 140,
+      backgroundColor: colors.accent,
+      borderRadius: radius.md,
+      paddingHorizontal: space.s4,
+      paddingVertical: space.s3,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    primaryButtonText: { color: colors.onAccent, fontSize: type.label.size, fontFamily: fonts.ui },
+    secondaryButton: {
+      minWidth: 120,
+      backgroundColor: colors.surface,
+      borderRadius: radius.md,
+      paddingHorizontal: space.s4,
+      paddingVertical: space.s3,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.hairlineStrong,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    secondaryButtonText: { color: colors.text, fontSize: type.label.size, fontFamily: fonts.ui },
+  });
+}
