@@ -81,6 +81,39 @@ function gatewayToken() {
   return process.env.HERMES_VOICE_GATEWAY_TOKEN?.trim() || '';
 }
 
+/**
+ * Host pin for the voice gateway. The session_url/status_url values come from
+ * the Platform projection; if Platform ever served an attacker-influenced URL
+ * the gateway token in the Authorization header would leak to that host. Only
+ * talk to hosts we recognize as agent workspaces (`*.sprites.dev`, HTTPS) or
+ * hosts the operator explicitly allowed via HERMES_VOICE_ALLOWED_HOSTS
+ * (comma-separated exact hostnames, e.g. a local gateway during development).
+ */
+const ALLOWED_GATEWAY_HOST_SUFFIXES = ['.sprites.dev'];
+
+function operatorAllowedHosts(): string[] {
+  return (process.env.HERMES_VOICE_ALLOWED_HOSTS || '')
+    .split(',')
+    .map((host) => host.trim().toLowerCase())
+    .filter((host) => host.length > 0);
+}
+
+export function isAllowedHermesGatewayUrl(rawUrl: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    return false;
+  }
+
+  const host = url.hostname.toLowerCase();
+  if (operatorAllowedHosts().includes(host)) {
+    return true;
+  }
+
+  return url.protocol === 'https:' && ALLOWED_GATEWAY_HOST_SUFFIXES.some((suffix) => host.endsWith(suffix));
+}
+
 function headers(input: {
   authorization?: string | undefined;
   contentType?: boolean | undefined;
@@ -123,6 +156,11 @@ async function requestJson<T>(
 ): Promise<HermesVoiceClientResult<T>> {
   if (!gatewayToken() && isReleaseRuntime()) {
     return { kind: 'missing_config', requiredEnv: 'HERMES_VOICE_GATEWAY_TOKEN' };
+  }
+
+  if (!isAllowedHermesGatewayUrl(url)) {
+    console.error('❌ [VOICE] Blocked Hermes voice request to unapproved gateway host.');
+    return { kind: 'upstream_error', message: 'Hermes voice is unavailable.' };
   }
 
   try {

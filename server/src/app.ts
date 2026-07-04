@@ -3,6 +3,8 @@ import express from 'express';
 import { z } from 'zod';
 
 import { generateJwt } from '@coinbase/cdp-sdk/auth';
+import { CorsOriginError, createErrorHandler } from './errorHandling.js';
+import { checkReadiness } from './health.js';
 import { sendError } from './httpResponses.js';
 import { createCdpCustomAuthToken, getCdpJwks } from './identity.js';
 import { resolveClientIp } from './ip.js';
@@ -152,9 +154,10 @@ app.use(cors({
       return callback(null, true);
     }
 
-    // Block all other origins (random websites)
+    // Block all other origins (random websites). CorsOriginError is turned
+    // into the standard error envelope by the final error handler.
     console.warn('⚠️ [CORS] Blocked request from unauthorized origin:', origin);
-    callback(new Error('Not allowed by CORS'));
+    callback(new CorsOriginError());
   },
   credentials: true,
   methods: ['GET', 'POST', 'OPTIONS'],
@@ -176,21 +179,28 @@ app.use((req, _res, next) => {
   next();
 });
 
-// Health check (no auth required)
+// Liveness check (no auth required): the process is up and serving.
 app.get("/health", (_req, res) => {
   res.json({ ok: true, message: 'Server is running' });
+});
+
+// Readiness check (no auth required): hard dependencies still answer. The Fly
+// health check targets this path so a machine with a dead Redis connection is
+// marked unhealthy instead of silently failing requests. See src/health.ts.
+app.get('/health/ready', async (_req, res) => {
+  const readiness = await checkReadiness({
+    redisPing: database ? () => database.ping() : null,
+  });
+
+  res.status(readiness.ok ? 200 : 503).json(readiness);
 });
 
 app.get('/.well-known/jwks.json', publicReadRateLimiter, (_req, res) => {
   try {
     res.json(getCdpJwks());
   } catch (error) {
-    return sendError(
-      res,
-      500,
-      'ConfigurationError',
-      error instanceof Error ? error.message : 'JWKS is not configured.'
-    );
+    console.error('❌ [AUTH] JWKS is not configured:', summarizeErrorLog(error));
+    return sendError(res, 500, 'ConfigurationError', 'Sign-in keys are not configured for this build.');
   }
 });
 
@@ -200,6 +210,7 @@ app.use((req, res, next) => {
   // Skip authentication for health check, webhooks, and debug endpoints
   if (
     req.path === '/health' ||
+    req.path === '/health/ready' ||
     req.path === '/.well-known/jwks.json' ||
     req.path.startsWith('/webhooks') ||
     req.path === '/internal/mobile/message/push' ||
@@ -230,12 +241,7 @@ app.post('/auth/cdp-token', async (req, res) => {
     return res.json({ token });
   } catch (error) {
     console.error('❌ [AUTH] Unable to create Coinbase custom sign-in token:', summarizeErrorLog(error));
-    return sendError(
-      res,
-      500,
-      'ConfigurationError',
-      error instanceof Error ? error.message : 'Unable to open the wallet right now.'
-    );
+    return sendError(res, 500, 'ConfigurationError', 'Unable to open the wallet right now.');
   }
 });
 
@@ -957,5 +963,10 @@ app.post('/webhooks/onramp', webhookRateLimiter, async (req, res) => {
     return sendError(res, 502, 'WebhookProcessingFailed', 'Unable to process this webhook right now.');
   }
 });
+
+// Final error handler: every error that falls through (CORS rejections,
+// malformed JSON bodies, unexpected throws) leaves as the standard error
+// envelope with a client-safe message. Must be registered last.
+app.use(createErrorHandler());
 
 export default app;

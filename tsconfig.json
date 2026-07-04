@@ -16,6 +16,7 @@
   ],
   "exclude": [
     "vendor/**/*",
-    "component-tests/**/*"
+    "component-tests/**/*",
+    "server/**/*"
   ]
 }

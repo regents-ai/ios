@@ -11,6 +11,11 @@ kill_timeout = "5s"
   PORT = "8080"
   REGENTS_MOBILE_STATE_DIR = "/data"
 
+# SINGLE-MACHINE ASSUMPTION: wallet-intent and voice-session state is
+# per-machine JSON on the /data volume (REGENTS_MOBILE_STATE_DIR). Keep exactly
+# one machine (min_machines_running = 1, auto_stop off, never `fly scale count`
+# above 1) until that state moves to Redis — a second machine would have its
+# own empty volume and 404 intents created on the first.
 [http_service]
   internal_port = 8080
   force_https = true
@@ -19,12 +24,14 @@ kill_timeout = "5s"
   min_machines_running = 1
   processes = ["app"]
 
+  # Readiness, not liveness: /health/ready PINGs Redis so a machine with a
+  # dead Redis connection is marked unhealthy. Plain liveness stays at /health.
   [[http_service.checks]]
     grace_period = "10s"
     interval = "15s"
     timeout = "5s"
     method = "GET"
-    path = "/health"
+    path = "/health/ready"
 
 [[mounts]]
   source = "regents_mobile_data"

@@ -21,6 +21,12 @@ RUN npm ci --omit=dev
 
 COPY --from=build /app/dist dist
 
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod 0755 /usr/local/bin/docker-entrypoint.sh
+
 EXPOSE 8080
 
+# The entrypoint starts as root only to chown the Fly /data volume to the
+# node user, then drops privileges before exec'ing the server (setpriv).
+ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["node", "dist/index.js"]

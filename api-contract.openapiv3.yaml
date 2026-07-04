@@ -51,6 +51,37 @@ paths:
                     type: boolean
                   message:
                     type: string
+  /health/ready:
+    get:
+      operationId: getHealthReadiness
+      summary: Check whether the mobile backend's dependencies are reachable
+      responses:
+        '200':
+          description: Backend dependencies are reachable
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, redis]
+                properties:
+                  ok:
+                    type: boolean
+                  redis:
+                    type: string
+                    enum: [ok, unreachable, not_configured]
+        '503':
+          description: A backend dependency is unreachable
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, redis]
+                properties:
+                  ok:
+                    type: boolean
+                  redis:
+                    type: string
+                    enum: [ok, unreachable, not_configured]
   /.well-known/jwks.json:
     get:
       operationId: getCdpJwks
