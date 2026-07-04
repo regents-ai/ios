@@ -1,15 +1,46 @@
 import test, { beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 
 import {
-  getMobileRegentStateFilePathForTests,
   prepareWalletActionForUser,
+  readMobileRegentStateForTests,
   resetMobileRegentStateForTests,
 } from '../server/src/mobileRegents.js';
 
-beforeEach(() => {
-  resetMobileRegentStateForTests();
+/**
+ * In-memory stand-in for the release Redis client, mirroring the fake used by
+ * server/src/mobileRoutes.test.ts. `eval` implements the same compare-and-swap
+ * semantics as the Lua script in sharedStateStore.ts.
+ */
+function createFakeSharedStateRedis() {
+  const store = new Map<string, string>();
+  return {
+    store,
+    async get(key: string) {
+      return store.get(key) ?? null;
+    },
+    async set(key: string, value: string) {
+      store.set(key, value);
+      return 'OK';
+    },
+    async eval(_script: string, options: { keys: string[]; arguments: string[] }) {
+      const key = options.keys[0] ?? '';
+      const [expected, next, missingSentinel] = options.arguments;
+      const current = store.get(key);
+      if ((current === undefined && expected === missingSentinel) || current === expected) {
+        store.set(key, next ?? '');
+        return 1;
+      }
+      return 0;
+    },
+  };
+}
+
+let redis = createFakeSharedStateRedis();
+
+beforeEach(async () => {
+  redis = createFakeSharedStateRedis();
+  await resetMobileRegentStateForTests(redis);
 });
 
 function walletActionInput(idempotencyKey: string) {
@@ -26,31 +57,29 @@ function walletActionInput(idempotencyKey: string) {
   };
 }
 
-function trackedActionIds() {
-  const state = JSON.parse(readFileSync(getMobileRegentStateFilePathForTests(), 'utf8')) as {
-    preparedWalletActions: Record<string, { action_id: string }>;
-  };
+async function trackedActionIds() {
+  const state = await readMobileRegentStateForTests(redis);
 
   return new Set(Object.values(state.preparedWalletActions).map((action) => action.action_id));
 }
 
-test('preparing twice with the same idempotency key reuses the tracked action', () => {
-  const first = prepareWalletActionForUser('funding-user', 'funding', walletActionInput('funding-key-1'));
-  const second = prepareWalletActionForUser('funding-user', 'funding', walletActionInput('funding-key-1'));
+test('preparing twice with the same idempotency key reuses the tracked action', async () => {
+  const first = await prepareWalletActionForUser('funding-user', 'funding', walletActionInput('funding-key-1'), redis);
+  const second = await prepareWalletActionForUser('funding-user', 'funding', walletActionInput('funding-key-1'), redis);
 
   assert.ok(first);
   assert.ok(second);
   assert.equal(second.action_id, first.action_id);
   assert.equal(second.expires_at, first.expires_at);
-  assert.equal(trackedActionIds().size, 1);
+  assert.equal((await trackedActionIds()).size, 1);
 });
 
-test('a different idempotency key creates a new tracked action', () => {
-  const first = prepareWalletActionForUser('funding-user', 'funding', walletActionInput('funding-key-1'));
-  const other = prepareWalletActionForUser('funding-user', 'funding', walletActionInput('funding-key-2'));
+test('a different idempotency key creates a new tracked action', async () => {
+  const first = await prepareWalletActionForUser('funding-user', 'funding', walletActionInput('funding-key-1'), redis);
+  const other = await prepareWalletActionForUser('funding-user', 'funding', walletActionInput('funding-key-2'), redis);
 
   assert.ok(first);
   assert.ok(other);
   assert.notEqual(other.action_id, first.action_id);
-  assert.equal(trackedActionIds().size, 2);
+  assert.equal((await trackedActionIds()).size, 2);
 });
