@@ -24,6 +24,11 @@ const config: ExpoConfig = {
           NSAllowsLocalNetworking: true,
         },
         UIBackgroundModes: ['fetch', 'remote-notification'],
+        // Live Activities for pending runs (send / onramp settlement / staking).
+        // The lock-screen widget target itself is staged in targets/pending-runs
+        // pending the provisioning decision; these keys are decision-free.
+        NSSupportsLiveActivities: true,
+        NSSupportsLiveActivitiesFrequentUpdates: true,
       }
     },
 
