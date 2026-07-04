@@ -4,7 +4,12 @@ import { routes } from './navigation/routes';
 
 const threadIdPattern = /^[1-9][0-9]*(~[1-9][0-9]*){0,2}$/;
 
-const onrampNotificationTypes = new Set(['onramp_complete', 'onramp_failed']);
+const walletActivityNotificationTypes = new Set([
+  'onramp_complete',
+  'onramp_failed',
+  'offramp_complete',
+  'offramp_failed',
+]);
 
 export function isMessageThreadId(value: unknown): value is string {
   return typeof value === 'string' && threadIdPattern.test(value);
@@ -27,7 +32,7 @@ export function routeIntentFromNotificationData(data: unknown): PushRouteIntent 
     return { href: routes.messageThread(payload.threadId), refreshWallet: false };
   }
 
-  if (typeof payload.type === 'string' && onrampNotificationTypes.has(payload.type)) {
+  if (typeof payload.type === 'string' && walletActivityNotificationTypes.has(payload.type)) {
     return { href: routes.wallet(), refreshWallet: true };
   }
 

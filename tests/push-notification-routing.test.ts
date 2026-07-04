@@ -40,6 +40,25 @@ test('onramp push payloads route to the wallet tab with a refresh request', () =
   );
 });
 
+test('offramp push payloads route to the wallet tab with a refresh request', () => {
+  assert.deepEqual(
+    routeIntentFromNotificationData({
+      type: 'offramp_complete',
+      transactionId: 'txn-789',
+      partnerUserRef: 'user-1',
+    }),
+    { href: '/wallet', refreshWallet: true },
+  );
+  assert.deepEqual(
+    routeIntentFromNotificationData({
+      type: 'offramp_failed',
+      transactionId: 'txn-790',
+      partnerUserRef: 'user-1',
+    }),
+    { href: '/wallet', refreshWallet: true },
+  );
+});
+
 test('push routing ignores missing malformed or unrelated payloads', () => {
   assert.equal(routeIntentFromNotificationData(null), null);
   assert.equal(routeIntentFromNotificationData({ type: 'mobile_message' }), null);

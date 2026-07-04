@@ -355,13 +355,13 @@ paths:
   /webhooks/onramp:
     post:
       operationId: receiveOnrampWebhook
-      summary: Receive one signed Coinbase onramp webhook
+      summary: Receive one signed Coinbase onramp or offramp transaction webhook
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CoinbaseOnrampWebhook'
+              $ref: '#/components/schemas/CoinbaseTransactionWebhook'
       responses:
         '200':
           description: Webhook received
@@ -395,6 +395,37 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '500':
           description: Webhook verification is not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+  /events/onramp:
+    get:
+      operationId: listOnrampTransactionEvents
+      summary: List the signed-in user's recent Coinbase transaction webhook events
+      description: >-
+        Read-only feed of onramp and offramp transaction lifecycle events recorded
+        from verified Coinbase webhooks. Events are scoped to the authenticated
+        user and never move funds.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Recent transaction events, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [events]
+                properties:
+                  events:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TransactionEvent'
+        '401':
+          description: Access token is missing or invalid
           content:
             application/json:
               schema:
@@ -2725,9 +2756,16 @@ components:
         idempotencyKey:
           type: string
           description: Required for creating Coinbase onramp sessions and guest checkout orders.
-    CoinbaseOnrampWebhook:
+    CoinbaseTransactionWebhook:
       type: object
-      additionalProperties: false
+      description: >-
+        Inbound Coinbase onramp/offramp webhook payload. Coinbase owns this shape,
+        so unknown extra fields are accepted and ignored. The server normalizes
+        every accepted payload to one canonical internal event before processing:
+        `onramp.transaction.completed` (sent by the Coinbase widget path) maps to
+        `onramp.transaction.success`, object-form `purchaseAmount` maps to its
+        string value, and `purchaseNetwork` maps to `destinationNetwork`.
+      additionalProperties: true
       required: [eventType, transactionId]
       properties:
         eventType:
@@ -2736,16 +2774,72 @@ components:
             - onramp.transaction.created
             - onramp.transaction.updated
             - onramp.transaction.success
+            - onramp.transaction.completed
             - onramp.transaction.failed
+            - offramp.transaction.created
+            - offramp.transaction.updated
+            - offramp.transaction.success
+            - offramp.transaction.failed
         transactionId:
           type: string
         partnerUserRef:
           type: string
         purchaseAmount:
-          type: string
+          oneOf:
+            - type: string
+            - type: object
+              required: [value]
+              properties:
+                value:
+                  type: string
+                currency:
+                  type: string
         purchaseCurrency:
           type: string
         destinationNetwork:
+          type: string
+        purchaseNetwork:
+          type: string
+        sellAmount:
+          type: object
+          properties:
+            value:
+              type: string
+            currency:
+              type: string
+        network:
+          type: string
+        redirectUrl:
+          type: string
+          description: Offramp events may carry the partnerUserRef only as a query parameter here.
+        failureReason:
+          type: string
+    TransactionEvent:
+      type: object
+      additionalProperties: false
+      required: [eventType, transactionId, occurredAt]
+      properties:
+        eventType:
+          type: string
+          enum:
+            - onramp.transaction.created
+            - onramp.transaction.updated
+            - onramp.transaction.success
+            - onramp.transaction.failed
+            - offramp.transaction.created
+            - offramp.transaction.updated
+            - offramp.transaction.success
+            - offramp.transaction.failed
+        transactionId:
+          type: string
+        occurredAt:
+          type: string
+          format: date-time
+        amount:
+          type: string
+        currency:
+          type: string
+        network:
           type: string
         failureReason:
           type: string

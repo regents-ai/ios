@@ -22,6 +22,7 @@ import {
   type CacheMode,
 } from "../../utils/cacheFallbackPolicy";
 import { resolveDynamicTypeLayout } from "../../utils/dynamicTypeLayout";
+import { fetchOnrampEvents, type TransactionEvent } from "../../utils/fetchOnrampEvents";
 import { fetchTransactionHistory } from "../../utils/fetchTransactionHistory";
 import { describeListLoadFailure, type ListLoadFailure } from "../../utils/listLoadFailure";
 
@@ -59,7 +60,19 @@ export default function History() {
   const [nextPageKey, setNextPageKey] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<ListLoadFailure | null>(null);
   const [cacheMode, setCacheMode] = useState<CacheMode>('live');
+  const [activityEvents, setActivityEvents] = useState<TransactionEvent[]>([]);
   const cachedTransactionsRef = useRef<Transaction[] | null>(null);
+
+  // Read-only lifecycle feed recorded from Coinbase updates. Loading it can
+  // never block or fail the main history list.
+  const loadActivityEvents = useCallback(async () => {
+    try {
+      const accessToken = await getAccessToken();
+      setActivityEvents(await fetchOnrampEvents(accessToken || undefined));
+    } catch (error) {
+      console.warn('Could not load recent transaction updates:', error);
+    }
+  }, [getAccessToken]);
 
   const loadTransactions = useCallback(async (pageKey?: string, append: boolean = false) => {
     const userId = regentsUserId;
@@ -118,13 +131,15 @@ export default function History() {
 
       if (userId) {
         loadTransactions();
+        loadActivityEvents();
       }
-    }, [loadTransactions, regentsUserId])
+    }, [loadActivityEvents, loadTransactions, regentsUserId])
   );
 
   const handleRefresh = useCallback(() => {
     loadTransactions();
-  }, [loadTransactions]);
+    loadActivityEvents();
+  }, [loadActivityEvents, loadTransactions]);
 
   const handleLoadMore = useCallback(() => {
     if (nextPageKey && !loadingMore && !loading) {
@@ -162,6 +177,80 @@ export default function History() {
 
   const formatStatusLabel = (status: string) =>
     status.replace(/ONRAMP_TRANSACTION_STATUS_/g, '').replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
+
+  const describeActivityEvent = (event: TransactionEvent) => {
+    const isCashOut = event.eventType.startsWith('offramp.');
+    const stage = event.eventType.split('.').pop() ?? '';
+    const stageLabel =
+      stage === 'created' ? 'Started'
+        : stage === 'updated' ? 'In progress'
+          : stage === 'success' ? 'Complete'
+            : 'Failed';
+    const stageColor =
+      stage === 'success' ? colors.success
+        : stage === 'failed' ? colors.error
+          : colors.warning;
+    const title = isCashOut
+      ? `${event.currency ?? ''} Cash Out`.trim()
+      : `${event.currency ?? 'Crypto'} Purchase`;
+
+    return { failed: stage === 'failed', stageColor, stageLabel, title };
+  };
+
+  const renderActivityUpdates = (standalone = false) => {
+    if (activityEvents.length === 0) {
+      return null;
+    }
+
+    return (
+      <View style={[styles.updatesSection, standalone && styles.updatesSectionStandalone]}>
+        <Text style={styles.updatesTitle}>Latest updates</Text>
+        {activityEvents.slice(0, 5).map((event) => {
+          const { failed, stageColor, stageLabel, title } = describeActivityEvent(event);
+          const subtitleParts = [
+            event.amount && event.currency ? `${event.amount} ${event.currency}` : null,
+            event.network,
+            formatDate(event.occurredAt),
+          ].filter(Boolean);
+
+          return (
+            <View key={`${event.eventType}:${event.transactionId}`} style={styles.updateRow}>
+              <View
+                style={styles.updateRowTop}
+                accessible
+                accessibilityLabel={`${title}, ${stageLabel}, ${subtitleParts.join(', ')}`}
+              >
+                <View style={styles.updateInfo}>
+                  <Text style={styles.transactionTitle}>{title}</Text>
+                  <Text style={styles.transactionSubtitle}>{subtitleParts.join(' • ')}</Text>
+                  {failed && event.failureReason ? (
+                    <Text style={styles.updateFailureText}>{event.failureReason}</Text>
+                  ) : null}
+                </View>
+                <View style={[styles.statusBadge, { borderColor: stageColor, backgroundColor: `${stageColor}15` }]}>
+                  <Text style={[styles.statusText, { color: stageColor }]}>{stageLabel}</Text>
+                </View>
+              </View>
+              {failed && (
+                <View style={styles.updateBadgeRow}>
+                  <FailedTransactionBadge
+                    transaction={{
+                      transaction_id: event.transactionId,
+                      status: 'failed',
+                      purchase_currency: event.currency,
+                      purchase_network: event.network,
+                      created_at: event.occurredAt,
+                      partner_user_ref: regentsUserId ?? undefined,
+                    }}
+                  />
+                </View>
+              )}
+            </View>
+          );
+        })}
+      </View>
+    );
+  };
 
   const renderTransaction = ({ item }: { item: Transaction }) => {
     const isFailed = isFailedTransaction(item.status);
@@ -251,6 +340,8 @@ export default function History() {
       ) : null}
       {transactions.length === 0 ? (
         loadError ? null : (
+        <>
+        {renderActivityUpdates(true)}
         <View style={styles.emptyState}>
           <View style={styles.emptyIcon}>
             <Ionicons name="time-outline" size={28} color={colors.accent} />
@@ -268,6 +359,7 @@ export default function History() {
             <Text style={styles.emptyButtonText}>{regentsUserId ? 'Open Wallet' : 'Sign in'}</Text>
           </RegentPressable>
         </View>
+        </>
         )
       ) : (
           <FlatList
@@ -275,6 +367,7 @@ export default function History() {
             renderItem={renderTransaction}
             keyExtractor={(item) => item.transaction_id}
             contentContainerStyle={styles.listContainer}
+            ListHeaderComponent={renderActivityUpdates()}
             showsVerticalScrollIndicator={false}
             ItemSeparatorComponent={() => <View style={styles.separator} />}
             onEndReached={handleLoadMore}
@@ -408,6 +501,46 @@ function makeStyles({ colors, fonts }: Theme) {
     fontSize: 12,
     lineHeight: 16,
     fontFamily: fonts.ui,
+  },
+  updatesSection: {
+    marginBottom: 16,
+    gap: 10,
+  },
+  updatesSectionStandalone: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+  },
+  updatesTitle: {
+    fontSize: 14,
+    color: colors.textMuted,
+    fontFamily: fonts.title,
+  },
+  updateRow: {
+    padding: 14,
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: colors.hairlineStrong,
+    borderRadius: 16,
+  },
+  updateRowTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  updateInfo: {
+    flex: 1,
+    minWidth: 0,
+    gap: 4,
+  },
+  updateFailureText: {
+    fontSize: 12,
+    color: colors.error,
+    fontFamily: fonts.ui,
+  },
+  updateBadgeRow: {
+    marginTop: 4,
+    alignItems: 'flex-start',
   },
   transactionAmount: {
     fontSize: 16,

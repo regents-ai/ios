@@ -6,14 +6,15 @@ import test, { beforeEach } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import {
-  claimOnrampWebhookEvent,
-  hasProcessedOnrampWebhookEvent,
-  markOnrampWebhookEventProcessed,
-  ONRAMP_WEBHOOK_PROCESSING_LEASE_SECONDS,
-  onrampWebhookDedupeKey,
-  parseCanonicalOnrampWebhook,
-  releaseOnrampWebhookEventClaim,
-  resetOnrampWebhookEventStoreForTests,
+  claimTransactionWebhookEvent,
+  hasProcessedTransactionWebhookEvent,
+  isOfframpWebhook,
+  markTransactionWebhookEventProcessed,
+  parseCanonicalTransactionWebhook,
+  releaseTransactionWebhookEventClaim,
+  resetTransactionWebhookEventStoreForTests,
+  TRANSACTION_WEBHOOK_PROCESSING_LEASE_SECONDS,
+  transactionWebhookDedupeKey,
 } from './onrampWebhook.js';
 import { verifyWebhookSignature } from './verifyWebhookSignature.js';
 
@@ -29,97 +30,217 @@ const successWebhook = {
 } as const;
 
 beforeEach(() => {
-  resetOnrampWebhookEventStoreForTests();
+  resetTransactionWebhookEventStoreForTests();
 });
 
-test('onramp webhook parser accepts the current canonical shape', () => {
-  const parsed = parseCanonicalOnrampWebhook(JSON.stringify(successWebhook));
+test('onramp webhook parser accepts the documented canonical shape', () => {
+  const parsed = parseCanonicalTransactionWebhook(JSON.stringify(successWebhook));
 
   assert.equal(parsed.kind, 'ok');
   if (parsed.kind === 'ok') {
     assert.equal(parsed.webhook.transactionId, 'tx-1');
-    assert.equal(onrampWebhookDedupeKey(parsed.webhook), 'onramp.transaction.success:tx-1');
+    assert.equal(transactionWebhookDedupeKey(parsed.webhook), 'onramp.transaction.success:tx-1');
+  }
+});
+
+test('widget completed alias is normalized to the canonical success event', () => {
+  // The Coinbase widget path sends `completed` with an object purchaseAmount
+  // and purchaseNetwork; docs.cdp.coinbase.com documents `success`. Both must
+  // land as one canonical internal representation.
+  const widgetPayload = {
+    eventType: 'onramp.transaction.completed',
+    transactionId: 'tx-widget',
+    partnerUserRef: 'user-1',
+    purchaseAmount: { value: '4.81', currency: 'USDC' },
+    purchaseNetwork: 'base',
+  };
+
+  const parsed = parseCanonicalTransactionWebhook(JSON.stringify(widgetPayload));
+  assert.equal(parsed.kind, 'ok');
+  if (parsed.kind === 'ok') {
+    assert.equal(parsed.webhook.eventType, 'onramp.transaction.success');
+    assert.equal(isOfframpWebhook(parsed.webhook), false);
+    if (!isOfframpWebhook(parsed.webhook)) {
+      assert.equal(parsed.webhook.purchaseAmount, '4.81');
+      assert.equal(parsed.webhook.purchaseCurrency, 'USDC');
+      assert.equal(parsed.webhook.destinationNetwork, 'base');
+    }
+    // A retried delivery under the other name must dedupe to the same key.
+    assert.equal(
+      transactionWebhookDedupeKey(parsed.webhook),
+      'onramp.transaction.success:tx-widget',
+    );
+  }
+});
+
+test('vendor extra fields are tolerated and stripped to the canonical shape', () => {
+  const vendorPayload = {
+    ...successWebhook,
+    status: 'ONRAMP_TRANSACTION_STATUS_SUCCESS',
+    createdAt: '2026-07-01T00:00:00Z',
+    paymentTotal: { value: '26.00', currency: 'USD' },
+    txHash: '0xabc',
+  };
+
+  const parsed = parseCanonicalTransactionWebhook(JSON.stringify(vendorPayload));
+  assert.equal(parsed.kind, 'ok');
+  if (parsed.kind === 'ok') {
+    assert.deepEqual(parsed.webhook, successWebhook);
   }
 });
 
 test('onramp webhook parser rejects malformed current payloads', () => {
-  assert.equal(parseCanonicalOnrampWebhook('{').kind, 'invalid');
-  assert.equal(parseCanonicalOnrampWebhook(JSON.stringify({})).kind, 'invalid');
-  assert.equal(parseCanonicalOnrampWebhook(JSON.stringify({ ...successWebhook, transactionId: '' })).kind, 'invalid');
-  assert.equal(parseCanonicalOnrampWebhook(JSON.stringify({ ...successWebhook, purchaseAmount: '' })).kind, 'invalid');
+  assert.equal(parseCanonicalTransactionWebhook('{').kind, 'invalid');
+  assert.equal(parseCanonicalTransactionWebhook(JSON.stringify({})).kind, 'invalid');
+  assert.equal(parseCanonicalTransactionWebhook(JSON.stringify({ ...successWebhook, transactionId: '' })).kind, 'invalid');
+  assert.equal(parseCanonicalTransactionWebhook(JSON.stringify({ ...successWebhook, purchaseAmount: '' })).kind, 'invalid');
+  // Success events must carry the fields the push notification depends on.
+  assert.equal(
+    parseCanonicalTransactionWebhook(JSON.stringify({ ...successWebhook, partnerUserRef: undefined })).kind,
+    'invalid',
+  );
 });
 
-test('onramp webhook events are recorded durably after processing', async () => {
-  const parsed = parseCanonicalOnrampWebhook(JSON.stringify(successWebhook));
+test('offramp webhook events parse to a canonical offramp shape', () => {
+  const offrampPayload = {
+    eventType: 'offramp.transaction.success',
+    transactionId: 'off-tx-1',
+    partnerUserRef: 'user-1',
+    sellAmount: { value: '10.00', currency: 'USDC' },
+    network: 'base',
+  };
+
+  const parsed = parseCanonicalTransactionWebhook(JSON.stringify(offrampPayload));
+  assert.equal(parsed.kind, 'ok');
+  if (parsed.kind === 'ok') {
+    assert.equal(isOfframpWebhook(parsed.webhook), true);
+    if (isOfframpWebhook(parsed.webhook)) {
+      assert.equal(parsed.webhook.sellAmount, '10.00');
+      assert.equal(parsed.webhook.sellCurrency, 'USDC');
+      assert.equal(parsed.webhook.network, 'base');
+    }
+    assert.equal(transactionWebhookDedupeKey(parsed.webhook), 'offramp.transaction.success:off-tx-1');
+  }
+});
+
+test('offramp webhook resolves partnerUserRef from the redirectUrl query', () => {
+  const offrampPayload = {
+    eventType: 'offramp.transaction.updated',
+    transactionId: 'off-tx-2',
+    redirectUrl: 'regentsmobile://offramp-send?partnerUserRef=user-9',
+  };
+
+  const parsed = parseCanonicalTransactionWebhook(JSON.stringify(offrampPayload));
+  assert.equal(parsed.kind, 'ok');
+  if (parsed.kind === 'ok') {
+    assert.equal(parsed.webhook.partnerUserRef, 'user-9');
+  }
+});
+
+test('offramp created events without a partnerUserRef still parse', () => {
+  const offrampPayload = {
+    eventType: 'offramp.transaction.created',
+    transactionId: 'off-tx-3',
+    sellAmount: { value: '5.00', currency: 'USDC' },
+  };
+
+  const parsed = parseCanonicalTransactionWebhook(JSON.stringify(offrampPayload));
+  assert.equal(parsed.kind, 'ok');
+  if (parsed.kind === 'ok') {
+    assert.equal(parsed.webhook.partnerUserRef, undefined);
+  }
+});
+
+test('transaction webhook events are recorded durably after processing', async () => {
+  const parsed = parseCanonicalTransactionWebhook(JSON.stringify(successWebhook));
   assert.equal(parsed.kind, 'ok');
   if (parsed.kind !== 'ok') {
     return;
   }
 
-  assert.equal(await hasProcessedOnrampWebhookEvent(parsed.webhook), false);
-  await markOnrampWebhookEventProcessed(parsed.webhook);
-  assert.equal(await hasProcessedOnrampWebhookEvent(parsed.webhook), true);
+  assert.equal(await hasProcessedTransactionWebhookEvent(parsed.webhook), false);
+  await markTransactionWebhookEventProcessed(parsed.webhook);
+  assert.equal(await hasProcessedTransactionWebhookEvent(parsed.webhook), true);
 });
 
-test('onramp webhook events are claimed before side effects', async () => {
-  const parsed = parseCanonicalOnrampWebhook(JSON.stringify(successWebhook));
+test('transaction webhook events are claimed before side effects', async () => {
+  const parsed = parseCanonicalTransactionWebhook(JSON.stringify(successWebhook));
   assert.equal(parsed.kind, 'ok');
   if (parsed.kind !== 'ok') {
     return;
   }
 
-  assert.equal(await claimOnrampWebhookEvent(parsed.webhook), 'claimed');
-  assert.equal(await hasProcessedOnrampWebhookEvent(parsed.webhook), false);
-  assert.equal(await claimOnrampWebhookEvent(parsed.webhook), 'processing');
+  assert.equal(await claimTransactionWebhookEvent(parsed.webhook), 'claimed');
+  assert.equal(await hasProcessedTransactionWebhookEvent(parsed.webhook), false);
+  assert.equal(await claimTransactionWebhookEvent(parsed.webhook), 'processing');
 
-  await releaseOnrampWebhookEventClaim(parsed.webhook);
-  assert.equal(await hasProcessedOnrampWebhookEvent(parsed.webhook), false);
-  assert.equal(await claimOnrampWebhookEvent(parsed.webhook), 'claimed');
+  await releaseTransactionWebhookEventClaim(parsed.webhook);
+  assert.equal(await hasProcessedTransactionWebhookEvent(parsed.webhook), false);
+  assert.equal(await claimTransactionWebhookEvent(parsed.webhook), 'claimed');
 });
 
-test('onramp webhook claim distinguishes in-flight processing from processed duplicates', async () => {
-  const parsed = parseCanonicalOnrampWebhook(JSON.stringify(successWebhook));
+test('transaction webhook claim distinguishes in-flight processing from processed duplicates', async () => {
+  const parsed = parseCanonicalTransactionWebhook(JSON.stringify(successWebhook));
   assert.equal(parsed.kind, 'ok');
   if (parsed.kind !== 'ok') {
     return;
   }
 
-  assert.equal(await claimOnrampWebhookEvent(parsed.webhook), 'claimed');
+  assert.equal(await claimTransactionWebhookEvent(parsed.webhook), 'claimed');
   // Lease held, not yet processed: the retrying sender must NOT be told duplicate.
-  assert.equal(await claimOnrampWebhookEvent(parsed.webhook), 'processing');
+  assert.equal(await claimTransactionWebhookEvent(parsed.webhook), 'processing');
 
-  await markOnrampWebhookEventProcessed(parsed.webhook);
+  await markTransactionWebhookEventProcessed(parsed.webhook);
   // Fully processed: safe to tell the sender it is a duplicate.
-  assert.equal(await claimOnrampWebhookEvent(parsed.webhook), 'processed');
+  assert.equal(await claimTransactionWebhookEvent(parsed.webhook), 'processed');
 });
 
-test('onramp webhook processing claims can be retried after the short lease', async () => {
-  const parsed = parseCanonicalOnrampWebhook(JSON.stringify(successWebhook));
+test('offramp webhook events reuse the same claim mechanism', async () => {
+  const parsed = parseCanonicalTransactionWebhook(JSON.stringify({
+    eventType: 'offramp.transaction.failed',
+    transactionId: 'off-tx-4',
+    partnerUserRef: 'user-1',
+    failureReason: 'bank transfer rejected',
+  }));
+  assert.equal(parsed.kind, 'ok');
+  if (parsed.kind !== 'ok') {
+    return;
+  }
+
+  assert.equal(await claimTransactionWebhookEvent(parsed.webhook), 'claimed');
+  assert.equal(await claimTransactionWebhookEvent(parsed.webhook), 'processing');
+
+  await markTransactionWebhookEventProcessed(parsed.webhook);
+  assert.equal(await claimTransactionWebhookEvent(parsed.webhook), 'processed');
+});
+
+test('transaction webhook processing claims can be retried after the short lease', async () => {
+  const parsed = parseCanonicalTransactionWebhook(JSON.stringify(successWebhook));
   assert.equal(parsed.kind, 'ok');
   if (parsed.kind !== 'ok') {
     return;
   }
 
   const claimedAt = new Date('2026-05-13T12:00:00.000Z');
-  const afterLease = new Date(claimedAt.getTime() + ONRAMP_WEBHOOK_PROCESSING_LEASE_SECONDS * 1000);
+  const afterLease = new Date(claimedAt.getTime() + TRANSACTION_WEBHOOK_PROCESSING_LEASE_SECONDS * 1000);
 
-  assert.equal(await claimOnrampWebhookEvent(parsed.webhook, null, claimedAt), 'claimed');
-  assert.equal(await claimOnrampWebhookEvent(parsed.webhook, null, claimedAt), 'processing');
-  assert.equal(await claimOnrampWebhookEvent(parsed.webhook, null, afterLease), 'claimed');
+  assert.equal(await claimTransactionWebhookEvent(parsed.webhook, null, claimedAt), 'claimed');
+  assert.equal(await claimTransactionWebhookEvent(parsed.webhook, null, claimedAt), 'processing');
+  assert.equal(await claimTransactionWebhookEvent(parsed.webhook, null, afterLease), 'claimed');
 
-  await markOnrampWebhookEventProcessed(parsed.webhook);
-  assert.equal(await claimOnrampWebhookEvent(parsed.webhook, null, afterLease), 'processed');
+  await markTransactionWebhookEventProcessed(parsed.webhook);
+  assert.equal(await claimTransactionWebhookEvent(parsed.webhook, null, afterLease), 'processed');
 });
 
-test('onramp webhook processing lease is short so crashed claims retry quickly', () => {
+test('transaction webhook processing lease is short so crashed claims retry quickly', () => {
   assert.ok(
-    ONRAMP_WEBHOOK_PROCESSING_LEASE_SECONDS <= 120,
-    `processing lease must stay short (got ${ONRAMP_WEBHOOK_PROCESSING_LEASE_SECONDS}s)`
+    TRANSACTION_WEBHOOK_PROCESSING_LEASE_SECONDS <= 120,
+    `processing lease must stay short (got ${TRANSACTION_WEBHOOK_PROCESSING_LEASE_SECONDS}s)`
   );
 });
 
-test('onramp webhook redis claim reports processing and processed duplicates', async () => {
-  const parsed = parseCanonicalOnrampWebhook(JSON.stringify(successWebhook));
+test('transaction webhook redis claim reports processing and processed duplicates', async () => {
+  const parsed = parseCanonicalTransactionWebhook(JSON.stringify(successWebhook));
   assert.equal(parsed.kind, 'ok');
   if (parsed.kind !== 'ok') {
     return;
@@ -142,14 +263,14 @@ test('onramp webhook redis claim reports processing and processed duplicates', a
     },
   };
 
-  assert.equal(await claimOnrampWebhookEvent(parsed.webhook, fakeRedis), 'claimed');
-  assert.equal(await claimOnrampWebhookEvent(parsed.webhook, fakeRedis), 'processing');
+  assert.equal(await claimTransactionWebhookEvent(parsed.webhook, fakeRedis), 'claimed');
+  assert.equal(await claimTransactionWebhookEvent(parsed.webhook, fakeRedis), 'processing');
 
-  await markOnrampWebhookEventProcessed(parsed.webhook, fakeRedis);
-  assert.equal(await claimOnrampWebhookEvent(parsed.webhook, fakeRedis), 'processed');
+  await markTransactionWebhookEventProcessed(parsed.webhook, fakeRedis);
+  assert.equal(await claimTransactionWebhookEvent(parsed.webhook, fakeRedis), 'processed');
 });
 
-test('onramp webhook route returns a retryable non-2xx while a claim is processing', () => {
+test('transaction webhook route returns a retryable non-2xx while a claim is processing', () => {
   const appSource = readFileSync(resolve(testDir, 'app.ts'), 'utf8');
 
   // A processing (in-flight) claim must trigger a retryable 409, never a 200
@@ -160,12 +281,12 @@ test('onramp webhook route returns a retryable non-2xx while a claim is processi
   assert.match(appSource, /\{ received: true, duplicate: true \}/);
 });
 
-test('onramp webhook handler uses the current signed body parser', () => {
+test('transaction webhook handler uses the current signed body parser', () => {
   const appSource = readFileSync(resolve(testDir, 'app.ts'), 'utf8');
   const verifierSource = readFileSync(resolve(testDir, 'verifyWebhookSignature.ts'), 'utf8');
 
   assert.match(appSource, /x-hook0-signature/);
-  assert.match(appSource, /parseCanonicalOnrampWebhook\(rawBody\)/);
+  assert.match(appSource, /parseCanonicalTransactionWebhook\(rawBody\)/);
   assert.match(verifierSource, /key === 'v1'/);
 });
 

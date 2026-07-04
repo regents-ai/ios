@@ -11,9 +11,31 @@ test('OpenAPI operations have stable operation IDs', () => {
   const operations = [...contract.matchAll(/^    (get|post|put|patch|delete):$/gm)];
   const operationIds = [...contract.matchAll(/^\s+operationId:\s+([A-Za-z0-9_]+)$/gm)].map((match) => match[1]);
 
-  assert.equal(operations.length, 42);
+  assert.equal(operations.length, 43);
   assert.equal(operationIds.length, operations.length);
   assert.equal(new Set(operationIds).size, operationIds.length);
+});
+
+test('transaction event feed is declared in the contract and covered by the client', () => {
+  const eventsClient = readFileSync('utils/fetchOnrampEvents.ts', 'utf8');
+
+  assert.match(contract, /\/events\/onramp:[\s\S]*operationId: listOnrampTransactionEvents/);
+  assert.match(contract, /TransactionEvent:[\s\S]*required: \[eventType, transactionId, occurredAt\]/);
+  assert.match(eventsClient, /fetchOnrampEvents\(accessToken\?: string\)/);
+  assert.match(eventsClient, /\/events\/onramp/);
+});
+
+test('inbound Coinbase webhook contract covers both ramps and the widget alias', () => {
+  const webhookSchema = contract.slice(
+    contract.indexOf('    CoinbaseTransactionWebhook:'),
+    contract.indexOf('    TransactionEvent:')
+  );
+
+  assert.match(webhookSchema, /- onramp\.transaction\.completed/);
+  assert.match(webhookSchema, /- offramp\.transaction\.success/);
+  assert.match(webhookSchema, /- offramp\.transaction\.failed/);
+  // Coinbase owns this payload: unknown vendor fields must be tolerated.
+  assert.match(webhookSchema, /additionalProperties: true/);
 });
 
 test('OpenAPI 3.0 schemas use nullable instead of array-typed nulls', () => {

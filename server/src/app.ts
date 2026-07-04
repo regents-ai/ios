@@ -17,12 +17,16 @@ import {
   type PushTokenRecord,
 } from './pushDelivery.js';
 import {
-  claimOnrampWebhookEvent,
-  markOnrampWebhookEventProcessed,
-  ONRAMP_WEBHOOK_PROCESSING_LEASE_SECONDS,
-  parseCanonicalOnrampWebhook,
-  releaseOnrampWebhookEventClaim,
+  claimTransactionWebhookEvent,
+  markTransactionWebhookEventProcessed,
+  parseCanonicalTransactionWebhook,
+  releaseTransactionWebhookEventClaim,
+  TRANSACTION_WEBHOOK_PROCESSING_LEASE_SECONDS,
 } from './onrampWebhook.js';
+import {
+  ingestTransactionWebhook,
+  listTransactionEvents,
+} from './transactionEventFeed.js';
 import {
   buildPushTokenDebugResponse,
   canAccessPushTokenDebug,
@@ -843,14 +847,17 @@ app.get('/push-tokens/debug/:userId', async (req, res) => {
 });
 
 /**
- * Onramp Webhook Endpoint
+ * Coinbase Transaction Webhook Endpoint
  * POST /webhooks/onramp
  *
- * Receives transaction status updates from Coinbase
- * Events: onramp.transaction.created, onramp.transaction.updated, onramp.transaction.success, onramp.transaction.failed
+ * Receives onramp AND offramp transaction status updates from Coinbase (one
+ * subscription URL serves both). Events: onramp/offramp.transaction.created,
+ * .updated, .success, .failed — plus the widget-path alias
+ * onramp.transaction.completed, normalized to .success at the parse boundary.
  *
  * Security: Verifies webhook signature using CDP API key + Rate limiting (DoS protection)
- * Use case: Send push notifications when transactions complete
+ * Use case: Send push notifications when transactions complete and record a
+ * read-only per-user event feed (GET /events/onramp). Never credits funds.
  *
  * Note: This endpoint is PUBLIC (no auth middleware) because Coinbase servers call it
  */
@@ -875,16 +882,16 @@ app.post('/webhooks/onramp', webhookRateLimiter, async (req, res) => {
     return sendError(res, 500, 'WebhookVerificationUnavailable', 'Webhook verification is not configured.');
   }
 
-  const parsed = parseCanonicalOnrampWebhook(rawBody);
+  const parsed = parseCanonicalTransactionWebhook(rawBody);
   if (parsed.kind !== 'ok') {
-    return sendError(res, 400, 'BadRequest', 'Webhook body does not match the current onramp contract.');
+    return sendError(res, 400, 'BadRequest', 'Webhook body does not match the current transaction webhook contract.');
   }
 
   const webhook = parsed.webhook;
   console.log('🔔 [WEBHOOK] Received:', webhook.eventType);
   console.log('📦 [WEBHOOK] Summary:', summarizeWebhookLog(webhook));
 
-  const webhookClaim = await claimOnrampWebhookEvent(webhook, useDatabase ? database : null);
+  const webhookClaim = await claimTransactionWebhookEvent(webhook, useDatabase ? database : null);
   if (webhookClaim === 'processed') {
     return res.status(200).json({ received: true, duplicate: true });
   }
@@ -892,11 +899,41 @@ app.post('/webhooks/onramp', webhookRateLimiter, async (req, res) => {
     // Another attempt holds the processing lease but has not finished. Return a
     // retryable non-2xx so Coinbase redelivers instead of dropping the event —
     // a 200 here would lose the webhook if the leaseholder crashed mid-flight.
-    res.setHeader('Retry-After', String(ONRAMP_WEBHOOK_PROCESSING_LEASE_SECONDS));
+    res.setHeader('Retry-After', String(TRANSACTION_WEBHOOK_PROCESSING_LEASE_SECONDS));
     return sendError(res, 409, 'WebhookInProgress', 'This webhook event is already being processed. Please retry shortly.');
   }
 
   try {
+    // Record the event into the read-only per-user feed first. This also
+    // resolves the owning user for offramp events that arrive without a
+    // top-level partnerUserRef (backfilled from earlier events on the same
+    // transaction), so pushes below can be addressed.
+    const resolvedUserRef = await ingestTransactionWebhook(webhook, useDatabase ? database : null);
+
+    const sendUserPush = async (
+      partnerUserRef: string,
+      notification: { title: string; body: string; type: string },
+    ) => {
+      const userTokenData = await readPushTokenForUser(partnerUserRef);
+
+      if (!userTokenData) {
+        console.log('⚠️ [WEBHOOK] No push token found:', summarizeWebhookLog(webhook));
+        return;
+      }
+
+      await sendPushNotification(userTokenData, {
+        title: notification.title,
+        body: notification.body,
+        data: {
+          transactionId: webhook.transactionId,
+          type: notification.type,
+          partnerUserRef,
+        },
+      }, {
+        apnProvider,
+      });
+    };
+
     switch (webhook.eventType) {
       case 'onramp.transaction.created':
         console.log('📝 [WEBHOOK] Transaction created');
@@ -908,59 +945,98 @@ app.post('/webhooks/onramp', webhookRateLimiter, async (req, res) => {
 
       case 'onramp.transaction.success': {
         console.log('✅ [WEBHOOK] Transaction completed');
-        const partnerUserRef = webhook.partnerUserRef!;
-        const userTokenData = await readPushTokenForUser(partnerUserRef);
-
-        if (!userTokenData) {
-          console.log('⚠️ [WEBHOOK] No push token found:', summarizeWebhookLog(webhook));
-          break;
-        }
-
-        await sendPushNotification(userTokenData, {
+        // partnerUserRef, amount, currency, and network are guaranteed by the
+        // canonical parser for onramp success events.
+        await sendUserPush(webhook.partnerUserRef!, {
           title: 'Purchase complete',
           body: `Your ${webhook.purchaseAmount} ${webhook.purchaseCurrency} has been delivered to your ${webhook.destinationNetwork} wallet.`,
-          data: {
-            transactionId: webhook.transactionId,
-            type: 'onramp_complete',
-            partnerUserRef,
-          },
-        }, {
-          apnProvider,
+          type: 'onramp_complete',
         });
         break;
       }
 
       case 'onramp.transaction.failed': {
         console.log('❌ [WEBHOOK] Transaction failed');
-        const partnerUserRef = webhook.partnerUserRef!;
-        const userTokenData = await readPushTokenForUser(partnerUserRef);
+        await sendUserPush(webhook.partnerUserRef!, {
+          title: 'Purchase failed',
+          body: `Your purchase failed: ${webhook.failureReason}. Please try again.`,
+          type: 'onramp_failed',
+        });
+        break;
+      }
 
-        if (!userTokenData) {
-          console.log('⚠️ [WEBHOOK] No push token found:', summarizeWebhookLog(webhook));
+      case 'offramp.transaction.created':
+        console.log('📝 [WEBHOOK] Cash-out transaction created');
+        break;
+
+      case 'offramp.transaction.updated':
+        console.log('🔄 [WEBHOOK] Cash-out transaction updated');
+        break;
+
+      case 'offramp.transaction.success': {
+        console.log('✅ [WEBHOOK] Cash-out transaction completed');
+        if (!resolvedUserRef) {
+          console.log('⚠️ [WEBHOOK] Cash-out success without a resolvable user:', summarizeWebhookLog(webhook));
           break;
         }
 
-        await sendPushNotification(userTokenData, {
-          title: 'Purchase failed',
-          body: `Your purchase failed: ${webhook.failureReason}. Please try again.`,
-          data: {
-            transactionId: webhook.transactionId,
-            type: 'onramp_failed',
-            partnerUserRef,
-          },
-        }, {
-          apnProvider,
+        await sendUserPush(resolvedUserRef, {
+          title: 'Cash out complete',
+          body: webhook.sellAmount && webhook.sellCurrency
+            ? `Your ${webhook.sellAmount} ${webhook.sellCurrency} cash out is complete. The money is on its way to you.`
+            : 'Your cash out is complete. The money is on its way to you.',
+          type: 'offramp_complete',
+        });
+        break;
+      }
+
+      case 'offramp.transaction.failed': {
+        console.log('❌ [WEBHOOK] Cash-out transaction failed');
+        if (!resolvedUserRef) {
+          console.log('⚠️ [WEBHOOK] Cash-out failure without a resolvable user:', summarizeWebhookLog(webhook));
+          break;
+        }
+
+        await sendUserPush(resolvedUserRef, {
+          title: 'Cash out failed',
+          body: webhook.failureReason
+            ? `Your cash out failed: ${webhook.failureReason}. Please try again.`
+            : 'Your cash out failed. Please try again.',
+          type: 'offramp_failed',
         });
         break;
       }
     }
 
-    await markOnrampWebhookEventProcessed(webhook, useDatabase ? database : null);
+    await markTransactionWebhookEventProcessed(webhook, useDatabase ? database : null);
     return res.status(200).json({ received: true });
   } catch (error) {
-    await releaseOnrampWebhookEventClaim(webhook, useDatabase ? database : null).catch(() => undefined);
+    await releaseTransactionWebhookEventClaim(webhook, useDatabase ? database : null).catch(() => undefined);
     console.error('❌ [WEBHOOK] Error processing webhook:', summarizeErrorLog(error));
     return sendError(res, 502, 'WebhookProcessingFailed', 'Unable to process this webhook right now.');
+  }
+});
+
+/**
+ * Transaction Event Feed
+ * GET /events/onramp
+ *
+ * Read-only list of the signed-in user's recent onramp/offramp lifecycle
+ * events, recorded from verified Coinbase webhooks. Requires the standard app
+ * access token (global auth middleware); never exposes another user's events
+ * and never touches funds.
+ */
+app.get('/events/onramp', async (req, res) => {
+  try {
+    if (!req.userId) {
+      return sendError(res, 401, 'Unauthorized', 'Sign in to view your recent transaction updates.');
+    }
+
+    const events = await listTransactionEvents(req.userId, useDatabase ? database : null);
+    return res.json({ events });
+  } catch (error) {
+    console.error('❌ [EVENTS] Unable to list transaction events:', summarizeErrorLog(error));
+    return sendError(res, 500, 'TransactionEventsUnavailable', 'Unable to load your recent transaction updates right now.');
   }
 });
 

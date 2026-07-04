@@ -29,7 +29,7 @@ test('Coinbase Widget buy flow uses the app return link with the in-app auth bro
   assert.doesNotMatch(resume, /Linking\.openURL\(url\)/);
 });
 
-test('Coinbase Widget return is a first-class app route without the upstream debug event route', () => {
+test('Coinbase Widget return is a first-class app route without upstream debug surfaces', () => {
   assert.equal(existsSync(resolve(rootDir, 'app/onramp-return.tsx')), true);
 
   const layout = source('app/_layout.tsx');
@@ -39,8 +39,14 @@ test('Coinbase Widget return is a first-class app route without the upstream deb
 
   assert.match(layout, /name="onramp-return"/);
   assert.doesNotMatch(returnScreen, /JSON\.stringify|Deep link|Redirect received/);
-  assert.doesNotMatch(appServer, /\/events\/onramp/);
-  assert.doesNotMatch(contract, /\/events\/onramp/);
+
+  // The transaction event feed is the contract-declared, token-scoped route:
+  // it reads req.userId from the auth middleware, never a caller-chosen user,
+  // and must not be in the webhook/debug auth-skip list.
+  assert.match(appServer, /app\.get\('\/events\/onramp'/);
+  assert.match(appServer, /listTransactionEvents\(req\.userId/);
+  assert.doesNotMatch(appServer, /\/events\/onramp\/:/);
+  assert.match(contract, /\/events\/onramp:[\s\S]*security:[\s\S]*- bearerAuth: \[\]/);
 });
 
 test('Coinbase onramp create requests carry app-owned idempotency keys', () => {

@@ -75,6 +75,7 @@ test('served backend routes stay declared in the mobile API contract', () => {
     '/push-tokens',
     '/push-tokens/debug/{user_id}',
     '/webhooks/onramp',
+    '/events/onramp',
     '/mobile/regents',
     '/mobile/message/threads',
   ];
@@ -88,7 +89,7 @@ test('Coinbase proxy contract exposes the operation allowlist only', () => {
   const contract = readFileSync(resolve(testDir, '../api-contract.openapiv3.yaml'), 'utf8');
   const schema = contract.slice(
     contract.indexOf('CoinbaseProxyRequest:'),
-    contract.indexOf('CoinbaseOnrampWebhook:')
+    contract.indexOf('CoinbaseTransactionWebhook:')
   );
 
   assert.match(schema, /required: \[operation\]/);
@@ -137,6 +138,7 @@ test('serverless route forwarders load the built server app', () => {
     '../server/api/balances/evm.js',
     '../server/api/balances/solana.js',
     '../server/api/webhooks/onramp.js',
+    '../server/api/events/onramp.js',
   ];
 
   for (const file of files) {
