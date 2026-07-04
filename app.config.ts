@@ -10,7 +10,7 @@ const config: ExpoConfig = {
     scheme: 'regentsmobile',
     userInterfaceStyle: 'automatic',
     newArchEnabled: true,
-    icon: './assets/images/onrampV2Icon.png',
+    icon: './assets/images/icon-regents.png',
 
     ios: {
       bundleIdentifier: 'com.regentslabs.mobile',
@@ -29,8 +29,8 @@ const config: ExpoConfig = {
 
     android: {
       adaptiveIcon: {
-        foregroundImage: './assets/images/adaptive-icon.png',
-        backgroundColor: '#ffffff'
+        foregroundImage: './assets/images/adaptive-icon-regents.png',
+        backgroundColor: '#0a0a0a'
       },
       edgeToEdgeEnabled: true,
       package: "com.regentslabs.mobile"
@@ -52,7 +52,7 @@ const config: ExpoConfig = {
           './assets/fonts/GeistPixel-Square.woff2',
         ],
       }],
-      ['expo-splash-screen', { image: './assets/images/splash-icon.png', imageWidth: 200, resizeMode: 'contain', backgroundColor: '#ffffff' }],
+      ['expo-splash-screen', { image: './assets/images/splash-icon-regents.png', imageWidth: 200, resizeMode: 'contain', backgroundColor: '#0a0a0a' }],
       ['expo-build-properties', { ios: { deploymentTarget: '16.0' } }],
       ['expo-notifications', {
         icon: './assets/images/icon.png',
