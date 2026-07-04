@@ -26,6 +26,7 @@ import { createHermesVoiceApi, type MobileHermesVoicePath } from '@/utils/regent
 const mobileRegentsPath = '/mobile/regents';
 const mobileRegentStakingPath = '/mobile/regent/staking';
 const mobileMessageThreadsPath = '/mobile/message/threads';
+const mobileAgentLinkClaimPath = '/mobile/agent-links/claim';
 
 type MobileRegentPath =
   | typeof mobileRegentsPath
@@ -64,7 +65,8 @@ type RegentApiPath =
   | MobileRegentStakingPath
   | MobileWalletActionPath
   | MobileMessagePath
-  | MobileHermesVoicePath;
+  | MobileHermesVoicePath
+  | typeof mobileAgentLinkClaimPath;
 
 async function readErrorMessage(response: Response, defaultMessage: string) {
   const payload = await response.json().catch(() => null);
@@ -421,6 +423,22 @@ export const regentApi = {
       },
       'Unable to prepare claim and restake right now.'
     );
+  },
+
+  async claimAgentLink(input: { code: string }): Promise<{ id: string; name: string }> {
+    const payload = await requestJson<{ connectedAgent: { id: string; name: string } }>(
+      mobileAgentLinkClaimPath,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ code: input.code }),
+      },
+      'Unable to connect your agent right now.'
+    );
+
+    return payload.connectedAgent;
   },
 
   async prepareWalletAction(input: {

@@ -11,7 +11,7 @@ test('OpenAPI operations have stable operation IDs', () => {
   const operations = [...contract.matchAll(/^    (get|post|put|patch|delete):$/gm)];
   const operationIds = [...contract.matchAll(/^\s+operationId:\s+([A-Za-z0-9_]+)$/gm)].map((match) => match[1]);
 
-  assert.equal(operations.length, 43);
+  assert.equal(operations.length, 44);
   assert.equal(operationIds.length, operations.length);
   assert.equal(new Set(operationIds).size, operationIds.length);
 });
@@ -46,6 +46,13 @@ test('Regent app client covers declared return request lookup route', () => {
   assert.match(contract, /\/mobile\/regents\/\{id\}\/return-requests\/\{return_request_id\}:[\s\S]*operationId: getRegentReturnRequest/);
   assert.match(regentClient, /getReturnRequest\(input:/);
   assert.match(regentClient, /regentReturnRequestPath\(input\.regentId, input\.returnRequestId\)/);
+});
+
+test('agent-link claim route is declared in the contract and covered by the client', () => {
+  assert.match(contract, /\/mobile\/agent-links\/claim:[\s\S]*operationId: claimMobileAgentLink/);
+  assert.match(contract, /MobileAgentLinkClaimResponse:[\s\S]*connectedAgent:[\s\S]*required: \[id, name\]/);
+  assert.match(regentClient, /claimAgentLink\(input: \{ code: string \}\)/);
+  assert.match(regentClient, /mobileAgentLinkClaimPath/);
 });
 
 test('Hermes voice contract exposes only the live ChatGPT-gated mobile surface', () => {

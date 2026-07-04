@@ -37,7 +37,9 @@ import {
   resolveMessageThreadApproval,
 } from './mobileMessageThreads.js';
 import {
+  createPlatformAgentLinkClient,
   createPlatformStakingClient,
+  type PlatformAgentLinkClient,
   type PlatformProjection,
   type PlatformRwrClient,
   type RwrWorkItem,
@@ -1221,6 +1223,218 @@ test('mobile staking routes cover unstake and all claim actions', async () => {
     assert.equal(response.status, 200);
     assert.equal(response.body.wallet_action.action, expectedAction);
     assert.equal(response.body.wallet_action.owner_product, 'platform');
+  }
+});
+
+test('mobile agent-link claim forwards the code and bearer auth, relaying the connected agent as 201', async () => {
+  const forwarded: unknown[] = [];
+  const platformAgentLinkClient: PlatformAgentLinkClient = {
+    async claim(auth, code) {
+      forwarded.push({ auth, code });
+      return { kind: 'ok', data: { connectedAgent: { id: '42', name: 'Atlas' } } };
+    },
+  };
+
+  const response = await requestMobileRoute(
+    platformProjection,
+    {
+      method: 'POST',
+      url: '/mobile/agent-links/claim',
+      headers: {
+        Authorization: 'Bearer mobile-token',
+        Cookie: 'platform_session=secret',
+      },
+      body: { code: 'PAIR-CODE' },
+    },
+    { platformAgentLinkClient },
+  );
+
+  assert.equal(response.status, 201);
+  assert.deepEqual(response.body, { connectedAgent: { id: '42', name: 'Atlas' } });
+  assert.deepEqual(forwarded, [{ auth: { authorization: 'Bearer mobile-token' }, code: 'PAIR-CODE' }]);
+});
+
+test('mobile agent-link claim rejects a missing code before calling Platform', async () => {
+  let called = false;
+  const platformAgentLinkClient: PlatformAgentLinkClient = {
+    async claim() {
+      called = true;
+      return { kind: 'ok', data: { connectedAgent: { id: '1', name: 'x' } } };
+    },
+  };
+
+  const response = await requestMobileRoute(
+    platformProjection,
+    { method: 'POST', url: '/mobile/agent-links/claim', body: {} },
+    { platformAgentLinkClient },
+  );
+
+  assert.equal(response.status, 400);
+  assert.equal(called, false);
+  assert.equal(response.body.error.message, 'A pairing code is required to connect your agent.');
+});
+
+test('mobile agent-link claim maps Platform outcomes to mobile status codes', async () => {
+  const cases = [
+    { kind: 'not_found' as const, status: 404 },
+    { kind: 'unauthorized' as const, status: 401 },
+    { kind: 'missing_config' as const, requiredEnv: 'PLATFORM_API_BASE_URL' as const, status: 503 },
+    { kind: 'conflict' as const, message: 'This agent is already connected to a different account.', status: 409 },
+    { kind: 'upstream_error' as const, message: 'Platform records are unavailable.', status: 502 },
+  ];
+
+  for (const outcome of cases) {
+    const { status, ...clientResult } = outcome;
+    const platformAgentLinkClient: PlatformAgentLinkClient = {
+      async claim() {
+        return clientResult as Awaited<ReturnType<PlatformAgentLinkClient['claim']>>;
+      },
+    };
+
+    const response = await requestMobileRoute(
+      platformProjection,
+      { method: 'POST', url: '/mobile/agent-links/claim', body: { code: 'PAIR-CODE' } },
+      { platformAgentLinkClient },
+    );
+
+    assert.equal(response.status, status);
+    assert.equal(typeof response.body.error.message, 'string');
+  }
+});
+
+test('mobile agent-link claim relays the Platform conflict message verbatim as a 409', async () => {
+  const platformMessage = 'This code has expired. Generate a new one on your agent.';
+  const platformAgentLinkClient: PlatformAgentLinkClient = {
+    async claim() {
+      return { kind: 'conflict', message: platformMessage };
+    },
+  };
+
+  const response = await requestMobileRoute(
+    platformProjection,
+    { method: 'POST', url: '/mobile/agent-links/claim', body: { code: 'PAIR-CODE' } },
+    { platformAgentLinkClient },
+  );
+
+  assert.equal(response.status, 409);
+  assert.equal(response.body.error.code, 'AgentLinkConflict');
+  assert.equal(response.body.error.message, platformMessage);
+});
+
+test('Platform agent-link client relays the private agent as a slim connected agent', async () => {
+  const previousPlatformUrl = process.env.PLATFORM_API_BASE_URL;
+  process.env.PLATFORM_API_BASE_URL = 'https://platform.example';
+
+  try {
+    const fetchImpl: typeof fetch = async (input, init) => {
+      assert.equal(String(input), 'https://platform.example/api/platform/mobile/agent-links/claim');
+      assert.equal(init?.method, 'POST');
+      assert.equal(init?.body, JSON.stringify({ code: 'PAIR-CODE' }));
+      return new Response(
+        JSON.stringify({ ok: true, agent: { id: 42, name: 'Atlas', slug: 'atlas', status: 'ready' } }),
+        { status: 201, headers: { 'Content-Type': 'application/json' } },
+      );
+    };
+    const client = createPlatformAgentLinkClient(fetchImpl);
+
+    const result = await client.claim({ authorization: 'Bearer mobile-token' }, 'PAIR-CODE');
+
+    assert.equal(result.kind, 'ok');
+    if (result.kind === 'ok') {
+      assert.deepEqual(result.data, { connectedAgent: { id: '42', name: 'Atlas' } });
+    }
+  } finally {
+    if (previousPlatformUrl === undefined) {
+      delete process.env.PLATFORM_API_BASE_URL;
+    } else {
+      process.env.PLATFORM_API_BASE_URL = previousPlatformUrl;
+    }
+  }
+});
+
+test('Platform agent-link client reports an unrecognized code as not_found', async () => {
+  const previousPlatformUrl = process.env.PLATFORM_API_BASE_URL;
+  process.env.PLATFORM_API_BASE_URL = 'https://platform.example';
+
+  try {
+    const fetchImpl: typeof fetch = async () =>
+      new Response(JSON.stringify({ error: { message: 'not found' } }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    const client = createPlatformAgentLinkClient(fetchImpl);
+
+    const result = await client.claim({}, 'PAIR-CODE');
+    assert.equal(result.kind, 'not_found');
+  } finally {
+    if (previousPlatformUrl === undefined) {
+      delete process.env.PLATFORM_API_BASE_URL;
+    } else {
+      process.env.PLATFORM_API_BASE_URL = previousPlatformUrl;
+    }
+  }
+});
+
+test('Platform agent-link client relays 409 envelope messages verbatim as conflict', async () => {
+  const previousPlatformUrl = process.env.PLATFORM_API_BASE_URL;
+  process.env.PLATFORM_API_BASE_URL = 'https://platform.example';
+
+  try {
+    for (const platformMessage of [
+      'This code has expired. Generate a new one on your agent.',
+      'This agent is already connected to a different account.',
+    ]) {
+      const fetchImpl: typeof fetch = async () =>
+        new Response(
+          JSON.stringify({
+            error: {
+              code: 'conflict',
+              product: 'platform',
+              status: 409,
+              path: '/api/platform/mobile/agent-links/claim',
+              request_id: null,
+              message: platformMessage,
+            },
+          }),
+          { status: 409, headers: { 'Content-Type': 'application/json' } },
+        );
+      const client = createPlatformAgentLinkClient(fetchImpl);
+
+      const result = await client.claim({}, 'PAIR-CODE');
+      assert.equal(result.kind, 'conflict');
+      if (result.kind === 'conflict') {
+        assert.equal(result.message, platformMessage);
+      }
+    }
+  } finally {
+    if (previousPlatformUrl === undefined) {
+      delete process.env.PLATFORM_API_BASE_URL;
+    } else {
+      process.env.PLATFORM_API_BASE_URL = previousPlatformUrl;
+    }
+  }
+});
+
+test('Platform agent-link client treats a 409 without a readable envelope as a contract mismatch', async () => {
+  const previousPlatformUrl = process.env.PLATFORM_API_BASE_URL;
+  process.env.PLATFORM_API_BASE_URL = 'https://platform.example';
+
+  try {
+    const fetchImpl: typeof fetch = async () =>
+      new Response('conflict', { status: 409, headers: { 'Content-Type': 'text/plain' } });
+    const client = createPlatformAgentLinkClient(fetchImpl);
+
+    const result = await client.claim({}, 'PAIR-CODE');
+    assert.equal(result.kind, 'upstream_error');
+    if (result.kind === 'upstream_error') {
+      assert.equal(result.message, 'Platform response did not match the current contract.');
+    }
+  } finally {
+    if (previousPlatformUrl === undefined) {
+      delete process.env.PLATFORM_API_BASE_URL;
+    } else {
+      process.env.PLATFORM_API_BASE_URL = previousPlatformUrl;
+    }
   }
 });
 

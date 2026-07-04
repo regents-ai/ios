@@ -3,14 +3,9 @@
  *
  * Shows the Regents plugin install command, then a QR scanner (same
  * expo-camera pattern as app/settings/local-voice.tsx) for the code the
- * plugin will display on the computer.
- *
- * TODO(sean-decision): the phone <-> agent <-> platform linkage (the
- * `hermes regents qr` plugin command, the platform endpoint, and the QR
- * payload contract) is a new cross-repo flow that is not designed yet. Until
- * then a successful scan shows a friendly "almost ready" message and nothing
- * is sent anywhere. Do not invent a payload contract here — the owning YAML
- * contract comes first when that flow is approved.
+ * plugin displays on the computer. A scanned code is read with
+ * `parseAgentLinkQr`, then submitted to the backend, which connects the
+ * agent to this account. On success the person lands on their agents list.
  */
 
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -24,6 +19,8 @@ import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { RegentPressable } from '@/components/ui/RegentPressable';
 import { useCoinbaseAlert } from '@/hooks/useCoinbaseAlert';
 import { useTheme, type Theme } from '@/theme/ThemeProvider';
+import { outcomeForClaimError, outcomeForScan, type ConnectPhase } from '@/utils/agentLink/connectFlow';
+import { regentApi } from '@/utils/regentApi/client';
 
 /** Install command shown to the user. TODO(sean-decision): confirm final command. */
 const PLUGIN_INSTALL_COMMAND = 'hermes plugins install regents';
@@ -35,9 +32,12 @@ export default function ConnectHermesScreen() {
   const { colors } = theme;
   const { alertProps, showAlert } = useCoinbaseAlert();
   const [permission, requestPermission] = useCameraPermissions();
-  const [scanning, setScanning] = useState(false);
+  const [phase, setPhase] = useState<ConnectPhase>('idle');
+  const [connectedName, setConnectedName] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const handledRef = useRef(false);
+
+  const scanning = phase === 'scanning';
 
   const copyCommand = useCallback(async () => {
     await Clipboard.setStringAsync(PLUGIN_INSTALL_COMMAND);
@@ -58,27 +58,40 @@ export default function ConnectHermesScreen() {
       }
     }
     handledRef.current = false;
-    setScanning(true);
+    setPhase('scanning');
   }, [permission, requestPermission, showAlert]);
 
   const onScanned = useCallback(
-    ({ data }: { data: string }) => {
+    async ({ data }: { data: string }) => {
       if (handledRef.current || !data) {
         return;
       }
       handledRef.current = true;
-      setScanning(false);
-      // TODO(sean-decision): send the scanned pairing code to the platform to
-      // link phone + agent + web account. That backend flow is not built yet.
-      showAlert({
-        title: 'Code scanned',
-        message:
-          'Agent connections open soon. Once they are live, scanning this code will link your agent to this phone.',
-        type: 'info',
-      });
+
+      const outcome = outcomeForScan(data);
+      if (outcome.kind === 'reject') {
+        setPhase(outcome.phase);
+        showAlert({ title: outcome.alert.title, message: outcome.alert.message, type: 'error' });
+        return;
+      }
+
+      setPhase(outcome.phase);
+      try {
+        const agent = await regentApi.claimAgentLink({ code: outcome.code });
+        setConnectedName(agent.name);
+        setPhase('connected');
+      } catch (error) {
+        const failure = outcomeForClaimError(error);
+        setPhase(failure.phase);
+        showAlert({ title: failure.alert.title, message: failure.alert.message, type: 'error' });
+      }
     },
     [showAlert],
   );
+
+  const goToAgents = useCallback(() => {
+    router.replace('/agents');
+  }, [router]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -115,34 +128,59 @@ export default function ConnectHermesScreen() {
           </Text>
         </View>
 
-        <View style={styles.stepCard}>
-          <Text style={styles.stepLabel}>Step 2</Text>
-          <Text style={styles.stepTitle}>Scan the code</Text>
-          {scanning ? (
-            <>
-              <CameraView
-                style={styles.camera}
-                facing="back"
-                barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-                onBarcodeScanned={({ data }) => onScanned({ data })}
-              />
-              <RegentPressable style={styles.secondaryButton} onPress={() => setScanning(false)}>
-                <Text style={styles.secondaryButtonText}>Cancel</Text>
-              </RegentPressable>
-            </>
-          ) : (
-            <RegentPressable style={styles.primaryButton} onPress={() => void beginScan()}>
-              {permission === null ? (
-                <ActivityIndicator color={colors.onAccent} size="small" />
-              ) : (
-                <View style={styles.primaryButtonContent}>
-                  <Ionicons name="qr-code-outline" size={18} color={colors.onAccent} />
-                  <Text style={styles.primaryButtonText}>Connect Agent with QR</Text>
-                </View>
-              )}
+        {phase === 'connected' ? (
+          <View style={styles.stepCard}>
+            <View style={styles.connectedIcon}>
+              <Ionicons name="checkmark-circle" size={28} color={colors.success} />
+            </View>
+            <Text style={styles.stepTitle}>
+              {connectedName ? `${connectedName} is connected` : 'Your agent is connected'}
+            </Text>
+            <Text style={styles.stepHint}>
+              You can reach it any time from your agents list.
+            </Text>
+            <RegentPressable style={styles.primaryButton} onPress={goToAgents}>
+              <View style={styles.primaryButtonContent}>
+                <Text style={styles.primaryButtonText}>Go to my agents</Text>
+                <Ionicons name="arrow-forward" size={18} color={colors.onAccent} />
+              </View>
             </RegentPressable>
-          )}
-        </View>
+          </View>
+        ) : (
+          <View style={styles.stepCard}>
+            <Text style={styles.stepLabel}>Step 2</Text>
+            <Text style={styles.stepTitle}>Scan the code</Text>
+            {scanning ? (
+              <>
+                <CameraView
+                  style={styles.camera}
+                  facing="back"
+                  barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+                  onBarcodeScanned={({ data }) => void onScanned({ data })}
+                />
+                <RegentPressable style={styles.secondaryButton} onPress={() => setPhase('idle')}>
+                  <Text style={styles.secondaryButtonText}>Cancel</Text>
+                </RegentPressable>
+              </>
+            ) : phase === 'submitting' ? (
+              <View style={styles.submittingRow}>
+                <ActivityIndicator color={colors.accent} size="small" />
+                <Text style={styles.stepHint}>Connecting your agent…</Text>
+              </View>
+            ) : (
+              <RegentPressable style={styles.primaryButton} onPress={() => void beginScan()}>
+                {permission === null ? (
+                  <ActivityIndicator color={colors.onAccent} size="small" />
+                ) : (
+                  <View style={styles.primaryButtonContent}>
+                    <Ionicons name="qr-code-outline" size={18} color={colors.onAccent} />
+                    <Text style={styles.primaryButtonText}>Connect Agent with QR</Text>
+                  </View>
+                )}
+              </RegentPressable>
+            )}
+          </View>
+        )}
       </ScrollView>
 
       <CoinbaseAlert {...alertProps} />
@@ -227,6 +265,8 @@ function makeStyles({ colors, fonts, type, space, radius }: Theme) {
       justifyContent: 'center',
     },
     camera: { width: '100%', aspectRatio: 1, borderRadius: radius.md, overflow: 'hidden' },
+    connectedIcon: { alignItems: 'flex-start' },
+    submittingRow: { flexDirection: 'row', alignItems: 'center', gap: space.s2, paddingVertical: space.s2 },
     primaryButton: {
       backgroundColor: colors.accent,
       borderRadius: radius.md,

@@ -250,6 +250,21 @@ const regentStakingActionResponseSchema = z.object({
   wallet_action: platformWalletActionSchema,
 });
 
+const agentPhoneLinkClaimSchema = z.object({
+  ok: z.literal(true),
+  agent: z.object({
+    id: z.number().int(),
+    name: z.string(),
+  }).passthrough(),
+});
+
+/** Platform error envelope (StatusMessage): the message lives at `error.message`. */
+const platformStatusMessageSchema = z.object({
+  error: z.object({
+    message: z.string().min(1),
+  }).passthrough(),
+});
+
 const platformProjectionSchema = z.object({
   ok: z.boolean(),
   projection: z.object({
@@ -332,6 +347,28 @@ export type PlatformRwrClient = {
     approvalId: number,
     decision: 'approved' | 'denied'
   ): Promise<PlatformRwrClientResult<RwrApproval>>;
+};
+
+export type ConnectedAgent = {
+  id: string;
+  name: string;
+};
+
+/**
+ * Claim results carry one kind beyond the shared client results: `conflict`
+ * relays the Platform envelope's person-facing message verbatim (expired
+ * code, or agent already connected to a different account).
+ */
+export type PlatformAgentLinkClaimResult =
+  | { kind: 'ok'; data: { connectedAgent: ConnectedAgent } }
+  | { kind: 'missing_config'; requiredEnv: 'PLATFORM_API_BASE_URL' }
+  | { kind: 'unauthorized' }
+  | { kind: 'not_found' }
+  | { kind: 'conflict'; message: string }
+  | { kind: 'upstream_error'; message: string };
+
+export type PlatformAgentLinkClient = {
+  claim(auth: PlatformRequestAuth, code: string): Promise<PlatformAgentLinkClaimResult>;
 };
 
 export type PlatformStakingClient = {
@@ -575,6 +612,64 @@ export function createPlatformRwrClient(fetchImpl: typeof fetch = fetch): Platfo
         }
       );
       return result.kind === 'ok' ? { kind: 'ok', data: result.data.approval } : result;
+    },
+  };
+}
+
+export function createPlatformAgentLinkClient(fetchImpl: typeof fetch = fetch): PlatformAgentLinkClient {
+  return {
+    async claim(auth, code) {
+      const baseUrl = platformBaseUrl();
+      if (!baseUrl) {
+        return { kind: 'missing_config', requiredEnv: 'PLATFORM_API_BASE_URL' };
+      }
+
+      try {
+        const response = await fetchImpl(`${baseUrl.replace(/\/$/, '')}/api/platform/mobile/agent-links/claim`, {
+          method: 'POST',
+          headers: platformHeaders(auth, true),
+          body: JSON.stringify({ code }),
+        });
+
+        if (response.status === 401) {
+          return { kind: 'unauthorized' };
+        }
+        if (response.status === 404) {
+          return { kind: 'not_found' };
+        }
+
+        const payload = await response.json().catch(() => null);
+
+        // Platform answers 409 for the two person-meaningful refusals —
+        // an expired code, or an agent already connected to a different
+        // account — with copy already written for end users. Relay it.
+        if (response.status === 409) {
+          const parsedEnvelope = platformStatusMessageSchema.safeParse(payload);
+          if (!parsedEnvelope.success) {
+            return { kind: 'upstream_error', message: 'Platform response did not match the current contract.' };
+          }
+          return { kind: 'conflict', message: parsedEnvelope.data.error.message };
+        }
+
+        if (!response.ok) {
+          return { kind: 'upstream_error', message: 'Platform records are unavailable.' };
+        }
+
+        const parsed = agentPhoneLinkClaimSchema.safeParse(payload);
+        if (!parsed.success) {
+          return { kind: 'upstream_error', message: 'Platform response did not match the current contract.' };
+        }
+
+        return {
+          kind: 'ok',
+          data: { connectedAgent: { id: String(parsed.data.agent.id), name: parsed.data.agent.name } },
+        };
+      } catch (error) {
+        return {
+          kind: 'upstream_error',
+          message: error instanceof Error ? error.message : 'Platform records are unavailable.',
+        };
+      }
     },
   };
 }

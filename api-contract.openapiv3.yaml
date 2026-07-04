@@ -1136,6 +1136,57 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '429':
           $ref: '#/components/responses/RateLimitError'
+  /mobile/agent-links/claim:
+    post:
+      operationId: claimMobileAgentLink
+      summary: Connect an existing agent by submitting its pairing code
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MobileAgentLinkClaimRequest'
+      responses:
+        '201':
+          description: Agent connected to this account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MobileAgentLinkClaimResponse'
+        '400':
+          description: Pairing code is missing or invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: Pairing code was not recognized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '409':
+          description: Pairing code has expired, or the agent is already connected to a different account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '502':
+          description: Platform is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: Platform base URL is not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
   /mobile/wallet-actions/{type}/prepare:
     post:
       operationId: prepareMobileWalletAction
@@ -2087,6 +2138,29 @@ components:
           type: string
         receiver:
           type: string
+    MobileAgentLinkClaimRequest:
+      type: object
+      additionalProperties: false
+      required: [code]
+      properties:
+        code:
+          type: string
+          minLength: 1
+          description: The pairing code scanned from the agent's QR.
+    MobileAgentLinkClaimResponse:
+      type: object
+      additionalProperties: false
+      required: [connectedAgent]
+      properties:
+        connectedAgent:
+          type: object
+          additionalProperties: false
+          required: [id, name]
+          properties:
+            id:
+              type: string
+            name:
+              type: string
     RegentStakingState:
       type: object
       required:

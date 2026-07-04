@@ -28,9 +28,11 @@ import {
   resolveMessageThreadApproval,
 } from './mobileMessageThreads.js';
 import {
+  createPlatformAgentLinkClient,
   createPlatformProjectionClient,
   createPlatformRwrClient,
   createPlatformStakingClient,
+  type PlatformAgentLinkClient,
   type PlatformProjectionClient,
   type PlatformRequestAuth,
   type PlatformRwrClient,
@@ -147,10 +149,15 @@ const stakingStakeBodySchema = stakingAmountBodySchema.extend({
   receiver: z.string().min(1).optional(),
 });
 
+const agentLinkClaimBodySchema = z.object({
+  code: z.string().min(1),
+});
+
 export function createMobileRoutes(input?: {
   platformProjectionClient?: PlatformProjectionClient;
   platformRwrClient?: PlatformRwrClient;
   platformStakingClient?: PlatformStakingClient;
+  platformAgentLinkClient?: PlatformAgentLinkClient;
   hermesVoiceClient?: HermesVoiceClient;
   redis?: SharedStateRedis | null;
 }) {
@@ -159,6 +166,7 @@ export function createMobileRoutes(input?: {
   const platformProjectionClient = input?.platformProjectionClient || createPlatformProjectionClient();
   const platformRwrClient = input?.platformRwrClient || createPlatformRwrClient();
   const platformStakingClient = input?.platformStakingClient || createPlatformStakingClient();
+  const platformAgentLinkClient = input?.platformAgentLinkClient || createPlatformAgentLinkClient();
   const hermesVoiceClient = input?.hermesVoiceClient || createHermesVoiceClient();
 
   function platformAuth(req: Request): PlatformRequestAuth {
@@ -614,6 +622,49 @@ export function createMobileRoutes(input?: {
 
     const result = await platformStakingClient.claimAndRestakeRegent(platformAuth(req), parsed.data.walletAddress);
     return sendPlatformStakingResult(res, result, (data) => data);
+  });
+
+  router.post('/mobile/agent-links/claim', async (req, res) => {
+    const parsed = agentLinkClaimBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return sendError(res, 400, 'BadRequest', 'A pairing code is required to connect your agent.');
+    }
+
+    const result = await platformAgentLinkClient.claim(platformAuth(req), parsed.data.code);
+
+    if (result.kind === 'ok') {
+      return res.status(201).json(result.data);
+    }
+
+    if (result.kind === 'missing_config') {
+      return sendError(
+        res,
+        503,
+        'PlatformAgentLinkMissing',
+        `${result.requiredEnv} is required before agents can be connected.`,
+      );
+    }
+
+    if (result.kind === 'unauthorized') {
+      return sendError(res, 401, 'Unauthorized', 'Sign in again before connecting your agent.');
+    }
+
+    if (result.kind === 'not_found') {
+      return sendError(
+        res,
+        404,
+        'AgentLinkNotFound',
+        "That code wasn't recognized. Generate a fresh one on your agent and scan it again.",
+      );
+    }
+
+    // Expired code or agent already connected elsewhere: Platform's message
+    // is already written for the person — relay it verbatim.
+    if (result.kind === 'conflict') {
+      return sendError(res, 409, 'AgentLinkConflict', result.message);
+    }
+
+    return sendError(res, 502, 'PlatformAgentLinkUnavailable', result.message);
   });
 
   router.post('/mobile/wallet-actions/:type/prepare', async (req, res) => {
