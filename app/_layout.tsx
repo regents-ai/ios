@@ -17,9 +17,8 @@ import 'react-native-get-random-values';
 import 'react-native-url-polyfill/auto';
 import { StyleSheet, Text, View } from "react-native";
 
-// This fallback screen renders before the ThemeProvider wraps the tree, so it
-// cannot read useTheme(). It uses the dark token set directly (app default is
-// follow-OS, and this pre-config screen is always shown on the dark ground).
+// The missing-config screen uses the dark token set directly: it is always
+// shown on the dark ground regardless of the user's appearance preference.
 const c = THEME_COLORS.dark;
 const cardSlideRight = { presentation: 'card', animation: 'slide_from_right' } as const;
 const cardSlideBottom = { presentation: 'card', animation: 'slide_from_bottom' } as const;
@@ -70,6 +69,16 @@ function WalletProviders({
 }
 
 export default function RootLayout() {
+  // Theme is app-wide: pre-auth routes (login, onboarding) call useTheme()
+  // too, so the provider must sit above every branch below.
+  return (
+    <ThemeProvider>
+      <RootLayoutContent />
+    </ThemeProvider>
+  );
+}
+
+function RootLayoutContent() {
   useAppBootstrap();
   const segments = useSegments();
   const config = readMobilePublicConfig();
@@ -126,7 +135,6 @@ export default function RootLayout() {
   }
 
   return (
-    <ThemeProvider>
     <PrivyProvider appId={config.privyAppId} clientId={config.privyClientId}>
       <WalletProviders cdpProjectId={config.cdpProjectId}>
         <Stack screenOptions={{ headerShown: false }}>
@@ -153,7 +161,6 @@ export default function RootLayout() {
         </Stack>
       </WalletProviders>
     </PrivyProvider>
-    </ThemeProvider>
   );
 }
 

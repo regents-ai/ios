@@ -18,6 +18,7 @@ const config: ExpoConfig = {
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
         NSMicrophoneUsageDescription: 'Talk to Hermes with your voice.',
+        NSCameraUsageDescription: 'Scan the pairing QR code shown by your local Hermes to connect voice.',
         NSLocalNetworkUsageDescription: 'Regents uses this to return you to the app after ChatGPT sign-in.',
         NSAppTransportSecurity: {
           NSAllowsArbitraryLoads: false,
@@ -65,8 +66,11 @@ const config: ExpoConfig = {
       }],
       ['expo-image-picker', {
         photosPermission: 'Choose a QR code photo to fill in the send recipient.',
-        cameraPermission: false,
-        microphonePermission: false,
+        // Never pass `false` here: the image-picker plugin deletes the key from
+        // the built Info.plist, wiping the mic/camera strings set above and by
+        // expo-camera. Set the same strings so every plugin agrees.
+        cameraPermission: 'Scan the pairing QR code shown by your local Hermes to connect voice.',
+        microphonePermission: 'Talk to Hermes with your voice.',
       }],
       ['expo-camera', {
         cameraPermission: 'Scan the pairing QR code shown by your local Hermes to connect voice.',
