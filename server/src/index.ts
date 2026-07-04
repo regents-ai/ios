@@ -1,3 +1,4 @@
+import { clearTimeout, setTimeout } from 'node:timers';
 import { config } from 'dotenv';
 
 config();
