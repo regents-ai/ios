@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-import { createJsonFileStore } from './jsonFileStore.js';
+import { createSharedStateStore, type SharedStateRedis } from './sharedStateStore.js';
 import type { ConfirmedBaseReceipt } from './baseReceiptVerification.js';
 import type { PlatformCompanyProjection, PlatformProjection } from './platformProjection.js';
 
@@ -167,7 +167,7 @@ type MobileRegentStoreState = {
 
 const preparedWalletActionTtlMs = 10 * 60 * 1000;
 
-// Bounded retention so the JSON state file cannot grow forever. Only
+// Bounded retention so the shared state cannot grow forever. Only
 // clearly-finished records are ever pruned: return and funding intents in a
 // terminal state (confirmed/failed) idle past a long retention window, and
 // prepared wallet actions long past their own expiry. Intents that could
@@ -175,7 +175,7 @@ const preparedWalletActionTtlMs = 10 * 60 * 1000;
 const TERMINAL_INTENT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 const EXPIRED_WALLET_ACTION_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
-const mobileRegentStore = createJsonFileStore<MobileRegentStoreState>('mobile-regent-state.json', () => ({
+const mobileRegentStore = createSharedStateStore<MobileRegentStoreState>('mobile-regent-state', () => ({
   returnRequestIntents: {},
   fundingIntentIntents: {},
   preparedWalletActions: {},
@@ -210,8 +210,8 @@ function pruneMobileRegentStateInPlace(state: MobileRegentStoreState, now: numbe
   }
 }
 
-export function pruneMobileRegentState(now = new Date()) {
-  mobileRegentStore.update((state) => pruneMobileRegentStateInPlace(state, now.getTime()));
+export async function pruneMobileRegentState(now = new Date(), redis?: SharedStateRedis | null) {
+  await mobileRegentStore.update((state) => pruneMobileRegentStateInPlace(state, now.getTime()), redis);
 }
 
 function cloneJson<T>(value: T): T {
@@ -346,18 +346,19 @@ export function voiceForCompany(company: PlatformCompanyProjection): MobileRegen
   };
 }
 
-function returnRequestsForUser(userId: string, regentId: string) {
-  return Object.entries(mobileRegentStore.read().returnRequestIntents)
+async function returnRequestsForUser(userId: string, regentId: string, redis?: SharedStateRedis | null) {
+  return Object.entries((await mobileRegentStore.read(redis)).returnRequestIntents)
     .filter(([key, request]) => key.startsWith(`${userId}:${regentId}:return:`) && request.regentId === regentId)
     .map(([, request]) => request)
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
 
-function summaryFromCompany(
+async function summaryFromCompany(
   userId: string,
   projection: PlatformProjection,
   company: PlatformCompanyProjection,
-): RegentSummary {
+  redis?: SharedStateRedis | null,
+): Promise<RegentSummary> {
   const id = companyId(company);
   const runtimeStatus = runtimeStatusForCompany(company);
   const summary: RegentSummary = {
@@ -373,7 +374,7 @@ function summaryFromCompany(
 
   if (runtimeStatus !== 'online') {
     summary.treasuryNote = 'Review the latest company status before moving money.';
-  } else if (returnRequestsForUser(userId, id).some((request) => request.status !== 'confirmed')) {
+  } else if ((await returnRequestsForUser(userId, id, redis)).some((request) => request.status !== 'confirmed')) {
     summary.treasuryNote = 'A return transfer is waiting for review.';
   }
 
@@ -390,24 +391,26 @@ export function hasRegentInPlatformProjection(regentId: string, projection: Plat
   return !!findCompany(projection, regentId);
 }
 
-export function listRegentsForUserFromPlatformProjection(
+export async function listRegentsForUserFromPlatformProjection(
   userId: string,
   projection: PlatformProjection,
-): RegentSummary[] {
-  return projection.companies.map((company) => summaryFromCompany(userId, projection, company));
+  redis?: SharedStateRedis | null,
+): Promise<RegentSummary[]> {
+  return Promise.all(projection.companies.map((company) => summaryFromCompany(userId, projection, company, redis)));
 }
 
-export function getRegentForUserFromPlatformProjection(
+export async function getRegentForUserFromPlatformProjection(
   userId: string,
   regentId: string,
   projection: PlatformProjection,
-): RegentDetail | null {
+  redis?: SharedStateRedis | null,
+): Promise<RegentDetail | null> {
   const company = findCompany(projection, regentId);
   if (!company) {
     return null;
   }
 
-  const summary = summaryFromCompany(userId, projection, company);
+  const summary = await summaryFromCompany(userId, projection, company, redis);
   return {
     ...summary,
     runtimeHeadline: `${summary.name} is ${summary.runtimeStatus === 'online' ? 'ready for work' : 'waiting for review'}.`,
@@ -422,7 +425,7 @@ export function getRegentForUserFromPlatformProjection(
         at: summary.lastActiveAt,
       },
     ],
-    returnRequests: returnRequestsForUser(userId, summary.id),
+    returnRequests: await returnRequestsForUser(userId, summary.id, redis),
   };
 }
 
@@ -494,17 +497,18 @@ export function getRegentManagerForUserFromPlatformProjection(
   return cloneJson(manager);
 }
 
-export function getRegentBaseSnapshotForUserFromPlatformProjection(
+export async function getRegentBaseSnapshotForUserFromPlatformProjection(
   userId: string,
   regentId: string,
   projection: PlatformProjection,
-): MobileRegentBaseSnapshot | null {
+  redis?: SharedStateRedis | null,
+): Promise<MobileRegentBaseSnapshot | null> {
   const company = findCompany(projection, regentId);
   if (!company) {
     return null;
   }
 
-  const summary = summaryFromCompany(userId, projection, company);
+  const summary = await summaryFromCompany(userId, projection, company, redis);
   return cloneJson({
     chainId: 8453,
     blockNumber: null,
@@ -521,7 +525,7 @@ export function getRegentBaseSnapshotForUserFromPlatformProjection(
   });
 }
 
-export function createRegentReturnRequestForUser(
+export async function createRegentReturnRequestForUser(
   userId: string,
   regentId: string,
   input: {
@@ -535,9 +539,10 @@ export function createRegentReturnRequestForUser(
     data: string;
   },
   idempotencyKey: string,
-): RegentReturnRequest | null {
+  redis?: SharedStateRedis | null,
+): Promise<RegentReturnRequest | null> {
   const key = `${userId}:${regentId}:return:${idempotencyKey}`;
-  const existing = mobileRegentStore.read().returnRequestIntents[key];
+  const existing = (await mobileRegentStore.read(redis)).returnRequestIntents[key];
   if (existing) {
     return cloneJson(existing);
   }
@@ -559,17 +564,32 @@ export function createRegentReturnRequestForUser(
     updatedAt: createdAt,
   };
 
-  mobileRegentStore.update((state) => {
+  let stored: RegentReturnRequest = request;
+  await mobileRegentStore.update((state) => {
+    // A concurrent create with the same idempotency key may have landed
+    // between the read above and this atomic update; keep the first record.
+    const concurrent = state.returnRequestIntents[key];
+    if (concurrent) {
+      stored = concurrent;
+      return;
+    }
+
     pruneMobileRegentStateInPlace(state, Date.now());
     state.returnRequestIntents[key] = request;
-  });
+    stored = request;
+  }, redis);
 
-  return cloneJson(request);
+  return cloneJson(stored);
 }
 
-export function getRegentReturnRequestForUser(userId: string, regentId: string, returnRequestId: string) {
+export async function getRegentReturnRequestForUser(
+  userId: string,
+  regentId: string,
+  returnRequestId: string,
+  redis?: SharedStateRedis | null,
+) {
   return (
-    Object.entries(mobileRegentStore.read().returnRequestIntents).find(
+    Object.entries((await mobileRegentStore.read(redis)).returnRequestIntents).find(
       ([key, request]) =>
         key.startsWith(`${userId}:${regentId}:return:`) &&
         request.id === returnRequestId &&
@@ -578,43 +598,49 @@ export function getRegentReturnRequestForUser(userId: string, regentId: string, 
   );
 }
 
-export function confirmRegentReturnRequestForUser(
+export async function confirmRegentReturnRequestForUser(
   userId: string,
   regentId: string,
   returnRequestId: string,
   receipt: ConfirmedBaseReceipt,
-): { kind: 'ok'; returnRequest: RegentReturnRequest } | { kind: 'not_found' } | { kind: 'conflict' } {
-  const matchingEntry = Object.entries(mobileRegentStore.read().returnRequestIntents).find(
-    ([key, request]) => key.startsWith(`${userId}:${regentId}:return:`) && request.id === returnRequestId,
-  );
-  if (!matchingEntry) {
-    return { kind: 'not_found' };
-  }
-  if (receipt.chainId !== 8453 || receipt.status !== 'confirmed' || !/^0x[a-fA-F0-9]{64}$/.test(receipt.txHash)) {
-    return { kind: 'conflict' };
-  }
-
-  const [key, request] = matchingEntry;
-  if (!receiptMatchesExpected(receipt, request)) {
-    return { kind: 'conflict' };
-  }
-
-  let updatedRequest: RegentReturnRequest | null = null;
-  mobileRegentStore.update((state) => {
-    const request = state.returnRequestIntents[key];
-    if (request) {
-      request.status = 'confirmed';
-      request.txHash = receipt.txHash;
-      request.blockNumber = receipt.blockNumber;
-      request.updatedAt = nowIso();
-      updatedRequest = request;
+  redis?: SharedStateRedis | null,
+): Promise<{ kind: 'ok'; returnRequest: RegentReturnRequest } | { kind: 'not_found' } | { kind: 'conflict' }> {
+  // Find, verify, and update inside one atomic update so a concurrent write
+  // can never be lost and the receipt is always checked against the current
+  // stored intent.
+  let outcome: { kind: 'ok'; returnRequest: RegentReturnRequest } | { kind: 'not_found' } | { kind: 'conflict' } = {
+    kind: 'not_found',
+  };
+  await mobileRegentStore.update((state) => {
+    outcome = { kind: 'not_found' };
+    const matchingEntry = Object.entries(state.returnRequestIntents).find(
+      ([key, request]) => key.startsWith(`${userId}:${regentId}:return:`) && request.id === returnRequestId,
+    );
+    if (!matchingEntry) {
+      return;
     }
-  });
+    if (receipt.chainId !== 8453 || receipt.status !== 'confirmed' || !/^0x[a-fA-F0-9]{64}$/.test(receipt.txHash)) {
+      outcome = { kind: 'conflict' };
+      return;
+    }
 
-  return updatedRequest ? { kind: 'ok', returnRequest: cloneJson(updatedRequest) } : { kind: 'not_found' };
+    const [, request] = matchingEntry;
+    if (!receiptMatchesExpected(receipt, request)) {
+      outcome = { kind: 'conflict' };
+      return;
+    }
+
+    request.status = 'confirmed';
+    request.txHash = receipt.txHash;
+    request.blockNumber = receipt.blockNumber;
+    request.updatedAt = nowIso();
+    outcome = { kind: 'ok', returnRequest: cloneJson(request) };
+  }, redis);
+
+  return outcome;
 }
 
-export function createRegentFundingIntentForUser(
+export async function createRegentFundingIntentForUser(
   userId: string,
   regentId: string,
   input: {
@@ -630,9 +656,10 @@ export function createRegentFundingIntentForUser(
     data: string;
   },
   idempotencyKey: string,
-): RegentFundingIntent | null {
+  redis?: SharedStateRedis | null,
+): Promise<RegentFundingIntent | null> {
   const key = `${userId}:${regentId}:funding:${idempotencyKey}`;
-  const existing = mobileRegentStore.read().fundingIntentIntents[key];
+  const existing = (await mobileRegentStore.read(redis)).fundingIntentIntents[key];
   if (existing) {
     return cloneJson(existing);
   }
@@ -656,17 +683,32 @@ export function createRegentFundingIntentForUser(
     updatedAt: createdAt,
   };
 
-  mobileRegentStore.update((state) => {
+  let stored: RegentFundingIntent = intent;
+  await mobileRegentStore.update((state) => {
+    // A concurrent create with the same idempotency key may have landed
+    // between the read above and this atomic update; keep the first record.
+    const concurrent = state.fundingIntentIntents[key];
+    if (concurrent) {
+      stored = concurrent;
+      return;
+    }
+
     pruneMobileRegentStateInPlace(state, Date.now());
     state.fundingIntentIntents[key] = intent;
-  });
+    stored = intent;
+  }, redis);
 
-  return cloneJson(intent);
+  return cloneJson(stored);
 }
 
-export function getRegentFundingIntentForUser(userId: string, regentId: string, fundingIntentId: string) {
+export async function getRegentFundingIntentForUser(
+  userId: string,
+  regentId: string,
+  fundingIntentId: string,
+  redis?: SharedStateRedis | null,
+) {
   return (
-    Object.entries(mobileRegentStore.read().fundingIntentIntents).find(
+    Object.entries((await mobileRegentStore.read(redis)).fundingIntentIntents).find(
       ([key, intent]) =>
         key.startsWith(`${userId}:${regentId}:funding:`) &&
         intent.id === fundingIntentId &&
@@ -675,43 +717,49 @@ export function getRegentFundingIntentForUser(userId: string, regentId: string, 
   );
 }
 
-export function confirmRegentFundingIntentForUser(
+export async function confirmRegentFundingIntentForUser(
   userId: string,
   regentId: string,
   fundingIntentId: string,
   receipt: ConfirmedBaseReceipt,
-): { kind: 'ok'; fundingIntent: RegentFundingIntent } | { kind: 'not_found' } | { kind: 'conflict' } {
-  const matchingEntry = Object.entries(mobileRegentStore.read().fundingIntentIntents).find(
-    ([key, intent]) => key.startsWith(`${userId}:${regentId}:funding:`) && intent.id === fundingIntentId,
-  );
-  if (!matchingEntry) {
-    return { kind: 'not_found' };
-  }
-  if (receipt.chainId !== 8453 || receipt.status !== 'confirmed' || !/^0x[a-fA-F0-9]{64}$/.test(receipt.txHash)) {
-    return { kind: 'conflict' };
-  }
-
-  const [key, intent] = matchingEntry;
-  if (!receiptMatchesExpected(receipt, intent)) {
-    return { kind: 'conflict' };
-  }
-
-  let updatedIntent: RegentFundingIntent | null = null;
-  mobileRegentStore.update((state) => {
-    const intent = state.fundingIntentIntents[key];
-    if (intent) {
-      intent.status = 'confirmed';
-      intent.txHash = receipt.txHash;
-      intent.blockNumber = receipt.blockNumber;
-      intent.updatedAt = nowIso();
-      updatedIntent = intent;
+  redis?: SharedStateRedis | null,
+): Promise<{ kind: 'ok'; fundingIntent: RegentFundingIntent } | { kind: 'not_found' } | { kind: 'conflict' }> {
+  // Find, verify, and update inside one atomic update so a concurrent write
+  // can never be lost and the receipt is always checked against the current
+  // stored intent.
+  let outcome: { kind: 'ok'; fundingIntent: RegentFundingIntent } | { kind: 'not_found' } | { kind: 'conflict' } = {
+    kind: 'not_found',
+  };
+  await mobileRegentStore.update((state) => {
+    outcome = { kind: 'not_found' };
+    const matchingEntry = Object.entries(state.fundingIntentIntents).find(
+      ([key, intent]) => key.startsWith(`${userId}:${regentId}:funding:`) && intent.id === fundingIntentId,
+    );
+    if (!matchingEntry) {
+      return;
     }
-  });
+    if (receipt.chainId !== 8453 || receipt.status !== 'confirmed' || !/^0x[a-fA-F0-9]{64}$/.test(receipt.txHash)) {
+      outcome = { kind: 'conflict' };
+      return;
+    }
 
-  return updatedIntent ? { kind: 'ok', fundingIntent: cloneJson(updatedIntent) } : { kind: 'not_found' };
+    const [, intent] = matchingEntry;
+    if (!receiptMatchesExpected(receipt, intent)) {
+      outcome = { kind: 'conflict' };
+      return;
+    }
+
+    intent.status = 'confirmed';
+    intent.txHash = receipt.txHash;
+    intent.blockNumber = receipt.blockNumber;
+    intent.updatedAt = nowIso();
+    outcome = { kind: 'ok', fundingIntent: cloneJson(intent) };
+  }, redis);
+
+  return outcome;
 }
 
-export function prepareWalletActionForUser(
+export async function prepareWalletActionForUser(
   userId: string,
   type: WalletActionType,
   input: {
@@ -725,10 +773,11 @@ export function prepareWalletActionForUser(
     amount?: string | undefined;
     currency?: string | undefined;
   },
-): PreparedWalletAction | null {
+  redis?: SharedStateRedis | null,
+): Promise<PreparedWalletAction | null> {
   const createdAt = Date.now();
   const key = `${userId}:${input.regentId}:${type}:${input.idempotencyKey}`;
-  const existing = mobileRegentStore.read().preparedWalletActions[key];
+  const existing = (await mobileRegentStore.read(redis)).preparedWalletActions[key];
   if (existing) {
     return cloneJson(existing);
   }
@@ -752,34 +801,54 @@ export function prepareWalletActionForUser(
     status: 'prepared',
   };
 
-  mobileRegentStore.update((state) => {
+  let stored: PreparedWalletAction = action;
+  await mobileRegentStore.update((state) => {
+    // A concurrent prepare with the same idempotency key may have landed
+    // between the read above and this atomic update; keep the first record.
+    const concurrent = state.preparedWalletActions[key];
+    if (concurrent) {
+      stored = concurrent;
+      return;
+    }
+
     pruneMobileRegentStateInPlace(state, Date.now());
     state.preparedWalletActions[action.action_id] = action;
     state.preparedWalletActions[key] = action;
-  });
+    stored = action;
+  }, redis);
 
-  return cloneJson(action);
+  return cloneJson(stored);
 }
 
-export function confirmPreparedWalletActionForUser(
+export async function confirmPreparedWalletActionForUser(
   actionId: string,
   receipt: ConfirmedBaseReceipt,
   confirmedAt = new Date(),
-):
+  redis?: SharedStateRedis | null,
+): Promise<
   | { kind: 'ok'; action: PreparedWalletAction }
   | { kind: 'not_found' }
   | { kind: 'expired'; action: PreparedWalletAction }
-  | { kind: 'conflict' } {
-  const action = mobileRegentStore.read().preparedWalletActions[actionId];
-  if (!action) {
-    return { kind: 'not_found' };
-  }
-  if (
-    action.status !== 'confirmed' &&
-    (action.status === 'expired' || confirmedAt.getTime() >= Date.parse(action.expires_at))
-  ) {
-    let expiredAction: PreparedWalletAction | null = null;
-    mobileRegentStore.update((state) => {
+  | { kind: 'conflict' }
+> {
+  // The whole expiry/receipt decision runs inside one atomic update so a
+  // concurrent confirm and expiry can never overwrite each other.
+  let outcome:
+    | { kind: 'ok'; action: PreparedWalletAction }
+    | { kind: 'not_found' }
+    | { kind: 'expired'; action: PreparedWalletAction }
+    | { kind: 'conflict' } = { kind: 'not_found' };
+  await mobileRegentStore.update((state) => {
+    outcome = { kind: 'not_found' };
+    const action = state.preparedWalletActions[actionId];
+    if (!action) {
+      return;
+    }
+    if (
+      action.status !== 'confirmed' &&
+      (action.status === 'expired' || confirmedAt.getTime() >= Date.parse(action.expires_at))
+    ) {
+      let expiredAction: PreparedWalletAction | null = null;
       for (const stored of Object.values(state.preparedWalletActions)) {
         if (stored.action_id !== actionId) {
           continue;
@@ -787,24 +856,26 @@ export function confirmPreparedWalletActionForUser(
         stored.status = 'expired';
         expiredAction = stored;
       }
-    });
 
-    return expiredAction ? { kind: 'expired', action: cloneJson(expiredAction) } : { kind: 'not_found' };
-  }
+      outcome = expiredAction ? { kind: 'expired', action: cloneJson(expiredAction) } : { kind: 'not_found' };
+      return;
+    }
 
-  if (receipt.chainId !== 8453 || receipt.status !== 'confirmed' || !/^0x[a-fA-F0-9]{64}$/.test(receipt.txHash)) {
-    return { kind: 'conflict' };
-  }
-  if (!receiptMatchesWalletAction(receipt, action)) {
-    return { kind: 'conflict' };
-  }
+    if (receipt.chainId !== 8453 || receipt.status !== 'confirmed' || !/^0x[a-fA-F0-9]{64}$/.test(receipt.txHash)) {
+      outcome = { kind: 'conflict' };
+      return;
+    }
+    if (!receiptMatchesWalletAction(receipt, action)) {
+      outcome = { kind: 'conflict' };
+      return;
+    }
 
-  if (action.status === 'confirmed') {
-    return { kind: 'ok', action: cloneJson(action) };
-  }
+    if (action.status === 'confirmed') {
+      outcome = { kind: 'ok', action: cloneJson(action) };
+      return;
+    }
 
-  let updatedAction: PreparedWalletAction | null = null;
-  mobileRegentStore.update((state) => {
+    let updatedAction: PreparedWalletAction | null = null;
     for (const stored of Object.values(state.preparedWalletActions)) {
       if (stored.action_id !== actionId) {
         continue;
@@ -814,15 +885,17 @@ export function confirmPreparedWalletActionForUser(
       stored.block_number = receipt.blockNumber;
       updatedAction = stored;
     }
-  });
 
-  return updatedAction ? { kind: 'ok', action: cloneJson(updatedAction) } : { kind: 'not_found' };
+    outcome = updatedAction ? { kind: 'ok', action: cloneJson(updatedAction) } : { kind: 'not_found' };
+  }, redis);
+
+  return outcome;
 }
 
-export function resetMobileRegentStateForTests() {
-  mobileRegentStore.reset();
+export async function resetMobileRegentStateForTests(redis?: SharedStateRedis | null) {
+  await mobileRegentStore.reset(redis);
 }
 
-export function getMobileRegentStateFilePathForTests() {
-  return mobileRegentStore.filePath;
+export async function readMobileRegentStateForTests(redis?: SharedStateRedis | null) {
+  return mobileRegentStore.read(redis);
 }

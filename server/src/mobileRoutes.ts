@@ -39,6 +39,7 @@ import {
 } from './platformProjection.js';
 import { createMobileVoiceRoutes } from './routes/mobileVoice.js';
 import { createHermesVoiceClient, type HermesVoiceClient } from './services/hermesVoiceClient.js';
+import type { SharedStateRedis } from './sharedStateStore.js';
 
 const currentUserId = (userId?: string) => userId || '';
 
@@ -151,8 +152,10 @@ export function createMobileRoutes(input?: {
   platformRwrClient?: PlatformRwrClient;
   platformStakingClient?: PlatformStakingClient;
   hermesVoiceClient?: HermesVoiceClient;
+  redis?: SharedStateRedis | null;
 }) {
   const router = Router();
+  const redis = input?.redis || null;
   const platformProjectionClient = input?.platformProjectionClient || createPlatformProjectionClient();
   const platformRwrClient = input?.platformRwrClient || createPlatformRwrClient();
   const platformStakingClient = input?.platformStakingClient || createPlatformStakingClient();
@@ -209,7 +212,7 @@ export function createMobileRoutes(input?: {
     }
 
     res.json({
-      regents: listRegentsForUserFromPlatformProjection(currentUserId(req.userId), projection),
+      regents: await listRegentsForUserFromPlatformProjection(currentUserId(req.userId), projection, redis),
     });
   });
 
@@ -224,7 +227,7 @@ export function createMobileRoutes(input?: {
       return;
     }
 
-    const regent = getRegentForUserFromPlatformProjection(currentUserId(req.userId), parsed.data.id, projection);
+    const regent = await getRegentForUserFromPlatformProjection(currentUserId(req.userId), parsed.data.id, projection, redis);
     if (!regent) {
       return sendError(res, 404, 'NotFound', 'That Regent could not be found.');
     }
@@ -262,10 +265,11 @@ export function createMobileRoutes(input?: {
       return;
     }
 
-    const snapshot = getRegentBaseSnapshotForUserFromPlatformProjection(
+    const snapshot = await getRegentBaseSnapshotForUserFromPlatformProjection(
       currentUserId(req.userId),
       parsed.data.id,
       projection,
+      redis,
     );
     if (!snapshot) {
       return sendError(res, 404, 'NotFound', 'That Regent could not be found.');
@@ -309,11 +313,12 @@ export function createMobileRoutes(input?: {
       return sendError(res, 404, 'NotFound', 'That Regent could not be found.');
     }
 
-    const returnRequest = createRegentReturnRequestForUser(
+    const returnRequest = await createRegentReturnRequestForUser(
       currentUserId(req.userId),
       parsedParams.data.id,
       parsedBody.data,
       idempotencyKey,
+      redis,
     );
     if (!returnRequest) {
       return sendError(res, 404, 'NotFound', 'That Regent could not be found.');
@@ -322,16 +327,17 @@ export function createMobileRoutes(input?: {
     return res.status(201).json({ returnRequest });
   });
 
-  router.get('/mobile/regents/:id/return-requests/:return_request_id', (req, res) => {
+  router.get('/mobile/regents/:id/return-requests/:return_request_id', async (req, res) => {
     const parsed = returnRequestParamsSchema.safeParse(req.params);
     if (!parsed.success) {
       return sendError(res, 400, 'BadRequest', 'A valid Regent ID and return request ID are required.');
     }
 
-    const returnRequest = getRegentReturnRequestForUser(
+    const returnRequest = await getRegentReturnRequestForUser(
       currentUserId(req.userId),
       parsed.data.id,
       parsed.data.return_request_id,
+      redis,
     );
     if (!returnRequest) {
       return sendError(res, 404, 'NotFound', 'That return request could not be found.');
@@ -367,11 +373,12 @@ export function createMobileRoutes(input?: {
       return sendError(res, 409, 'ReceiptMismatch', 'The chain receipt does not match this return.');
     }
 
-    const result = confirmRegentReturnRequestForUser(
+    const result = await confirmRegentReturnRequestForUser(
       currentUserId(req.userId),
       parsedParams.data.id,
       parsedParams.data.return_request_id,
       verification.receipt,
+      redis,
     );
 
     if (result.kind === 'not_found') {
@@ -422,10 +429,11 @@ export function createMobileRoutes(input?: {
     if (!projection) {
       return;
     }
-    const regent = getRegentForUserFromPlatformProjection(
+    const regent = await getRegentForUserFromPlatformProjection(
       currentUserId(req.userId),
       parsedParams.data.id,
       projection,
+      redis,
     );
     if (!regent) {
       return sendError(res, 404, 'NotFound', 'That Regent could not be found.');
@@ -437,11 +445,12 @@ export function createMobileRoutes(input?: {
       return sendError(res, 400, 'BadRequest', 'Funding destination must match this Regent wallet.');
     }
 
-    const fundingIntent = createRegentFundingIntentForUser(
+    const fundingIntent = await createRegentFundingIntentForUser(
       currentUserId(req.userId),
       parsedParams.data.id,
       parsedBody.data,
       idempotencyKey,
+      redis,
     );
     if (!fundingIntent) {
       return sendError(res, 404, 'NotFound', 'That Regent could not be found.');
@@ -450,16 +459,17 @@ export function createMobileRoutes(input?: {
     return res.status(201).json({ fundingIntent });
   });
 
-  router.get('/mobile/regents/:id/funding-intents/:funding_intent_id', (req, res) => {
+  router.get('/mobile/regents/:id/funding-intents/:funding_intent_id', async (req, res) => {
     const parsed = fundingIntentParamsSchema.safeParse(req.params);
     if (!parsed.success) {
       return sendError(res, 400, 'BadRequest', 'A valid Regent ID and funding intent ID are required.');
     }
 
-    const fundingIntent = getRegentFundingIntentForUser(
+    const fundingIntent = await getRegentFundingIntentForUser(
       currentUserId(req.userId),
       parsed.data.id,
       parsed.data.funding_intent_id,
+      redis,
     );
     if (!fundingIntent) {
       return sendError(res, 404, 'NotFound', 'That funding intent could not be found.');
@@ -495,11 +505,12 @@ export function createMobileRoutes(input?: {
       return sendError(res, 409, 'ReceiptMismatch', 'The chain receipt does not match this funding.');
     }
 
-    const result = confirmRegentFundingIntentForUser(
+    const result = await confirmRegentFundingIntentForUser(
       currentUserId(req.userId),
       parsedParams.data.id,
       parsedParams.data.funding_intent_id,
       verification.receipt,
+      redis,
     );
 
     if (result.kind === 'not_found') {
@@ -646,10 +657,10 @@ export function createMobileRoutes(input?: {
       return sendError(res, 404, 'NotFound', 'That Regent could not be found.');
     }
 
-    const action = prepareWalletActionForUser(currentUserId(req.userId), parsedParams.data.type, {
+    const action = await prepareWalletActionForUser(currentUserId(req.userId), parsedParams.data.type, {
       ...parsedBody.data,
       idempotencyKey,
-    });
+    }, redis);
     if (!action) {
       return sendError(res, 404, 'NotFound', 'That Regent could not be found.');
     }
@@ -685,7 +696,12 @@ export function createMobileRoutes(input?: {
       return sendError(res, 409, 'ReceiptMismatch', 'The chain receipt does not match this action.');
     }
 
-    const result = confirmPreparedWalletActionForUser(parsedParams.data.action_id, verification.receipt);
+    const result = await confirmPreparedWalletActionForUser(
+      parsedParams.data.action_id,
+      verification.receipt,
+      new Date(),
+      redis,
+    );
     if (result.kind === 'not_found') {
       return sendError(res, 404, 'NotFound', 'That wallet action could not be found.');
     }
@@ -857,6 +873,7 @@ export function createMobileRoutes(input?: {
   router.use(createMobileVoiceRoutes({
     platformProjectionClient,
     hermesVoiceClient,
+    redis,
   }));
 
   return router;

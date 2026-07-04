@@ -58,7 +58,9 @@ import {
   createWebhookRateLimiter,
 } from './rateLimits.js';
 
-// Redis storage setup - use external Redis for production, in-memory for local dev
+// Redis storage setup - use external Redis for production, in-memory for local
+// dev. Redis holds all shared server state: push tokens, webhook dedupe, the
+// transaction event feed, wallet intents, and voice sessions.
 let database: any = null;
 const databaseUrl = process.env.REDIS_URL;
 const useDatabase = !!databaseUrl;
@@ -98,11 +100,11 @@ if (useDatabase) {
   });
   await connectRedisWithRetry(redisClient);
   database = redisClient;
-  console.log('✅ Using Redis for push token storage (production)');
+  console.log('✅ Using Redis for server state storage (production)');
 } else if (isReleaseRuntime()) {
-  throw new Error('REDIS_URL is required for release push-token storage.');
+  throw new Error('REDIS_URL is required for release server state storage.');
 } else {
-  console.log('ℹ️ Using in-memory storage for push tokens (local dev)');
+  console.log('ℹ️ Using in-memory server state storage (local dev)');
 }
 
 /** Close long-lived resources (Redis) during graceful shutdown. */
@@ -249,7 +251,7 @@ app.post('/auth/cdp-token', async (req, res) => {
   }
 });
 
-app.use(createMobileRoutes());
+app.use(createMobileRoutes({ redis: useDatabase ? database : null }));
 
 /**
  * Coinbase proxy for the mobile wallet operations declared in api-contract.openapiv3.yaml.

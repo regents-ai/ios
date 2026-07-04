@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 
-import { createJsonFileStore } from './jsonFileStore.js';
+import { createSharedStateStore, type SharedStateRedis } from './sharedStateStore.js';
 
 export type MobileVoiceSessionStatus = 'active' | 'disconnected' | 'expired';
 
@@ -27,11 +27,11 @@ type MobileVoiceSessionStoreState = {
   sessions: Record<string, MobileVoiceSessionRecord>;
 };
 
-const mobileVoiceSessionStore = createJsonFileStore<MobileVoiceSessionStoreState>('mobile-voice-sessions.json', () => ({
+const mobileVoiceSessionStore = createSharedStateStore<MobileVoiceSessionStoreState>('mobile-voice-sessions', () => ({
   sessions: {},
 }));
 
-// Bounded retention so the JSON state file cannot grow forever. Live sessions
+// Bounded retention so the shared state cannot grow forever. Live sessions
 // (active and not yet expired) are never pruned; everything else is dropped
 // once it has been idle past the retention window, and oldest-first past the
 // hard cap.
@@ -73,8 +73,8 @@ function pruneVoiceSessionsInPlace(state: MobileVoiceSessionStoreState, now: num
   }
 }
 
-export function pruneMobileVoiceSessions(now = new Date()) {
-  mobileVoiceSessionStore.update((state) => pruneVoiceSessionsInPlace(state, now.getTime()));
+export async function pruneMobileVoiceSessions(now = new Date(), redis?: SharedStateRedis | null) {
+  await mobileVoiceSessionStore.update((state) => pruneVoiceSessionsInPlace(state, now.getTime()), redis);
 }
 
 export function mobileVoiceSafetyIdentifier(input: {
@@ -87,7 +87,7 @@ export function mobileVoiceSafetyIdentifier(input: {
     .digest('hex');
 }
 
-export function createMobileVoiceSessionRecord(input: {
+export async function createMobileVoiceSessionRecord(input: {
   userId: string;
   agentId: string;
   hermesRuntimeId?: string | null;
@@ -98,7 +98,7 @@ export function createMobileVoiceSessionRecord(input: {
   toolRegistryDigest: string;
   safetyIdentifierHash: string;
   expiresAt: string;
-}) {
+}, redis?: SharedStateRedis | null) {
   const timestamp = nowIso();
   const record: MobileVoiceSessionRecord = {
     id: randomUUID(),
@@ -119,20 +119,20 @@ export function createMobileVoiceSessionRecord(input: {
     updated_at: timestamp,
   };
 
-  mobileVoiceSessionStore.update((state) => {
+  await mobileVoiceSessionStore.update((state) => {
     pruneVoiceSessionsInPlace(state, Date.now());
     state.sessions[record.id] = record;
-  });
+  }, redis);
 
   return record;
 }
 
-export function getMobileVoiceSessionForUser(input: {
+export async function getMobileVoiceSessionForUser(input: {
   userId: string;
   agentId: string;
   sessionId: string;
-}) {
-  const record = mobileVoiceSessionStore.read().sessions[input.sessionId];
+}, redis?: SharedStateRedis | null) {
+  const record = (await mobileVoiceSessionStore.read(redis)).sessions[input.sessionId];
 
   if (!record || record.user_id !== input.userId || record.agent_id !== input.agentId) {
     return null;
@@ -141,46 +141,45 @@ export function getMobileVoiceSessionForUser(input: {
   return record;
 }
 
-export function disconnectMobileVoiceSession(input: {
+export async function disconnectMobileVoiceSession(input: {
   userId: string;
   agentId: string;
   sessionId: string;
-}) {
-  const state = mobileVoiceSessionStore.read();
-  const record = state.sessions[input.sessionId];
+}, redis?: SharedStateRedis | null) {
+  // Check and write inside one atomic update so a concurrent update to the
+  // same session record can never be lost.
+  let updated: MobileVoiceSessionRecord | null = null;
+  await mobileVoiceSessionStore.update((state) => {
+    updated = null;
+    const record = state.sessions[input.sessionId];
 
-  if (!record || record.user_id !== input.userId || record.agent_id !== input.agentId) {
-    return null;
-  }
+    if (!record || record.user_id !== input.userId || record.agent_id !== input.agentId) {
+      return;
+    }
 
-  const timestamp = nowIso();
-  const updated: MobileVoiceSessionRecord = {
-    ...record,
-    status: 'disconnected',
-    ended_at: timestamp,
-    updated_at: timestamp,
-  };
+    const timestamp = nowIso();
+    record.status = 'disconnected';
+    record.ended_at = timestamp;
+    record.updated_at = timestamp;
+    updated = { ...record };
+  }, redis);
 
-  mobileVoiceSessionStore.update((nextState) => {
-    nextState.sessions[input.sessionId] = updated;
-  });
-
-  return updated;
+  return updated as MobileVoiceSessionRecord | null;
 }
 
-export function getActiveMobileVoiceSession(userId: string, agentId: string) {
+export async function getActiveMobileVoiceSession(userId: string, agentId: string, redis?: SharedStateRedis | null) {
   const now = Date.now();
 
-  return Object.values(mobileVoiceSessionStore.read().sessions)
+  return Object.values((await mobileVoiceSessionStore.read(redis)).sessions)
     .filter((session) => session.user_id === userId && session.agent_id === agentId)
     .filter((session) => session.status === 'active' && new Date(session.expires_at).getTime() > now)
     .sort((left, right) => right.created_at.localeCompare(left.created_at))[0] || null;
 }
 
-export function resetMobileVoiceSessionsForTests() {
-  return mobileVoiceSessionStore.reset();
+export async function resetMobileVoiceSessionsForTests(redis?: SharedStateRedis | null) {
+  return mobileVoiceSessionStore.reset(redis);
 }
 
-export function getMobileVoiceSessionStateFilePathForTests() {
-  return mobileVoiceSessionStore.filePath;
+export async function readMobileVoiceSessionStateForTests(redis?: SharedStateRedis | null) {
+  return mobileVoiceSessionStore.read(redis);
 }

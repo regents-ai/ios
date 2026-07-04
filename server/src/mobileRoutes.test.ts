@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
 import test, { beforeEach } from 'node:test';
 import type { Request, Response } from 'express';
 import { encodeFunctionData, parseUnits } from 'viem';
@@ -11,7 +10,7 @@ import {
   createRegentFundingIntentForUser,
   createRegentReturnRequestForUser,
   getRegentFundingIntentForUser,
-  getMobileRegentStateFilePathForTests,
+  readMobileRegentStateForTests,
   getRegentManagerForUserFromPlatformProjection,
   getRegentForUserFromPlatformProjection,
   listRegentsForUserFromPlatformProjection,
@@ -24,7 +23,8 @@ import { createMobileRoutes } from './mobileRoutes.js';
 import {
   createMobileVoiceSessionRecord,
   disconnectMobileVoiceSession,
-  getMobileVoiceSessionStateFilePathForTests,
+  getActiveMobileVoiceSession,
+  readMobileVoiceSessionStateForTests,
   pruneMobileVoiceSessions,
   resetMobileVoiceSessionsForTests,
 } from './mobileVoiceSessions.js';
@@ -45,10 +45,39 @@ import {
 } from './platformProjection.js';
 import type { HermesVoiceClient } from './services/hermesVoiceClient.js';
 
-beforeEach(() => {
-  resetMobileRegentStateForTests();
-  resetMobileVoiceSessionsForTests();
+beforeEach(async () => {
+  await resetMobileRegentStateForTests();
+  await resetMobileVoiceSessionsForTests();
 });
+
+/**
+ * In-memory stand-in for the release Redis client, mirroring the fake used by
+ * the webhook dedupe tests. `eval` implements the same compare-and-swap
+ * semantics as the Lua script in sharedStateStore.ts.
+ */
+function createFakeSharedStateRedis() {
+  const store = new Map<string, string>();
+  return {
+    store,
+    async get(key: string) {
+      return store.get(key) ?? null;
+    },
+    async set(key: string, value: string) {
+      store.set(key, value);
+      return 'OK';
+    },
+    async eval(_script: string, options: { keys: string[]; arguments: string[] }) {
+      const key = options.keys[0] ?? '';
+      const [expected, next, missingSentinel] = options.arguments;
+      const current = store.get(key);
+      if ((current === undefined && expected === missingSentinel) || current === expected) {
+        store.set(key, next ?? '');
+        return 1;
+      }
+      return 0;
+    },
+  };
+}
 
 function listRoutePaths() {
   const router = createMobileRoutes();
@@ -841,11 +870,11 @@ test('mobile Agent Brief is scoped to the signed-in projection: owner succeeds, 
   assert.equal(otherUserResponse.body.error.code, 'NotFound');
 });
 
-test('mobile Regent detail includes Platform-owned state', () => {
+test('mobile Regent detail includes Platform-owned state', async () => {
   const routePaths = listRoutePaths();
   assert.ok(routePaths.includes('/mobile/regents/:id'));
 
-  const body = getRegentForUserFromPlatformProjection('platform-user', 'atlas-capital', platformProjection);
+  const body = await getRegentForUserFromPlatformProjection('platform-user', 'atlas-capital', platformProjection);
   assert.ok(body);
   assert.equal(body.platformState.claimedName, 'Atlas Capital');
   assert.equal(body.platformState.formationStatus, 'ready');
@@ -1230,9 +1259,9 @@ test('Platform staking responses reject malformed transaction data before mobile
   }
 });
 
-test('mobile Regent state can be sourced from the Platform projection contract', () => {
-  const regents = listRegentsForUserFromPlatformProjection('platform-user', platformProjection);
-  const detail = getRegentForUserFromPlatformProjection('platform-user', 'atlas-capital', platformProjection);
+test('mobile Regent state can be sourced from the Platform projection contract', async () => {
+  const regents = await listRegentsForUserFromPlatformProjection('platform-user', platformProjection);
+  const detail = await getRegentForUserFromPlatformProjection('platform-user', 'atlas-capital', platformProjection);
 
   assert.equal(regents.length, 1);
   assert.ok(detail);
@@ -1702,18 +1731,21 @@ test('mobile message approval routes reject malformed approval IDs with 400', as
   assert.equal(response.body.error.code, 'BadRequest');
 });
 
-test('mobile Regent wallet intent state is written to durable backend storage', () => {
-  const created = createRegentReturnRequestForUser(
+test('mobile Regent wallet intent state is written to shared Redis storage', async () => {
+  const redis = createFakeSharedStateRedis();
+  const created = await createRegentReturnRequestForUser(
     'durable-user',
     'atlas-capital',
     expectedReturnInput({ amount: '12' }),
     'durable-return',
+    redis,
   );
 
   assert.ok(created);
-  const filePath = getMobileRegentStateFilePathForTests();
-  assert.equal(existsSync(filePath), true);
-  assert.match(readFileSync(filePath, 'utf8'), /atlas-capital/);
+  const persisted = redis.store.get('mobile-regent-state');
+  assert.ok(persisted);
+  assert.match(persisted, /atlas-capital/);
+  assert.deepEqual(await getRegentReturnRequestForUser('durable-user', 'atlas-capital', created.id, redis), created);
 });
 
 test('mobile message threads and messages are sourced from Platform RWR', async () => {
@@ -1846,8 +1878,8 @@ test('mobile message event polling returns only the approval decision after appr
   }
 });
 
-test('return requests require a confirmed Base receipt before completion', () => {
-  const created = createRegentReturnRequestForUser(
+test('return requests require a confirmed Base receipt before completion', async () => {
+  const created = await createRegentReturnRequestForUser(
     'receipt-user',
     'atlas-capital',
     expectedReturnInput(),
@@ -1855,7 +1887,7 @@ test('return requests require a confirmed Base receipt before completion', () =>
   );
   assert.ok(created);
 
-  const rejected = confirmRegentReturnRequestForUser('receipt-user', 'atlas-capital', created.id, {
+  const rejected = await confirmRegentReturnRequestForUser('receipt-user', 'atlas-capital', created.id, {
     txHash: '0xabc',
     chainId: 8453,
     blockNumber: 1,
@@ -1867,15 +1899,15 @@ test('return requests require a confirmed Base receipt before completion', () =>
   });
   assert.equal(rejected.kind, 'conflict');
 
-  const confirmed = confirmRegentReturnRequestForUser('receipt-user', 'atlas-capital', created.id, confirmedReceipt());
+  const confirmed = await confirmRegentReturnRequestForUser('receipt-user', 'atlas-capital', created.id, confirmedReceipt());
   assert.equal(confirmed.kind, 'ok');
   if (confirmed.kind === 'ok') {
     assert.equal(confirmed.returnRequest.status, 'confirmed');
   }
 });
 
-test('return request confirmation rejects receipts for the wrong transaction details', () => {
-  const created = createRegentReturnRequestForUser(
+test('return request confirmation rejects receipts for the wrong transaction details', async () => {
+  const created = await createRegentReturnRequestForUser(
     'return-mismatch-user',
     'atlas-capital',
     expectedReturnInput(),
@@ -1884,44 +1916,44 @@ test('return request confirmation rejects receipts for the wrong transaction det
   assert.ok(created);
 
   assert.equal(
-    confirmRegentReturnRequestForUser(
+    (await confirmRegentReturnRequestForUser(
       'return-mismatch-user',
       'atlas-capital',
       created.id,
       confirmedReceipt({ from: '0x3333333333333333333333333333333333333333' }),
-    ).kind,
+    )).kind,
     'conflict',
   );
   assert.equal(
-    confirmRegentReturnRequestForUser(
+    (await confirmRegentReturnRequestForUser(
       'return-mismatch-user',
       'atlas-capital',
       created.id,
       confirmedReceipt({ to: '0x3333333333333333333333333333333333333333' }),
-    ).kind,
+    )).kind,
     'conflict',
   );
   assert.equal(
-    confirmRegentReturnRequestForUser(
+    (await confirmRegentReturnRequestForUser(
       'return-mismatch-user',
       'atlas-capital',
       created.id,
       confirmedReceipt({ value: '1' }),
-    ).kind,
+    )).kind,
     'conflict',
   );
   assert.equal(
-    confirmRegentReturnRequestForUser(
+    (await confirmRegentReturnRequestForUser(
       'return-mismatch-user',
       'atlas-capital',
       created.id,
       confirmedReceipt({ data: '0x1234' }),
-    ).kind,
+    )).kind,
     'conflict',
   );
 });
 
-test('funding intents are idempotent and keep expected Base funding details', () => {
+test('funding intents are idempotent and keep expected Base funding details', async () => {
   const input = {
     amount: '25',
     currency: 'USDC',
@@ -1934,8 +1966,8 @@ test('funding intents are idempotent and keep expected Base funding details', ()
     value: '0',
     data: fundingTransferData(),
   };
-  const first = createRegentFundingIntentForUser('funding-user', 'atlas-capital', input, 'fund-once');
-  const second = createRegentFundingIntentForUser('funding-user', 'atlas-capital', input, 'fund-once');
+  const first = await createRegentFundingIntentForUser('funding-user', 'atlas-capital', input, 'fund-once');
+  const second = await createRegentFundingIntentForUser('funding-user', 'atlas-capital', input, 'fund-once');
 
   assert.ok(first);
   assert.deepEqual(second, first);
@@ -1947,8 +1979,8 @@ test('funding intents are idempotent and keep expected Base funding details', ()
   assert.equal(first.data, fundingTransferData());
 });
 
-test('funding intents can be fetched and confirmed from matching Base receipts', () => {
-  const created = createRegentFundingIntentForUser(
+test('funding intents can be fetched and confirmed from matching Base receipts', async () => {
+  const created = await createRegentFundingIntentForUser(
     'funding-confirm-user',
     'atlas-capital',
     {
@@ -1967,10 +1999,10 @@ test('funding intents can be fetched and confirmed from matching Base receipts',
   );
   assert.ok(created);
 
-  const fetched = getRegentFundingIntentForUser('funding-confirm-user', 'atlas-capital', created.id);
+  const fetched = await getRegentFundingIntentForUser('funding-confirm-user', 'atlas-capital', created.id);
   assert.deepEqual(fetched, created);
 
-  const rejected = confirmRegentFundingIntentForUser(
+  const rejected = await confirmRegentFundingIntentForUser(
     'funding-confirm-user',
     'atlas-capital',
     created.id,
@@ -1978,7 +2010,7 @@ test('funding intents can be fetched and confirmed from matching Base receipts',
   );
   assert.equal(rejected.kind, 'conflict');
 
-  const confirmed = confirmRegentFundingIntentForUser(
+  const confirmed = await confirmRegentFundingIntentForUser(
     'funding-confirm-user',
     'atlas-capital',
     created.id,
@@ -1991,8 +2023,8 @@ test('funding intents can be fetched and confirmed from matching Base receipts',
   }
 });
 
-test('prepared wallet actions expire and confirm from Base receipts only', () => {
-  const action = prepareWalletActionForUser('wallet-action-user', 'funding', expectedWalletActionInput());
+test('prepared wallet actions expire and confirm from Base receipts only', async () => {
+  const action = await prepareWalletActionForUser('wallet-action-user', 'funding', expectedWalletActionInput());
 
   assert.ok(action);
   assert.equal(action.action, 'funding');
@@ -2006,9 +2038,9 @@ test('prepared wallet actions expire and confirm from Base receipts only', () =>
   assert.ok(ttlMs <= 10 * 60 * 1000);
 });
 
-test('prepared wallet actions support funding and returns with the same required fields', () => {
+test('prepared wallet actions support funding and returns with the same required fields', async () => {
   for (const type of ['funding', 'return'] as const) {
-    const action = prepareWalletActionForUser(
+    const action = await prepareWalletActionForUser(
       `wallet-action-${type}-user`,
       type,
       expectedWalletActionInput({
@@ -2035,12 +2067,12 @@ test('prepared wallet actions support funding and returns with the same required
   }
 });
 
-test('prepared wallet actions reuse the same idempotency key for duplicate prepares', () => {
+test('prepared wallet actions reuse the same idempotency key for duplicate prepares', async () => {
   const input = expectedWalletActionInput({
     idempotencyKey: 'duplicate-wallet-action-key',
   });
-  const first = prepareWalletActionForUser('duplicate-wallet-action-user', 'funding', input);
-  const second = prepareWalletActionForUser('duplicate-wallet-action-user', 'funding', input);
+  const first = await prepareWalletActionForUser('duplicate-wallet-action-user', 'funding', input);
+  const second = await prepareWalletActionForUser('duplicate-wallet-action-user', 'funding', input);
 
   assert.ok(first);
   assert.ok(second);
@@ -2048,17 +2080,17 @@ test('prepared wallet actions reuse the same idempotency key for duplicate prepa
   assert.equal(second.expires_at, first.expires_at);
   assert.equal(second.risk_copy, first.risk_copy);
 
-  const confirmed = confirmPreparedWalletActionForUser(first.action_id, confirmedReceipt());
+  const confirmed = await confirmPreparedWalletActionForUser(first.action_id, confirmedReceipt());
   assert.equal(confirmed.kind, 'ok');
 
-  const afterConfirm = prepareWalletActionForUser('duplicate-wallet-action-user', 'funding', input);
+  const afterConfirm = await prepareWalletActionForUser('duplicate-wallet-action-user', 'funding', input);
   assert.ok(afterConfirm);
   assert.equal(afterConfirm.action_id, first.action_id);
   assert.equal(afterConfirm.status, 'confirmed');
 });
 
-test('prepared wallet actions reject receipts for the wrong transaction details', () => {
-  const action = prepareWalletActionForUser(
+test('prepared wallet actions reject receipts for the wrong transaction details', async () => {
+  const action = await prepareWalletActionForUser(
     'wallet-action-user',
     'funding',
     expectedWalletActionInput({ idempotencyKey: 'wallet-action-conflict-key' }),
@@ -2066,36 +2098,36 @@ test('prepared wallet actions reject receipts for the wrong transaction details'
   assert.ok(action);
 
   assert.equal(
-    confirmPreparedWalletActionForUser(
+    (await confirmPreparedWalletActionForUser(
       action.action_id,
       confirmedReceipt({ from: '0x3333333333333333333333333333333333333333' }),
-    ).kind,
+    )).kind,
     'conflict',
   );
   assert.equal(
-    confirmPreparedWalletActionForUser(
+    (await confirmPreparedWalletActionForUser(
       action.action_id,
       confirmedReceipt({ to: '0x3333333333333333333333333333333333333333' }),
-    ).kind,
+    )).kind,
     'conflict',
   );
-  assert.equal(confirmPreparedWalletActionForUser(action.action_id, confirmedReceipt({ value: '1' })).kind, 'conflict');
+  assert.equal((await confirmPreparedWalletActionForUser(action.action_id, confirmedReceipt({ value: '1' }))).kind, 'conflict');
   assert.equal(
-    confirmPreparedWalletActionForUser(action.action_id, confirmedReceipt({ data: '0x1234' })).kind,
+    (await confirmPreparedWalletActionForUser(action.action_id, confirmedReceipt({ data: '0x1234' }))).kind,
     'conflict',
   );
-  assert.equal(confirmPreparedWalletActionForUser(action.action_id, confirmedReceipt()).kind, 'ok');
+  assert.equal((await confirmPreparedWalletActionForUser(action.action_id, confirmedReceipt())).kind, 'ok');
 });
 
-test('prepared wallet actions cannot be confirmed after their expiry time', () => {
-  const action = prepareWalletActionForUser(
+test('prepared wallet actions cannot be confirmed after their expiry time', async () => {
+  const action = await prepareWalletActionForUser(
     'expired-wallet-action-user',
     'funding',
     expectedWalletActionInput({ idempotencyKey: 'expired-wallet-action-key' }),
   );
   assert.ok(action);
 
-  const result = confirmPreparedWalletActionForUser(
+  const result = await confirmPreparedWalletActionForUser(
     action.action_id,
     confirmedReceipt(),
     new Date(Date.parse(action.expires_at)),
@@ -2107,8 +2139,8 @@ test('prepared wallet actions cannot be confirmed after their expiry time', () =
   }
 });
 
-test('expired prepared wallet actions report expiry before receipt mismatches', () => {
-  const action = prepareWalletActionForUser(
+test('expired prepared wallet actions report expiry before receipt mismatches', async () => {
+  const action = await prepareWalletActionForUser(
     'expired-wallet-action-mismatch-user',
     'funding',
     expectedWalletActionInput({
@@ -2117,7 +2149,7 @@ test('expired prepared wallet actions report expiry before receipt mismatches', 
   );
   assert.ok(action);
 
-  const result = confirmPreparedWalletActionForUser(
+  const result = await confirmPreparedWalletActionForUser(
     action.action_id,
     confirmedReceipt({ from: '0x3333333333333333333333333333333333333333' }),
     new Date(Date.parse(action.expires_at)),
@@ -2141,8 +2173,8 @@ test('mobile Regent Manager data is returned as a fresh copy', () => {
   assert.notEqual(secondGoal.title, 'Changed by test');
 });
 
-test('finished wallet intents are pruned after retention while live intents are kept', () => {
-  const awaiting = createRegentReturnRequestForUser(
+test('finished wallet intents are pruned after retention while live intents are kept', async () => {
+  const awaiting = await createRegentReturnRequestForUser(
     'prune-user',
     'atlas-capital',
     expectedReturnInput(),
@@ -2150,7 +2182,7 @@ test('finished wallet intents are pruned after retention while live intents are 
   );
   assert.ok(awaiting);
 
-  const finished = createRegentReturnRequestForUser(
+  const finished = await createRegentReturnRequestForUser(
     'prune-user',
     'atlas-capital',
     expectedReturnInput(),
@@ -2158,11 +2190,11 @@ test('finished wallet intents are pruned after retention while live intents are 
   );
   assert.ok(finished);
   assert.equal(
-    confirmRegentReturnRequestForUser('prune-user', 'atlas-capital', finished.id, confirmedReceipt()).kind,
+    (await confirmRegentReturnRequestForUser('prune-user', 'atlas-capital', finished.id, confirmedReceipt())).kind,
     'ok',
   );
 
-  const funding = createRegentFundingIntentForUser(
+  const funding = await createRegentFundingIntentForUser(
     'prune-user',
     'atlas-capital',
     {
@@ -2181,25 +2213,25 @@ test('finished wallet intents are pruned after retention while live intents are 
   );
   assert.ok(funding);
 
-  const action = prepareWalletActionForUser(
+  const action = await prepareWalletActionForUser(
     'prune-user',
     'funding',
     expectedWalletActionInput({ idempotencyKey: 'prune-action' }),
   );
   assert.ok(action);
 
-  pruneMobileRegentState(new Date(Date.now() + 31 * 24 * 60 * 60 * 1000));
+  await pruneMobileRegentState(new Date(Date.now() + 31 * 24 * 60 * 60 * 1000));
 
   // Intents that can still be acted on are never dropped.
-  assert.ok(getRegentReturnRequestForUser('prune-user', 'atlas-capital', awaiting.id));
-  assert.ok(getRegentFundingIntentForUser('prune-user', 'atlas-capital', funding.id));
+  assert.ok(await getRegentReturnRequestForUser('prune-user', 'atlas-capital', awaiting.id));
+  assert.ok(await getRegentFundingIntentForUser('prune-user', 'atlas-capital', funding.id));
 
   // Terminal and long-expired records are pruned.
-  assert.equal(getRegentReturnRequestForUser('prune-user', 'atlas-capital', finished.id), null);
-  assert.equal(confirmPreparedWalletActionForUser(action.action_id, confirmedReceipt()).kind, 'not_found');
+  assert.equal(await getRegentReturnRequestForUser('prune-user', 'atlas-capital', finished.id), null);
+  assert.equal((await confirmPreparedWalletActionForUser(action.action_id, confirmedReceipt())).kind, 'not_found');
 });
 
-test('voice session records are pruned once finished and no longer live', () => {
+test('voice session records are pruned once finished and no longer live', async () => {
   const sessionInput = {
     userId: 'prune-voice-user',
     agentId: 'atlas-capital',
@@ -2209,32 +2241,30 @@ test('voice session records are pruned once finished and no longer live', () => 
     safetyIdentifierHash: 'hash',
   };
 
-  const live = createMobileVoiceSessionRecord({
+  const live = await createMobileVoiceSessionRecord({
     ...sessionInput,
     expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
   });
-  const finished = createMobileVoiceSessionRecord({
+  const finished = await createMobileVoiceSessionRecord({
     ...sessionInput,
     expiresAt: new Date(Date.now() + 60 * 1000).toISOString(),
   });
-  disconnectMobileVoiceSession({
+  await disconnectMobileVoiceSession({
     userId: sessionInput.userId,
     agentId: sessionInput.agentId,
     sessionId: finished.id,
   });
 
-  pruneMobileVoiceSessions(new Date(Date.now() + 25 * 60 * 60 * 1000));
+  await pruneMobileVoiceSessions(new Date(Date.now() + 25 * 60 * 60 * 1000));
 
-  const state = JSON.parse(readFileSync(getMobileVoiceSessionStateFilePathForTests(), 'utf8')) as {
-    sessions: Record<string, unknown>;
-  };
+  const state = await readMobileVoiceSessionStateForTests();
   assert.ok(state.sessions[live.id]);
   assert.equal(state.sessions[finished.id], undefined);
 });
 
-test('voice session records are capped so the state file stays bounded', () => {
+test('voice session records are capped so the shared state stays bounded', async () => {
   for (let index = 0; index < 505; index += 1) {
-    createMobileVoiceSessionRecord({
+    await createMobileVoiceSessionRecord({
       userId: 'cap-voice-user',
       agentId: 'atlas-capital',
       provider: 'openai-realtime',
@@ -2245,8 +2275,138 @@ test('voice session records are capped so the state file stays bounded', () => {
     });
   }
 
-  const state = JSON.parse(readFileSync(getMobileVoiceSessionStateFilePathForTests(), 'utf8')) as {
-    sessions: Record<string, unknown>;
-  };
+  const state = await readMobileVoiceSessionStateForTests();
   assert.ok(Object.keys(state.sessions).length <= 501);
+});
+
+test('funding intents keep full money-path semantics on the Redis-backed store', async () => {
+  const redis = createFakeSharedStateRedis();
+  const input = {
+    amount: '25',
+    currency: 'USDC',
+    sourceWalletAddress: expectedSigner,
+    destinationWalletAddress: expectedRecipient,
+    chainId: 8453,
+    tokenAddress: expectedFundingToken,
+    expectedSigner,
+    to: expectedFundingToken,
+    value: '0',
+    data: fundingTransferData(),
+  };
+
+  const first = await createRegentFundingIntentForUser('redis-funding-user', 'atlas-capital', input, 'redis-fund', redis);
+  const duplicate = await createRegentFundingIntentForUser(
+    'redis-funding-user',
+    'atlas-capital',
+    input,
+    'redis-fund',
+    redis,
+  );
+  assert.ok(first);
+  assert.deepEqual(duplicate, first);
+  assert.match(redis.store.get('mobile-regent-state') ?? '', /redis-fund/);
+
+  const fetched = await getRegentFundingIntentForUser('redis-funding-user', 'atlas-capital', first.id, redis);
+  assert.deepEqual(fetched, first);
+
+  const rejected = await confirmRegentFundingIntentForUser(
+    'redis-funding-user',
+    'atlas-capital',
+    first.id,
+    confirmedReceipt({ to: '0x4444444444444444444444444444444444444444', data: fundingTransferData() }),
+    redis,
+  );
+  assert.equal(rejected.kind, 'conflict');
+
+  const confirmed = await confirmRegentFundingIntentForUser(
+    'redis-funding-user',
+    'atlas-capital',
+    first.id,
+    confirmedReceipt({ to: expectedFundingToken, data: fundingTransferData() }),
+    redis,
+  );
+  assert.equal(confirmed.kind, 'ok');
+  if (confirmed.kind === 'ok') {
+    assert.equal(confirmed.fundingIntent.status, 'confirmed');
+    assert.equal(confirmed.fundingIntent.txHash, `0x${'1'.repeat(64)}`);
+  }
+});
+
+test('concurrent Redis-backed writes never lose an intent', async () => {
+  const redis = createFakeSharedStateRedis();
+
+  const [first, second] = await Promise.all([
+    createRegentReturnRequestForUser('race-user', 'atlas-capital', expectedReturnInput(), 'race-return-a', redis),
+    createRegentReturnRequestForUser('race-user', 'atlas-capital', expectedReturnInput(), 'race-return-b', redis),
+  ]);
+  assert.ok(first);
+  assert.ok(second);
+
+  // Both writers raced on the same shared state; compare-and-swap must keep both records.
+  assert.ok(await getRegentReturnRequestForUser('race-user', 'atlas-capital', first.id, redis));
+  assert.ok(await getRegentReturnRequestForUser('race-user', 'atlas-capital', second.id, redis));
+});
+
+test('prepared wallet actions expire on the Redis-backed store exactly as before', async () => {
+  const redis = createFakeSharedStateRedis();
+  const action = await prepareWalletActionForUser(
+    'redis-wallet-action-user',
+    'funding',
+    expectedWalletActionInput({ idempotencyKey: 'redis-wallet-action-key' }),
+    redis,
+  );
+  assert.ok(action);
+
+  const ttlMs = Date.parse(action.expires_at) - Date.now();
+  assert.ok(ttlMs > 9 * 60 * 1000);
+  assert.ok(ttlMs <= 10 * 60 * 1000);
+
+  const expired = await confirmPreparedWalletActionForUser(
+    action.action_id,
+    confirmedReceipt(),
+    new Date(Date.parse(action.expires_at)),
+    redis,
+  );
+  assert.equal(expired.kind, 'expired');
+
+  const stillExpired = await confirmPreparedWalletActionForUser(action.action_id, confirmedReceipt(), new Date(), redis);
+  assert.equal(stillExpired.kind, 'expired');
+});
+
+test('voice sessions live in the Redis-backed store and prune there', async () => {
+  const redis = createFakeSharedStateRedis();
+  const sessionInput = {
+    userId: 'redis-voice-user',
+    agentId: 'atlas-capital',
+    provider: 'openai-realtime' as const,
+    model: 'gpt-realtime',
+    toolRegistryDigest: 'digest',
+    safetyIdentifierHash: 'hash',
+  };
+
+  const live = await createMobileVoiceSessionRecord({
+    ...sessionInput,
+    expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
+  }, redis);
+  const finished = await createMobileVoiceSessionRecord({
+    ...sessionInput,
+    expiresAt: new Date(Date.now() + 60 * 1000).toISOString(),
+  }, redis);
+
+  const disconnected = await disconnectMobileVoiceSession({
+    userId: sessionInput.userId,
+    agentId: sessionInput.agentId,
+    sessionId: finished.id,
+  }, redis);
+  assert.equal(disconnected?.status, 'disconnected');
+
+  // Only the still-live session remains active once the other disconnects.
+  assert.equal((await getActiveMobileVoiceSession('redis-voice-user', 'atlas-capital', redis))?.id, live.id);
+
+  await pruneMobileVoiceSessions(new Date(Date.now() + 25 * 60 * 60 * 1000), redis);
+
+  const state = await readMobileVoiceSessionStateForTests(redis);
+  assert.ok(state.sessions[live.id]);
+  assert.equal(state.sessions[finished.id], undefined);
+  assert.match(redis.store.get('mobile-voice-sessions') ?? '', new RegExp(live.id));
 });

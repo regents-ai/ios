@@ -1,20 +1,19 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { isReleaseRuntime } from './runtime.js';
-
 type StateFactory<T> = () => T;
 
 function cloneJson<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
+/**
+ * Local-development-only JSON file storage. Release runtimes always have
+ * Redis (app.ts refuses to boot a release without REDIS_URL), so every
+ * consumer of this store only reaches it when no Redis client is configured.
+ */
 export function createJsonFileStore<T extends object>(fileName: string, createInitialState: StateFactory<T>) {
   const configuredDirectory = process.env.REGENTS_MOBILE_STATE_DIR?.trim();
-  if (isReleaseRuntime() && !configuredDirectory) {
-    throw new Error('REGENTS_MOBILE_STATE_DIR is required for release wallet intent storage.');
-  }
-
   const directory = configuredDirectory || join(process.cwd(), '.regents-mobile-state');
   const filePath = join(directory, fileName);
 

@@ -9,6 +9,7 @@ import {
   getMobileVoiceSessionForUser,
 } from '../mobileVoiceSessions.js';
 import type { PlatformProjection, PlatformProjectionClient, PlatformRequestAuth } from '../platformProjection.js';
+import type { SharedStateRedis } from '../sharedStateStore.js';
 import { buildRealtimeSafetyIdentifier } from '../services/realtimeClientSecret.js';
 import {
   createHermesVoiceClient,
@@ -110,10 +111,14 @@ function sendHermesResult<T>(
   return sendError(res, 502, 'HermesVoiceUnavailable', result.message);
 }
 
-function statusFromProjection(company: PlatformProjection['companies'][number], userId: string) {
+async function statusFromProjection(
+  company: PlatformProjection['companies'][number],
+  userId: string,
+  redis?: SharedStateRedis | null,
+) {
   const voice = company.runtime.voice;
   const agentId = agentKey(company);
-  const active = getActiveMobileVoiceSession(userId, agentId);
+  const active = await getActiveMobileVoiceSession(userId, agentId, redis);
 
   return {
     enabled: voice.enabled && voice.account.satisfied && voice.health !== 'unavailable',
@@ -146,9 +151,11 @@ function requireVoiceReady(res: Response, company: PlatformProjection['companies
 export function createMobileVoiceRoutes(input: {
   platformProjectionClient: PlatformProjectionClient;
   hermesVoiceClient?: HermesVoiceClient | undefined;
+  redis?: SharedStateRedis | null;
 }) {
   const router = Router();
   const hermesVoiceClient = input.hermesVoiceClient || createHermesVoiceClient();
+  const redis = input.redis || null;
 
   router.get('/mobile/agents/:agent_id/voice/status', async (req, res) => {
     const parsed = voiceParamsSchema.safeParse(req.params);
@@ -167,7 +174,7 @@ export function createMobileVoiceRoutes(input: {
     }
 
     if (!company.runtime.voice.account.satisfied || !company.runtime.voice.enabled) {
-      return res.json(statusFromProjection(company, currentUserId(req)));
+      return res.json(await statusFromProjection(company, currentUserId(req), redis));
     }
 
     const result = await hermesVoiceClient.status({
@@ -218,7 +225,7 @@ export function createMobileVoiceRoutes(input: {
       return sendHermesResult(res, result, (data) => data);
     }
 
-    const record = createMobileVoiceSessionRecord({
+    const record = await createMobileVoiceSessionRecord({
       userId: currentUserId(req),
       agentId: parsedParams.data.agent_id,
       hermesRuntimeId: String(company.company.id),
@@ -229,7 +236,7 @@ export function createMobileVoiceRoutes(input: {
       toolRegistryDigest: company.runtime.voice.tool_registry_digest,
       safetyIdentifierHash: safetyIdentifier,
       expiresAt: result.data.expires_at,
-    });
+    }, redis);
 
     const { realtime_session_id: _realtimeSessionId, ...mobileRealtime } = result.data.realtime;
 
@@ -290,11 +297,11 @@ export function createMobileVoiceRoutes(input: {
       return sendError(res, 403, 'Forbidden', 'You do not have access to this agent.');
     }
 
-    const localSession = getMobileVoiceSessionForUser({
+    const localSession = await getMobileVoiceSessionForUser({
       userId: currentUserId(req),
       agentId: parsedParams.data.agent_id,
       sessionId: parsedBody.data.session_id,
-    });
+    }, redis);
     if (!localSession?.hermes_session_id) {
       return sendError(res, 404, 'VoiceSessionNotFound', 'This voice session is no longer active.');
     }
@@ -310,11 +317,11 @@ export function createMobileVoiceRoutes(input: {
     });
 
     if (result.kind === 'ok') {
-      disconnectMobileVoiceSession({
+      await disconnectMobileVoiceSession({
         userId: currentUserId(req),
         agentId: parsedParams.data.agent_id,
         sessionId: parsedBody.data.session_id,
-      });
+      }, redis);
     }
 
     return sendHermesResult(res, result, (data) => data);
@@ -341,11 +348,11 @@ export function createMobileVoiceRoutes(input: {
       return;
     }
 
-    const localSession = getMobileVoiceSessionForUser({
+    const localSession = await getMobileVoiceSessionForUser({
       userId: currentUserId(req),
       agentId: parsedParams.data.agent_id,
       sessionId: parsedBody.data.session_id,
-    });
+    }, redis);
     if (!localSession?.hermes_session_id) {
       return sendError(res, 404, 'VoiceSessionNotFound', 'This voice session is no longer active.');
     }

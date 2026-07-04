@@ -26,7 +26,7 @@ RUN chmod 0755 /usr/local/bin/docker-entrypoint.sh
 
 EXPOSE 8080
 
-# The entrypoint starts as root only to chown the Fly /data volume to the
-# node user, then drops privileges before exec'ing the server (setpriv).
+# The entrypoint drops privileges (setpriv) before exec'ing the server so the
+# Node process never runs as root.
 ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["node", "dist/index.js"]

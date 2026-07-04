@@ -1,13 +1,9 @@
 #!/bin/sh
 set -eu
 
-# Fly mounts the /data volume owned by root. Hand it to the unprivileged
-# node user once, then drop root before starting the server — the Node
-# process itself never runs as root.
+# Drop root before starting the server — the Node process itself never
+# runs as root. All server state lives in Redis; no local volume is used.
 if [ "$(id -u)" = "0" ]; then
-  if [ -d /data ]; then
-    chown -R node:node /data
-  fi
   exec setpriv --reuid=node --regid=node --init-groups "$@"
 fi
 

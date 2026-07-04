@@ -9,13 +9,10 @@ kill_timeout = "5s"
 [env]
   NODE_ENV = "production"
   PORT = "8080"
-  REGENTS_MOBILE_STATE_DIR = "/data"
 
-# SINGLE-MACHINE ASSUMPTION: wallet-intent and voice-session state is
-# per-machine JSON on the /data volume (REGENTS_MOBILE_STATE_DIR). Keep exactly
-# one machine (min_machines_running = 1, auto_stop off, never `fly scale count`
-# above 1) until that state moves to Redis — a second machine would have its
-# own empty volume and 404 intents created on the first.
+# All server state (wallet intents, voice sessions, push tokens, webhook
+# dedupe, transaction event feed) lives in Redis (REDIS_URL), so machines are
+# stateless and the app can scale beyond one machine.
 [http_service]
   internal_port = 8080
   force_https = true
@@ -32,10 +29,6 @@ kill_timeout = "5s"
     timeout = "5s"
     method = "GET"
     path = "/health/ready"
-
-[[mounts]]
-  source = "regents_mobile_data"
-  destination = "/data"
 
 [[vm]]
   cpu_kind = "shared"
