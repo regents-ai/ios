@@ -67,6 +67,10 @@ const config: ExpoConfig = {
         cameraPermission: 'Scan the pairing QR code shown by your local Hermes to connect voice.',
         recordAudioAndroid: false,
       }],
+      ['expo-alternate-app-icons', [
+        { name: 'Light', ios: './assets/images/icon-regents-light.png' },
+        { name: 'Blue', ios: './assets/images/icon-regents-blue.png' },
+      ]],
       withGooglePayWebView,
     ],
 

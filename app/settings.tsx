@@ -1,6 +1,7 @@
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { AccountManagementSection, PhoneReverifyModal } from '@/components/settings/AccountSection';
 import { AppearanceToggle } from '@/components/settings/AppearanceToggle';
+import { AppIconSection } from '@/components/settings/AppIconSection';
 import { ConnectSection } from '@/components/settings/ConnectSection';
 import { SettingsHero, SettingsMenu, type SettingsSectionKey } from '@/components/settings/SettingsShell';
 import { HelpSupportSection, SignOutSection, WalletSettingsSection } from '@/components/settings/SettingsSections';
@@ -206,6 +207,7 @@ export default function SettingsScreen() {
       <ScrollView style={styles.container} contentContainerStyle={styles.content} contentInsetAdjustmentBehavior="automatic">
         <SettingsHero />
         <AppearanceToggle />
+        <AppIconSection isExpoGo={isExpoGo} />
         <SettingsMenu activeSection={activeSection} displayEmail={displayEmail} onSectionChange={setActiveSection} />
 
         {activeSection === 'account' ? (
