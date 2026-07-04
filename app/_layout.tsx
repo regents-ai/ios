@@ -4,7 +4,7 @@ import { PrivyProvider } from "@privy-io/expo";
 
 import { AuthGate } from "@/components/AuthGate";
 import { AuthInitializer } from "@/components/AuthInitializer";
-import { MessagePushNotificationRouter } from "@/components/MessagePushNotificationRouter";
+import { PushNotificationRouter } from "@/components/PushNotificationRouter";
 import { PendingRouteDrainer } from "@/components/PendingRouteDrainer";
 import { useAppBootstrap } from "@/hooks/useAppBootstrap";
 import { useRegentsAuth } from "@/hooks/useRegentsAuth";
@@ -59,7 +59,7 @@ function WalletProviders({
   return (
     <CDPHooksProvider config={cdpConfig}>
       <AuthInitializer>
-        <MessagePushNotificationRouter />
+        <PushNotificationRouter />
         <PendingRouteDrainer />
         <AuthGate>
           {children}

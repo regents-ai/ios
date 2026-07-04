@@ -3,7 +3,8 @@ import { useEffect } from 'react';
 import { Platform } from 'react-native';
 
 import { setPendingRoute } from '@/utils/pendingRoute';
-import { messageThreadRouteFromNotificationData } from '@/utils/pushNotificationRouting';
+import { routeIntentFromNotificationData } from '@/utils/pushNotificationRouting';
+import { requestWalletRefresh } from '@/utils/walletRefresh';
 
 async function getNotificationsModule() {
   if (Platform.OS === 'web') {
@@ -20,10 +21,13 @@ function responseKey(response: NotificationResponse) {
   }
 
   const data = response.notification.request.content.data;
-  return typeof data?.threadId === 'string' ? data.threadId : null;
+  if (typeof data?.threadId === 'string') {
+    return data.threadId;
+  }
+  return typeof data?.transactionId === 'string' ? data.transactionId : null;
 }
 
-export function MessagePushNotificationRouter() {
+export function PushNotificationRouter() {
   useEffect(() => {
     if (Platform.OS === 'web') {
       return;
@@ -37,15 +41,18 @@ export function MessagePushNotificationRouter() {
         return;
       }
 
-      const route = messageThreadRouteFromNotificationData(response.notification.request.content.data);
-      if (!route) {
+      const intent = routeIntentFromNotificationData(response.notification.request.content.data);
+      if (!intent) {
         return;
       }
 
       // Write into the shared pending-route store; the root drains it once
       // navigation is ready (dedupe by the notification key lives in the store).
-      const key = responseKey(response);
-      setPendingRoute({ key: key ?? `notif-${Date.now()}`, href: route });
+      const key = responseKey(response) ?? `notif-${Date.now()}`;
+      setPendingRoute({ key, href: intent.href });
+      if (intent.refreshWallet) {
+        requestWalletRefresh(key);
+      }
     };
 
     getNotificationsModule()
@@ -61,7 +68,7 @@ export function MessagePushNotificationRouter() {
         }
       })
       .catch((error) => {
-        console.error('[PUSH] Failed to connect message notification routing:', error);
+        console.error('[PUSH] Failed to connect push notification routing:', error);
       });
 
     return () => {

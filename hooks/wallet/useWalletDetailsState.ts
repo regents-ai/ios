@@ -12,6 +12,7 @@ import { authenticatedFetch } from '@/utils/authenticatedFetch';
 import { createOfframpSession } from '@/utils/createOfframpSession';
 import { setPendingOfframpBalance } from '@/utils/state/flowRuntimeState';
 import { setCurrentSolanaAddress, setCurrentWalletAddress } from '@/utils/state/walletRuntimeState';
+import { consumeWalletRefreshRequest, subscribeWalletRefresh } from '@/utils/walletRefresh';
 
 export type BalanceRecord = {
   network: string;
@@ -203,6 +204,21 @@ export function useWalletDetailsState() {
       }
     }, [fetchBalances, fetchTestnetBalances, primaryAddress, solanaAddress])
   );
+
+  // Out-of-band refresh requests (e.g. tapping an onramp push notification)
+  // land in the wallet-refresh bridge; drain them here so balances update even
+  // when the wallet screen is already focused.
+  useEffect(() => {
+    const drainRefreshRequest = () => {
+      if (consumeWalletRefreshRequest() && (primaryAddress || solanaAddress)) {
+        void fetchBalances();
+        void fetchTestnetBalances();
+      }
+    };
+
+    drainRefreshRequest();
+    return subscribeWalletRefresh(drainRefreshRequest);
+  }, [fetchBalances, fetchTestnetBalances, primaryAddress, solanaAddress]);
 
   const groupedMainnetBalances = useMemo(
     () =>
