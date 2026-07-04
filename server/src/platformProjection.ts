@@ -430,7 +430,7 @@ export function createPlatformProjectionClient(fetchImpl: typeof fetch = fetch):
       }
 
       try {
-        const response = await fetchImpl(`${baseUrl.replace(/\/$/, '')}/api/agent-platform/projection`, {
+        const response = await fetchImpl(`${baseUrl.replace(/\/$/, '')}/api/platform/projection`, {
           method: 'GET',
           headers: platformHeaders(input),
         });
@@ -463,7 +463,7 @@ export function createPlatformProjectionClient(fetchImpl: typeof fetch = fetch):
 export function createPlatformRwrClient(fetchImpl: typeof fetch = fetch): PlatformRwrClient {
   return {
     async fetchAccount(auth) {
-      const result = await requestPlatformJson(fetchImpl, auth, '/api/agent-platform/rwr/account', rwrAccountSchema);
+      const result = await requestPlatformJson(fetchImpl, auth, '/api/platform/rwr/account', rwrAccountSchema);
       if (result.kind !== 'ok') {
         return result;
       }
@@ -481,7 +481,7 @@ export function createPlatformRwrClient(fetchImpl: typeof fetch = fetch): Platfo
       const result = await requestPlatformJson(
         fetchImpl,
         auth,
-        `/api/agent-platform/companies/${companyId}/rwr/work-items`,
+        `/api/platform/regents/${companyId}/rwr/work-items`,
         rwrWorkItemsSchema
       );
       return result.kind === 'ok' ? { kind: 'ok', data: result.data.work_items } : result;
@@ -491,7 +491,7 @@ export function createPlatformRwrClient(fetchImpl: typeof fetch = fetch): Platfo
       const result = await requestPlatformJson(
         fetchImpl,
         auth,
-        `/api/agent-platform/companies/${companyId}/rwr/work-items`,
+        `/api/platform/regents/${companyId}/rwr/work-items`,
         rwrWorkItemResponseSchema,
         {
           method: 'POST',
@@ -512,7 +512,7 @@ export function createPlatformRwrClient(fetchImpl: typeof fetch = fetch): Platfo
       const result = await requestPlatformJson(
         fetchImpl,
         auth,
-        `/api/agent-platform/companies/${companyId}/rwr/work-items/${workItemId}/runs`,
+        `/api/platform/regents/${companyId}/rwr/work-items/${workItemId}/runs`,
         rwrRunResponseSchema,
         {
           method: 'POST',
@@ -532,7 +532,7 @@ export function createPlatformRwrClient(fetchImpl: typeof fetch = fetch): Platfo
       const result = await requestPlatformJson(
         fetchImpl,
         auth,
-        `/api/agent-platform/companies/${companyId}/rwr/runs/${runId}`,
+        `/api/platform/regents/${companyId}/rwr/runs/${runId}`,
         rwrRunResponseSchema
       );
       return result.kind === 'ok' ? { kind: 'ok', data: result.data.run } : result;
@@ -542,7 +542,7 @@ export function createPlatformRwrClient(fetchImpl: typeof fetch = fetch): Platfo
       const result = await requestPlatformJson(
         fetchImpl,
         auth,
-        `/api/agent-platform/companies/${companyId}/rwr/runs/${runId}/events`,
+        `/api/platform/regents/${companyId}/rwr/runs/${runId}/events`,
         rwrRunEventsSchema
       );
       return result.kind === 'ok' ? { kind: 'ok', data: result.data.events } : result;
@@ -552,7 +552,7 @@ export function createPlatformRwrClient(fetchImpl: typeof fetch = fetch): Platfo
       const result = await requestPlatformJson(
         fetchImpl,
         auth,
-        `/api/agent-platform/companies/${companyId}/rwr/runs/${runId}/approvals`,
+        `/api/platform/regents/${companyId}/rwr/runs/${runId}/approvals`,
         rwrApprovalsSchema
       );
       return result.kind === 'ok' ? { kind: 'ok', data: result.data.approvals } : result;
@@ -562,7 +562,7 @@ export function createPlatformRwrClient(fetchImpl: typeof fetch = fetch): Platfo
       const result = await requestPlatformJson(
         fetchImpl,
         auth,
-        `/api/agent-platform/companies/${companyId}/rwr/runs/${runId}/approvals/${approvalId}/resolve`,
+        `/api/platform/regents/${companyId}/rwr/runs/${runId}/approvals/${approvalId}/resolve`,
         rwrApprovalResponseSchema,
         {
           method: 'POST',
@@ -595,7 +595,7 @@ export function createPlatformStakingClient(fetchImpl: typeof fetch = fetch): Pl
       const result = await requestPlatformJson(
         fetchImpl,
         auth,
-        `/api/agent-platform/mobile/regent/staking?wallet_address=${encodeURIComponent(walletAddress)}`,
+        `/api/platform/mobile/regent/staking?wallet_address=${encodeURIComponent(walletAddress)}`,
         regentStakingStateSchema
       );
 
@@ -603,7 +603,7 @@ export function createPlatformStakingClient(fetchImpl: typeof fetch = fetch): Pl
     },
 
     stake(auth, input) {
-      return actionRequest(auth, '/api/agent-platform/mobile/regent/staking/stake', {
+      return actionRequest(auth, '/api/platform/mobile/regent/staking/stake', {
         wallet_address: input.walletAddress,
         amount: input.amount,
         ...(input.receiver ? { receiver: input.receiver } : {}),
@@ -611,26 +611,26 @@ export function createPlatformStakingClient(fetchImpl: typeof fetch = fetch): Pl
     },
 
     unstake(auth, input) {
-      return actionRequest(auth, '/api/agent-platform/mobile/regent/staking/unstake', {
+      return actionRequest(auth, '/api/platform/mobile/regent/staking/unstake', {
         wallet_address: input.walletAddress,
         amount: input.amount,
       });
     },
 
     claimUsdc(auth, walletAddress) {
-      return actionRequest(auth, '/api/agent-platform/mobile/regent/staking/claim-usdc', {
+      return actionRequest(auth, '/api/platform/mobile/regent/staking/claim-usdc', {
         wallet_address: walletAddress,
       });
     },
 
     claimRegent(auth, walletAddress) {
-      return actionRequest(auth, '/api/agent-platform/mobile/regent/staking/claim-regent', {
+      return actionRequest(auth, '/api/platform/mobile/regent/staking/claim-regent', {
         wallet_address: walletAddress,
       });
     },
 
     claimAndRestakeRegent(auth, walletAddress) {
-      return actionRequest(auth, '/api/agent-platform/mobile/regent/staking/claim-and-restake-regent', {
+      return actionRequest(auth, '/api/platform/mobile/regent/staking/claim-and-restake-regent', {
         wallet_address: walletAddress,
       });
     },
