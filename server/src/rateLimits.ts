@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response, RequestHandler } from 'express';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 
 import { sendError } from './httpResponses.js';
+import { trustedClientIp } from './ip.js';
 
 type RateLimitRequest = Request & {
   rateLimit?: {
@@ -16,14 +17,11 @@ type RateLimitOptions = {
 
 const oneMinute = 60 * 1000;
 
-function forwardedIp(req: Request): string | undefined {
-  const forwarded = req.headers['x-forwarded-for'];
-  const value = Array.isArray(forwarded) ? forwarded[0] : forwarded;
-  return value?.split(',')[0]?.trim();
-}
-
 export function clientIpKey(req: Request) {
-  return ipKeyGenerator(forwardedIp(req) || req.ip || 'unknown');
+  // On Fly.io the only trustworthy client IP is the Fly-Client-IP header set by
+  // fly-proxy. X-Forwarded-For is client-spoofable (fly-proxy appends, keeping
+  // the client-supplied leftmost entry), so it must never key rate limits.
+  return ipKeyGenerator(trustedClientIp(req) || 'unknown');
 }
 
 function retryAfterSeconds(req: RateLimitRequest) {

@@ -68,13 +68,29 @@ test('onramp webhook events are claimed before side effects', async () => {
     return;
   }
 
-  assert.equal(await claimOnrampWebhookEvent(parsed.webhook), true);
+  assert.equal(await claimOnrampWebhookEvent(parsed.webhook), 'claimed');
   assert.equal(await hasProcessedOnrampWebhookEvent(parsed.webhook), false);
-  assert.equal(await claimOnrampWebhookEvent(parsed.webhook), false);
+  assert.equal(await claimOnrampWebhookEvent(parsed.webhook), 'processing');
 
   await releaseOnrampWebhookEventClaim(parsed.webhook);
   assert.equal(await hasProcessedOnrampWebhookEvent(parsed.webhook), false);
-  assert.equal(await claimOnrampWebhookEvent(parsed.webhook), true);
+  assert.equal(await claimOnrampWebhookEvent(parsed.webhook), 'claimed');
+});
+
+test('onramp webhook claim distinguishes in-flight processing from processed duplicates', async () => {
+  const parsed = parseCanonicalOnrampWebhook(JSON.stringify(successWebhook));
+  assert.equal(parsed.kind, 'ok');
+  if (parsed.kind !== 'ok') {
+    return;
+  }
+
+  assert.equal(await claimOnrampWebhookEvent(parsed.webhook), 'claimed');
+  // Lease held, not yet processed: the retrying sender must NOT be told duplicate.
+  assert.equal(await claimOnrampWebhookEvent(parsed.webhook), 'processing');
+
+  await markOnrampWebhookEventProcessed(parsed.webhook);
+  // Fully processed: safe to tell the sender it is a duplicate.
+  assert.equal(await claimOnrampWebhookEvent(parsed.webhook), 'processed');
 });
 
 test('onramp webhook processing claims can be retried after the short lease', async () => {
@@ -87,12 +103,61 @@ test('onramp webhook processing claims can be retried after the short lease', as
   const claimedAt = new Date('2026-05-13T12:00:00.000Z');
   const afterLease = new Date(claimedAt.getTime() + ONRAMP_WEBHOOK_PROCESSING_LEASE_SECONDS * 1000);
 
-  assert.equal(await claimOnrampWebhookEvent(parsed.webhook, null, claimedAt), true);
-  assert.equal(await claimOnrampWebhookEvent(parsed.webhook, null, claimedAt), false);
-  assert.equal(await claimOnrampWebhookEvent(parsed.webhook, null, afterLease), true);
+  assert.equal(await claimOnrampWebhookEvent(parsed.webhook, null, claimedAt), 'claimed');
+  assert.equal(await claimOnrampWebhookEvent(parsed.webhook, null, claimedAt), 'processing');
+  assert.equal(await claimOnrampWebhookEvent(parsed.webhook, null, afterLease), 'claimed');
 
   await markOnrampWebhookEventProcessed(parsed.webhook);
-  assert.equal(await claimOnrampWebhookEvent(parsed.webhook, null, afterLease), false);
+  assert.equal(await claimOnrampWebhookEvent(parsed.webhook, null, afterLease), 'processed');
+});
+
+test('onramp webhook processing lease is short so crashed claims retry quickly', () => {
+  assert.ok(
+    ONRAMP_WEBHOOK_PROCESSING_LEASE_SECONDS <= 120,
+    `processing lease must stay short (got ${ONRAMP_WEBHOOK_PROCESSING_LEASE_SECONDS}s)`
+  );
+});
+
+test('onramp webhook redis claim reports processing and processed duplicates', async () => {
+  const parsed = parseCanonicalOnrampWebhook(JSON.stringify(successWebhook));
+  assert.equal(parsed.kind, 'ok');
+  if (parsed.kind !== 'ok') {
+    return;
+  }
+
+  const store = new Map<string, string>();
+  const fakeRedis = {
+    async get(key: string) {
+      return store.get(key) ?? null;
+    },
+    async set(key: string, value: string, options?: { EX?: number; NX?: boolean }) {
+      if (options?.NX && store.has(key)) {
+        return null;
+      }
+      store.set(key, value);
+      return 'OK';
+    },
+    async del(key: string) {
+      return store.delete(key) ? 1 : 0;
+    },
+  };
+
+  assert.equal(await claimOnrampWebhookEvent(parsed.webhook, fakeRedis), 'claimed');
+  assert.equal(await claimOnrampWebhookEvent(parsed.webhook, fakeRedis), 'processing');
+
+  await markOnrampWebhookEventProcessed(parsed.webhook, fakeRedis);
+  assert.equal(await claimOnrampWebhookEvent(parsed.webhook, fakeRedis), 'processed');
+});
+
+test('onramp webhook route returns a retryable non-2xx while a claim is processing', () => {
+  const appSource = readFileSync(resolve(testDir, 'app.ts'), 'utf8');
+
+  // A processing (in-flight) claim must trigger a retryable 409, never a 200
+  // duplicate acknowledgement that would make Coinbase drop the event.
+  assert.match(appSource, /webhookClaim === 'processing'/);
+  assert.match(appSource, /sendError\(res, 409, 'WebhookInProgress'/);
+  assert.match(appSource, /webhookClaim === 'processed'/);
+  assert.match(appSource, /\{ received: true, duplicate: true \}/);
 });
 
 test('onramp webhook handler uses the current signed body parser', () => {

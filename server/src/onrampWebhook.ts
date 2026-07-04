@@ -10,7 +10,10 @@ type OnrampWebhookEventRecord = {
   status: 'processing' | 'processed';
 };
 
-export const ONRAMP_WEBHOOK_PROCESSING_LEASE_SECONDS = 15 * 60;
+// Processing (push-notification delivery) takes seconds. A short lease means a
+// crash mid-processing only blocks Coinbase's retries for one minute before the
+// event can be claimed and processed again.
+export const ONRAMP_WEBHOOK_PROCESSING_LEASE_SECONDS = 60;
 const ONRAMP_WEBHOOK_PROCESSED_TTL_SECONDS = 60 * 60 * 24 * 90;
 
 const processedEventStore = createJsonFileStore<{
@@ -137,34 +140,46 @@ export async function markOnrampWebhookEventProcessed(webhook: CanonicalOnrampWe
   });
 }
 
+export type OnrampWebhookClaimResult = 'claimed' | 'processing' | 'processed';
+
 export async function claimOnrampWebhookEvent(
   webhook: CanonicalOnrampWebhook,
   redis?: RedisLike | null,
   now = new Date(),
-) {
+): Promise<OnrampWebhookClaimResult> {
   const key = onrampWebhookDedupeKey(webhook);
   const record = processingRecord(webhook, now);
 
   if (redis) {
-    return (
-      (await redis.set(`onramp-webhook:${key}`, JSON.stringify(record), {
-        EX: ONRAMP_WEBHOOK_PROCESSING_LEASE_SECONDS,
-        NX: true,
-      })) !== null
-    );
+    const claimed = (await redis.set(`onramp-webhook:${key}`, JSON.stringify(record), {
+      EX: ONRAMP_WEBHOOK_PROCESSING_LEASE_SECONDS,
+      NX: true,
+    })) !== null;
+
+    if (claimed) {
+      return 'claimed';
+    }
+
+    const existing = parseEventRecord(await redis.get(`onramp-webhook:${key}`));
+    // The record may have expired between SET NX and GET; treat that race as an
+    // in-flight processing claim so the sender retries.
+    return existing?.status === 'processed' ? 'processed' : 'processing';
   }
 
-  let claimed = false;
+  let result: OnrampWebhookClaimResult = 'processing';
   processedEventStore.update((state) => {
     const existing = state.processedEvents[key];
 
     if (!existing || processingLeaseExpired(existing, now)) {
       state.processedEvents[key] = record;
-      claimed = true;
+      result = 'claimed';
+      return;
     }
+
+    result = existing.status === 'processed' ? 'processed' : 'processing';
   });
 
-  return claimed;
+  return result;
 }
 
 export async function releaseOnrampWebhookEventClaim(webhook: CanonicalOnrampWebhook, redis?: RedisLike | null) {

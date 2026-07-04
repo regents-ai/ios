@@ -10,26 +10,22 @@
  * validation to ensure the quote can only be used by the requesting user.
  * Do not trust HTTP headers like X-Forwarded-For — these can be easily spoofed."
  *
- * IMPLEMENTATION STRATEGY:
+ * IMPLEMENTATION STRATEGY (Fly.io production):
  *
- * 1. TRUSTED PROXY (Production on Vercel):
- *    - Use req.ip (Vercel sets this from actual TCP connection, NOT raw client headers)
- *    - Vercel strips client-provided X-Forwarded-For and sets its own trusted value
- *    - This gives the true client IP even when behind CDN/load balancer
+ * 1. FLY-CLIENT-IP HEADER (Production on Fly.io):
+ *    - fly-proxy terminates every public connection and always sets the
+ *      Fly-Client-IP header to the real client IP, overwriting anything the
+ *      client sent. It is the authoritative client IP on Fly.
+ *    - X-Forwarded-For is NOT safe here: fly-proxy appends to the chain, so a
+ *      client-supplied X-Forwarded-For value survives as the leftmost entry.
  *
- * 2. DIRECT CONNECTION (Self-hosted):
- *    - Use req.socket.remoteAddress (direct TCP connection IP)
- *    - No proxy headers involved - pure socket-level IP
+ * 2. DIRECT CONNECTION (no Fly-Client-IP header, e.g. self-hosted / tests):
+ *    - Use req.ip (Express, with trust proxy = 1) or req.socket.remoteAddress.
  *
  * 3. LOCALHOST (Development):
  *    - Both approaches give 127.0.0.1 (server and client on same machine)
  *    - MUST use external IP service (ipify.org) to get developer's real public IP
  *    - Coinbase will reject localhost IPs in production mode
- *
- * SECURITY NOTE:
- * - Never trust raw X-Forwarded-For header from req.headers (client can spoof)
- * - Always use req.ip (framework-sanitized) or req.socket.remoteAddress (TCP-level)
- * - For hosted platforms, verify they use trusted proxy configuration
  */
 
 import { Agent, setGlobalDispatcher } from 'undici';
@@ -67,10 +63,28 @@ async function getPublicIp(): Promise<string> {
   }
 }
 
+/**
+ * The trusted client IP for this request, synchronously.
+ * Fly-Client-IP (set by fly-proxy on every public request) wins; otherwise the
+ * Express-resolved req.ip, otherwise the raw socket address.
+ */
+export function trustedClientIp(req: {
+  headers?: Record<string, string | string[] | undefined> | undefined;
+  ip?: string | undefined;
+  socket?: { remoteAddress?: string | undefined } | undefined;
+}): string {
+  const flyClientIp = req.headers?.['fly-client-ip'];
+  const headerValue = Array.isArray(flyClientIp) ? flyClientIp[0] : flyClientIp;
+  const trimmed = headerValue?.trim();
+  if (trimmed) {
+    return trimmed;
+  }
+
+  return req.ip || req.socket?.remoteAddress || '';
+}
+
 export async function resolveClientIp(req: any): Promise<string> {
-  // Simple approach: Use Vercel's req.ip (from trusted x-forwarded-for)
-  // This gives us whatever IP the client is actually using (IPv4 or IPv6)
-  const clientIp = req.ip || req.socket?.remoteAddress || '';
+  const clientIp = trustedClientIp(req);
 
   // For development environments with private IPs, use fallback
   if (isPrivate(clientIp)) {

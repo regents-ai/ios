@@ -160,6 +160,34 @@ test('authenticated limits are keyed by verified user, not CLI headers', async (
   assert.equal(otherUser.status, 200);
 });
 
+test('rate limits key on Fly-Client-IP, not spoofable X-Forwarded-For', async () => {
+  const app = express();
+  app.get('/public', createPublicReadRateLimiter({ max: 1, windowMs: 60_000 }), (_req, res) => {
+    res.json({ ok: true });
+  });
+
+  const first = await requestApp(app, {
+    url: '/public',
+    headers: { 'fly-client-ip': '203.0.113.7', 'x-forwarded-for': '198.51.100.1' },
+  });
+  assert.equal(first.status, 200);
+
+  // Same real client rotating a spoofed X-Forwarded-For must stay limited.
+  const spoofed = await requestApp(app, {
+    url: '/public',
+    headers: { 'fly-client-ip': '203.0.113.7', 'x-forwarded-for': '198.51.100.2' },
+  });
+  assert.equal(spoofed.status, 429);
+  assert.equal(spoofed.body.error?.code, 'TooManyPublicRequests');
+
+  // A genuinely different client (different Fly-Client-IP) gets its own bucket.
+  const otherClient = await requestApp(app, {
+    url: '/public',
+    headers: { 'fly-client-ip': '203.0.113.8', 'x-forwarded-for': '198.51.100.1' },
+  });
+  assert.equal(otherClient.status, 200);
+});
+
 test('webhook routes keep their own limiter and Retry-After response', async () => {
   const app = express();
   app.post('/webhooks/onramp', createWebhookRateLimiter({ max: 1, windowMs: 60_000 }), (_req, res) => {

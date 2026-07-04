@@ -17,6 +17,7 @@ import {
 import {
   claimOnrampWebhookEvent,
   markOnrampWebhookEventProcessed,
+  ONRAMP_WEBHOOK_PROCESSING_LEASE_SECONDS,
   parseCanonicalOnrampWebhook,
   releaseOnrampWebhookEventClaim,
 } from './onrampWebhook.js';
@@ -55,14 +56,58 @@ import {
 let database: any = null;
 const databaseUrl = process.env.REDIS_URL;
 const useDatabase = !!databaseUrl;
+
+const REDIS_CONNECT_ATTEMPTS = 5;
+const REDIS_CONNECT_BASE_DELAY_MS = 500;
+
+async function connectRedisWithRetry(client: { connect(): Promise<unknown> }) {
+  for (let attempt = 1; attempt <= REDIS_CONNECT_ATTEMPTS; attempt += 1) {
+    try {
+      await client.connect();
+      return;
+    } catch (error) {
+      console.error(`❌ [REDIS] Connect attempt ${attempt}/${REDIS_CONNECT_ATTEMPTS} failed:`, summarizeErrorLog(error));
+      if (attempt === REDIS_CONNECT_ATTEMPTS) {
+        throw error;
+      }
+      const delayMs = REDIS_CONNECT_BASE_DELAY_MS * 2 ** (attempt - 1);
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, delayMs));
+    }
+  }
+}
+
 if (useDatabase) {
   const { createClient } = await import('redis');
-  database = await createClient({ url: databaseUrl! }).connect();
+  const redisClient = createClient({
+    url: databaseUrl!,
+    socket: {
+      // Built-in reconnect: back off up to 5s between attempts, retry forever.
+      reconnectStrategy: (retries: number) => Math.min(retries * 250, 5000),
+    },
+  });
+  // Without an 'error' listener, a dropped socket emits an unhandled 'error'
+  // event and kills the process. Log and let the client reconnect on its own.
+  redisClient.on('error', (error: unknown) => {
+    console.error('❌ [REDIS] Client error:', summarizeErrorLog(error));
+  });
+  await connectRedisWithRetry(redisClient);
+  database = redisClient;
   console.log('✅ Using Redis for push token storage (production)');
 } else if (isReleaseRuntime()) {
   throw new Error('REDIS_URL is required for release push-token storage.');
 } else {
   console.log('ℹ️ Using in-memory storage for push tokens (local dev)');
+}
+
+/** Close long-lived resources (Redis) during graceful shutdown. */
+export async function closeAppResources() {
+  if (database) {
+    try {
+      await database.close();
+    } catch (error) {
+      console.error('❌ [REDIS] Error closing client during shutdown:', summarizeErrorLog(error));
+    }
+  }
 }
 
 // APNs setup for direct iOS push notifications. Native iOS tokens never fall back to Expo.
@@ -71,8 +116,12 @@ const apnProvider = await createApnsProviderFromEnv(process.env, isReleaseRuntim
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
 
-// On Vercel, trust proxy to read x-forwarded-for
-app.set('trust proxy', true);
+// On Fly.io there is exactly one trusted proxy hop (fly-proxy) in front of the
+// app, so trust exactly 1 hop. `true` would trust the entire X-Forwarded-For
+// chain, letting clients spoof req.ip with their own X-Forwarded-For header.
+// The authoritative client IP on Fly is the Fly-Client-IP header, which
+// fly-proxy always sets; see src/ip.ts and src/rateLimits.ts.
+app.set('trust proxy', 1);
 
 const webhookRateLimiter = createWebhookRateLimiter();
 const publicReadRateLimiter = createPublicReadRateLimiter();
@@ -829,9 +878,16 @@ app.post('/webhooks/onramp', webhookRateLimiter, async (req, res) => {
   console.log('🔔 [WEBHOOK] Received:', webhook.eventType);
   console.log('📦 [WEBHOOK] Summary:', summarizeWebhookLog(webhook));
 
-  const webhookClaimed = await claimOnrampWebhookEvent(webhook, useDatabase ? database : null);
-  if (!webhookClaimed) {
+  const webhookClaim = await claimOnrampWebhookEvent(webhook, useDatabase ? database : null);
+  if (webhookClaim === 'processed') {
     return res.status(200).json({ received: true, duplicate: true });
+  }
+  if (webhookClaim === 'processing') {
+    // Another attempt holds the processing lease but has not finished. Return a
+    // retryable non-2xx so Coinbase redelivers instead of dropping the event —
+    // a 200 here would lose the webhook if the leaseholder crashed mid-flight.
+    res.setHeader('Retry-After', String(ONRAMP_WEBHOOK_PROCESSING_LEASE_SECONDS));
+    return sendError(res, 409, 'WebhookInProgress', 'This webhook event is already being processed. Please retry shortly.');
   }
 
   try {
