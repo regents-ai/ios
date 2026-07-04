@@ -2742,7 +2742,12 @@ components:
             - offramp_token
         partnerUserRef:
           type: string
-          description: Required for operations scoped to the signed-in mobile user.
+          description: >-
+            Required for operations scoped to the signed-in mobile user. Must
+            equal the authenticated user id. For onramp_session and
+            onramp_order the server always stamps the authenticated user id
+            into the outbound Coinbase request body as partnerUserRef, so
+            webhook events map back to the user regardless of the client body.
         params:
           type: object
           additionalProperties:

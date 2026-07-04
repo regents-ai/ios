@@ -33,9 +33,63 @@ test('proxy builds only declared Coinbase operation targets', () => {
   assert.equal(session.url.toString(), 'https://api.cdp.coinbase.com/platform/v2/onramp/sessions');
   assert.deepEqual(session.body, {
     destinationAddress: '0xabc',
+    partnerUserRef: 'user-1',
     clientIp: '203.0.113.10',
   });
   assert.equal(validateBuiltProxyTarget(session).hostname, 'api.cdp.coinbase.com');
+});
+
+test('proxy stamps the signed-in user into onramp session and order bodies', () => {
+  // Session bodies from the app do not carry partnerUserRef; the server must
+  // add it so Coinbase webhooks can map the transaction back to the user.
+  const session = buildCoinbaseProxyRequest({
+    operation: 'onramp_session',
+    currentUserId: 'user-1',
+    partnerUserRef: 'user-1',
+    body: {
+      destinationAddress: '0xabc',
+    },
+  });
+  assert.equal(session.body?.partnerUserRef, 'user-1');
+
+  const order = buildCoinbaseProxyRequest({
+    operation: 'onramp_order',
+    currentUserId: 'user-1',
+    partnerUserRef: 'user-1',
+    body: {
+      destinationAddress: '0xabc',
+      partnerUserRef: 'user-1',
+    },
+  });
+  assert.equal(order.body?.partnerUserRef, 'user-1');
+});
+
+test('proxy rejects create bodies that reference another user', () => {
+  for (const operation of ['onramp_session', 'onramp_order', 'offramp_token'] as const) {
+    assert.throws(
+      () => buildCoinbaseProxyRequest({
+        operation,
+        currentUserId: 'user-1',
+        partnerUserRef: 'user-1',
+        body: {
+          partnerUserRef: 'user-2',
+        },
+      }),
+      /only create Coinbase requests for your own account/
+    );
+  }
+
+  assert.throws(
+    () => buildCoinbaseProxyRequest({
+      operation: 'onramp_session',
+      currentUserId: 'user-1',
+      partnerUserRef: 'user-2',
+      body: {
+        destinationAddress: '0xabc',
+      },
+    }),
+    /only access your own Coinbase records/
+  );
 });
 
 test('proxy only builds user-scoped Coinbase paths for the signed-in user', () => {

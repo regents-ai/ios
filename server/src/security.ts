@@ -179,7 +179,9 @@ export function buildCoinbaseProxyRequest(input: CoinbaseProxyBuildInput): Built
       const currentUserId = requireMatchingPartnerUserRef(input);
       assertBodyUserRefMatchesCurrentUser(input.body, currentUserId);
       return {
-        body: postBody(input.body, input.clientIp),
+        // The server stamps the authenticated user into the Coinbase body so
+        // webhook events always map back to a user, whatever the client sent.
+        body: postBody({ ...(input.body || {}), partnerUserRef: currentUserId }, input.clientIp),
         idempotencyRequired: true,
         method: 'POST',
         operation: input.operation,
@@ -191,7 +193,9 @@ export function buildCoinbaseProxyRequest(input: CoinbaseProxyBuildInput): Built
       const currentUserId = requireMatchingPartnerUserRef(input);
       assertBodyUserRefMatchesCurrentUser(input.body, currentUserId);
       return {
-        body: postBody(input.body, input.clientIp),
+        // The server stamps the authenticated user into the Coinbase body so
+        // webhook events always map back to a user, whatever the client sent.
+        body: postBody({ ...(input.body || {}), partnerUserRef: currentUserId }, input.clientIp),
         idempotencyRequired: true,
         method: 'POST',
         operation: input.operation,

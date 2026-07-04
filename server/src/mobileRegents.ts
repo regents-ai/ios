@@ -167,11 +167,52 @@ type MobileRegentStoreState = {
 
 const preparedWalletActionTtlMs = 10 * 60 * 1000;
 
+// Bounded retention so the JSON state file cannot grow forever. Only
+// clearly-finished records are ever pruned: return and funding intents in a
+// terminal state (confirmed/failed) idle past a long retention window, and
+// prepared wallet actions long past their own expiry. Intents that could
+// still be confirmed are never dropped.
+const TERMINAL_INTENT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+const EXPIRED_WALLET_ACTION_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+
 const mobileRegentStore = createJsonFileStore<MobileRegentStoreState>('mobile-regent-state.json', () => ({
   returnRequestIntents: {},
   fundingIntentIntents: {},
   preparedWalletActions: {},
 }));
+
+function pruneMobileRegentStateInPlace(state: MobileRegentStoreState, now: number) {
+  for (const [key, request] of Object.entries(state.returnRequestIntents)) {
+    if (
+      (request.status === 'confirmed' || request.status === 'failed') &&
+      now - Date.parse(request.updatedAt) > TERMINAL_INTENT_RETENTION_MS
+    ) {
+      delete state.returnRequestIntents[key];
+    }
+  }
+
+  for (const [key, intent] of Object.entries(state.fundingIntentIntents)) {
+    if (
+      (intent.status === 'confirmed' || intent.status === 'failed') &&
+      now - Date.parse(intent.updatedAt) > TERMINAL_INTENT_RETENTION_MS
+    ) {
+      delete state.fundingIntentIntents[key];
+    }
+  }
+
+  for (const [key, action] of Object.entries(state.preparedWalletActions)) {
+    // Every prepared wallet action expires ten minutes after creation, so
+    // anything long past its expiry is finished (confirmed, expired, or
+    // failed) and can no longer be confirmed.
+    if (now - Date.parse(action.expires_at) > EXPIRED_WALLET_ACTION_RETENTION_MS) {
+      delete state.preparedWalletActions[key];
+    }
+  }
+}
+
+export function pruneMobileRegentState(now = new Date()) {
+  mobileRegentStore.update((state) => pruneMobileRegentStateInPlace(state, now.getTime()));
+}
 
 function cloneJson<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -519,6 +560,7 @@ export function createRegentReturnRequestForUser(
   };
 
   mobileRegentStore.update((state) => {
+    pruneMobileRegentStateInPlace(state, Date.now());
     state.returnRequestIntents[key] = request;
   });
 
@@ -615,6 +657,7 @@ export function createRegentFundingIntentForUser(
   };
 
   mobileRegentStore.update((state) => {
+    pruneMobileRegentStateInPlace(state, Date.now());
     state.fundingIntentIntents[key] = intent;
   });
 
@@ -710,6 +753,7 @@ export function prepareWalletActionForUser(
   };
 
   mobileRegentStore.update((state) => {
+    pruneMobileRegentStateInPlace(state, Date.now());
     state.preparedWalletActions[action.action_id] = action;
     state.preparedWalletActions[key] = action;
   });

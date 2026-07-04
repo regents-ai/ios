@@ -31,8 +31,50 @@ const mobileVoiceSessionStore = createJsonFileStore<MobileVoiceSessionStoreState
   sessions: {},
 }));
 
+// Bounded retention so the JSON state file cannot grow forever. Live sessions
+// (active and not yet expired) are never pruned; everything else is dropped
+// once it has been idle past the retention window, and oldest-first past the
+// hard cap.
+const FINISHED_VOICE_SESSION_RETENTION_MS = 24 * 60 * 60 * 1000;
+const MAX_VOICE_SESSION_RECORDS = 500;
+
 function nowIso() {
   return new Date().toISOString();
+}
+
+function isLiveVoiceSession(session: MobileVoiceSessionRecord, now: number) {
+  return session.status === 'active' && new Date(session.expires_at).getTime() > now;
+}
+
+function pruneVoiceSessionsInPlace(state: MobileVoiceSessionStoreState, now: number) {
+  for (const session of Object.values(state.sessions)) {
+    if (isLiveVoiceSession(session, now)) {
+      continue;
+    }
+    if (now - new Date(session.updated_at).getTime() > FINISHED_VOICE_SESSION_RETENTION_MS) {
+      delete state.sessions[session.id];
+    }
+  }
+
+  let overflow = Object.keys(state.sessions).length - MAX_VOICE_SESSION_RECORDS;
+  if (overflow <= 0) {
+    return;
+  }
+
+  const prunable = Object.values(state.sessions)
+    .filter((session) => !isLiveVoiceSession(session, now))
+    .sort((left, right) => left.updated_at.localeCompare(right.updated_at));
+  for (const session of prunable) {
+    if (overflow <= 0) {
+      break;
+    }
+    delete state.sessions[session.id];
+    overflow -= 1;
+  }
+}
+
+export function pruneMobileVoiceSessions(now = new Date()) {
+  mobileVoiceSessionStore.update((state) => pruneVoiceSessionsInPlace(state, now.getTime()));
 }
 
 export function mobileVoiceSafetyIdentifier(input: {
@@ -78,6 +120,7 @@ export function createMobileVoiceSessionRecord(input: {
   };
 
   mobileVoiceSessionStore.update((state) => {
+    pruneVoiceSessionsInPlace(state, Date.now());
     state.sessions[record.id] = record;
   });
 

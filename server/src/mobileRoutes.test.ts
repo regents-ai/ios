@@ -15,11 +15,19 @@ import {
   getRegentManagerForUserFromPlatformProjection,
   getRegentForUserFromPlatformProjection,
   listRegentsForUserFromPlatformProjection,
+  getRegentReturnRequestForUser,
   prepareWalletActionForUser,
+  pruneMobileRegentState,
   resetMobileRegentStateForTests,
 } from './mobileRegents.js';
 import { createMobileRoutes } from './mobileRoutes.js';
-import { resetMobileVoiceSessionsForTests } from './mobileVoiceSessions.js';
+import {
+  createMobileVoiceSessionRecord,
+  disconnectMobileVoiceSession,
+  getMobileVoiceSessionStateFilePathForTests,
+  pruneMobileVoiceSessions,
+  resetMobileVoiceSessionsForTests,
+} from './mobileVoiceSessions.js';
 import {
   createMessageThread,
   getMessageThreadEvents,
@@ -2131,4 +2139,114 @@ test('mobile Regent Manager data is returned as a fresh copy', () => {
   const secondGoal = second.goals[0];
   assert.ok(secondGoal);
   assert.notEqual(secondGoal.title, 'Changed by test');
+});
+
+test('finished wallet intents are pruned after retention while live intents are kept', () => {
+  const awaiting = createRegentReturnRequestForUser(
+    'prune-user',
+    'atlas-capital',
+    expectedReturnInput(),
+    'prune-return-live',
+  );
+  assert.ok(awaiting);
+
+  const finished = createRegentReturnRequestForUser(
+    'prune-user',
+    'atlas-capital',
+    expectedReturnInput(),
+    'prune-return-done',
+  );
+  assert.ok(finished);
+  assert.equal(
+    confirmRegentReturnRequestForUser('prune-user', 'atlas-capital', finished.id, confirmedReceipt()).kind,
+    'ok',
+  );
+
+  const funding = createRegentFundingIntentForUser(
+    'prune-user',
+    'atlas-capital',
+    {
+      amount: '25',
+      currency: 'USDC',
+      sourceWalletAddress: '0x1111111111111111111111111111111111111111',
+      destinationWalletAddress: '0x2222222222222222222222222222222222222222',
+      chainId: 8453,
+      tokenAddress: '0x3333333333333333333333333333333333333333',
+      expectedSigner,
+      to: '0x3333333333333333333333333333333333333333',
+      value: '0',
+      data: fundingTransferData(),
+    },
+    'prune-funding-live',
+  );
+  assert.ok(funding);
+
+  const action = prepareWalletActionForUser(
+    'prune-user',
+    'funding',
+    expectedWalletActionInput({ idempotencyKey: 'prune-action' }),
+  );
+  assert.ok(action);
+
+  pruneMobileRegentState(new Date(Date.now() + 31 * 24 * 60 * 60 * 1000));
+
+  // Intents that can still be acted on are never dropped.
+  assert.ok(getRegentReturnRequestForUser('prune-user', 'atlas-capital', awaiting.id));
+  assert.ok(getRegentFundingIntentForUser('prune-user', 'atlas-capital', funding.id));
+
+  // Terminal and long-expired records are pruned.
+  assert.equal(getRegentReturnRequestForUser('prune-user', 'atlas-capital', finished.id), null);
+  assert.equal(confirmPreparedWalletActionForUser(action.action_id, confirmedReceipt()).kind, 'not_found');
+});
+
+test('voice session records are pruned once finished and no longer live', () => {
+  const sessionInput = {
+    userId: 'prune-voice-user',
+    agentId: 'atlas-capital',
+    provider: 'openai-realtime' as const,
+    model: 'gpt-realtime',
+    toolRegistryDigest: 'digest',
+    safetyIdentifierHash: 'hash',
+  };
+
+  const live = createMobileVoiceSessionRecord({
+    ...sessionInput,
+    expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
+  });
+  const finished = createMobileVoiceSessionRecord({
+    ...sessionInput,
+    expiresAt: new Date(Date.now() + 60 * 1000).toISOString(),
+  });
+  disconnectMobileVoiceSession({
+    userId: sessionInput.userId,
+    agentId: sessionInput.agentId,
+    sessionId: finished.id,
+  });
+
+  pruneMobileVoiceSessions(new Date(Date.now() + 25 * 60 * 60 * 1000));
+
+  const state = JSON.parse(readFileSync(getMobileVoiceSessionStateFilePathForTests(), 'utf8')) as {
+    sessions: Record<string, unknown>;
+  };
+  assert.ok(state.sessions[live.id]);
+  assert.equal(state.sessions[finished.id], undefined);
+});
+
+test('voice session records are capped so the state file stays bounded', () => {
+  for (let index = 0; index < 505; index += 1) {
+    createMobileVoiceSessionRecord({
+      userId: 'cap-voice-user',
+      agentId: 'atlas-capital',
+      provider: 'openai-realtime',
+      model: 'gpt-realtime',
+      toolRegistryDigest: 'digest',
+      safetyIdentifierHash: 'hash',
+      expiresAt: new Date(Date.now() - 1000).toISOString(),
+    });
+  }
+
+  const state = JSON.parse(readFileSync(getMobileVoiceSessionStateFilePathForTests(), 'utf8')) as {
+    sessions: Record<string, unknown>;
+  };
+  assert.ok(Object.keys(state.sessions).length <= 501);
 });

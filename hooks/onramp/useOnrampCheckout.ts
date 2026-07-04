@@ -197,12 +197,7 @@ export function useOnrampCheckout({
           partnerUserRef
         );
 
-        let url = response?.session?.onrampUrl;
-
-        if (url) {
-          const separator = url.includes('?') ? '&' : '?';
-          url = `${url}${separator}partnerUserId=${encodeURIComponent(partnerUserRef)}`;
-        }
+        const url = response?.session?.onrampUrl;
 
         if (!url) {
           throw new Error('No onrampUrl returned');
