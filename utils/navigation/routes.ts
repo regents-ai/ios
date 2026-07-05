@@ -33,8 +33,13 @@ export const routes = {
     return '/settings';
   },
 
-  localVoicePairing(): Href {
-    return '/settings/local-voice';
+  localVoicePairing(params: { regentId: string; agentWallet: string; name?: string }): Href {
+    return {
+      pathname: '/settings/local-voice',
+      params: params.name
+        ? { id: params.regentId, wallet: params.agentWallet, name: params.name }
+        : { id: params.regentId, wallet: params.agentWallet },
+    };
   },
 
   message(): Href {

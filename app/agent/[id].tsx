@@ -337,7 +337,7 @@ export default function AgentDetailScreen() {
               <Text style={styles.secondaryButtonText}>Message Agent</Text>
             </RegentPressable>
           </View>
-          <HermesVoiceButton voice={agent.voice} onPress={openVoice} />
+          <HermesVoiceButton voice={agent.voice} runtimeKind={agent.runtimeKind} onPress={openVoice} />
         </View>
 
         <View style={[styles.priorityCard, { backgroundColor: nextAction.wash }]}>
@@ -534,6 +534,8 @@ export default function AgentDetailScreen() {
       <HermesVoiceSheet
         agentId={agent.id}
         agentName={agent.name}
+        runtimeKind={agent.runtimeKind}
+        agentWallet={agent.walletAddress}
         visible={voiceSheetOpen}
         onClose={() => setVoiceSheetOpen(false)}
       />

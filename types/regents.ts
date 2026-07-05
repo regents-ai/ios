@@ -2,6 +2,10 @@ export type RegentStatus = 'active' | 'attention' | 'paused';
 // 'unknown' is the tolerant-decode case: any unrecognized wire value maps to
 // it instead of crashing an exhaustive switch (see utils/regentApi/tolerantDecode).
 export type RegentRuntimeStatus = 'online' | 'waiting' | 'offline' | 'unknown';
+// Where the agent runs: a hosted cloud sprite, or a self-run Hermes on the
+// owner's own computer. Voice on a self-run agent uses the paired local
+// gateway; a hosted agent uses the hosted voice path.
+export type RegentRuntimeKind = 'hosted' | 'self_hosted';
 export type RegentReturnStatus = 'requested' | 'approved' | 'broadcasting' | 'confirmed' | 'failed' | 'unknown';
 
 export type PlatformFormationStatus = 'pending' | 'blocked' | 'provisioning' | 'ready';
@@ -41,6 +45,7 @@ export type RegentSummary = {
   name: string;
   status: RegentStatus;
   runtimeStatus: RegentRuntimeStatus;
+  runtimeKind: RegentRuntimeKind;
   walletAddress: string;
   platformState: RegentPlatformState;
   voice: MobileRegentVoice;

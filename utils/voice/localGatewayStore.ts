@@ -1,35 +1,49 @@
 /**
- * Secure persistence for the paired local Hermes voice gateway.
+ * Secure persistence for paired local Hermes voice gateways, keyed per agent.
  *
- * The pairing token is a secret, so the paired gateway is stored only in the
- * device keychain (via the hardened scoped secure store), never in plain
- * storage, and it is never logged. Kept separate from utils/voice/localGateway
- * so the pure parse/URL/mint logic there stays free of native SecureStore.
+ * Each self-run agent pairs its own computer, so a paired gateway is stored
+ * under that agent's wallet address. The pairing token is a secret, so gateways
+ * live only in the device keychain (via the hardened scoped secure store),
+ * never in plain storage, and are never logged.
+ *
+ * Kept separate from utils/voice/localGateway so the pure parse/URL/mint logic
+ * there stays free of native SecureStore.
  */
 
 import { createScopedSecureStore, environmentScope } from '@/utils/scopedSecureStore';
-import { parsePairingPayload, type LocalVoiceGateway } from '@/utils/voice/localGateway';
+import {
+  normalizeAgentWallet,
+  parsePairingPayload,
+  type LocalVoiceGateway,
+} from '@/utils/voice/localGateway';
 
-// One keychain entry per environment scope. The value is the JSON payload; the
-// token lives only inside the keychain.
-const PAIRED_GATEWAY_KEY = 'hermesVoice.localGateway';
+// One keychain entry per agent wallet within an environment scope. The value is
+// the JSON payload; the token lives only inside the keychain.
+const PAIRED_GATEWAY_KEY_PREFIX = 'hermesVoice.localGateway';
 const store = createScopedSecureStore(environmentScope());
 
-/** Persists the paired gateway to the keychain. */
-export async function savePairedGateway(gateway: LocalVoiceGateway): Promise<void> {
-  await store.setItem(PAIRED_GATEWAY_KEY, JSON.stringify(gateway));
+function gatewayKey(agentWallet: string): string {
+  return `${PAIRED_GATEWAY_KEY_PREFIX}.${normalizeAgentWallet(agentWallet)}`;
 }
 
-/** Reads the paired gateway from the keychain, or null when none is paired. */
-export async function readPairedGateway(): Promise<LocalVoiceGateway | null> {
-  const raw = await store.getItem(PAIRED_GATEWAY_KEY);
+/** Persists the paired gateway for its agent to the keychain. */
+export async function savePairedGateway(gateway: LocalVoiceGateway): Promise<void> {
+  await store.setItem(gatewayKey(gateway.agentWallet), JSON.stringify(gateway));
+}
+
+/**
+ * Reads the paired gateway for one agent from the keychain, or null when that
+ * agent has no paired computer.
+ */
+export async function readPairedGateway(agentWallet: string): Promise<LocalVoiceGateway | null> {
+  const raw = await store.getItem(gatewayKey(agentWallet));
   if (!raw) {
     return null;
   }
   return parsePairingPayload(raw);
 }
 
-/** Removes the paired gateway from the keychain (disconnect / switch to hosted). */
-export async function clearPairedGateway(): Promise<void> {
-  await store.deleteItem(PAIRED_GATEWAY_KEY);
+/** Removes one agent's paired gateway from the keychain (disconnect). */
+export async function clearPairedGateway(agentWallet: string): Promise<void> {
+  await store.deleteItem(gatewayKey(agentWallet));
 }

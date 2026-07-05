@@ -1,4 +1,4 @@
-import type { HermesVoiceSession, HermesVoiceStatus } from '@/types/regents';
+import type { HermesVoiceSession, HermesVoiceStatus, RegentRuntimeKind } from '@/types/regents';
 import { describeApiError } from '@/utils/apiError';
 import { regentApi } from '@/utils/regentApi/client';
 import { isIosOwnedTool, runDeviceTool, type VoiceApprovalRequest } from '@/utils/voice/deviceTools';
@@ -29,7 +29,19 @@ function voiceSummary(turns: VoiceTranscriptTurn[]) {
   return summary ? `Voice summary\n${summary}` : null;
 }
 
-export function useHermesVoiceSession(agentId: string, agentName = 'Hermes') {
+type UseHermesVoiceSessionInput = {
+  agentId: string;
+  agentName?: string;
+  runtimeKind: RegentRuntimeKind;
+  agentWallet: string;
+};
+
+export function useHermesVoiceSession({
+  agentId,
+  agentName = 'Hermes',
+  runtimeKind,
+  agentWallet,
+}: UseHermesVoiceSessionInput) {
   const [status, setStatus] = useState<HermesVoiceStatus | null>(null);
   const [session, setSession] = useState<HermesVoiceSession | null>(null);
   const [connectionState, setConnectionState] = useState<VoiceConnectionState>('idle');
@@ -45,13 +57,20 @@ export function useHermesVoiceSession(agentId: string, agentName = 'Hermes') {
     sessionRef.current = session;
   }, [session]);
 
-  // Load any paired local gateway so voice can target it instead of the hosted
-  // sprite. Refreshed when the pairing screen changes it via refreshLocalGateway.
+  const isSelfHosted = runtimeKind === 'self_hosted';
+
+  // A self-run agent talks to its own paired computer; a hosted agent always
+  // uses the hosted path and never reads a local gateway. Refreshed when the
+  // pairing screen changes it via refreshLocalGateway.
   const refreshLocalGateway = useCallback(async () => {
-    const paired = await readPairedGateway().catch(() => null);
+    if (!isSelfHosted) {
+      setLocalGateway(null);
+      return null;
+    }
+    const paired = await readPairedGateway(agentWallet).catch(() => null);
     setLocalGateway(paired);
     return paired;
-  }, []);
+  }, [isSelfHosted, agentWallet]);
 
   useEffect(() => {
     void refreshLocalGateway();
@@ -190,9 +209,15 @@ export function useHermesVoiceSession(agentId: string, agentName = 'Hermes') {
     // Prefer the freshest paired-gateway state at start time.
     const paired = await refreshLocalGateway();
 
-    // Hosted path gates on the ChatGPT account. A paired LOCAL gateway holds its
-    // own OpenAI key, so that gate does not apply — skip it when local.
-    if (!paired) {
+    if (isSelfHosted) {
+      // A self-run agent can only talk once its computer is paired. The sheet
+      // sends an unpaired agent to the pairing screen, so this is a guard.
+      if (!paired) {
+        return;
+      }
+    } else {
+      // Hosted path gates on the ChatGPT account. A paired local gateway holds
+      // its own OpenAI key, so that gate never applies on the self-run path.
       const nextStatus = status || await refreshStatus();
       if (!nextStatus) {
         return;
@@ -248,7 +273,7 @@ export function useHermesVoiceSession(agentId: string, agentName = 'Hermes') {
       setErrorMessage(describeApiError(error).message);
       setConnectionState('error');
     }
-  }, [agentId, handleToolCall, refreshLocalGateway, refreshStatus, status]);
+  }, [agentId, handleToolCall, isSelfHosted, refreshLocalGateway, refreshStatus, status]);
 
   const resolveApproval = useCallback(async (approved: boolean) => {
     if (!approvalRequest) {
@@ -296,5 +321,7 @@ export function useHermesVoiceSession(agentId: string, agentName = 'Hermes') {
     resolveApproval,
     localGateway,
     refreshLocalGateway,
+    isSelfHosted,
+    agentWallet,
   };
 }

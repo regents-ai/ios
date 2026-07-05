@@ -7,10 +7,16 @@ import {
   gatewayDisplayLabel,
   localSessionUrl,
   parsePairingPayload,
+  resolveVoiceMode,
   type LocalVoiceGateway,
 } from '../utils/voice/localGateway';
 
-const GATEWAY: LocalVoiceGateway = { baseUrl: 'http://192.168.1.20:8787', token: 'pair-token-abc' };
+const AGENT_WALLET = '0x1234567890abcdef1234567890ABCDEF12345678';
+const GATEWAY: LocalVoiceGateway = {
+  baseUrl: 'http://192.168.1.20:8787',
+  token: 'pair-token-abc',
+  agentWallet: '0x1234567890abcdef1234567890abcdef12345678',
+};
 
 const sessionRequest = {
   voice: 'marin',
@@ -19,17 +25,78 @@ const sessionRequest = {
   device_capabilities: ['ios_status'],
 };
 
-test('parsePairingPayload accepts a valid { baseUrl, token } and trims trailing slash', () => {
-  const gateway = parsePairingPayload(JSON.stringify({ baseUrl: 'http://10.0.0.5:8787/', token: 't1' }));
-  assert.deepEqual(gateway, { baseUrl: 'http://10.0.0.5:8787', token: 't1' });
+test('parsePairingPayload accepts a valid { baseUrl, token, agentWallet }, trims the slash, and lowercases the wallet', () => {
+  const gateway = parsePairingPayload(
+    JSON.stringify({ baseUrl: 'http://10.0.0.5:8787/', token: 't1', agentWallet: AGENT_WALLET }),
+  );
+  assert.deepEqual(gateway, {
+    baseUrl: 'http://10.0.0.5:8787',
+    token: 't1',
+    agentWallet: '0x1234567890abcdef1234567890abcdef12345678',
+  });
+});
+
+test('parsePairingPayload requires agentWallet', () => {
+  assert.equal(
+    parsePairingPayload(JSON.stringify({ baseUrl: 'http://x:8787', token: 't' })),
+    null,
+    'no agentWallet',
+  );
+  assert.equal(
+    parsePairingPayload(JSON.stringify({ baseUrl: 'http://x:8787', token: 't', agentWallet: 'not-an-address' })),
+    null,
+    'malformed agentWallet',
+  );
 });
 
 test('parsePairingPayload rejects non-JSON, missing fields, and non-URL baseUrls', () => {
   assert.equal(parsePairingPayload('not json'), null);
-  assert.equal(parsePairingPayload(JSON.stringify({ baseUrl: 'http://x:8787' })), null, 'no token');
-  assert.equal(parsePairingPayload(JSON.stringify({ token: 't' })), null, 'no baseUrl');
-  assert.equal(parsePairingPayload(JSON.stringify({ baseUrl: 'x:8787', token: 't' })), null, 'not http(s)');
-  assert.equal(parsePairingPayload(JSON.stringify({ baseUrl: 'http://x', token: '  ' })), null, 'blank token');
+  assert.equal(
+    parsePairingPayload(JSON.stringify({ baseUrl: 'http://x:8787', agentWallet: AGENT_WALLET })),
+    null,
+    'no token',
+  );
+  assert.equal(
+    parsePairingPayload(JSON.stringify({ token: 't', agentWallet: AGENT_WALLET })),
+    null,
+    'no baseUrl',
+  );
+  assert.equal(
+    parsePairingPayload(JSON.stringify({ baseUrl: 'x:8787', token: 't', agentWallet: AGENT_WALLET })),
+    null,
+    'not http(s)',
+  );
+  assert.equal(
+    parsePairingPayload(JSON.stringify({ baseUrl: 'http://x', token: '  ', agentWallet: AGENT_WALLET })),
+    null,
+    'blank token',
+  );
+});
+
+test('resolveVoiceMode: a self-run agent with a paired computer talks locally', () => {
+  assert.equal(
+    resolveVoiceMode({ runtimeKind: 'self_hosted', hasPairedGateway: true, hostedAccountSatisfied: false }),
+    'local',
+    'a paired self-run agent uses the local gateway and skips the hosted account gate',
+  );
+});
+
+test('resolveVoiceMode: a self-run agent with no paired computer leads to pairing', () => {
+  assert.equal(
+    resolveVoiceMode({ runtimeKind: 'self_hosted', hasPairedGateway: false, hostedAccountSatisfied: true }),
+    'pair',
+  );
+});
+
+test('resolveVoiceMode: a hosted agent uses the hosted path, gated on its ChatGPT account', () => {
+  assert.equal(
+    resolveVoiceMode({ runtimeKind: 'hosted', hasPairedGateway: false, hostedAccountSatisfied: true }),
+    'hosted',
+  );
+  assert.equal(
+    resolveVoiceMode({ runtimeKind: 'hosted', hasPairedGateway: false, hostedAccountSatisfied: false }),
+    'hosted-connect',
+  );
 });
 
 test('localSessionUrl and label are derived without exposing the token', () => {

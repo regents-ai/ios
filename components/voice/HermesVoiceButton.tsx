@@ -1,27 +1,37 @@
 import { RegentPressable } from '@/components/ui/RegentPressable';
 import { useTheme, type Theme } from '@/theme/ThemeProvider';
-import type { MobileRegentVoice } from '@/types/regents';
+import type { MobileRegentVoice, RegentRuntimeKind } from '@/types/regents';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 type HermesVoiceButtonProps = {
   voice: MobileRegentVoice;
+  runtimeKind: RegentRuntimeKind;
   onPress: () => void;
 };
 
-export function HermesVoiceButton({ voice, onPress }: HermesVoiceButtonProps) {
+export function HermesVoiceButton({ voice, runtimeKind, onPress }: HermesVoiceButtonProps) {
   const theme = useTheme();
   const { colors } = theme;
   const styles = useMemo(() => makeStyles(theme), [theme]);
+  const isSelfHosted = runtimeKind === 'self_hosted';
 
-  if (!voice.enabled && voice.health === 'unavailable' && voice.account.satisfied) {
+  // A hosted agent hides the button when the hosted voice path is truly
+  // unavailable. A self-run agent always offers the button — voice runs from
+  // its own computer, so the hosted availability fold does not apply.
+  if (!isSelfHosted && !voice.enabled && voice.health === 'unavailable' && voice.account.satisfied) {
     return null;
   }
 
-  const needsAccount = !voice.account.satisfied;
-  const label = needsAccount ? 'Connect ChatGPT' : 'Talk to Hermes';
-  const detail = needsAccount ? 'Connect once to use voice.' : 'Start a live voice chat.';
+  const needsAccount = !isSelfHosted && !voice.account.satisfied;
+  const label = isSelfHosted ? 'Talk to this agent' : needsAccount ? 'Connect ChatGPT' : 'Talk to Hermes';
+  const detail = isSelfHosted
+    ? 'Talk to this agent on your computer.'
+    : needsAccount
+      ? 'Connect once to use voice.'
+      : 'Start a live voice chat.';
+  const iconName = isSelfHosted ? 'mic-outline' : needsAccount ? 'link-outline' : 'mic-outline';
 
   return (
     <RegentPressable
@@ -30,7 +40,7 @@ export function HermesVoiceButton({ voice, onPress }: HermesVoiceButtonProps) {
       onPress={onPress}
     >
       <View style={styles.iconWrap}>
-        <Ionicons name={needsAccount ? 'link-outline' : 'mic-outline'} size={18} color={colors.onAccent} />
+        <Ionicons name={iconName} size={18} color={colors.onAccent} />
       </View>
       <View style={styles.copy}>
         <Text style={styles.label}>{label}</Text>

@@ -149,6 +149,7 @@ const platformProjection: PlatformProjection = {
         sprite_free_until: null,
       },
       runtime: {
+        runtime_kind: 'hosted',
         sprite: {
           status: 'ready',
           free_until: null,
@@ -208,6 +209,22 @@ function platformProjectionWithVoice(voice: ReturnType<typeof voiceProjection>) 
       runtime: {
         ...company.runtime,
         voice,
+      },
+    })),
+  } satisfies PlatformProjection;
+}
+
+// A self-run agent: runtime_kind self_hosted, and (by platform design) its
+// hosted voice payload is disabled — the app decides self-hosted voice locally.
+function selfHostedProjection() {
+  return {
+    ...platformProjection,
+    companies: platformProjection.companies.map((company) => ({
+      ...company,
+      runtime: {
+        ...company.runtime,
+        runtime_kind: 'self_hosted' as const,
+        voice: voiceProjection({ enabled: false }),
       },
     })),
   } satisfies PlatformProjection;
@@ -892,6 +909,28 @@ test('mobile Regent detail includes Platform-owned state', async () => {
       connect_url: null,
     },
   });
+});
+
+test('a hosted agent surfaces runtimeKind hosted', async () => {
+  const [regent] = await listRegentsForUserFromPlatformProjection('platform-user', platformProjection);
+  assert.ok(regent);
+  assert.equal(regent.runtimeKind, 'hosted');
+
+  const detail = await getRegentForUserFromPlatformProjection('platform-user', 'atlas-capital', platformProjection);
+  assert.equal(detail?.runtimeKind, 'hosted');
+});
+
+test('a self-run agent surfaces runtimeKind self_hosted with hosted voice disabled', async () => {
+  const projection = selfHostedProjection();
+  const [regent] = await listRegentsForUserFromPlatformProjection('platform-user', projection);
+  assert.ok(regent);
+  assert.equal(regent.runtimeKind, 'self_hosted');
+  // The hosted voice availability stays false by design — the app decides
+  // self-run voice from the paired computer, not this payload.
+  assert.equal(regent.voice.enabled, false);
+
+  const detail = await getRegentForUserFromPlatformProjection('platform-user', 'atlas-capital', projection);
+  assert.equal(detail?.runtimeKind, 'self_hosted');
 });
 
 test('mobile Hermes voice routes mount through the live mobile router', () => {

@@ -6,6 +6,7 @@ import type { PlatformCompanyProjection, PlatformProjection } from './platformPr
 
 type RegentStatus = 'active' | 'attention' | 'paused';
 type RegentRuntimeStatus = 'online' | 'waiting' | 'offline';
+type RegentRuntimeKind = 'hosted' | 'self_hosted';
 type RegentReturnStatus = 'requested' | 'approved' | 'broadcasting' | 'confirmed' | 'failed';
 type PlatformFormationStatus = 'pending' | 'blocked' | 'provisioning' | 'ready';
 type PlatformBillingStatus = 'trial' | 'free-day' | 'prepaid' | 'paused' | 'zero' | 'failed';
@@ -44,6 +45,7 @@ type RegentSummary = {
   name: string;
   status: RegentStatus;
   runtimeStatus: RegentRuntimeStatus;
+  runtimeKind: RegentRuntimeKind;
   walletAddress: string;
   platformState: RegentPlatformState;
   voice: MobileRegentVoice;
@@ -366,6 +368,7 @@ async function summaryFromCompany(
     name: company.company.name,
     status: statusForCompany(company),
     runtimeStatus,
+    runtimeKind: company.runtime.runtime_kind,
     walletAddress: company.company.wallet_address || '0x0000000000000000000000000000000000000000',
     platformState: platformStateForCompany(projection, company),
     voice: voiceForCompany(company),

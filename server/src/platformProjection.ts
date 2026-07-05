@@ -19,6 +19,7 @@ const platformCompanySchema = z.object({
     public_summary: z.string().nullable().optional(),
   }),
   runtime: z.object({
+    runtime_kind: z.enum(['hosted', 'self_hosted']),
     sprite: z.object({
       status: z.string(),
       free_until: z.string().nullable().optional(),

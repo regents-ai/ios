@@ -4,6 +4,7 @@ import { useCoinbaseAlert } from '@/hooks/useCoinbaseAlert';
 import { useTheme, type Theme } from '@/theme/ThemeProvider';
 import {
   gatewayDisplayLabel,
+  normalizeAgentWallet,
   parsePairingPayload,
   type LocalVoiceGateway,
 } from '@/utils/voice/localGateway';
@@ -14,7 +15,7 @@ import {
 } from '@/utils/voice/localGatewayStore';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 
@@ -29,9 +30,17 @@ export default function LocalVoicePairingScreen() {
   const [scanning, setScanning] = useState(false);
   const handledRef = useRef(false);
 
+  const params = useLocalSearchParams<{ id?: string; wallet?: string; name?: string }>();
+  const agentWallet = typeof params.wallet === 'string' ? params.wallet : '';
+  const agentName = typeof params.name === 'string' ? params.name : 'this agent';
+
   const load = useCallback(async () => {
-    setPaired(await readPairedGateway().catch(() => null));
-  }, []);
+    if (!agentWallet) {
+      setPaired(null);
+      return;
+    }
+    setPaired(await readPairedGateway(agentWallet).catch(() => null));
+  }, [agentWallet]);
 
   useFocusEffect(
     useCallback(() => {
@@ -45,7 +54,7 @@ export default function LocalVoicePairingScreen() {
       if (!result.granted) {
         showAlert({
           title: 'Camera access needed',
-          message: 'Allow camera access to scan the pairing code from your local Hermes.',
+          message: 'Allow camera access to scan the code shown on your computer.',
           type: 'info',
         });
         return;
@@ -65,28 +74,42 @@ export default function LocalVoicePairingScreen() {
         // Ignore non-pairing codes; keep scanning.
         return;
       }
+
+      // The code must belong to the agent being connected. A code for a
+      // different agent is refused so voice can never reach the wrong computer.
+      if (normalizeAgentWallet(gateway.agentWallet) !== normalizeAgentWallet(agentWallet)) {
+        handledRef.current = true;
+        setScanning(false);
+        showAlert({
+          title: 'This code belongs to a different agent',
+          message: `Scan the code shown on the computer running ${agentName}.`,
+          type: 'error',
+        });
+        return;
+      }
+
       handledRef.current = true;
       setScanning(false);
       await savePairedGateway(gateway);
       await load();
       showAlert({
-        title: 'Local Hermes connected',
-        message: `Voice will use ${gatewayDisplayLabel(gateway)} until you disconnect.`,
+        title: 'Computer connected',
+        message: `${agentName} will talk to you from ${gatewayDisplayLabel(gateway)} while you are on the same Wi-Fi.`,
         type: 'success',
       });
     },
-    [load, showAlert],
+    [agentName, agentWallet, load, showAlert],
   );
 
   const disconnect = useCallback(async () => {
-    await clearPairedGateway();
+    await clearPairedGateway(agentWallet);
     await load();
     showAlert({
-      title: 'Back to hosted voice',
-      message: 'Voice will use your hosted Hermes again.',
+      title: 'Computer disconnected',
+      message: `You will need to connect a computer again to talk to ${agentName}.`,
       type: 'info',
     });
-  }, [load, showAlert]);
+  }, [agentName, agentWallet, load, showAlert]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -94,14 +117,14 @@ export default function LocalVoicePairingScreen() {
         <RegentPressable pressStyle="icon" onPress={() => router.back()} style={styles.iconButton}>
           <Ionicons name="chevron-back" size={22} color={colors.text} />
         </RegentPressable>
-        <Text style={styles.headerTitle}>Local Hermes voice</Text>
+        <Text style={styles.headerTitle}>Talk to {agentName}</Text>
         <View style={styles.iconButton} />
       </View>
 
       <View style={styles.body}>
         <Text style={styles.intro}>
-          Run `regents voice serve` on your computer, then scan the QR code it shows to use your own
-          Hermes for voice.
+          {agentName} runs on your computer. Start voice on your computer, then scan the code it
+          shows to talk to {agentName} here. Keep your phone and computer on the same Wi-Fi.
         </Text>
 
         {scanning ? (
@@ -122,7 +145,9 @@ export default function LocalVoicePairingScreen() {
               <Ionicons name="checkmark-circle" size={20} color={colors.success} />
               <Text style={styles.statusText}>Connected to {gatewayDisplayLabel(paired)}</Text>
             </View>
-            <Text style={styles.statusHint}>Voice uses this local Hermes until you disconnect.</Text>
+            <Text style={styles.statusHint}>
+              You can talk to {agentName} while your phone and computer share the same Wi-Fi.
+            </Text>
             <View style={styles.actions}>
               <RegentPressable style={styles.primaryButton} onPress={beginScan}>
                 <Text style={styles.primaryButtonText}>Re-scan</Text>
@@ -134,12 +159,14 @@ export default function LocalVoicePairingScreen() {
           </View>
         ) : (
           <View style={styles.statusCard}>
-            <Text style={styles.statusHint}>No local Hermes paired. Voice uses your hosted Hermes.</Text>
+            <Text style={styles.statusHint}>
+              No computer connected yet. Scan the code from your computer to talk to {agentName}.
+            </Text>
             <RegentPressable style={styles.primaryButton} onPress={beginScan}>
               {permission === null ? (
                 <ActivityIndicator color={colors.onAccent} size="small" />
               ) : (
-                <Text style={styles.primaryButtonText}>Scan pairing code</Text>
+                <Text style={styles.primaryButtonText}>Scan code</Text>
               )}
             </RegentPressable>
           </View>

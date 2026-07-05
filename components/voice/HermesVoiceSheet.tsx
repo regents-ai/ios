@@ -1,8 +1,9 @@
 import { RegentPressable } from '@/components/ui/RegentPressable';
 import { useTheme, type Theme } from '@/theme/ThemeProvider';
 import { useHermesVoiceSession } from '@/hooks/useHermesVoiceSession';
+import type { RegentRuntimeKind } from '@/types/regents';
 import { routes } from '@/utils/navigation/routes';
-import { gatewayDisplayLabel } from '@/utils/voice/localGateway';
+import { gatewayDisplayLabel, resolveVoiceMode } from '@/utils/voice/localGateway';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo } from 'react';
@@ -17,6 +18,8 @@ import {
 type HermesVoiceSheetProps = {
   agentId: string;
   agentName: string;
+  runtimeKind: RegentRuntimeKind;
+  agentWallet: string;
   visible: boolean;
   onClose: () => void;
 };
@@ -36,24 +39,40 @@ function statusCopy(value: string) {
   }
 }
 
-export function HermesVoiceSheet({ agentId, agentName, visible, onClose }: HermesVoiceSheetProps) {
+export function HermesVoiceSheet({
+  agentId,
+  agentName,
+  runtimeKind,
+  agentWallet,
+  visible,
+  onClose,
+}: HermesVoiceSheetProps) {
   const theme = useTheme();
   const { colors } = theme;
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const router = useRouter();
-  const voice = useHermesVoiceSession(agentId, agentName);
+  const voice = useHermesVoiceSession({ agentId, agentName, runtimeKind, agentWallet });
   const refreshStatus = voice.refreshStatus;
   const prewarm = voice.prewarm;
+  const isSelfHosted = voice.isSelfHosted;
   const usingLocal = voice.localGateway !== null;
+  const voiceMode = resolveVoiceMode({
+    runtimeKind,
+    hasPairedGateway: usingLocal,
+    hostedAccountSatisfied: voice.status?.account.satisfied !== false,
+  });
+  // A self-run agent needs its computer paired before it can talk. Until then,
+  // the sheet leads to the pairing screen instead of trying to start voice.
+  const needsPairing = voiceMode === 'pair';
   // A paired local gateway holds its own OpenAI key, so the hosted ChatGPT gate
-  // does not apply when local.
-  const needsAccount = !usingLocal && voice.status?.account.satisfied === false;
+  // never applies on the self-run path.
+  const needsAccount = voiceMode === 'hosted-connect';
   const connected = voice.connectionState === 'connected';
   const busy = voice.connectionState === 'checking' || voice.connectionState === 'connecting';
 
   const openLocalPairing = () => {
     void voice.disconnect();
-    router.push(routes.localVoicePairing());
+    router.push(routes.localVoicePairing({ regentId: agentId, agentWallet, name: agentName }));
   };
 
   const refreshLocalGateway = voice.refreshLocalGateway;
@@ -64,16 +83,20 @@ export function HermesVoiceSheet({ agentId, agentName, visible, onClose }: Herme
 
     let mounted = true;
     void refreshLocalGateway();
-    refreshStatus().then((nextStatus) => {
-      if (mounted) {
-        void prewarm(nextStatus);
-      }
-    });
+    // The hosted voice status/prewarm only apply to hosted agents. A self-run
+    // agent's readiness lives on its own computer, not the hosted path.
+    if (!isSelfHosted) {
+      refreshStatus().then((nextStatus) => {
+        if (mounted) {
+          void prewarm(nextStatus);
+        }
+      });
+    }
 
     return () => {
       mounted = false;
     };
-  }, [visible, refreshStatus, prewarm, refreshLocalGateway]);
+  }, [visible, isSelfHosted, refreshStatus, prewarm, refreshLocalGateway]);
 
   const close = () => {
     void voice.disconnect();
@@ -101,18 +124,28 @@ export function HermesVoiceSheet({ agentId, agentName, visible, onClose }: Herme
               <Ionicons name={connected ? 'mic' : 'mic-outline'} size={34} color={colors.onAccent} />
             )}
           </View>
-          <Text style={styles.statusTitle}>{needsAccount ? 'Connect ChatGPT' : statusCopy(voice.connectionState)}</Text>
+          <Text style={styles.statusTitle}>
+            {needsPairing
+              ? 'Connect your computer'
+              : needsAccount
+                ? 'Connect ChatGPT'
+                : statusCopy(voice.connectionState)}
+          </Text>
           <Text style={styles.statusBody}>
-            {needsAccount
-              ? 'Connect ChatGPT once, then come back to talk to Hermes.'
-              : connected
-                ? 'Speak naturally. Hermes will ask before any sensitive action.'
-                : 'Start voice when you are ready.'}
+            {needsPairing
+              ? 'Connect your computer to talk to this agent. Your phone and computer need to be on the same Wi-Fi.'
+              : needsAccount
+                ? 'Connect ChatGPT once, then come back to talk to Hermes.'
+                : connected
+                  ? `Speak naturally. ${agentName} will ask before any sensitive action.`
+                  : 'Start voice when you are ready.'}
           </Text>
           {voice.errorMessage ? <Text style={styles.errorText}>{voice.errorMessage}</Text> : null}
           <Text style={styles.sourceLabel}>
-            {usingLocal
-              ? `Using local Hermes (${gatewayDisplayLabel(voice.localGateway!)})`
+            {isSelfHosted
+              ? usingLocal
+                ? `Talking to this agent on your computer (${gatewayDisplayLabel(voice.localGateway!)})`
+                : 'This agent runs on your computer'
               : 'Using hosted Hermes'}
           </Text>
         </View>
@@ -133,7 +166,11 @@ export function HermesVoiceSheet({ agentId, agentName, visible, onClose }: Herme
         ) : null}
 
         <View style={styles.footer}>
-          {needsAccount ? (
+          {needsPairing ? (
+            <RegentPressable style={styles.primaryButton} onPress={openLocalPairing}>
+              <Text style={styles.primaryButtonText}>Connect your computer</Text>
+            </RegentPressable>
+          ) : needsAccount ? (
             <RegentPressable style={styles.primaryButton} onPress={voice.openAccountConnection}>
               <Text style={styles.primaryButtonText}>Connect ChatGPT</Text>
             </RegentPressable>
@@ -148,12 +185,10 @@ export function HermesVoiceSheet({ agentId, agentName, visible, onClose }: Herme
           )}
         </View>
 
-        {!connected && !busy ? (
+        {isSelfHosted && usingLocal && !connected && !busy ? (
           <RegentPressable style={styles.localLink} onPress={openLocalPairing}>
             <Ionicons name="qr-code-outline" size={16} color={colors.accent} />
-            <Text style={styles.localLinkText}>
-              {usingLocal ? 'Manage local Hermes' : 'Connect to local Hermes'}
-            </Text>
+            <Text style={styles.localLinkText}>Manage this agent&apos;s computer</Text>
           </RegentPressable>
         ) : null}
       </View>

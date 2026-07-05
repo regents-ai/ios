@@ -14,6 +14,7 @@ import type {
   MessageThreadStatus,
   RegentDetail,
   RegentReturnRequest,
+  RegentRuntimeKind,
   RegentRuntimeStatus,
   RegentSummary,
 } from '@/types/regents';
@@ -75,6 +76,13 @@ const runtimeStatus = tolerantEnum<RegentRuntimeStatus>(
   'regent.runtimeStatus'
 );
 
+// runtimeKind decides whether voice talks to a self-run agent's own computer or
+// the hosted path. It has no 'unknown' case, so an unrecognized value falls back
+// to 'hosted' — the path that never sends a user at a computer that is not there.
+function runtimeKind(value: unknown): RegentRuntimeKind {
+  return value === 'self_hosted' ? 'self_hosted' : 'hosted';
+}
+
 const returnStatus = tolerantEnum<RegentReturnRequest['status']>(
   ['requested', 'approved', 'broadcasting', 'confirmed', 'failed'],
   'returnRequest.status'
@@ -128,7 +136,11 @@ export function normalizeReturnRequest(returnRequest: RegentReturnRequest): Rege
 
 /** Normalizes a Regent summary's enum fields. */
 export function normalizeRegentSummary<T extends RegentSummary>(regent: T): T {
-  return { ...regent, runtimeStatus: runtimeStatus(regent.runtimeStatus) };
+  return {
+    ...regent,
+    runtimeStatus: runtimeStatus(regent.runtimeStatus),
+    runtimeKind: runtimeKind(regent.runtimeKind),
+  };
 }
 
 /** Normalizes a Regent detail: summary enums plus its return requests. */
