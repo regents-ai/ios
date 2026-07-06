@@ -15,6 +15,7 @@ import { SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { RegentPressable } from '@/components/ui/RegentPressable';
 import { useTheme, type Theme } from '@/theme/ThemeProvider';
+import { setPostAuthDestination } from '@/utils/state/postAuthDestination';
 
 const STEPS = [
   { icon: 'cash-outline', title: 'Add funds', detail: 'Load USDC with Apple Pay or your card.' },
@@ -64,7 +65,14 @@ export default function CreateCloudAgentScreen() {
           Cloud agent creation opens soon. You can add funds now so you are ready on day one.
         </Text>
 
-        <RegentPressable style={styles.primaryButton} onPress={() => router.replace('/(tabs)/wallet')}>
+        <RegentPressable
+          style={styles.primaryButton}
+          onPress={() => {
+            // Adding funds is the chosen next step now, even if sign-in comes first.
+            setPostAuthDestination('/(tabs)/wallet');
+            router.replace('/(tabs)/wallet');
+          }}
+        >
           <Text style={styles.primaryButtonText}>Add funds to get ready</Text>
         </RegentPressable>
       </ScrollView>

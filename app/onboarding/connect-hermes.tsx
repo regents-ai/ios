@@ -17,13 +17,20 @@ import { ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, Text, View } f
 
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { RegentPressable } from '@/components/ui/RegentPressable';
+import { useChatGptAuth } from '@/hooks/useChatGptAuth';
 import { useCoinbaseAlert } from '@/hooks/useCoinbaseAlert';
+import { useRegentsAuth } from '@/hooks/useRegentsAuth';
 import { useTheme, type Theme } from '@/theme/ThemeProvider';
 import { outcomeForClaimError, outcomeForScan, type ConnectPhase } from '@/utils/agentLink/connectFlow';
 import { regentApi } from '@/utils/regentApi/client';
+import { setPostAuthDestination } from '@/utils/state/postAuthDestination';
 
-/** Install command shown to the user. TODO(sean-decision): confirm final command. */
-const PLUGIN_INSTALL_COMMAND = 'hermes plugins install regents';
+/**
+ * Commands shown to the user, matching the shipped CLI surface
+ * (regents-cli cli-contract: `regents agent connect phone`).
+ */
+const CLI_INSTALL_COMMAND = 'curl -fsSL https://regents.sh/install.sh | bash';
+const SHOW_CODE_COMMAND = 'regents agent connect phone';
 
 export default function ConnectHermesScreen() {
   const router = useRouter();
@@ -31,19 +38,29 @@ export default function ConnectHermesScreen() {
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const { colors } = theme;
   const { alertProps, showAlert } = useCoinbaseAlert();
+  const { session: chatGptSession } = useChatGptAuth();
+  const { isAuthenticated: isPrivyAuthenticated } = useRegentsAuth();
   const [permission, requestPermission] = useCameraPermissions();
   const [phase, setPhase] = useState<ConnectPhase>('idle');
   const [connectedName, setConnectedName] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [copiedCommand, setCopiedCommand] = useState<string | null>(null);
   const handledRef = useRef(false);
 
   const scanning = phase === 'scanning';
+  // Claiming a code needs a signed-in account; first-run visitors arrive here
+  // before sign-in, so the scan step routes them through sign-in and back.
+  const isSignedIn = !!chatGptSession && isPrivyAuthenticated;
 
-  const copyCommand = useCallback(async () => {
-    await Clipboard.setStringAsync(PLUGIN_INSTALL_COMMAND);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const copyCommand = useCallback(async (command: string) => {
+    await Clipboard.setStringAsync(command);
+    setCopiedCommand(command);
+    setTimeout(() => setCopiedCommand(null), 2000);
   }, []);
+
+  const goToSignIn = useCallback(() => {
+    setPostAuthDestination('/onboarding/connect-hermes');
+    router.replace('/auth/login');
+  }, [router]);
 
   const beginScan = useCallback(async () => {
     if (!permission?.granted) {
@@ -105,27 +122,43 @@ export default function ConnectHermesScreen() {
 
       <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
         <Text style={styles.intro}>
-          Already running a Hermes agent on your computer? Install the Regents plugin there, then
-          scan the code it shows to link that agent to this phone.
+          Already running a Hermes agent on your computer? Install Regents there, then scan the
+          code your agent shows to link it to this phone.
         </Text>
 
         <View style={styles.stepCard}>
           <Text style={styles.stepLabel}>Step 1</Text>
-          <Text style={styles.stepTitle}>Install the Regents plugin</Text>
+          <Text style={styles.stepTitle}>Install Regents on your computer</Text>
           <Text style={styles.stepHint}>Run this on the computer where your agent lives.</Text>
           <View style={styles.commandRow}>
-            <Text style={styles.commandText}>{PLUGIN_INSTALL_COMMAND}</Text>
-            <RegentPressable pressStyle="icon" style={styles.copyButton} onPress={() => void copyCommand()}>
+            <Text style={styles.commandText}>{CLI_INSTALL_COMMAND}</Text>
+            <RegentPressable
+              pressStyle="icon"
+              style={styles.copyButton}
+              onPress={() => void copyCommand(CLI_INSTALL_COMMAND)}
+            >
               <Ionicons
-                name={copied ? 'checkmark' : 'copy-outline'}
+                name={copiedCommand === CLI_INSTALL_COMMAND ? 'checkmark' : 'copy-outline'}
                 size={18}
-                color={copied ? colors.success : colors.text}
+                color={copiedCommand === CLI_INSTALL_COMMAND ? colors.success : colors.text}
               />
             </RegentPressable>
           </View>
-          <Text style={styles.stepHint}>
-            The first run shows a QR code. You can bring it back any time with `hermes regents qr`.
-          </Text>
+          <Text style={styles.stepHint}>Then ask your agent to show its pairing code:</Text>
+          <View style={styles.commandRow}>
+            <Text style={styles.commandText}>{SHOW_CODE_COMMAND}</Text>
+            <RegentPressable
+              pressStyle="icon"
+              style={styles.copyButton}
+              onPress={() => void copyCommand(SHOW_CODE_COMMAND)}
+            >
+              <Ionicons
+                name={copiedCommand === SHOW_CODE_COMMAND ? 'checkmark' : 'copy-outline'}
+                size={18}
+                color={copiedCommand === SHOW_CODE_COMMAND ? colors.success : colors.text}
+              />
+            </RegentPressable>
+          </View>
         </View>
 
         {phase === 'connected' ? (
@@ -167,6 +200,18 @@ export default function ConnectHermesScreen() {
                 <ActivityIndicator color={colors.accent} size="small" />
                 <Text style={styles.stepHint}>Connecting your agent…</Text>
               </View>
+            ) : !isSignedIn ? (
+              <>
+                <Text style={styles.stepHint}>
+                  Sign in first so the agent connects to your account. You will come right back here.
+                </Text>
+                <RegentPressable style={styles.primaryButton} onPress={goToSignIn}>
+                  <View style={styles.primaryButtonContent}>
+                    <Ionicons name="person-circle-outline" size={18} color={colors.onAccent} />
+                    <Text style={styles.primaryButtonText}>Sign in to connect</Text>
+                  </View>
+                </RegentPressable>
+              </>
             ) : (
               <RegentPressable style={styles.primaryButton} onPress={() => void beginScan()}>
                 {permission === null ? (

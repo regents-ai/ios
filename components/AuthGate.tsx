@@ -15,6 +15,7 @@ import { useRegentsAuth } from '@/hooks/useRegentsAuth';
 import { getMotionPreset } from '@/components/motion/easePresets';
 import { useReducedMotion } from '@/components/motion/useReducedMotion';
 import { setCountry, setSubdivision } from '@/utils/state/locationState';
+import { clearPostAuthDestination, resolvePostAuthLanding } from '@/utils/state/postAuthDestination';
 import { setCurrentSolanaAddress, setCurrentWalletAddress } from '@/utils/state/walletRuntimeState';
 import { useIsInitialized, useSignOut } from '@coinbase/cdp-hooks';
 import { router, useRootNavigationState, useSegments } from 'expo-router';
@@ -115,9 +116,14 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
     const currentSegment = segments[0];
     const inManagedAuthRoute = isAuthManagedRoute(currentSegment);
-    const redirectTo = !isAuthenticated && !inManagedAuthRoute ? '/auth/login' : isAuthenticated && currentSegment === 'auth' ? '/agents' : null;
+    const redirectTo = !isAuthenticated && !inManagedAuthRoute ? '/auth/login' : isAuthenticated && currentSegment === 'auth' ? resolvePostAuthLanding() : null;
 
     if (!redirectTo) {
+      // A signed-in person outside the sign-in/onboarding flow has arrived at
+      // their destination, so any pending chosen-path intent is spent.
+      if (isAuthenticated && !inManagedAuthRoute) {
+        clearPostAuthDestination();
+      }
       return;
     }
 

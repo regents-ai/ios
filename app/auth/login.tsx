@@ -4,6 +4,7 @@ import { useChatGptAuth } from '@/hooks/useChatGptAuth';
 import { useRegentsAuth } from '@/hooks/useRegentsAuth';
 import { hasRegentsAccountConfig } from '@/utils/mobilePublicConfig';
 import { hasSeenOnboarding } from '@/utils/onboardingState';
+import { resolvePostAuthLanding } from '@/utils/state/postAuthDestination';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -41,7 +42,7 @@ function RegentsAccountRedirect({ hasChatGptSession }: { hasChatGptSession: bool
 
   useEffect(() => {
     if (isAuthenticated) {
-      router.replace('/agents');
+      router.replace(resolvePostAuthLanding());
     }
   }, [isAuthenticated, router]);
 

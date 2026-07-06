@@ -31,6 +31,10 @@ import { RegentPressable } from '@/components/ui/RegentPressable';
 import { useTheme, type Theme } from '@/theme/ThemeProvider';
 import { hexToRgb } from '@/theme/tokens';
 import { markOnboardingSeen } from '@/utils/onboardingState';
+import {
+  clearPostAuthDestination,
+  setPostAuthDestination,
+} from '@/utils/state/postAuthDestination';
 
 /** Concentric glow bands, inner to outer: relative size and settled opacity. */
 const GLOW_BANDS = [
@@ -204,7 +208,10 @@ export default function OnboardingWelcomeScreen() {
               haptic="selection"
               pressStyle="chip"
               style={styles.skipPill}
-              onPress={() => finish('/auth/login')}
+              onPress={() => {
+                clearPostAuthDestination();
+                finish('/auth/login');
+              }}
             >
               <Text style={styles.skipText}>Skip</Text>
             </RegentPressable>
@@ -219,7 +226,10 @@ export default function OnboardingWelcomeScreen() {
             haptic="selection"
             pressStyle="card"
             style={styles.optionRow}
-            onPress={() => router.push('/onboarding/connect-hermes')}
+            onPress={() => {
+              setPostAuthDestination('/onboarding/connect-hermes');
+              router.push('/onboarding/connect-hermes');
+            }}
           >
             <View style={styles.optionIcon}>
               <Ionicons name="terminal-outline" size={22} color={colors.accent} />
@@ -237,7 +247,10 @@ export default function OnboardingWelcomeScreen() {
             haptic="selection"
             pressStyle="card"
             style={styles.optionRow}
-            onPress={() => router.push('/onboarding/create-cloud-agent')}
+            onPress={() => {
+              setPostAuthDestination('/onboarding/create-cloud-agent');
+              router.push('/onboarding/create-cloud-agent');
+            }}
           >
             <View style={styles.optionIcon}>
               <Ionicons name="cloud-outline" size={22} color={colors.accent} />
@@ -256,7 +269,10 @@ export default function OnboardingWelcomeScreen() {
             haptic="selection"
             pressStyle="card"
             style={styles.tertiaryRow}
-            onPress={() => finish('/(tabs)/wallet')}
+            onPress={() => {
+              setPostAuthDestination('/(tabs)/wallet');
+              finish('/(tabs)/wallet');
+            }}
           >
             <Ionicons name="cash-outline" size={16} color={colors.textMuted} />
             <Text style={styles.tertiaryText}>Onramp USDC to an agent</Text>
