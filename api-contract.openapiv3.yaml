@@ -34,10 +34,10 @@ x-regent-message-contract:
   talk_source: Platform Regent Work Runtime
   transport_boundary: Mobile Message threads are sourced from Platform Regent Work Runtime. The mobile app does not own a separate peer-to-peer message transport.
 paths:
-  /health:
+  /healthz:
     get:
-      operationId: getHealth
-      summary: Check whether the mobile backend is running
+      operationId: getHealthz
+      summary: Check whether the mobile backend is running (liveness)
       responses:
         '200':
           description: Backend health status
@@ -51,10 +51,10 @@ paths:
                     type: boolean
                   message:
                     type: string
-  /health/ready:
+  /readyz:
     get:
-      operationId: getHealthReadiness
-      summary: Check whether the mobile backend's dependencies are reachable
+      operationId: getReadyz
+      summary: Check whether the mobile backend's dependencies are reachable (readiness)
       responses:
         '200':
           description: Backend dependencies are reachable
@@ -82,6 +82,17 @@ paths:
                   redis:
                     type: string
                     enum: [ok, unreachable, not_configured]
+  /metrics:
+    get:
+      operationId: getMetrics
+      summary: Read Prometheus metrics for the mobile backend
+      responses:
+        '200':
+          description: Prometheus text exposition of backend process, request, and product metrics
+          content:
+            text/plain:
+              schema:
+                type: string
   /.well-known/jwks.json:
     get:
       operationId: getCdpJwks

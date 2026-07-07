@@ -51,6 +51,8 @@ export async function validateAccessToken(
   }
 }
 
+// unref: cache cleanup must never keep the process alive on its own (tests
+// and scripts that import the app would otherwise hang instead of exiting).
 setInterval(() => {
   const now = Date.now();
   for (const [token, data] of tokenCache.entries()) {
@@ -58,4 +60,4 @@ setInterval(() => {
       tokenCache.delete(token);
     }
   }
-}, 10 * 60 * 1000);
+}, 10 * 60 * 1000).unref();

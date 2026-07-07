@@ -21,14 +21,20 @@ kill_timeout = "5s"
   min_machines_running = 1
   processes = ["app"]
 
-  # Readiness, not liveness: /health/ready PINGs Redis so a machine with a
-  # dead Redis connection is marked unhealthy. Plain liveness stays at /health.
+  # Readiness, not liveness: /readyz PINGs Redis so a machine with a dead
+  # Redis connection is marked unhealthy. Plain liveness stays at /healthz.
   [[http_service.checks]]
     grace_period = "10s"
     interval = "15s"
     timeout = "5s"
     method = "GET"
-    path = "/health/ready"
+    path = "/readyz"
+
+# Fly managed Prometheus scrapes the app registry (process, request timing,
+# and mobile product counters) and adds the `app` label itself.
+[metrics]
+  port = 8080
+  path = "/metrics"
 
 [[vm]]
   cpu_kind = "shared"

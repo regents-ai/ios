@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import { verifyBaseReceipt } from './baseReceiptVerification.js';
 import { sendError } from './httpResponses.js';
+import { mobileSendTotal } from './metrics.js';
 import {
   confirmPreparedWalletActionForUser,
   confirmRegentFundingIntentForUser,
@@ -394,9 +395,11 @@ export function createMobileRoutes(input?: {
     }
 
     if (result.kind === 'conflict') {
+      mobileSendTotal.inc({ result: 'failed' });
       return sendError(res, 409, 'ReceiptMismatch', 'The chain receipt does not match this return.');
     }
 
+    mobileSendTotal.inc({ result: 'ok' });
     return res.json({ returnRequest: result.returnRequest });
   });
 
@@ -526,9 +529,11 @@ export function createMobileRoutes(input?: {
     }
 
     if (result.kind === 'conflict') {
+      mobileSendTotal.inc({ result: 'failed' });
       return sendError(res, 409, 'ReceiptMismatch', 'The chain receipt does not match this funding.');
     }
 
+    mobileSendTotal.inc({ result: 'ok' });
     return res.json({ fundingIntent: result.fundingIntent });
   });
 
@@ -758,10 +763,12 @@ export function createMobileRoutes(input?: {
     }
 
     if (result.kind === 'conflict') {
+      mobileSendTotal.inc({ result: 'failed' });
       return sendError(res, 409, 'ReceiptMismatch', 'The chain receipt does not match this action.');
     }
 
     if (result.kind === 'expired') {
+      mobileSendTotal.inc({ result: 'failed' });
       return sendError(
         res,
         410,
@@ -770,6 +777,7 @@ export function createMobileRoutes(input?: {
       );
     }
 
+    mobileSendTotal.inc({ result: 'ok' });
     return res.json({ wallet_action: result.action });
   });
 

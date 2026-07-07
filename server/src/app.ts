@@ -8,6 +8,13 @@ import { checkReadiness } from './health.js';
 import { sendError } from './httpResponses.js';
 import { createCdpCustomAuthToken, getCdpJwks } from './identity.js';
 import { resolveClientIp } from './ip.js';
+import {
+  createHttpMetricsMiddleware,
+  metricsHandler,
+  mobilePushRegistrationsTotal,
+  mobileWalletOpenedTotal,
+  recordTransactionWebhookOutcome,
+} from './metrics.js';
 import { isReleaseRuntime } from './runtime.js';
 import { createMobileRoutes } from './mobileRoutes.js';
 import { processMobileMessagePushRequest } from './mobileMessagePush.js';
@@ -131,6 +138,10 @@ const PORT = Number(process.env.PORT || 3000);
 // fly-proxy always sets; see src/ip.ts and src/rateLimits.ts.
 app.set('trust proxy', 1);
 
+// Request timing for every response, labeled by the matched route pattern
+// (never the raw URL) and status class. Served at GET /metrics below.
+app.use(createHttpMetricsMiddleware());
+
 const webhookRateLimiter = createWebhookRateLimiter();
 const publicReadRateLimiter = createPublicReadRateLimiter();
 const publicWriteRateLimiter = createPublicWriteRateLimiter();
@@ -186,20 +197,24 @@ app.use((req, _res, next) => {
 });
 
 // Liveness check (no auth required): the process is up and serving.
-app.get("/health", (_req, res) => {
+app.get('/healthz', (_req, res) => {
   res.json({ ok: true, message: 'Server is running' });
 });
 
 // Readiness check (no auth required): hard dependencies still answer. The Fly
 // health check targets this path so a machine with a dead Redis connection is
 // marked unhealthy instead of silently failing requests. See src/health.ts.
-app.get('/health/ready', async (_req, res) => {
+app.get('/readyz', async (_req, res) => {
   const readiness = await checkReadiness({
     redisPing: database ? () => database.ping() : null,
   });
 
   res.status(readiness.ok ? 200 : 503).json(readiness);
 });
+
+// Prometheus metrics (no auth required): scraped by Fly managed Prometheus
+// via the [metrics] section in fly.toml. Labels are bounded; see src/metrics.ts.
+app.get('/metrics', metricsHandler);
 
 app.get('/.well-known/jwks.json', publicReadRateLimiter, (_req, res) => {
   try {
@@ -213,10 +228,11 @@ app.get('/.well-known/jwks.json', publicReadRateLimiter, (_req, res) => {
 // 🔒 GLOBAL AUTHENTICATION MIDDLEWARE
 // All routes except public health and verification routes require a valid app access token
 app.use((req, res, next) => {
-  // Skip authentication for health check, webhooks, and debug endpoints
+  // Skip authentication for health checks, metrics, webhooks, and debug endpoints
   if (
-    req.path === '/health' ||
-    req.path === '/health/ready' ||
+    req.path === '/healthz' ||
+    req.path === '/readyz' ||
+    req.path === '/metrics' ||
     req.path === '/.well-known/jwks.json' ||
     req.path.startsWith('/webhooks') ||
     req.path === '/internal/mobile/message/push' ||
@@ -244,6 +260,9 @@ app.post('/auth/cdp-token', async (req, res) => {
     }
 
     const token = await createCdpCustomAuthToken(req.userId);
+    // The app requests this token exactly when it opens the user's wallet, so
+    // a successfully issued token is the server-observed wallet-open event.
+    mobileWalletOpenedTotal.inc();
     return res.json({ token });
   } catch (error) {
     console.error('❌ [AUTH] Unable to create Coinbase custom sign-in token:', summarizeErrorLog(error));
@@ -810,6 +829,7 @@ app.post('/push-tokens', async (req, res) => {
         tokenType: tokenData.tokenType,
       }),
     });
+    mobilePushRegistrationsTotal.inc();
     res.json({ success: true });
   } catch (error) {
     console.error('❌ [PUSH] Error:', summarizeErrorLog(error));
@@ -1011,6 +1031,9 @@ app.post('/webhooks/onramp', webhookRateLimiter, async (req, res) => {
     }
 
     await markTransactionWebhookEventProcessed(webhook, useDatabase ? database : null);
+    // Counted only after the event is marked processed: the dedupe claim
+    // guarantees each settlement increments its buy/cash-out counter once.
+    recordTransactionWebhookOutcome(webhook.eventType);
     return res.status(200).json({ received: true });
   } catch (error) {
     await releaseTransactionWebhookEventClaim(webhook, useDatabase ? database : null).catch(() => undefined);

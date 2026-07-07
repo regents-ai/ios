@@ -1,7 +1,7 @@
 /**
  * Liveness vs readiness:
- * - `/health` (liveness): the process is up and serving HTTP.
- * - `/health/ready` (readiness): hard dependencies still answer. Redis is the
+ * - `/healthz` (liveness): the process is up and serving HTTP.
+ * - `/readyz` (readiness): hard dependencies still answer. Redis is the
  *   only post-boot dependency that can die silently (APNs and Redis are
  *   validated at startup in release runtime), so readiness PINGs Redis with a
  *   short timeout. The Fly health check targets readiness so a machine whose

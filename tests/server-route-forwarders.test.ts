@@ -64,7 +64,9 @@ test('server route forwarders exist for auth, live Regent, and message endpoints
 test('served backend routes stay declared in the mobile API contract', () => {
   const contract = readFileSync(resolve(testDir, '../api-contract.openapiv3.yaml'), 'utf8');
   const routePaths = [
-    '/health',
+    '/healthz',
+    '/readyz',
+    '/metrics',
     '/.well-known/jwks.json',
     '/auth/me',
     '/auth/cdp-token',
@@ -126,7 +128,7 @@ test('mobile message routes use the live mobile prefix only', () => {
 
 test('serverless route forwarders load the built server app', () => {
   const files = [
-    '../server/api/health.js',
+    '../server/api/healthz.js',
     '../server/api/push-tokens.js',
     '../server/api/push-tokens/ping.js',
     '../server/api/auth/me.js',

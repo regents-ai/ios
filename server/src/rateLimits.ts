@@ -130,7 +130,9 @@ function authenticatedKey(req: Request) {
 
 function isPublicRoute(req: Request) {
   return (
-    req.path === '/health' ||
+    req.path === '/healthz' ||
+    req.path === '/readyz' ||
+    req.path === '/metrics' ||
     req.path === '/.well-known/jwks.json' ||
     req.path.startsWith('/webhooks') ||
     req.path === '/internal/mobile/message/push' ||
