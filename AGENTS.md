@@ -1,7 +1,7 @@
 <!-- BEGIN REGENT META GENERATED -->
 ## Repo Contract
 
-Generated from `meta/stack.yaml` and repo `repo.yaml` files. Local notes may live outside this block.
+Generated from `metaprogramming/stack.yaml` and repo `repo.yaml` files. Local notes may live outside this block.
 
 - Repo contract: `ios/repo.yaml`
 - Owner: `ios`
@@ -26,7 +26,7 @@ The Regent dependency skills are installed in `/Users/sean/Documents/regent/.age
 
 ## Source Of Truth
 
-- `layer2.md` defines this repo's ownership, boundaries, secret rules, and acceptance checks.
+- `repo.yaml` defines this repo's ownership, boundaries, secret rules, and acceptance checks.
 - `api-contract.openapiv3.yaml` is the source of truth for the mobile backend surface.
 - `mobile-services-contract.openapiv3.yaml` records shared mobile service routes.
 - `README.md` explains local setup and the current product reality.

@@ -74,7 +74,7 @@ cd server && npm test
 
 ## Agent Orientation
 
-Start with `AGENTS.md`, `repo.yaml`, and `layer2.md` before editing. The app uses Expo Router under `app/`, shared UI under `components/`, wallet and Regent API helpers under `hooks/` and `utils/`, and the local mobile backend under `server/`.
+Start with `AGENTS.md`, `repo.yaml`, and the owning interface contracts before editing. The app uses Expo Router under `app/`, shared UI under `components/`, wallet and Regent API helpers under `hooks/` and `utils/`, and the local mobile backend under `server/`.
 
 The in-repo API source of truth is `api-contract.openapiv3.yaml`. `mobile-services-contract.openapiv3.yaml` currently documents that there are no separate shipped shared mobile service routes.
 
