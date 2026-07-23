@@ -22,8 +22,6 @@ jest.mock('expo-secure-store', () => ({
   }),
 }));
 
-process.env.EXPO_PUBLIC_BASE_URL = process.env.EXPO_PUBLIC_BASE_URL || 'https://test.regents.sh';
-
 import {
   clearPairedGateway,
   readPairedGateway,
