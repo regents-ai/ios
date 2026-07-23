@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { getRegentHapticPattern } from '../components/ui/hapticMapping';
+import {
+  getRegentEventHapticKind,
+  getRegentHapticPattern,
+} from '../components/ui/hapticMapping';
 import {
   getSwipeReleaseMotion,
   getSwipeThreshold,
@@ -18,6 +21,12 @@ test('Regent haptics stay iOS-only and map common feedback to subtle patterns', 
   assert.deepEqual(getRegentHapticPattern('tap', 'android'), { type: 'none' });
   assert.deepEqual(getRegentHapticPattern('success', 'web'), { type: 'none' });
   assert.deepEqual(getRegentHapticPattern('none', 'ios'), { type: 'none' });
+});
+
+test('radial dial named events map selection, commit, and cancel feedback', () => {
+  assert.equal(getRegentEventHapticKind('dialSelectionChanged'), 'selection');
+  assert.equal(getRegentEventHapticKind('dialCommitted'), 'success');
+  assert.equal(getRegentEventHapticKind('dialCancelled'), 'warning');
 });
 
 test('swipe confirmation keeps the same threshold and skips release motion when requested', () => {

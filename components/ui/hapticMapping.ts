@@ -12,7 +12,10 @@ export type RegentHapticEvent =
   | 'approvalGranted'
   | 'approvalDenied'
   | 'swipeConfirmCompleted'
-  | 'messageSent';
+  | 'messageSent'
+  | 'dialSelectionChanged'
+  | 'dialCommitted'
+  | 'dialCancelled';
 
 const REGENT_EVENT_HAPTIC_KINDS: Record<RegentHapticEvent, RegentHapticKind> = {
   txSubmitted: 'tap',
@@ -22,6 +25,9 @@ const REGENT_EVENT_HAPTIC_KINDS: Record<RegentHapticEvent, RegentHapticKind> = {
   approvalDenied: 'warning',
   swipeConfirmCompleted: 'success',
   messageSent: 'tap',
+  dialSelectionChanged: 'selection',
+  dialCommitted: 'success',
+  dialCancelled: 'warning',
 };
 
 export function getRegentEventHapticKind(event: RegentHapticEvent): RegentHapticKind {

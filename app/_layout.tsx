@@ -6,6 +6,7 @@ import { AuthGate } from "@/components/AuthGate";
 import { AuthInitializer } from "@/components/AuthInitializer";
 import { PushNotificationRouter } from "@/components/PushNotificationRouter";
 import { PendingRouteDrainer } from "@/components/PendingRouteDrainer";
+import { DialOverlayHost } from "@/components/dial/DialOverlayHost";
 import { useAppBootstrap } from "@/hooks/useAppBootstrap";
 import { useRegentsAuth } from "@/hooks/useRegentsAuth";
 import { fetchCdpAuthToken } from "@/utils/fetchCdpAuthToken";
@@ -16,6 +17,7 @@ import { useMemo } from "react";
 import 'react-native-get-random-values';
 import 'react-native-url-polyfill/auto';
 import { StyleSheet, Text, View } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 // The missing-config screen uses the dark token set directly: it is always
 // shown on the dark ground regardless of the user's appearance preference.
@@ -72,9 +74,14 @@ export default function RootLayout() {
   // Theme is app-wide: pre-auth routes (login, onboarding) call useTheme()
   // too, so the provider must sit above every branch below.
   return (
-    <ThemeProvider>
-      <RootLayoutContent />
-    </ThemeProvider>
+    <GestureHandlerRootView style={styles.root}>
+      <ThemeProvider>
+        <View style={styles.root}>
+          <RootLayoutContent />
+          <DialOverlayHost />
+        </View>
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }
 
@@ -83,7 +90,7 @@ function RootLayoutContent() {
   const segments = useSegments();
   const config = readMobilePublicConfig();
   const canUseRegentsAccount = hasRegentsAccountConfig(config);
-  const isLoginRoute = segments[0] === 'auth' && segments[1] === 'login';
+  const isLoginRoute = segments.join('/') === 'auth/login';
 
   if (!canUseRegentsAccount && !isLoginRoute) {
     return <Redirect href="/auth/login" />;
@@ -165,6 +172,9 @@ function RootLayoutContent() {
 }
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
   missingConfigContainer: {
     flex: 1,
     backgroundColor: c.bg,
