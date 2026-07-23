@@ -82,10 +82,12 @@ describe('RadialDial', () => {
   });
 
   it('expands from the center tap and collapses from the scrim tap', () => {
+    const onExpand = jest.fn();
     const { getByLabelText, getByTestId } = renderThemed(
       <RadialDial
         bottomOffset={112}
         onAction={jest.fn()}
+        onExpand={onExpand}
         petals={DEFAULT_DIAL_PETALS}
         rightOffset={16}
       />
@@ -95,6 +97,31 @@ describe('RadialDial', () => {
     expect(getByLabelText('Close radial dial')).toBeTruthy();
 
     fireEvent.press(getByTestId('dial-scrim'));
+    expect(getByLabelText('Open radial dial')).toBeTruthy();
+
+    fireEvent.press(getByLabelText('Open radial dial'));
+    expect(onExpand).toHaveBeenCalledTimes(2);
+  });
+
+  it('opens the Pay submenu and commits its Send action', () => {
+    const onAction = jest.fn();
+    const { getByLabelText } = renderThemed(
+      <RadialDial
+        bottomOffset={112}
+        onAction={onAction}
+        petals={DEFAULT_DIAL_PETALS}
+        rightOffset={16}
+      />
+    );
+
+    fireEvent.press(getByLabelText('Open radial dial'));
+    fireEvent.press(getByLabelText('Pay'));
+    fireEvent.press(getByLabelText('Send'));
+
+    expect(onAction).toHaveBeenCalledWith({
+      kind: 'navigate',
+      href: '/(tabs)/send',
+    });
     expect(getByLabelText('Open radial dial')).toBeTruthy();
   });
 

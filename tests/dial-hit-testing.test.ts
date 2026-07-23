@@ -10,9 +10,9 @@ import {
 } from '../components/dial/hitTesting';
 
 test('dial hit-testing resolves each default petal by angle and radius', () => {
-  for (let index = 0; index < 4; index += 1) {
-    const point = getDialPetalPosition(index, 4, DIAL_FIRST_RING_RADIUS);
-    assert.deepEqual(hitTestDialPetals(point.x, point.y, 4), {
+  for (let index = 0; index < 5; index += 1) {
+    const point = getDialPetalPosition(index, 5, DIAL_FIRST_RING_RADIUS);
+    assert.deepEqual(hitTestDialPetals(point.x, point.y, 5), {
       zone: 'petal',
       petalIndex: index,
     });

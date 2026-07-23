@@ -47,6 +47,7 @@ type RadialDialProps = {
   bottomOffset: number;
   rightOffset: number;
   onAction: (action: DialPetalAction) => void;
+  onExpand?: () => void;
 };
 
 type AnimatedPetalProps = {
@@ -134,6 +135,7 @@ function AnimatedPetal({
 export function RadialDial({
   bottomOffset,
   onAction,
+  onExpand,
   petals,
   rightOffset,
 }: RadialDialProps) {
@@ -211,11 +213,12 @@ export function RadialDial({
 
   const expand = useCallback(() => {
     if (!expandedRef.current) {
+      onExpand?.();
       setActiveSubmenuIndex(null);
       setHighlightedState(null);
       setExpandedState(true);
     }
-  }, [setExpandedState, setHighlightedState]);
+  }, [onExpand, setExpandedState, setHighlightedState]);
 
   const collapse = useCallback(() => {
     setHighlightedState(null);

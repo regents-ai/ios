@@ -1,10 +1,17 @@
 import type Ionicons from '@expo/vector-icons/Ionicons';
 import type { Href } from 'expo-router';
 
-export type DialPetalAction = {
-  kind: 'navigate';
-  href: Href;
-};
+export type DialPetalAction =
+  | {
+      kind: 'navigate';
+      href: Href;
+    }
+  | {
+      kind: 'primaryAgentVoice';
+    }
+  | {
+      kind: 'urgentMessage';
+    };
 
 export type DialPetal = {
   id: string;
@@ -24,6 +31,12 @@ export type DialPetalRegistry = Readonly<
 
 export const DEFAULT_DIAL_PETALS = [
   {
+    id: 'voice',
+    label: 'Voice',
+    icon: 'mic-outline',
+    action: { kind: 'primaryAgentVoice' },
+  },
+  {
     id: 'profile',
     label: 'Profile',
     icon: 'person-outline',
@@ -40,12 +53,20 @@ export const DEFAULT_DIAL_PETALS = [
     label: 'Pay',
     icon: 'card-outline',
     action: { kind: 'navigate', href: '/(tabs)/send' },
+    submenu: [
+      {
+        id: 'send',
+        label: 'Send',
+        icon: 'paper-plane-outline',
+        action: { kind: 'navigate', href: '/(tabs)/send' },
+      },
+    ],
   },
   {
     id: 'message',
     label: 'Message',
     icon: 'chatbubble-ellipses-outline',
-    action: { kind: 'navigate', href: '/(tabs)/message' },
+    action: { kind: 'urgentMessage' },
   },
 ] as const satisfies readonly DialPetal[];
 

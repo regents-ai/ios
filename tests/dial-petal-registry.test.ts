@@ -9,17 +9,37 @@ import {
   type DialPetalRegistry,
 } from '../components/dial/petalRegistry';
 
-test('the default dial registry contains exactly the four shipping navigation petals', () => {
+test('the default dial registry contains the five shipping petals and typed rich actions', () => {
   assert.deepEqual(Object.keys(DIAL_PETAL_REGISTRY), ['default']);
   assert.deepEqual(
-    DEFAULT_DIAL_PETALS.map(({ id, label, action }) => ({ id, label, href: action.href })),
+    DEFAULT_DIAL_PETALS.map(({ id, label, action }) => ({
+      id,
+      label,
+      kind: action.kind,
+      href: 'href' in action ? action.href : undefined,
+    })),
     [
-      { id: 'profile', label: 'Profile', href: '/settings' },
-      { id: 'fund', label: 'Fund', href: '/(tabs)/wallet' },
-      { id: 'pay', label: 'Pay', href: '/(tabs)/send' },
-      { id: 'message', label: 'Message', href: '/(tabs)/message' },
+      { id: 'voice', label: 'Voice', kind: 'primaryAgentVoice', href: undefined },
+      { id: 'profile', label: 'Profile', kind: 'navigate', href: '/settings' },
+      { id: 'fund', label: 'Fund', kind: 'navigate', href: '/(tabs)/wallet' },
+      { id: 'pay', label: 'Pay', kind: 'navigate', href: '/(tabs)/send' },
+      { id: 'message', label: 'Message', kind: 'urgentMessage', href: undefined },
     ]
   );
+});
+
+test('Pay exposes only the supported Send submenu action', () => {
+  const pay = DEFAULT_DIAL_PETALS.find((petal) => petal.id === 'pay');
+
+  assert.ok(pay);
+  assert.deepEqual(pay.submenu, [
+    {
+      id: 'send',
+      label: 'Send',
+      icon: 'paper-plane-outline',
+      action: { kind: 'navigate', href: '/(tabs)/send' },
+    },
+  ]);
 });
 
 test('registry resolution falls back to default for message threads until one is registered', () => {
@@ -47,7 +67,7 @@ test('pre-auth, onboarding, and verification contexts resolve to no dial petals'
 });
 
 test('registry resolution supports a later message-thread petal set without changing its API', () => {
-  const threadPetals = [DEFAULT_DIAL_PETALS[3]];
+  const threadPetals = [DEFAULT_DIAL_PETALS[4]];
   const registry: DialPetalRegistry = {
     default: DEFAULT_DIAL_PETALS,
     messageThread: threadPetals,
