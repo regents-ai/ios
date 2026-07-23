@@ -1,6 +1,10 @@
 import type Ionicons from '@expo/vector-icons/Ionicons';
 import type { Href } from 'expo-router';
 
+import type { MessageComposerAction } from '@/utils/messageComposerBridge';
+
+export type MessageThreadDialCommand = MessageComposerAction | 'paste';
+
 export type DialPetalAction =
   | {
       kind: 'navigate';
@@ -11,6 +15,10 @@ export type DialPetalAction =
     }
   | {
       kind: 'urgentMessage';
+    }
+  | {
+      kind: 'messageComposer';
+      command: MessageThreadDialCommand;
     };
 
 export type DialPetal = {
@@ -70,8 +78,50 @@ export const DEFAULT_DIAL_PETALS = [
   },
 ] as const satisfies readonly DialPetal[];
 
+export const MESSAGE_THREAD_DIAL_PETALS = [
+  {
+    id: 'voice',
+    label: 'Voice',
+    icon: 'mic-outline',
+    action: { kind: 'messageComposer', command: 'voice' },
+  },
+  {
+    id: 'paste',
+    label: 'Paste',
+    icon: 'clipboard-outline',
+    action: { kind: 'messageComposer', command: 'paste' },
+  },
+  {
+    id: 'commands',
+    label: 'Commands',
+    icon: 'terminal-outline',
+    action: { kind: 'messageComposer', command: 'commands' },
+  },
+  {
+    id: 'keyboard',
+    label: 'Keyboard',
+    icon: 'keypad-outline',
+    action: { kind: 'messageComposer', command: 'keyboard' },
+  },
+  {
+    id: 'attach',
+    label: 'Attach',
+    icon: 'attach-outline',
+    action: { kind: 'messageComposer', command: 'scanQr' },
+    submenu: [
+      {
+        id: 'scan-qr',
+        label: 'Scan QR',
+        icon: 'qr-code-outline',
+        action: { kind: 'messageComposer', command: 'scanQr' },
+      },
+    ],
+  },
+] as const satisfies readonly DialPetal[];
+
 export const DIAL_PETAL_REGISTRY: DialPetalRegistry = {
   default: DEFAULT_DIAL_PETALS,
+  messageThread: MESSAGE_THREAD_DIAL_PETALS,
 };
 
 export function getDialRouteContext(pathname: string): DialRouteContext {

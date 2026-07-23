@@ -17,7 +17,7 @@ const config: ExpoConfig = {
       supportsTablet: false,
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
-        NSMicrophoneUsageDescription: 'Talk to Hermes with your voice.',
+        NSMicrophoneUsageDescription: 'Regents uses the microphone and speech recognition to turn your voice into a message draft.',
         NSCameraUsageDescription: 'Scan the pairing QR code shown by your local Hermes to connect voice.',
         NSLocalNetworkUsageDescription: 'Regents uses this to return you to the app after ChatGPT sign-in.',
         NSAppTransportSecurity: {
@@ -70,11 +70,15 @@ const config: ExpoConfig = {
         // the built Info.plist, wiping the mic/camera strings set above and by
         // expo-camera. Set the same strings so every plugin agrees.
         cameraPermission: 'Scan the pairing QR code shown by your local Hermes to connect voice.',
-        microphonePermission: 'Talk to Hermes with your voice.',
+        microphonePermission: 'Regents uses the microphone and speech recognition to turn your voice into a message draft.',
       }],
       ['expo-camera', {
         cameraPermission: 'Scan the pairing QR code shown by your local Hermes to connect voice.',
         recordAudioAndroid: false,
+      }],
+      ['expo-speech-recognition', {
+        microphonePermission: 'Regents uses the microphone and speech recognition to turn your voice into a message draft.',
+        speechRecognitionPermission: 'Regents uses the microphone and speech recognition to turn your voice into a message draft.',
       }],
       ['expo-alternate-app-icons', [
         { name: 'Light', ios: './assets/images/icon-regents-light.png' },

@@ -4,13 +4,14 @@ import assert from 'node:assert/strict';
 import {
   DEFAULT_DIAL_PETALS,
   DIAL_PETAL_REGISTRY,
+  MESSAGE_THREAD_DIAL_PETALS,
   getDialRouteContext,
   resolveDialPetals,
   type DialPetalRegistry,
 } from '../components/dial/petalRegistry';
 
 test('the default dial registry contains the five shipping petals and typed rich actions', () => {
-  assert.deepEqual(Object.keys(DIAL_PETAL_REGISTRY), ['default']);
+  assert.deepEqual(Object.keys(DIAL_PETAL_REGISTRY), ['default', 'messageThread']);
   assert.deepEqual(
     DEFAULT_DIAL_PETALS.map(({ id, label, action }) => ({
       id,
@@ -42,10 +43,39 @@ test('Pay exposes only the supported Send submenu action', () => {
   ]);
 });
 
-test('registry resolution falls back to default for message threads until one is registered', () => {
+test('message threads resolve the five composer actions', () => {
   assert.equal(getDialRouteContext('/message/thread-123'), 'messageThread');
-  assert.equal(resolveDialPetals('/message/thread-123'), DEFAULT_DIAL_PETALS);
+  assert.equal(resolveDialPetals('/message/thread-123'), MESSAGE_THREAD_DIAL_PETALS);
   assert.equal(resolveDialPetals('/(tabs)/wallet'), DEFAULT_DIAL_PETALS);
+  assert.deepEqual(
+    MESSAGE_THREAD_DIAL_PETALS.map(({ id, label, action }) => ({
+      id,
+      label,
+      kind: action.kind,
+      command: action.command,
+    })),
+    [
+      { id: 'voice', label: 'Voice', kind: 'messageComposer', command: 'voice' },
+      { id: 'paste', label: 'Paste', kind: 'messageComposer', command: 'paste' },
+      { id: 'commands', label: 'Commands', kind: 'messageComposer', command: 'commands' },
+      { id: 'keyboard', label: 'Keyboard', kind: 'messageComposer', command: 'keyboard' },
+      { id: 'attach', label: 'Attach', kind: 'messageComposer', command: 'scanQr' },
+    ]
+  );
+});
+
+test('Attach exposes only the supported Scan QR action', () => {
+  const attach = MESSAGE_THREAD_DIAL_PETALS.find((petal) => petal.id === 'attach');
+
+  assert.ok(attach);
+  assert.deepEqual(attach.submenu, [
+    {
+      id: 'scan-qr',
+      label: 'Scan QR',
+      icon: 'qr-code-outline',
+      action: { kind: 'messageComposer', command: 'scanQr' },
+    },
+  ]);
 });
 
 test('pre-auth, onboarding, and verification contexts resolve to no dial petals', () => {

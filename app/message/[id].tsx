@@ -2,6 +2,7 @@ import { StatusPill } from '@/components/agent-surfaces/StatusPill';
 import { SpinningRefreshIcon } from '@/components/motion/SpinningRefreshIcon';
 import { ThreadSkeleton } from '@/components/motion/ThreadSkeleton';
 import { TypingIndicator } from '@/components/motion/TypingIndicator';
+import { MessageQrScannerModal } from '@/components/message/MessageQrScannerModal';
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { ComposerFade, COMPOSER_FADE_HEIGHT } from '@/components/ui/ComposerFade';
 import { runRegentEventHaptic } from '@/components/ui/haptics';
@@ -16,7 +17,6 @@ import {
   PendingMessageApproval,
   MessageThreadEvent,
   MessageThreadDetail,
-  MessageThreadStatus,
 } from '@/types/regents';
 import { routes } from '@/utils/navigation/routes';
 import { describeApiError } from '@/utils/apiError';
@@ -58,6 +58,15 @@ import {
 } from '@/utils/localNotices';
 import { parseSlashInput, type SlashCommand } from '@/utils/slashCommands';
 import {
+  applyDictationTranscript,
+  beginDictationDraft,
+  insertComposerText,
+  registerMessageComposer,
+  type ComposerEdit,
+  type ComposerSelection,
+  type DictationDraftSession,
+} from '@/utils/messageComposerBridge';
+import {
   adoptMessageThreadId,
   completeMessagePoll,
   extendMessagePollBurst,
@@ -65,6 +74,11 @@ import {
   nextMessagePollDelay,
 } from '@/utils/regentApi/messagePolling';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import {
+  ExpoSpeechRecognitionModule,
+  useSpeechRecognitionEvent,
+  type ExpoSpeechRecognitionErrorCode,
+} from 'expo-speech-recognition';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -81,6 +95,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  type TextInputSelectionChangeEventData,
   View,
 } from 'react-native';
 
@@ -221,6 +236,8 @@ function keyEvent(event: MessageThreadEvent) {
   return event.eventId;
 }
 
+let activeDictationOwner: symbol | null = null;
+
 export default function MessageDetailScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string }>();
@@ -231,6 +248,14 @@ export default function MessageDetailScreen() {
   const scrollPolicyRef = useRef(createChatScrollState());
   const jumpPillVisibleRef = useRef(false);
   const streamingRef = useRef(false);
+  const composerInputRef = useRef<TextInput>(null);
+  const draftRef = useRef('');
+  const composerSelectionRef = useRef<ComposerSelection>({ start: 0, end: 0 });
+  const dictationSessionRef = useRef<DictationDraftSession | null>(null);
+  const dictationStartRef = useRef<{ cancelled: boolean } | null>(null);
+  const dictationOwnerRef = useRef<symbol | null>(null);
+  const dictatingRef = useRef(false);
+  const screenFocusedRef = useRef(false);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [effectiveThreadId, setEffectiveThreadId] = useState(routeThreadId);
   const [thread, setThread] = useState<MessageThreadDetail | null>(null);
@@ -242,6 +267,12 @@ export default function MessageDetailScreen() {
   const [recovery, setRecovery] = useState<StreamRecoveryStatus>(initialStreamRecovery);
   const [notices, setNotices] = useState<LocalNoticeState>(initialLocalNotices);
   const [draft, setDraft] = useState('');
+  const [composerSelection, setComposerSelection] = useState<ComposerSelection>({
+    start: 0,
+    end: 0,
+  });
+  const [dictating, setDictating] = useState(false);
+  const [qrScannerVisible, setQrScannerVisible] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [sending, setSending] = useState(false);
@@ -443,10 +474,352 @@ export default function MessageDetailScreen() {
     eventListRef.current?.scrollToEnd({ animated: true });
   }, [syncJumpPill]);
 
+  const commitComposerEdit = useCallback((edit: ComposerEdit) => {
+    draftRef.current = edit.text;
+    composerSelectionRef.current = edit.selection;
+    setDraft(edit.text);
+    setComposerSelection(edit.selection);
+  }, []);
+
+  const replaceComposerDraft = useCallback(
+    (text: string) => {
+      commitComposerEdit({
+        text,
+        selection: { start: text.length, end: text.length },
+      });
+    },
+    [commitComposerEdit]
+  );
+
+  const handleDraftChange = useCallback((text: string) => {
+    if (dictatingRef.current) {
+      return;
+    }
+    draftRef.current = text;
+    setDraft(text);
+  }, []);
+
+  const handleComposerSelectionChange = useCallback(
+    (event: NativeSyntheticEvent<TextInputSelectionChangeEventData>) => {
+      const nextSelection = event.nativeEvent.selection;
+      composerSelectionRef.current = nextSelection;
+      setComposerSelection(nextSelection);
+    },
+    []
+  );
+
+  const showVoiceUnavailable = useCallback(() => {
+    showAlert({
+      title: 'Voice typing unavailable',
+      message: "Voice typing isn't available on this device. You can still type or paste your message.",
+      type: 'info',
+    });
+  }, [showAlert]);
+
+  const cancelDictationStart = useCallback(() => {
+    if (dictationStartRef.current) {
+      dictationStartRef.current.cancelled = true;
+      dictationStartRef.current = null;
+    }
+  }, []);
+
+  const abortDictation = useCallback(() => {
+    cancelDictationStart();
+    const wasDictating = dictatingRef.current;
+    const owner = dictationOwnerRef.current;
+    const ownsActiveDictation =
+      owner !== null && activeDictationOwner === owner;
+    dictatingRef.current = false;
+    dictationSessionRef.current = null;
+    dictationOwnerRef.current = null;
+    setDictating(false);
+
+    if (ownsActiveDictation) {
+      activeDictationOwner = null;
+    }
+
+    if (wasDictating && ownsActiveDictation) {
+      try {
+        ExpoSpeechRecognitionModule.abort();
+      } catch {
+        // The native recognizer may already have ended.
+      }
+    }
+  }, [cancelDictationStart]);
+
+  useFocusEffect(
+    useCallback(() => {
+      screenFocusedRef.current = true;
+      return () => {
+        screenFocusedRef.current = false;
+        abortDictation();
+      };
+    }, [abortDictation])
+  );
+
+  const startDictation = useCallback(async () => {
+    if (
+      dictatingRef.current ||
+      dictationStartRef.current ||
+      activeDictationOwner !== null ||
+      !screenFocusedRef.current
+    ) {
+      return;
+    }
+
+    const attempt = { cancelled: false };
+    dictationStartRef.current = attempt;
+
+    try {
+      if (
+        !ExpoSpeechRecognitionModule.isRecognitionAvailable() ||
+        !ExpoSpeechRecognitionModule.supportsOnDeviceRecognition()
+      ) {
+        showVoiceUnavailable();
+        return;
+      }
+
+      const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      if (
+        attempt.cancelled ||
+        dictationStartRef.current !== attempt ||
+        !screenFocusedRef.current
+      ) {
+        return;
+      }
+
+      if (!permission.granted) {
+        showAlert({
+          title: 'Voice typing needs access',
+          message: 'Allow microphone and speech recognition access to turn your voice into a message draft.',
+          type: 'info',
+        });
+        return;
+      }
+
+      dictationSessionRef.current = beginDictationDraft(
+        draftRef.current,
+        composerSelectionRef.current
+      );
+      const owner = Symbol('message-dictation-owner');
+      dictationOwnerRef.current = owner;
+      activeDictationOwner = owner;
+      dictatingRef.current = true;
+      setDictating(true);
+      ExpoSpeechRecognitionModule.start({
+        addsPunctuation: true,
+        continuous: false,
+        interimResults: true,
+        iosTaskHint: 'dictation',
+        requiresOnDeviceRecognition: true,
+      });
+    } catch {
+      if (activeDictationOwner === dictationOwnerRef.current) {
+        activeDictationOwner = null;
+      }
+      dictationOwnerRef.current = null;
+      dictationSessionRef.current = null;
+      dictatingRef.current = false;
+      setDictating(false);
+      if (
+        !attempt.cancelled &&
+        dictationStartRef.current === attempt &&
+        screenFocusedRef.current
+      ) {
+        showVoiceUnavailable();
+      }
+    } finally {
+      if (dictationStartRef.current === attempt) {
+        dictationStartRef.current = null;
+      }
+    }
+  }, [showAlert, showVoiceUnavailable]);
+
+  const stopDictation = useCallback(() => {
+    const wasDictating = dictatingRef.current;
+    cancelDictationStart();
+    const owner = dictationOwnerRef.current;
+    const ownsActiveDictation =
+      owner !== null && activeDictationOwner === owner;
+    if (!wasDictating) {
+      return;
+    }
+    dictatingRef.current = false;
+    dictationSessionRef.current = null;
+    dictationOwnerRef.current = null;
+    setDictating(false);
+    if (ownsActiveDictation) {
+      activeDictationOwner = null;
+    }
+    if (!ownsActiveDictation) {
+      return;
+    }
+    try {
+      ExpoSpeechRecognitionModule.stop();
+    } catch {
+      showVoiceUnavailable();
+    }
+  }, [cancelDictationStart, showVoiceUnavailable]);
+
+  const appendComposerText = useCallback(
+    (text: string) => {
+      stopDictation();
+      commitComposerEdit(
+        insertComposerText(draftRef.current, text, composerSelectionRef.current)
+      );
+    },
+    [commitComposerEdit, stopDictation]
+  );
+
+  const focusComposer = useCallback(() => {
+    const needsEditingRestore =
+      dictatingRef.current || dictationStartRef.current !== null;
+    stopDictation();
+
+    if (needsEditingRestore) {
+      setTimeout(() => composerInputRef.current?.focus(), 0);
+      return;
+    }
+    composerInputRef.current?.focus();
+  }, [stopDictation]);
+
+  const openCommands = useCallback(() => {
+    if (draftRef.current.length > 0) {
+      return false;
+    }
+    stopDictation();
+    replaceComposerDraft('/');
+    focusComposer();
+    return true;
+  }, [focusComposer, replaceComposerDraft, stopDictation]);
+
+  const handleSpeechError = useCallback(
+    (error: ExpoSpeechRecognitionErrorCode) => {
+      activeDictationOwner = null;
+      dictationOwnerRef.current = null;
+      dictatingRef.current = false;
+      setDictating(false);
+
+      if (error === 'aborted' || error === 'no-speech' || error === 'speech-timeout') {
+        dictationSessionRef.current = null;
+        return;
+      }
+
+      const unavailable =
+        error === 'not-allowed' ||
+        error === 'service-not-allowed' ||
+        error === 'language-not-supported' ||
+        error === 'audio-capture';
+      if (unavailable) {
+        dictationSessionRef.current = null;
+
+        if (error === 'not-allowed') {
+          showAlert({
+            title: 'Voice typing needs access',
+            message: 'Allow microphone and speech recognition access to turn your voice into a message draft.',
+            type: 'info',
+          });
+        } else {
+          showVoiceUnavailable();
+        }
+        return;
+      }
+
+      dictationSessionRef.current = null;
+      showAlert({
+        title: 'Voice typing stopped',
+        message: "We couldn't keep listening. Your draft is still here, so you can try again.",
+        type: 'info',
+      });
+    },
+    [showAlert, showVoiceUnavailable]
+  );
+
+  useSpeechRecognitionEvent('start', () => {
+    if (
+      dictationOwnerRef.current === null ||
+      activeDictationOwner !== dictationOwnerRef.current
+    ) {
+      return;
+    }
+    if (!screenFocusedRef.current || !dictationSessionRef.current) {
+      abortDictation();
+      return;
+    }
+    dictatingRef.current = true;
+    setDictating(true);
+  });
+  useSpeechRecognitionEvent('result', (event) => {
+    if (
+      dictationOwnerRef.current === null ||
+      activeDictationOwner !== dictationOwnerRef.current
+    ) {
+      return;
+    }
+    const transcript = event.results[0]?.transcript;
+    const session = dictationSessionRef.current;
+    if (!session || !transcript) {
+      return;
+    }
+    const update = applyDictationTranscript(draftRef.current, session, transcript);
+    dictationSessionRef.current = update.session;
+    commitComposerEdit(update.edit);
+  });
+  useSpeechRecognitionEvent('error', (event) => {
+    if (
+      dictationOwnerRef.current === null ||
+      activeDictationOwner !== dictationOwnerRef.current
+    ) {
+      return;
+    }
+    handleSpeechError(event.error);
+  });
+  useSpeechRecognitionEvent('end', () => {
+    if (
+      dictationOwnerRef.current === null ||
+      activeDictationOwner !== dictationOwnerRef.current
+    ) {
+      return;
+    }
+    activeDictationOwner = null;
+    dictationOwnerRef.current = null;
+    dictatingRef.current = false;
+    dictationSessionRef.current = null;
+    setDictating(false);
+  });
+
+  const openQrScanner = useCallback(() => {
+    setQrScannerVisible(true);
+  }, []);
+  const closeQrScanner = useCallback(() => {
+    setQrScannerVisible(false);
+  }, []);
+  const showQrUnavailable = useCallback(() => {
+    showAlert({
+      title: 'Camera access needed',
+      message: 'Allow camera access to scan a QR code into your message draft.',
+      type: 'info',
+    });
+  }, [showAlert]);
+
+  useEffect(
+    () =>
+      registerMessageComposer({
+        appendText: appendComposerText,
+        focus: focusComposer,
+        openCommands,
+        openQrScanner,
+        startDictation: () => {
+          void startDictation();
+        },
+      }),
+    [appendComposerText, focusComposer, openCommands, openQrScanner, startDictation]
+  );
+
   const sendMessage = useCallback(async () => {
     const text = draft.trim();
     const requestThreadId = effectiveThreadId || routeThreadId;
-    if (!requestThreadId || !text || sending) {
+    if (!requestThreadId || !text || sending || dictating) {
       return;
     }
 
@@ -469,7 +842,7 @@ export default function MessageDetailScreen() {
       const nextThreadId = adoptMessageThreadId(requestThreadId, nextThread.id);
       setThread(nextThread);
       moveToThread(nextThreadId);
-      setDraft('');
+      replaceComposerDraft('');
       runRegentEventHaptic('messageSent');
 
       await loadThread(true, nextThreadId);
@@ -483,14 +856,22 @@ export default function MessageDetailScreen() {
     } finally {
       setSending(false);
     }
-  }, [draft, effectiveThreadId, loadThread, moveToThread, routeThreadId, sending]);
+  }, [
+    dictating,
+    draft,
+    effectiveThreadId,
+    loadThread,
+    moveToThread,
+    replaceComposerDraft,
+    routeThreadId,
+    sending,
+  ]);
 
   // Slash-command autocomplete. Money commands never send inline text: they
   // route into the app's existing confirm screens.
   const slashParse = useMemo(() => parseSlashInput(draft), [draft]);
   const handleSlashPick = useCallback((command: SlashCommand) => {
     if (command.confirms) {
-      setDraft('');
       if (command.name === 'send') {
         router.push(routes.walletSend());
       } else if (command.name === 'stake') {
@@ -499,8 +880,8 @@ export default function MessageDetailScreen() {
       return;
     }
     // Non-money command: complete the token in the draft for the person to run.
-    setDraft(`/${command.name} `);
-  }, [router]);
+    replaceComposerDraft(`/${command.name} `);
+  }, [replaceComposerDraft, router]);
 
   // A pinned notice confirms and flushes into the transcript once the agent
   // starts working the turn (the thread goes to running).
@@ -835,21 +1216,47 @@ export default function MessageDetailScreen() {
 
         {thread ? <SlashCommandPanel parse={slashParse} onPick={handleSlashPick} /> : null}
         {thread ? <PinnedNoticeStrip notices={notices.pinned} /> : null}
+        {thread && dictating ? (
+          <View style={styles.dictationStatus}>
+            <View style={styles.dictationLabel}>
+              <Ionicons name="mic" size={16} color={colors.accent} />
+              <Text style={styles.dictationText}>Listening…</Text>
+            </View>
+            <RegentPressable
+              accessibilityLabel="Stop voice typing"
+              onPress={stopDictation}
+              style={styles.stopDictationButton}
+            >
+              <Text style={styles.stopDictationText}>Stop</Text>
+            </RegentPressable>
+          </View>
+        ) : null}
 
         {thread ? (
           <View style={styles.composer}>
             <TextInput
+              ref={composerInputRef}
               value={draft}
-              onChangeText={setDraft}
+              editable={!dictating}
+              onChangeText={handleDraftChange}
+              onPressIn={focusComposer}
+              onSelectionChange={handleComposerSelectionChange}
               placeholder={thread.composerPlaceholder || 'Message this agent...'}
               placeholderTextColor={colors.textMuted}
               multiline
-              style={styles.composerInput}
+              selection={composerSelection}
+              style={[
+                styles.composerInput,
+                dictating && styles.composerInputListening,
+              ]}
             />
             <RegentPressable
               pressStyle="icon"
-              style={[styles.sendButton, (!draft.trim() || sending) && styles.sendButtonDisabled]}
-              disabled={!draft.trim() || sending}
+              style={[
+                styles.sendButton,
+                (!draft.trim() || sending || dictating) && styles.sendButtonDisabled,
+              ]}
+              disabled={!draft.trim() || sending || dictating}
               onPress={sendMessage}
             >
               {sending ? (
@@ -862,6 +1269,12 @@ export default function MessageDetailScreen() {
         ) : null}
       </KeyboardAvoidingView>
 
+      <MessageQrScannerModal
+        onClose={closeQrScanner}
+        onScanned={appendComposerText}
+        onUnavailable={showQrUnavailable}
+        visible={qrScannerVisible}
+      />
       <CoinbaseAlert {...alertProps} confirmText="OK" />
     </SafeAreaView>
   );
@@ -1196,6 +1609,42 @@ function makeStyles({ colors, fonts }: Theme) {
     paddingBottom: Platform.OS === 'ios' ? 18 : 12,
     backgroundColor: colors.bg,
   },
+  dictationStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: 16,
+    marginBottom: 4,
+    paddingLeft: 14,
+    paddingRight: 6,
+    paddingVertical: 6,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.hairlineStrong,
+    backgroundColor: colors.surfaceElevated,
+  },
+  dictationLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  dictationText: {
+    color: colors.text,
+    fontSize: 13,
+    fontFamily: fonts.ui,
+  },
+  stopDictationButton: {
+    minHeight: 34,
+    justifyContent: 'center',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    backgroundColor: colors.surface,
+  },
+  stopDictationText: {
+    color: colors.accent,
+    fontSize: 13,
+    fontFamily: fonts.title,
+  },
   composerInput: {
     flex: 1,
     minHeight: 44,
@@ -1210,6 +1659,10 @@ function makeStyles({ colors, fonts }: Theme) {
     fontSize: 14,
     lineHeight: 20,
     fontFamily: fonts.ui,
+  },
+  composerInputListening: {
+    borderColor: colors.accent,
+    opacity: 0.82,
   },
   sendButton: {
     width: 44,

@@ -9,8 +9,10 @@ export type DialActionTargets = {
   urgentThreadId: string | null | undefined;
 };
 
+type NavigationDialAction = Exclude<DialPetalAction, { kind: 'messageComposer' }>;
+
 export function resolveDialActionHref(
-  action: DialPetalAction,
+  action: NavigationDialAction,
   targets: DialActionTargets
 ): Href {
   if (action.kind === 'navigate') {
