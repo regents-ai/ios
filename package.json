@@ -21,7 +21,8 @@
     "lint": "expo lint",
     "test:app": "node --import tsx --test tests/*.test.ts",
     "test:components": "jest",
-    "check:app": "npm run lint && npm run test:app && npm run test:components && expo-doctor"
+    "check:app": "npm run lint && npm run test:app && npm run test:components && EXPO_DOCTOR_SKIP_DEPENDENCY_VERSION_CHECK=1 expo-doctor",
+    "check:versions": "expo-doctor"
   },
   "dependencies": {
     "@coinbase/cdp-core": "0.0.100",
