@@ -248,6 +248,27 @@ export default function OnboardingWelcomeScreen() {
             pressStyle="card"
             style={styles.optionRow}
             onPress={() => {
+              setPostAuthDestination('/onboarding/connect-portal');
+              router.push('/onboarding/connect-portal');
+            }}
+          >
+            <View style={styles.optionIcon}>
+              <Ionicons name="link-outline" size={22} color={colors.accent} />
+            </View>
+            <View style={styles.optionCopy}>
+              <Text style={styles.optionTitle}>Nous Portal</Text>
+              <Text style={styles.optionDetail}>Pair your Nous Portal account</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </RegentPressable>
+
+          <View style={styles.rowDivider} />
+
+          <RegentPressable
+            haptic="selection"
+            pressStyle="card"
+            style={styles.optionRow}
+            onPress={() => {
               setPostAuthDestination('/onboarding/create-cloud-agent');
               router.push('/onboarding/create-cloud-agent');
             }}

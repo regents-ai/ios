@@ -18,6 +18,12 @@ test('a chosen onboarding path survives to the post-sign-in landing', () => {
   assert.equal(resolvePostAuthLanding(), '/onboarding/connect-hermes');
 });
 
+test('Nous Portal pairing survives the sign-in round trip', () => {
+  clearPostAuthDestination();
+  setPostAuthDestination('/onboarding/connect-portal');
+  assert.equal(resolvePostAuthLanding(), '/onboarding/connect-portal');
+});
+
 test('reading the landing does not spend the intent, so racing redirects agree', () => {
   clearPostAuthDestination();
   setPostAuthDestination('/(tabs)/wallet');

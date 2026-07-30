@@ -27,6 +27,15 @@ const mobileRegentsPath = '/mobile/regents';
 const mobileRegentStakingPath = '/mobile/regent/staking';
 const mobileMessageThreadsPath = '/mobile/message/threads';
 const mobileAgentLinkClaimPath = '/mobile/agent-links/claim';
+const mobilePortalPairingPath = '/mobile/portal-pairing';
+const mobilePortalPairingStartPath = '/mobile/portal-pairing/start';
+const mobilePortalPairingCompletePath = '/mobile/portal-pairing/complete';
+
+export type PortalPairingStatus = {
+  paired: boolean;
+  accountLabel: string | null;
+  pairedAt: string | null;
+};
 
 type MobileRegentPath =
   | typeof mobileRegentsPath
@@ -66,7 +75,10 @@ type RegentApiPath =
   | MobileWalletActionPath
   | MobileMessagePath
   | MobileHermesVoicePath
-  | typeof mobileAgentLinkClaimPath;
+  | typeof mobileAgentLinkClaimPath
+  | typeof mobilePortalPairingPath
+  | typeof mobilePortalPairingStartPath
+  | typeof mobilePortalPairingCompletePath;
 
 async function readErrorMessage(response: Response, defaultMessage: string) {
   const payload = await response.json().catch(() => null);
@@ -439,6 +451,44 @@ export const regentApi = {
     );
 
     return payload.connectedAgent;
+  },
+
+  startPortalPairing(): Promise<{ authorizeUrl: string }> {
+    return requestJson<{ authorizeUrl: string }>(
+      mobilePortalPairingStartPath,
+      { method: 'POST' },
+      'Unable to start pairing right now.'
+    );
+  },
+
+  completePortalPairing(input: { code: string; state: string }): Promise<PortalPairingStatus> {
+    return requestJson<PortalPairingStatus>(
+      mobilePortalPairingCompletePath,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(input),
+      },
+      'Unable to finish pairing right now.'
+    );
+  },
+
+  getPortalPairing(): Promise<PortalPairingStatus> {
+    return requestJson<PortalPairingStatus>(
+      mobilePortalPairingPath,
+      undefined,
+      'Unable to check your Nous Portal connection right now.'
+    );
+  },
+
+  disconnectPortalPairing(): Promise<PortalPairingStatus> {
+    return requestJson<PortalPairingStatus>(
+      mobilePortalPairingPath,
+      { method: 'DELETE' },
+      'Unable to disconnect Nous Portal right now.'
+    );
   },
 
   async prepareWalletAction(input: {

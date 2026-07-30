@@ -11,7 +11,7 @@ test('OpenAPI operations have stable operation IDs', () => {
   const operations = [...contract.matchAll(/^    (get|post|put|patch|delete):$/gm)];
   const operationIds = [...contract.matchAll(/^\s+operationId:\s+([A-Za-z0-9_]+)$/gm)].map((match) => match[1]);
 
-  assert.equal(operations.length, 45);
+  assert.equal(operations.length, 50);
   assert.equal(operationIds.length, operations.length);
   assert.equal(new Set(operationIds).size, operationIds.length);
 });
@@ -53,6 +53,27 @@ test('agent-link claim route is declared in the contract and covered by the clie
   assert.match(contract, /MobileAgentLinkClaimResponse:[\s\S]*connectedAgent:[\s\S]*required: \[id, name\]/);
   assert.match(regentClient, /claimAgentLink\(input: \{ code: string \}\)/);
   assert.match(regentClient, /mobileAgentLinkClaimPath/);
+});
+
+test('Nous Portal pairing is additive, authenticated, and covered by the client', () => {
+  const pairingContract = contract.slice(
+    contract.indexOf('  /oauth/callback:'),
+    contract.indexOf('  /mobile/agent-links/claim:'),
+  );
+  assert.match(contract, /\/oauth\/callback:[\s\S]*operationId: bouncePortalOAuthCallback[\s\S]*security: \[\]/);
+  assert.match(contract, /\/mobile\/portal-pairing\/start:[\s\S]*operationId: startMobilePortalPairing[\s\S]*bearerAuth/);
+  assert.match(contract, /\/mobile\/portal-pairing\/complete:[\s\S]*operationId: completeMobilePortalPairing[\s\S]*'409':/);
+  assert.match(contract, /\/mobile\/portal-pairing:[\s\S]*operationId: getMobilePortalPairing[\s\S]*operationId: disconnectMobilePortalPairing/);
+  assert.match(contract, /PortalPairingStatus:[\s\S]*required: \[paired, accountLabel, pairedAt\]/);
+  assert.match(regentClient, /startPortalPairing\(\)/);
+  assert.match(regentClient, /completePortalPairing\(input: \{ code: string; state: string \}\)/);
+  assert.match(regentClient, /getPortalPairing\(\)/);
+  assert.match(regentClient, /disconnectPortalPairing\(\)/);
+  assert.doesNotMatch(regentClient, /refreshToken|accessToken/);
+  assert.equal(
+    [...pairingContract.matchAll(/'401':[\s\S]{0,180}\$ref: '#\/components\/schemas\/ErrorEnvelope'/g)].length,
+    4,
+  );
 });
 
 test('Hermes voice contract exposes only the live ChatGPT-gated mobile surface', () => {

@@ -1147,6 +1147,146 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '429':
           $ref: '#/components/responses/RateLimitError'
+  /oauth/callback:
+    get:
+      operationId: bouncePortalOAuthCallback
+      summary: Return a Nous Portal pairing result to the mobile app
+      security: []
+      parameters:
+        - in: query
+          name: code
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: state
+          required: false
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirect to the fixed regentsmobile portal-return route with only code and state
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+  /mobile/portal-pairing/start:
+    post:
+      operationId: startMobilePortalPairing
+      summary: Start pairing a Nous Portal account
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Portal pairing is ready to continue
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalPairingStartResponse'
+        '401':
+          description: Authentication is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: Portal pairing is not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+  /mobile/portal-pairing/complete:
+    post:
+      operationId: completeMobilePortalPairing
+      summary: Complete pairing a Nous Portal account
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PortalPairingCompleteRequest'
+      responses:
+        '200':
+          description: Portal account paired
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalPairingStatus'
+        '400':
+          description: Pairing return is missing or invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '401':
+          description: Authentication is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '409':
+          description: Pairing return has expired, was already used, or belongs to another signed-in user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '502':
+          description: Nous Portal could not complete pairing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: Portal pairing is not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+  /mobile/portal-pairing:
+    get:
+      operationId: getMobilePortalPairing
+      summary: Read the signed-in user's Nous Portal pairing status
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current Portal pairing status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalPairingStatus'
+        '401':
+          description: Authentication is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+    delete:
+      operationId: disconnectMobilePortalPairing
+      summary: Disconnect the signed-in user's Nous Portal account
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Portal account disconnected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalPairingStatus'
+        '401':
+          description: Authentication is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
   /mobile/agent-links/claim:
     post:
       operationId: claimMobileAgentLink
@@ -2149,6 +2289,39 @@ components:
           type: string
         receiver:
           type: string
+    PortalPairingStartResponse:
+      type: object
+      required: [authorizeUrl]
+      properties:
+        authorizeUrl:
+          type: string
+          format: uri
+      additionalProperties: false
+    PortalPairingCompleteRequest:
+      type: object
+      required: [code, state]
+      properties:
+        code:
+          type: string
+          minLength: 1
+        state:
+          type: string
+          minLength: 1
+      additionalProperties: false
+    PortalPairingStatus:
+      type: object
+      required: [paired, accountLabel, pairedAt]
+      properties:
+        paired:
+          type: boolean
+        accountLabel:
+          type: string
+          nullable: true
+        pairedAt:
+          type: string
+          format: date-time
+          nullable: true
+      additionalProperties: false
     MobileAgentLinkClaimRequest:
       type: object
       additionalProperties: false

@@ -81,4 +81,10 @@ export const routes = {
       ? { pathname: '/onramp-return', params: { partnerUserRef } }
       : { pathname: '/onramp-return' };
   },
+
+  portalPairing(returnUrl?: string | null): Href {
+    return returnUrl
+      ? { pathname: '/onboarding/connect-portal', params: { returnUrl } }
+      : '/onboarding/connect-portal';
+  },
 };

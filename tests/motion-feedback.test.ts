@@ -29,6 +29,10 @@ test('radial dial named events map selection, commit, and cancel feedback', () =
   assert.equal(getRegentEventHapticKind('dialCancelled'), 'warning');
 });
 
+test('Nous Portal pairing success uses named success feedback', () => {
+  assert.equal(getRegentEventHapticKind('portalPairingSucceeded'), 'success');
+});
+
 test('swipe confirmation keeps the same threshold and skips release motion when requested', () => {
   assert.equal(getSwipeThreshold(200), 160);
   assert.equal(getSwipeThreshold(-20), 0);

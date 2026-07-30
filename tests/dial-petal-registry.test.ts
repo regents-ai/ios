@@ -84,6 +84,7 @@ test('pre-auth, onboarding, and verification contexts resolve to no dial petals'
     '/auth/recovery',
     '/onboarding',
     '/onboarding/connect-hermes',
+    '/onboarding/connect-portal',
     '/email-verify',
     '/email-code',
     '/phone-verify',

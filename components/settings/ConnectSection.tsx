@@ -1,22 +1,55 @@
 /**
- * Connect section (Settings): the returning-user selector for the three
- * onboarding paths — connect an existing Hermes agent, create a cloud agent,
- * and onramp USDC. Mirrors the first-open welcome sheet (app/onboarding).
+ * Connect section (Settings): the returning-user selector for the onboarding
+ * paths. Mirrors the first-open welcome sheet (app/onboarding).
  */
 
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
-import { useMemo } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { RegentPressable } from '@/components/ui/RegentPressable';
+import { useRegentsAuth } from '@/hooks/useRegentsAuth';
 import { useTheme, type Theme } from '@/theme/ThemeProvider';
+import { routes } from '@/utils/navigation/routes';
+import { regentApi } from '@/utils/regentApi/client';
 
 export function ConnectSection() {
   const router = useRouter();
   const theme = useTheme();
   const { colors } = theme;
   const styles = useMemo(() => makeStyles(theme), [theme]);
+  const { regentsUserId } = useRegentsAuth();
+  const currentUserRef = useRef(regentsUserId);
+  const [portalPaired, setPortalPaired] = useState(false);
+  currentUserRef.current = regentsUserId;
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!regentsUserId) {
+        setPortalPaired(false);
+        return;
+      }
+
+      const owner = regentsUserId;
+      let focused = true;
+      void regentApi.getPortalPairing()
+        .then((status) => {
+          if (focused && currentUserRef.current === owner) {
+            setPortalPaired(status.paired);
+          }
+        })
+        .catch(() => {
+          if (focused && currentUserRef.current === owner) {
+            setPortalPaired(false);
+          }
+        });
+
+      return () => {
+        focused = false;
+      };
+    }, [regentsUserId]),
+  );
 
   const rows: {
     icon: keyof typeof Ionicons.glyphMap;
@@ -29,6 +62,12 @@ export function ConnectSection() {
       title: 'Existing Hermes Agent',
       detail: 'Link the agent already running on your computer',
       onPress: () => router.push('/onboarding/connect-hermes'),
+    },
+    {
+      icon: 'link-outline',
+      title: 'Nous Portal',
+      detail: portalPaired ? 'Connected' : 'Pair your Nous Portal account',
+      onPress: () => router.push(routes.portalPairing()),
     },
     {
       icon: 'cloud-outline',

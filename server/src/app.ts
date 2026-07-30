@@ -17,6 +17,7 @@ import {
 } from './metrics.js';
 import { isReleaseRuntime } from './runtime.js';
 import { createMobileRoutes } from './mobileRoutes.js';
+import { createPortalPairingRoutes } from './routes/portalPairing.js';
 import { processMobileMessagePushRequest } from './mobileMessagePush.js';
 import {
   createApnsProviderFromEnv,
@@ -177,7 +178,7 @@ app.use(cors({
     callback(new CorsOriginError());
   },
   credentials: true,
-  methods: ['GET', 'POST', 'OPTIONS'],
+  methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key']
 }));
 
@@ -234,6 +235,7 @@ app.use((req, res, next) => {
     req.path === '/readyz' ||
     req.path === '/metrics' ||
     req.path === '/.well-known/jwks.json' ||
+    req.path === '/oauth/callback' ||
     req.path.startsWith('/webhooks') ||
     req.path === '/internal/mobile/message/push' ||
     req.path === '/push-tokens/ping'
@@ -246,6 +248,7 @@ app.use((req, res, next) => {
 });
 
 app.use(authenticatedApiRateLimiter);
+app.use(createPortalPairingRoutes({ redis: useDatabase ? database : null }));
 
 app.get('/auth/me', (req, res) => {
   res.json({
