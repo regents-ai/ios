@@ -31,6 +31,13 @@ test('pairing phases cover status, pairing, completion, and disconnect', () => {
     reducePortalPairingPhase('loading', { type: 'statusLoaded', paired: true }),
     'paired',
   );
+  assert.equal(
+    reducePortalPairingPhase('completing', {
+      type: 'statusLoaded',
+      paired: false,
+    }),
+    'completing',
+  );
   assert.equal(reducePortalPairingPhase('completing', { type: 'failed' }), 'idle');
 });
 

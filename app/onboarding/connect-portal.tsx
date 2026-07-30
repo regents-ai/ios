@@ -62,7 +62,7 @@ export default function ConnectPortalScreen() {
   const [phase, setPhase] = useState<PortalPairingPhase>('loading');
   const [status, setStatus] = useState<PortalPairingStatus | null>(null);
   const currentUserRef = useRef(regentsUserId);
-  const activeAttemptRef = useRef<number | null>(null);
+  const activeAttemptRef = useRef<PortalPairingOwnerToken | null>(null);
   const attemptSequenceRef = useRef(0);
   const handledReturnRef = useRef<string | null>(null);
   const mountedRef = useRef(true);
@@ -77,16 +77,17 @@ export default function ConnectPortalScreen() {
 
   const beginOwnedAttempt = useCallback(() => {
     attemptSequenceRef.current += 1;
-    activeAttemptRef.current = attemptSequenceRef.current;
-    return capturePortalPairingOwner(
+    const owner = capturePortalPairingOwner(
       currentUserRef.current,
       attemptSequenceRef.current,
     );
+    activeAttemptRef.current = owner;
+    return owner;
   }, []);
 
   const currentAttemptOwner = useCallback(() => ({
     userId: currentUserRef.current,
-    attemptId: activeAttemptRef.current,
+    attemptId: activeAttemptRef.current?.attemptId ?? null,
     mounted: mountedRef.current,
     focused: focusedRef.current,
   }), []);
@@ -95,13 +96,32 @@ export default function ConnectPortalScreen() {
     return isPortalPairingOwnerCurrent(owner, currentAttemptOwner());
   }, [currentAttemptOwner]);
 
-  const finishAttempt = useCallback((owner: PortalPairingOwnerToken) => {
-    if (activeAttemptRef.current === owner.attemptId) {
-      activeAttemptRef.current = null;
-    }
+  const isOwnerUserCurrent = useCallback((owner: PortalPairingOwnerToken) => {
+    return owner.userId === currentUserRef.current;
   }, []);
 
+  const isActiveAttempt = useCallback((owner: PortalPairingOwnerToken) => {
+    const activeAttempt = activeAttemptRef.current;
+    return (
+      activeAttempt?.userId === owner.userId &&
+      activeAttempt.attemptId === owner.attemptId
+    );
+  }, []);
+
+  const finishAttempt = useCallback((owner: PortalPairingOwnerToken) => {
+    if (isActiveAttempt(owner)) {
+      activeAttemptRef.current = null;
+    }
+  }, [isActiveAttempt]);
+
   const dropStaleAttempt = useCallback((owner: PortalPairingOwnerToken) => {
+    if (!isOwnerUserCurrent(owner)) {
+      return;
+    }
+    const activeAttempt = activeAttemptRef.current;
+    if (activeAttempt !== null && !isActiveAttempt(owner)) {
+      return;
+    }
     finishAttempt(owner);
     if (!mountedRef.current) {
       return;
@@ -112,7 +132,13 @@ export default function ConnectPortalScreen() {
       message: 'This pairing attempt is no longer active. Nothing changed.',
       type: 'info',
     });
-  }, [finishAttempt, showAlert, transition]);
+  }, [
+    finishAttempt,
+    isActiveAttempt,
+    isOwnerUserCurrent,
+    showAlert,
+    transition,
+  ]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -124,15 +150,19 @@ export default function ConnectPortalScreen() {
   }, []);
 
   const failAttempt = useCallback((owner: PortalPairingOwnerToken, error: unknown) => {
+    if (!isOwnerUserCurrent(owner)) {
+      return;
+    }
     finishAttempt(owner);
     transition({ type: 'failed' });
     const failure = describeApiError(error);
     showAlert({ ...failure, type: 'error' });
-  }, [finishAttempt, showAlert, transition]);
+  }, [finishAttempt, isOwnerUserCurrent, showAlert, transition]);
 
   const loadPortalStatus = useCallback((
     owner: PortalPairingOwnerToken,
     isActive: () => boolean,
+    replacesStaleAttempt = false,
   ) => {
     void regentApi.getPortalPairing()
       .then((nextStatus) => {
@@ -140,7 +170,11 @@ export default function ConnectPortalScreen() {
           return;
         }
         setStatus(nextStatus);
-        transition({ type: 'statusLoaded', paired: nextStatus.paired });
+        transition({
+          type: 'statusLoaded',
+          paired: nextStatus.paired,
+          replacesStaleAttempt,
+        });
         finishAttempt(owner);
       })
       .catch((error) => {
@@ -163,10 +197,18 @@ export default function ConnectPortalScreen() {
         };
       }
 
-      const owner = beginOwnedAttempt();
+      const activeAttempt = activeAttemptRef.current;
+      const preservesActiveAttempt = (
+        activeAttempt !== null &&
+        activeAttempt.userId === regentsUserId &&
+        ownsAttempt(activeAttempt)
+      );
+      const replacesStaleAttempt =
+        activeAttempt !== null && !preservesActiveAttempt;
+      const owner = preservesActiveAttempt ? null : beginOwnedAttempt();
       let focused = true;
       if (owner) {
-        loadPortalStatus(owner, () => focused);
+        loadPortalStatus(owner, () => focused, replacesStaleAttempt);
       }
 
       return () => {
@@ -181,6 +223,8 @@ export default function ConnectPortalScreen() {
       finishAttempt,
       isSignedIn,
       loadPortalStatus,
+      ownsAttempt,
+      regentsUserId,
     ]),
   );
 
@@ -202,7 +246,15 @@ export default function ConnectPortalScreen() {
       return;
     }
     if (completion.kind === 'stale_after_request') {
+      const completionStillOwnsAttempt =
+        isOwnerUserCurrent(owner) && isActiveAttempt(owner);
       finishAttempt(owner);
+      if (!completionStillOwnsAttempt) {
+        return;
+      }
+      if (mountedRef.current) {
+        transition({ type: 'failed' });
+      }
       if (mountedRef.current && focusedRef.current) {
         const refreshOwner = beginOwnedAttempt();
         if (refreshOwner) {
@@ -229,6 +281,8 @@ export default function ConnectPortalScreen() {
     dropStaleAttempt,
     failAttempt,
     finishAttempt,
+    isActiveAttempt,
+    isOwnerUserCurrent,
     loadPortalStatus,
     transition,
   ]);

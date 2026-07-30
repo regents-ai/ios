@@ -8,7 +8,11 @@ export type PortalPairingPhase =
   | 'disconnecting';
 
 export type PortalPairingEvent =
-  | { type: 'statusLoaded'; paired: boolean }
+  | {
+      type: 'statusLoaded';
+      paired: boolean;
+      replacesStaleAttempt?: boolean;
+    }
   | { type: 'start' }
   | { type: 'authorizationReady' }
   | { type: 'callbackReceived' }
@@ -39,7 +43,11 @@ export function reducePortalPairingPhase(
 ): PortalPairingPhase {
   switch (event.type) {
     case 'statusLoaded':
-      return event.paired ? 'paired' : 'idle';
+      return phase === 'completing' && !event.replacesStaleAttempt
+        ? phase
+        : event.paired
+          ? 'paired'
+          : 'idle';
     case 'start':
       return phase === 'idle' ? 'starting' : phase;
     case 'authorizationReady':

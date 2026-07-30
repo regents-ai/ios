@@ -332,6 +332,103 @@ test('disconnect prevents a delayed completion from restoring pairing', async ()
   });
 });
 
+test('DELETE-only pruning keeps a fresh tombstone blocking a delayed exchange', async () => {
+  let exchangeStarted!: () => void;
+  let finishExchange!: (
+    result: Awaited<ReturnType<PortalOAuthClient['exchangeCode']>>,
+  ) => void;
+  const started = new Promise<void>((resolve) => {
+    exchangeStarted = resolve;
+  });
+  const exchange = new Promise<
+    Awaited<ReturnType<PortalOAuthClient['exchangeCode']>>
+  >((resolve) => {
+    finishExchange = resolve;
+  });
+  const stub = portalStub();
+  stub.client.exchangeCode = async () => {
+    exchangeStarted();
+    return exchange;
+  };
+  const store = createPortalPairingStateStore(
+    `portal-pairing-test:${Math.random()}`,
+  );
+  let now = 30 * 60 * 1000;
+  await store.reset(null, {
+    pendingByState: {
+      'pairing-state': {
+        userId: 'user-a',
+        verifier: 'stored-verifier',
+        expiresAt: now + 5 * 60 * 1000,
+        generation: 'attempt-generation',
+      },
+    },
+    pairedByUser: {},
+    pairingGenerationByUser: {
+      'user-a': {
+        value: 'attempt-generation',
+        updatedAt: now,
+      },
+    },
+  });
+
+  await withServer({
+    client: stub.client,
+    now: () => now,
+    store,
+  }, async (baseUrl) => {
+    const completing = completePairing(baseUrl, 'user-a');
+    await started;
+
+    await store.update((state) => {
+      state.pairingGenerationByUser.aged = {
+        value: 'aged-generation',
+        updatedAt: 1,
+      };
+    }, null);
+
+    const disconnected = await fetch(`${baseUrl}/mobile/portal-pairing`, {
+      method: 'DELETE',
+      headers: userHeaders('user-a'),
+    });
+    assert.equal(disconnected.status, 200);
+
+    now += 10 * 60 * 1000;
+    const secondDisconnect = await fetch(
+      `${baseUrl}/mobile/portal-pairing`,
+      {
+        method: 'DELETE',
+        headers: userHeaders('user-b'),
+      },
+    );
+    assert.equal(secondDisconnect.status, 200);
+
+    const afterDeletes = await store.read(null);
+    assert.equal(afterDeletes.pairingGenerationByUser.aged, undefined);
+    assert.notEqual(
+      afterDeletes.pairingGenerationByUser['user-a']?.value,
+      'attempt-generation',
+    );
+    assert.equal(
+      afterDeletes.pairingGenerationByUser['user-a']?.updatedAt,
+      30 * 60 * 1000,
+    );
+
+    finishExchange({
+      kind: 'ok',
+      refreshToken: 'server-only-refresh',
+      accountLabel: 'Portal account',
+    });
+    const completed = await completing;
+    assert.equal(completed.status, 502);
+
+    const status = await fetch(`${baseUrl}/mobile/portal-pairing`, {
+      headers: userHeaders('user-a'),
+    });
+    assert.equal((await status.json()).paired, false);
+  });
+});
+
 test('a consume CAS retry cannot recover an attempt removed by disconnect', async () => {
   const stub = portalStub();
   const fakeRedis = createFakeSharedStateRedis();

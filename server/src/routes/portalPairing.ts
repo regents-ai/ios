@@ -238,14 +238,16 @@ export function createPortalPairingRoutes(input?: {
     };
     await store.update((state) => {
       normalizeState(state);
+      const currentTime = now();
+      const candidate = state.pendingByState[parsed.data.state];
+      pruneExpiredState(state, currentTime);
       consumeResult.pending = null;
       consumeResult.conflict = 'used';
-      const candidate = state.pendingByState[parsed.data.state];
 
       if (!candidate) {
         return;
       }
-      if (candidate.expiresAt <= now()) {
+      if (candidate.expiresAt <= currentTime) {
         delete state.pendingByState[parsed.data.state];
         consumeResult.conflict = 'expired';
         return;
@@ -289,6 +291,7 @@ export function createPortalPairingRoutes(input?: {
     let stored = false;
     await store.update((state) => {
       normalizeState(state);
+      pruneExpiredState(state, now());
       stored = false;
       if (
         state.pairingGenerationByUser[userId]?.value !==
@@ -340,6 +343,8 @@ export function createPortalPairingRoutes(input?: {
     const nextGeneration = newPairingGeneration();
     await store.update((state) => {
       normalizeState(state);
+      const currentTime = now();
+      pruneExpiredState(state, currentTime);
       delete state.pairedByUser[userId];
       for (const [stateKey, pending] of Object.entries(state.pendingByState)) {
         if (pending.userId === userId) {
@@ -348,7 +353,7 @@ export function createPortalPairingRoutes(input?: {
       }
       state.pairingGenerationByUser[userId] = {
         value: nextGeneration,
-        updatedAt: now(),
+        updatedAt: currentTime,
       };
     }, redis);
 
