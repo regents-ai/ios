@@ -30,19 +30,53 @@ import {
   showProgressToast,
   type ProgressToastState,
 } from '@/utils/progressToast';
+import { getDialBloomEasingLabel } from '@/utils/dialTuning';
 
 const CANNED_REPLY =
   'Here is a canned agent reply for tuning. It has enough words to feel the ' +
   'cadence, a burst of short ones, and then a longer stretch so the ' +
   'lag-bounded catch-up can kick in when the backlog grows past the budget.';
 
-const KNOB_LABELS: Record<keyof MotionKnobs, string> = {
+const GENERAL_KNOB_LABELS = {
   wordDrainCadenceMs: 'Word cadence (ms/tick)',
   wordDrainMaxLagMs: 'Drain lag bound (ms)',
   toastEntryMs: 'Toast entry (ms)',
-};
+} as const satisfies Partial<Record<keyof MotionKnobs, string>>;
 
-function KnobRow({ knob, value }: { knob: keyof MotionKnobs; value: number }) {
+const DIAL_KNOB_LABELS = {
+  dialDeadZoneRadius: 'Dead-zone radius',
+  dialFirstRingRadius: 'First ring radius',
+  dialSecondRingRadius: 'Second ring radius',
+  dialBloomDurationMs: 'Bloom duration (ms)',
+  dialBloomEasing: 'Bloom easing',
+  dialDragHysteresis: 'Drag hysteresis',
+  dialScrimOpacity: 'Scrim opacity',
+  dialFloatAmplitude: 'Float amplitude',
+  dialFloatPeriodMs: 'Float period (ms)',
+} as const satisfies Partial<Record<keyof MotionKnobs, string>>;
+
+type GeneralKnob = keyof typeof GENERAL_KNOB_LABELS;
+type DialKnob = keyof typeof DIAL_KNOB_LABELS;
+
+function formatKnobValue(knob: keyof MotionKnobs, value: number) {
+  if (knob === 'dialBloomEasing') {
+    return getDialBloomEasingLabel(value);
+  }
+  if (knob === 'dialScrimOpacity') {
+    return value.toFixed(2);
+  }
+  return String(value);
+}
+
+function KnobRow({
+  knob,
+  label,
+  value,
+}: {
+  knob: keyof MotionKnobs;
+  label: string;
+  value: number;
+}) {
   const theme = useTheme();
   const { colors } = theme;
   const styles = useMemo(() => makeStyles(theme), [theme]);
@@ -50,8 +84,8 @@ function KnobRow({ knob, value }: { knob: keyof MotionKnobs; value: number }) {
   return (
     <View style={styles.knobRow}>
       <View style={styles.knobCopy}>
-        <Text style={styles.knobLabel}>{KNOB_LABELS[knob]}</Text>
-        <Text style={styles.knobValue}>{value}</Text>
+        <Text style={styles.knobLabel}>{label}</Text>
+        <Text style={styles.knobValue}>{formatKnobValue(knob, value)}</Text>
       </View>
       <View style={styles.knobControls}>
         <RegentPressable
@@ -116,12 +150,32 @@ export default function MotionLab() {
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Knobs</Text>
           <Text style={styles.sectionHint}>Debug builds only. Release ships frozen defaults.</Text>
-          {(Object.keys(KNOB_LABELS) as (keyof MotionKnobs)[]).map((knob) => (
-            <KnobRow key={knob} knob={knob} value={knobs[knob]} />
+          {(Object.keys(GENERAL_KNOB_LABELS) as GeneralKnob[]).map((knob) => (
+            <KnobRow
+              key={knob}
+              knob={knob}
+              label={GENERAL_KNOB_LABELS[knob]}
+              value={knobs[knob]}
+            />
           ))}
           <RegentPressable style={styles.resetButton} onPress={resetMotionKnobs}>
             <Text style={styles.resetButtonText}>Reset to defaults</Text>
           </RegentPressable>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Dial</Text>
+          <Text style={styles.sectionHint}>
+            Tune the shipping dial geometry, bloom, drag feel, scrim, and idle float.
+          </Text>
+          {(Object.keys(DIAL_KNOB_LABELS) as DialKnob[]).map((knob) => (
+            <KnobRow
+              key={knob}
+              knob={knob}
+              label={DIAL_KNOB_LABELS[knob]}
+              value={knobs[knob]}
+            />
+          ))}
         </View>
 
         <View style={styles.card}>

@@ -1,41 +1,57 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import {
   Pressable,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { Gesture, GestureDetector, State } from 'react-native-gesture-handler';
 import Animated, {
   Easing,
+  cancelAnimation,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
+  withRepeat,
   withTiming,
   type SharedValue,
 } from 'react-native-reanimated';
 
 import { DialCenterGlyph } from '@/components/dial/DialCenterGlyph';
 import {
-  DIAL_FIRST_RING_RADIUS,
-  DIAL_SECOND_RING_RADIUS,
-  FIRST_DIAL_RING,
-  SECOND_DIAL_RING,
   getDialPetalPosition,
   hitTestDialPetals,
+  resolveDialViewportGeometry,
 } from '@/components/dial/hitTesting';
 import type { DialPetal, DialPetalAction } from '@/components/dial/petalRegistry';
 import { useReducedMotion } from '@/components/motion/useReducedMotion';
 import { runRegentEventHaptic } from '@/components/ui/haptics';
 import { useTheme, type Theme } from '@/theme/ThemeProvider';
+import {
+  DIAL_CENTER_SIZE,
+  DIAL_TUNING_DEFAULTS,
+  type DialTuning,
+} from '@/utils/dialConstants';
+import {
+  getDialBloomEasing,
+  getDialPetalSize,
+  shouldChangeDialHighlight,
+  shouldRunDialSelectionHaptic,
+} from '@/utils/dialTuning';
 
-const CENTER_SIZE = 64;
+const CENTER_SIZE = DIAL_CENTER_SIZE;
 const CENTER_RADIUS = CENTER_SIZE / 2;
-const PETAL_SIZE = 64;
-const PETAL_RADIUS = PETAL_SIZE / 2;
-const DIAL_CANVAS_SIZE = 252;
-const DIAL_CENTER_COORDINATE = DIAL_CANVAS_SIZE - CENTER_RADIUS;
+
+declare const __DEV__: boolean | undefined;
 
 type HighlightedPetal = {
   ring: 'first' | 'second';
@@ -51,14 +67,20 @@ type RadialDialProps = {
 };
 
 type AnimatedPetalProps = {
+  angleStep: number;
+  centerCoordinate: number;
   expanded: boolean;
   highlighted: boolean;
   index: number;
   petal: DialPetal;
   petalCount: number;
+  petalSize: number;
   progress: SharedValue<number>;
+  floatProgress: SharedValue<number>;
+  floatAmplitude: number;
   radius: number;
   reducedMotionEnabled: boolean;
+  submenuExpanded: boolean;
   styles: ReturnType<typeof makeStyles>;
   onPress: (petal: DialPetal, ring: 'first' | 'second', index: number) => void;
   ring: 'first' | 'second';
@@ -70,6 +92,8 @@ function sameHighlight(a: HighlightedPetal | null, b: HighlightedPetal | null) {
 }
 
 function AnimatedPetal({
+  angleStep,
+  centerCoordinate,
   colors,
   expanded,
   highlighted,
@@ -77,43 +101,75 @@ function AnimatedPetal({
   onPress,
   petal,
   petalCount,
+  petalSize,
   progress,
+  floatProgress,
+  floatAmplitude,
   radius,
   reducedMotionEnabled,
   ring,
+  submenuExpanded,
   styles,
 }: AnimatedPetalProps) {
   const position = useMemo(
-    () => getDialPetalPosition(index, petalCount, radius),
-    [index, petalCount, radius]
+    () => getDialPetalPosition(index, petalCount, radius, angleStep),
+    [angleStep, index, petalCount, radius]
   );
   const animatedStyle = useAnimatedStyle(() => {
-    const radialProgress = reducedMotionEnabled ? 1 : progress.value;
+    if (reducedMotionEnabled) {
+      return { opacity: progress.value };
+    }
+
+    const phase = petalCount <= 1 ? 0 : index / petalCount;
+    const floatOffset =
+      Math.sin((floatProgress.value + phase) * Math.PI * 2) *
+      floatAmplitude *
+      progress.value;
     return {
       opacity: progress.value,
       transform: [
-        { translateX: position.x * radialProgress },
-        { translateY: position.y * radialProgress },
-        { scale: reducedMotionEnabled ? 1 : 0.78 + progress.value * 0.22 },
+        { translateX: position.x * (progress.value - 1) },
+        { translateY: position.y * (progress.value - 1) + floatOffset },
+        { scale: 0.78 + progress.value * 0.22 },
       ],
     };
-  }, [position.x, position.y, reducedMotionEnabled]);
+  }, [
+    floatAmplitude,
+    index,
+    petalCount,
+    position.x,
+    position.y,
+    reducedMotionEnabled,
+  ]);
 
   return (
     <Animated.View
       accessibilityElementsHidden={!expanded}
       importantForAccessibility={expanded ? 'auto' : 'no-hide-descendants'}
       pointerEvents={expanded ? 'auto' : 'none'}
-      style={[styles.petalPosition, animatedStyle]}
+      style={[
+        styles.petalPosition,
+        {
+          left: centerCoordinate - petalSize / 2 + position.x,
+          top: centerCoordinate - petalSize / 2 + position.y,
+        },
+        animatedStyle,
+      ]}
+      testID={`dial-petal-position-${ring}-${petal.id}`}
     >
       <Pressable
         accessibilityLabel={petal.label}
         accessibilityRole="button"
+        accessibilityState={{
+          expanded: petal.submenu?.length ? submenuExpanded : undefined,
+          selected: highlighted,
+        }}
         onPress={() => onPress(petal, ring, index)}
         style={({ pressed }) => [
           styles.petal,
           highlighted && styles.petalHighlighted,
-          pressed && styles.petalPressed,
+          pressed &&
+            (reducedMotionEnabled ? styles.petalPressedReduced : styles.petalPressed),
         ]}
       >
         <Ionicons
@@ -122,7 +178,7 @@ function AnimatedPetal({
           color={highlighted ? colors.onAccent : colors.accent}
         />
         <Text
-          numberOfLines={1}
+          numberOfLines={2}
           style={[styles.petalLabel, highlighted && styles.petalLabelHighlighted]}
         >
           {petal.label}
@@ -132,40 +188,114 @@ function AnimatedPetal({
   );
 }
 
-export function RadialDial({
+function isDevBuild(): boolean {
+  return typeof __DEV__ !== 'undefined' && __DEV__ === true;
+}
+
+function DevTunableRadialDial(props: RadialDialProps) {
+  // The mutable store is required only inside the development component so
+  // release evaluation and rendering never construct or subscribe to it.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const store = require('@/utils/motionKnobs') as typeof import('@/utils/motionKnobs');
+  const knobs = useSyncExternalStore(
+    store.subscribeMotionKnobs,
+    store.getMotionKnobs,
+    store.getMotionKnobs
+  );
+  const tuning: DialTuning = {
+    deadZoneRadius: knobs.dialDeadZoneRadius,
+    firstRingRadius: knobs.dialFirstRingRadius,
+    secondRingRadius: knobs.dialSecondRingRadius,
+    bloomDurationMs: knobs.dialBloomDurationMs,
+    bloomEasing: knobs.dialBloomEasing,
+    dragHysteresis: knobs.dialDragHysteresis,
+    scrimOpacity: knobs.dialScrimOpacity,
+    floatAmplitude: knobs.dialFloatAmplitude,
+    floatPeriodMs: knobs.dialFloatPeriodMs,
+  };
+
+  return <RadialDialSurface {...props} tuning={tuning} />;
+}
+
+export function RadialDial(props: RadialDialProps) {
+  return isDevBuild() ? (
+    <DevTunableRadialDial {...props} />
+  ) : (
+    <RadialDialSurface {...props} tuning={DIAL_TUNING_DEFAULTS} />
+  );
+}
+
+function RadialDialSurface({
   bottomOffset,
   onAction,
   onExpand,
   petals,
   rightOffset,
-}: RadialDialProps) {
+  tuning,
+}: RadialDialProps & { tuning: Readonly<DialTuning> }) {
   const theme = useTheme();
   const { colors, motion } = theme;
-  const styles = useMemo(() => makeStyles(theme), [theme]);
+  const { fontScale, height, width } = useWindowDimensions();
   const reducedMotionEnabled = useReducedMotion();
   const progress = useSharedValue(0);
   const submenuProgress = useSharedValue(0);
+  const floatProgress = useSharedValue(0);
   const [expanded, setExpanded] = useState(false);
   const [activeSubmenuIndex, setActiveSubmenuIndex] = useState<number | null>(null);
   const [highlighted, setHighlighted] = useState<HighlightedPetal | null>(null);
   const expandedRef = useRef(false);
   const highlightedRef = useRef<HighlightedPetal | null>(null);
+  const lastSelectionHapticAtRef = useRef<number | null>(null);
   const pressStartedExpandedRef = useRef<boolean | null>(null);
 
   const activeSubmenu =
     activeSubmenuIndex === null ? undefined : petals[activeSubmenuIndex]?.submenu;
-  const scrimAnimatedStyle = useAnimatedStyle(() => ({ opacity: progress.value }));
+  const geometry = useMemo(
+    () =>
+      resolveDialViewportGeometry({
+        bottomOffset,
+        desiredPetalSize: getDialPetalSize(fontScale),
+        firstPetalCount: petals.length,
+        firstRingRadius: tuning.firstRingRadius,
+        floatAmplitude: reducedMotionEnabled ? 0 : tuning.floatAmplitude,
+        rightOffset,
+        secondPetalCount: activeSubmenu?.length ?? 1,
+        secondRingRadius: tuning.secondRingRadius,
+        viewportHeight: height,
+        viewportWidth: width,
+      }),
+    [
+      activeSubmenu?.length,
+      bottomOffset,
+      fontScale,
+      height,
+      petals.length,
+      reducedMotionEnabled,
+      rightOffset,
+      tuning.floatAmplitude,
+      tuning.firstRingRadius,
+      tuning.secondRingRadius,
+      width,
+    ]
+  );
+  const { canvasSize, centerCoordinate, layouts, petalSize } = geometry;
+  const styles = useMemo(() => makeStyles(theme, petalSize), [petalSize, theme]);
+  const bloomEasing = getDialBloomEasing(tuning.bloomEasing);
+  const scrimAnimatedStyle = useAnimatedStyle(
+    () => ({ opacity: progress.value * tuning.scrimOpacity }),
+    [tuning.scrimOpacity]
+  );
 
   useEffect(() => {
     progress.value = withTiming(expanded ? 1 : 0, {
-      duration: reducedMotionEnabled ? motion.durationFast : motion.durationBase,
-      easing: Easing.bezier(...motion.easeOut),
+      duration: reducedMotionEnabled ? motion.durationFast : tuning.bloomDurationMs,
+      easing: Easing.bezier(...bloomEasing),
     });
   }, [
+    bloomEasing,
     expanded,
-    motion.durationBase,
     motion.durationFast,
-    motion.easeOut,
+    tuning.bloomDurationMs,
     progress,
     reducedMotionEnabled,
   ]);
@@ -174,24 +304,47 @@ export function RadialDial({
     if (expanded && activeSubmenu?.length) {
       submenuProgress.value = 0;
       submenuProgress.value = withTiming(1, {
-        duration: reducedMotionEnabled ? motion.durationFast : motion.durationBase,
-        easing: Easing.bezier(...motion.easeOut),
+        duration: reducedMotionEnabled ? motion.durationFast : tuning.bloomDurationMs,
+        easing: Easing.bezier(...bloomEasing),
       });
       return;
     }
 
     submenuProgress.value = withTiming(0, {
-      duration: reducedMotionEnabled ? motion.durationFast : motion.durationBase,
-      easing: Easing.bezier(...motion.easeOut),
+      duration: reducedMotionEnabled ? motion.durationFast : tuning.bloomDurationMs,
+      easing: Easing.bezier(...bloomEasing),
     });
   }, [
     activeSubmenu,
+    bloomEasing,
     expanded,
-    motion.durationBase,
     motion.durationFast,
-    motion.easeOut,
+    tuning.bloomDurationMs,
     reducedMotionEnabled,
     submenuProgress,
+  ]);
+
+  useEffect(() => {
+    cancelAnimation(floatProgress);
+    floatProgress.value = 0;
+    if (reducedMotionEnabled || tuning.floatAmplitude === 0) {
+      return;
+    }
+
+    floatProgress.value = withRepeat(
+      withTiming(1, {
+        duration: tuning.floatPeriodMs,
+        easing: Easing.linear,
+      }),
+      -1,
+      false
+    );
+    return () => cancelAnimation(floatProgress);
+  }, [
+    floatProgress,
+    tuning.floatAmplitude,
+    tuning.floatPeriodMs,
+    reducedMotionEnabled,
   ]);
 
   const setExpandedState = useCallback((next: boolean) => {
@@ -206,7 +359,13 @@ export function RadialDial({
 
     highlightedRef.current = next;
     setHighlighted(next);
-    if (next) {
+    if (!next) {
+      return;
+    }
+
+    const now = Date.now();
+    if (shouldRunDialSelectionHaptic(lastSelectionHapticAtRef.current, now)) {
+      lastSelectionHapticAtRef.current = now;
       runRegentEventHaptic('dialSelectionChanged');
     }
   }, []);
@@ -249,45 +408,90 @@ export function RadialDial({
           x,
           y,
           activeSubmenu.length,
-          SECOND_DIAL_RING
+          layouts.second,
+          tuning.deadZoneRadius
         );
         if (submenuHit.petalIndex !== null) {
           return { ring: 'second', index: submenuHit.petalIndex };
         }
       }
 
-      const firstRingHit = hitTestDialPetals(x, y, petals.length, FIRST_DIAL_RING);
+      const firstRingHit = hitTestDialPetals(
+        x,
+        y,
+        petals.length,
+        layouts.first,
+        tuning.deadZoneRadius
+      );
       return firstRingHit.petalIndex === null
         ? null
         : { ring: 'first', index: firstRingHit.petalIndex };
     },
-    [activeSubmenu, petals.length]
+    [activeSubmenu, layouts, petals.length, tuning.deadZoneRadius]
+  );
+
+  const getHighlightCenter = useCallback(
+    (value: HighlightedPetal) => {
+      const isSecondRing = value.ring === 'second';
+      const count = isSecondRing ? activeSubmenu?.length ?? 0 : petals.length;
+      if (count <= value.index) {
+        return null;
+      }
+      return getDialPetalPosition(
+        value.index,
+        count,
+        isSecondRing ? layouts.second.radius : layouts.first.radius,
+        isSecondRing ? layouts.second.angleStep : layouts.first.angleStep
+      );
+    },
+    [activeSubmenu?.length, layouts, petals.length]
   );
 
   const handleTouchBegin = useCallback(() => {
     pressStartedExpandedRef.current = expandedRef.current;
+    lastSelectionHapticAtRef.current = null;
     expand();
   }, [expand]);
 
   const handleDragPosition = useCallback(
     (x: number, y: number) => {
-      setHighlightedState(hitTestPosition(x, y));
+      const candidate = hitTestPosition(x, y);
+      const current = highlightedRef.current;
+      if (current && candidate && !sameHighlight(current, candidate)) {
+        const currentCenter = getHighlightCenter(current);
+        const candidateCenter = getHighlightCenter(candidate);
+        if (
+          currentCenter &&
+          candidateCenter &&
+          !shouldChangeDialHighlight(
+            currentCenter,
+            candidateCenter,
+            { x, y },
+            tuning.dragHysteresis
+          )
+        ) {
+          return;
+        }
+      }
+      setHighlightedState(candidate);
     },
-    [hitTestPosition, setHighlightedState]
+    [getHighlightCenter, hitTestPosition, setHighlightedState, tuning.dragHysteresis]
   );
 
   const handleDragRelease = useCallback(
     (x: number, y: number) => {
       pressStartedExpandedRef.current = null;
-      const hit = hitTestPosition(x, y);
+      const rawHit = hitTestPosition(x, y);
+      const visibleHit = highlightedRef.current;
       setHighlightedState(null);
 
-      if (!hit) {
+      if (!rawHit) {
         runRegentEventHaptic('dialCancelled');
         collapse();
         return;
       }
 
+      const hit = visibleHit ?? rawHit;
       const selected =
         hit.ring === 'second' ? activeSubmenu?.[hit.index] : petals[hit.index];
       if (!selected) {
@@ -368,13 +572,17 @@ export function RadialDial({
           styles.canvas,
           {
             bottom: bottomOffset,
+            height: canvasSize,
             right: rightOffset,
+            width: canvasSize,
           },
         ]}
         testID="radial-dial"
       >
         {petals.map((petal, index) => (
           <AnimatedPetal
+            angleStep={layouts.first.angleStep}
+            centerCoordinate={centerCoordinate}
             colors={colors}
             expanded={expanded}
             highlighted={highlighted?.ring === 'first' && highlighted.index === index}
@@ -383,16 +591,22 @@ export function RadialDial({
             onPress={commitPetal}
             petal={petal}
             petalCount={petals.length}
+            petalSize={petalSize}
             progress={progress}
-            radius={DIAL_FIRST_RING_RADIUS}
+            floatProgress={floatProgress}
+            floatAmplitude={tuning.floatAmplitude}
+            radius={layouts.first.radius}
             reducedMotionEnabled={reducedMotionEnabled}
             ring="first"
+            submenuExpanded={activeSubmenuIndex === index}
             styles={styles}
           />
         ))}
 
         {activeSubmenu?.map((petal, index) => (
           <AnimatedPetal
+            angleStep={layouts.second.angleStep}
+            centerCoordinate={centerCoordinate}
             colors={colors}
             expanded={expanded}
             highlighted={highlighted?.ring === 'second' && highlighted.index === index}
@@ -401,22 +615,41 @@ export function RadialDial({
             onPress={commitPetal}
             petal={petal}
             petalCount={activeSubmenu.length}
+            petalSize={petalSize}
             progress={submenuProgress}
-            radius={DIAL_SECOND_RING_RADIUS}
+            floatProgress={floatProgress}
+            floatAmplitude={tuning.floatAmplitude}
+            radius={layouts.second.radius}
             reducedMotionEnabled={reducedMotionEnabled}
             ring="second"
+            submenuExpanded={false}
             styles={styles}
           />
         ))}
 
-        <View style={styles.centerPosition}>
+        <View
+          style={[
+            styles.centerPosition,
+            {
+              left: centerCoordinate - CENTER_RADIUS,
+              top: centerCoordinate - CENTER_RADIUS,
+            },
+          ]}
+          testID="dial-center-position"
+        >
           <GestureDetector gesture={panGesture}>
             <Pressable
               accessibilityLabel={expanded ? 'Close radial dial' : 'Open radial dial'}
               accessibilityRole="button"
               accessibilityState={{ expanded }}
               onPress={handleCenterPress}
-              style={({ pressed }) => [styles.center, pressed && styles.centerPressed]}
+              style={({ pressed }) => [
+                styles.center,
+                pressed &&
+                  (reducedMotionEnabled
+                    ? styles.centerPressedReduced
+                    : styles.centerPressed),
+              ]}
             >
               <DialCenterGlyph color={colors.onAccent} expanded={expanded} />
             </Pressable>
@@ -427,7 +660,7 @@ export function RadialDial({
   );
 }
 
-function makeStyles({ colors, fonts, motion, type }: Theme) {
+function makeStyles({ colors, fonts, motion, type }: Theme, petalSize: number) {
   return StyleSheet.create({
     overlay: {
       ...StyleSheet.absoluteFillObject,
@@ -439,13 +672,9 @@ function makeStyles({ colors, fonts, motion, type }: Theme) {
     },
     canvas: {
       position: 'absolute',
-      width: DIAL_CANVAS_SIZE,
-      height: DIAL_CANVAS_SIZE,
     },
     centerPosition: {
       position: 'absolute',
-      left: DIAL_CENTER_COORDINATE - CENTER_RADIUS,
-      top: DIAL_CENTER_COORDINATE - CENTER_RADIUS,
       width: CENTER_SIZE,
       height: CENTER_SIZE,
     },
@@ -467,17 +696,18 @@ function makeStyles({ colors, fonts, motion, type }: Theme) {
     centerPressed: {
       transform: [{ scale: motion.activeScale }],
     },
+    centerPressedReduced: {
+      opacity: 0.9,
+    },
     petalPosition: {
       position: 'absolute',
-      left: DIAL_CENTER_COORDINATE - PETAL_RADIUS,
-      top: DIAL_CENTER_COORDINATE - PETAL_RADIUS,
-      width: PETAL_SIZE,
-      height: PETAL_SIZE,
+      width: petalSize,
+      height: petalSize,
     },
     petal: {
-      width: PETAL_SIZE,
-      height: PETAL_SIZE,
-      borderRadius: PETAL_RADIUS,
+      width: petalSize,
+      height: petalSize,
+      borderRadius: petalSize / 2,
       alignItems: 'center',
       justifyContent: 'center',
       gap: 2,
@@ -496,11 +726,16 @@ function makeStyles({ colors, fonts, motion, type }: Theme) {
     petalPressed: {
       transform: [{ scale: motion.activeScale }],
     },
+    petalPressedReduced: {
+      opacity: 0.9,
+    },
     petalLabel: {
       color: colors.text,
       fontFamily: fonts.ui,
       fontSize: type.caption.size - 2,
       lineHeight: type.caption.line - 2,
+      maxWidth: petalSize - 16,
+      textAlign: 'center',
     },
     petalLabelHighlighted: {
       color: colors.onAccent,
