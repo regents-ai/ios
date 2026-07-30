@@ -8,14 +8,14 @@
  * motion is compile-time constant.
  */
 
-declare const __DEV__: boolean | undefined;
-
-import { WORD_DRAIN_CADENCE_MS, WORD_DRAIN_MAX_LAG_MS } from '@/utils/streamingWordDrain';
 import {
   DIAL_BASE_PETAL_SIZE,
   DIAL_RING_GAP,
   DIAL_TUNING_DEFAULTS,
 } from '@/utils/dialConstants';
+import { LEGACY_MOTION_TUNING_DEFAULTS } from '@/utils/legacyMotionConstants';
+
+declare const __DEV__: boolean | undefined;
 
 const DIAL_FIRST_RING_RADIUS_MIN = 88;
 
@@ -47,9 +47,7 @@ export type MotionKnobs = {
 };
 
 export const MOTION_KNOB_DEFAULTS: Readonly<MotionKnobs> = Object.freeze({
-  wordDrainCadenceMs: WORD_DRAIN_CADENCE_MS,
-  wordDrainMaxLagMs: WORD_DRAIN_MAX_LAG_MS,
-  toastEntryMs: 260,
+  ...LEGACY_MOTION_TUNING_DEFAULTS,
   dialDeadZoneRadius: DIAL_TUNING_DEFAULTS.deadZoneRadius,
   dialFirstRingRadius: DIAL_TUNING_DEFAULTS.firstRingRadius,
   dialSecondRingRadius: DIAL_TUNING_DEFAULTS.secondRingRadius,

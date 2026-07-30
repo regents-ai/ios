@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { useReducedMotion } from '@/components/motion/useReducedMotion';
-import { getMotionKnobs } from '@/utils/motionKnobs';
+import { useLegacyMotionTuning } from '@/hooks/useLegacyMotionTuning';
 import { drainQuota, splitAtUnitBoundary, unitCount } from '@/utils/streamingWordDrain';
 
 /**
@@ -17,6 +17,7 @@ import { drainQuota, splitAtUnitBoundary, unitCount } from '@/utils/streamingWor
 export function useWordDrain(text: string, enabled: boolean, onReveal?: () => void): string {
   const reducedMotion = useReducedMotion();
   const animate = enabled && !reducedMotion;
+  const { wordDrainCadenceMs, wordDrainMaxLagMs } = useLegacyMotionTuning();
 
   const revealedUnitsRef = useRef(0);
   const onRevealRef = useRef(onReveal);
@@ -38,8 +39,6 @@ export function useWordDrain(text: string, enabled: boolean, onReveal?: () => vo
       return;
     }
 
-    // Frozen constants in release; live-tunable from the Motion Lab in debug.
-    const { wordDrainCadenceMs, wordDrainMaxLagMs } = getMotionKnobs();
     const timer = setInterval(() => {
       const backlog = totalUnits - revealedUnitsRef.current;
       revealedUnitsRef.current += drainQuota(backlog, wordDrainCadenceMs, wordDrainMaxLagMs);
@@ -52,7 +51,7 @@ export function useWordDrain(text: string, enabled: boolean, onReveal?: () => vo
     }, wordDrainCadenceMs);
 
     return () => clearInterval(timer);
-  }, [animate, text]);
+  }, [animate, text, wordDrainCadenceMs, wordDrainMaxLagMs]);
 
   return visibleText;
 }

@@ -4,7 +4,7 @@
  * Adapted from hermex StreamingLabView.swift: steppers tune the real motion
  * pipeline (word drain, toast entry) against a canned replay, so cadence can
  * be felt, not guessed. Only reachable in debug builds via /motion-lab; the
- * shipped app reads frozen constants (see utils/motionKnobs).
+ * shipped app reads frozen constants (see utils/legacyMotionConstants).
  */
 
 import Ionicons from '@expo/vector-icons/Ionicons';

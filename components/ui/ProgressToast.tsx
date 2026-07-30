@@ -14,8 +14,8 @@ import { ActivityIndicator, Animated, Easing, StyleSheet, Text } from 'react-nat
 import { useReducedMotion } from '@/components/motion/useReducedMotion';
 import { GlassSurface } from '@/components/ui/GlassSurface';
 import { RegentPressable } from '@/components/ui/RegentPressable';
+import { useLegacyMotionTuning } from '@/hooks/useLegacyMotionTuning';
 import { useTheme, type Theme } from '@/theme/ThemeProvider';
-import { getMotionKnobs } from '@/utils/motionKnobs';
 import type { ProgressToastState } from '@/utils/progressToast';
 
 type ProgressToastProps = {
@@ -27,6 +27,7 @@ function ToastPill({ toast, onDismiss }: { toast: ProgressToastState; onDismiss:
   const theme = useTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const reducedMotion = useReducedMotion();
+  const { toastEntryMs } = useLegacyMotionTuning();
   const entry = useRef(new Animated.Value(reducedMotion ? 1 : 0)).current;
 
   useEffect(() => {
@@ -39,11 +40,11 @@ function ToastPill({ toast, onDismiss }: { toast: ProgressToastState; onDismiss:
     Animated.timing(entry, {
       toValue: 1,
       // Frozen in release; live-tunable from the Motion Lab in debug.
-      duration: getMotionKnobs().toastEntryMs,
+      duration: toastEntryMs,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start();
-  }, [entry, reducedMotion]);
+  }, [entry, reducedMotion, toastEntryMs]);
 
   // Cancellable auto-dismiss: unmounting or replacing the toast clears it.
   useEffect(() => {
