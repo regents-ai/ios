@@ -81,7 +81,11 @@ export function SettingsMenu({
   ];
 
   return (
-    <View style={styles.menuCard}>
+    <View
+      accessibilityLabel="Settings sections"
+      accessibilityRole="tablist"
+      style={styles.menuCard}
+    >
       {sectionOptions.map((section, index) => {
         const selected = section.key === activeSection;
 
@@ -90,6 +94,8 @@ export function SettingsMenu({
             <RegentPressable
               haptic="selection"
               pressStyle="card"
+              accessibilityRole="tab"
+              accessibilityState={{ selected }}
               style={[styles.menuRow, selected && styles.menuRowActive]}
               onPress={() => onSectionChange(section.key)}
             >

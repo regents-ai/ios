@@ -2,6 +2,7 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { Animated, Easing, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { useReducedMotion } from '@/components/motion/useReducedMotion';
+import { useTheme } from '@/theme/ThemeProvider';
 
 type LiveValueFlashProps = {
   children: ReactNode;
@@ -12,6 +13,7 @@ type LiveValueFlashProps = {
 
 export function LiveValueFlash({ children, nudge = false, style, value }: LiveValueFlashProps) {
   const reducedMotionEnabled = useReducedMotion();
+  const { colors } = useTheme();
   const flash = useRef(new Animated.Value(0)).current;
   const previousValue = useRef(value);
   const mounted = useRef(false);
@@ -57,7 +59,12 @@ export function LiveValueFlash({ children, nudge = false, style, value }: LiveVa
       {!reducedMotionEnabled ? (
         <Animated.View
           pointerEvents="none"
-          style={[StyleSheet.absoluteFillObject, styles.flashTint, { opacity: flashOpacity }]}
+          testID="live-value-flash-tint"
+          style={[
+            StyleSheet.absoluteFillObject,
+            styles.flashTint,
+            { backgroundColor: colors.success, opacity: flashOpacity },
+          ]}
         />
       ) : null}
       <View style={styles.flashContent}>{children}</View>
@@ -74,7 +81,6 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   flashTint: {
-    backgroundColor: '#1F7A57',
     borderRadius: 9,
   },
   flashContent: {

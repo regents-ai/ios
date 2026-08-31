@@ -1,10 +1,10 @@
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
+import { RegentPressable } from '@/components/ui/RegentPressable';
 import { useTheme, type Theme } from '@/theme/ThemeProvider';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useMemo, useState } from 'react';
 import {
   Linking,
-  Pressable,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -75,9 +75,14 @@ export function InformationalHubScreen({
           <Text style={styles.heroTitle}>{title}</Text>
           <Text style={styles.heroBody}>{intro}</Text>
           <View style={styles.heroActions}>
-            <Pressable style={styles.primaryButton} onPress={() => openUrl(websiteUrl)}>
+            <RegentPressable
+              accessibilityHint="Opens in your browser"
+              accessibilityRole="link"
+              style={styles.primaryButton}
+              onPress={() => openUrl(websiteUrl)}
+            >
               <Text style={styles.primaryButtonText}>{websiteLabel}</Text>
-            </Pressable>
+            </RegentPressable>
           </View>
         </View>
 
@@ -101,10 +106,15 @@ export function InformationalHubScreen({
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>{resourceTitle}</Text>
           <Text style={styles.sectionHint}>{resourceBody}</Text>
-          <Pressable style={styles.secondaryButton} onPress={() => openUrl(resourceUrl)}>
+          <RegentPressable
+            accessibilityHint="Opens in your browser"
+            accessibilityRole="link"
+            style={styles.secondaryButton}
+            onPress={() => openUrl(resourceUrl)}
+          >
             <Ionicons name="open-outline" size={16} color={colors.text} />
             <Text style={styles.secondaryButtonText}>{resourceLabel}</Text>
-          </Pressable>
+          </RegentPressable>
         </View>
       </ScrollView>
 

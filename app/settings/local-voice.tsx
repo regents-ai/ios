@@ -28,7 +28,9 @@ export default function LocalVoicePairingScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [paired, setPaired] = useState<LocalVoiceGateway | null>(null);
   const [scanning, setScanning] = useState(false);
+  const [requestingPermission, setRequestingPermission] = useState(false);
   const handledRef = useRef(false);
+  const requestingPermissionRef = useRef(false);
 
   const params = useLocalSearchParams<{ id?: string; wallet?: string; name?: string }>();
   const agentWallet = typeof params.wallet === 'string' ? params.wallet : '';
@@ -49,15 +51,26 @@ export default function LocalVoicePairingScreen() {
   );
 
   const beginScan = useCallback(async () => {
+    if (requestingPermissionRef.current) {
+      return;
+    }
+
     if (!permission?.granted) {
-      const result = await requestPermission();
-      if (!result.granted) {
-        showAlert({
-          title: 'Camera access needed',
-          message: 'Allow camera access to scan the code shown on your computer.',
-          type: 'info',
-        });
-        return;
+      requestingPermissionRef.current = true;
+      setRequestingPermission(true);
+      try {
+        const result = await requestPermission();
+        if (!result.granted) {
+          showAlert({
+            title: 'Camera access needed',
+            message: 'Allow camera access to scan the code shown on your computer.',
+            type: 'info',
+          });
+          return;
+        }
+      } finally {
+        requestingPermissionRef.current = false;
+        setRequestingPermission(false);
       }
     }
     handledRef.current = false;
@@ -114,7 +127,13 @@ export default function LocalVoicePairingScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <RegentPressable pressStyle="icon" onPress={() => router.back()} style={styles.iconButton}>
+        <RegentPressable
+          accessibilityLabel="Go back"
+          accessibilityRole="button"
+          pressStyle="icon"
+          onPress={() => router.back()}
+          style={styles.iconButton}
+        >
           <Ionicons name="chevron-back" size={22} color={colors.text} />
         </RegentPressable>
         <Text style={styles.headerTitle}>Talk to {agentName}</Text>
@@ -162,8 +181,20 @@ export default function LocalVoicePairingScreen() {
             <Text style={styles.statusHint}>
               No computer connected yet. Scan the code from your computer to talk to {agentName}.
             </Text>
-            <RegentPressable style={styles.primaryButton} onPress={beginScan}>
-              {permission === null ? (
+            <RegentPressable
+              accessibilityLabel={
+                permission === null || requestingPermission ? 'Preparing camera' : 'Scan code'
+              }
+              accessibilityRole="button"
+              accessibilityState={{
+                busy: permission === null || requestingPermission,
+                disabled: permission === null || requestingPermission,
+              }}
+              disabled={permission === null || requestingPermission}
+              style={styles.primaryButton}
+              onPress={beginScan}
+            >
+              {permission === null || requestingPermission ? (
                 <ActivityIndicator color={colors.onAccent} size="small" />
               ) : (
                 <Text style={styles.primaryButtonText}>Scan code</Text>
@@ -199,8 +230,8 @@ function makeStyles({ colors, fonts, type, space, radius }: Theme) {
       borderBottomColor: colors.hairline,
     },
     iconButton: {
-      width: 40,
-      height: 40,
+      width: 44,
+      height: 44,
       borderRadius: radius.full,
       alignItems: 'center',
       justifyContent: 'center',

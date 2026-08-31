@@ -27,14 +27,14 @@ export function AppearanceToggle() {
   return (
     <View style={styles.card}>
       <Text style={styles.label}>APPEARANCE</Text>
-      <View style={styles.track}>
+      <View accessibilityLabel="Appearance" accessibilityRole="radiogroup" style={styles.track}>
         {OPTIONS.map((option) => {
           const selected = appearance === option.value;
           return (
             <RegentPressable
               key={option.value}
-              accessibilityRole="button"
-              accessibilityState={{ selected }}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: selected }}
               style={[styles.segment, selected && styles.segmentSelected]}
               onPress={() => setAppearance(option.value)}
             >
@@ -77,6 +77,7 @@ function makeStyles({ colors, fonts, type, space, radius }: Theme) {
     },
     segment: {
       flex: 1,
+      minHeight: 44,
       alignItems: 'center',
       justifyContent: 'center',
       paddingVertical: space.s2,

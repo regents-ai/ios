@@ -144,7 +144,9 @@ export default function OnboardingWelcomeScreen() {
     <View style={styles.container}>
       {/* Brand glow: concentric accent bands blooming from center. */}
       <View pointerEvents="none" style={styles.glowLayer}>
-        <Animated.View style={[styles.glowCenter, { transform: [{ scale: breatheScale }] }]}>
+        <Animated.View
+          style={[styles.glowCenter, !reducedMotion && { transform: [{ scale: breatheScale }] }]}
+        >
           {GLOW_BANDS.map((band, index) => {
             const size = glowBase * band.scale;
             const driver = bandDrivers[index];
@@ -158,12 +160,14 @@ export default function OnboardingWelcomeScreen() {
                     height: size,
                     borderRadius: size * 0.32,
                     backgroundColor: `rgba(${accentRgb}, ${band.opacity})`,
-                    opacity: driver,
-                    transform: [
-                      {
-                        scale: driver.interpolate({ inputRange: [0, 1], outputRange: [0.78, 1] }),
-                      },
-                    ],
+                    opacity: reducedMotion ? 1 : driver,
+                    transform: reducedMotion
+                      ? undefined
+                      : [
+                          {
+                            scale: driver.interpolate({ inputRange: [0, 1], outputRange: [0.78, 1] }),
+                          },
+                        ],
                   },
                 ]}
               />
@@ -175,13 +179,16 @@ export default function OnboardingWelcomeScreen() {
       {/* Wordmark. */}
       <View pointerEvents="none" style={styles.titleLayer}>
         <Animated.Text
+          testID="onboarding-wordmark"
           style={[
             styles.brand,
             {
-              opacity: titleDriver,
-              transform: [
-                { translateY: titleDriver.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) },
-              ],
+              opacity: reducedMotion ? 1 : titleDriver,
+              transform: reducedMotion
+                ? undefined
+                : [
+                    { translateY: titleDriver.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) },
+                  ],
             },
           ]}
         >
@@ -191,13 +198,16 @@ export default function OnboardingWelcomeScreen() {
 
       {/* Connect sheet. */}
       <Animated.View
+        testID="onboarding-connect-sheet"
         style={[
           styles.sheet,
           {
             opacity: reducedMotion ? 1 : sheetDriver,
-            transform: [
-              { translateY: sheetDriver.interpolate({ inputRange: [0, 1], outputRange: [440, 0] }) },
-            ],
+            transform: reducedMotion
+              ? undefined
+              : [
+                  { translateY: sheetDriver.interpolate({ inputRange: [0, 1], outputRange: [440, 0] }) },
+                ],
           },
         ]}
       >

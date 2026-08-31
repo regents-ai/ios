@@ -7,8 +7,8 @@
  * adaptive GlassSurface so it reads over the transcript.
  */
 
-import { useMemo } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useRef } from 'react';
+import { AccessibilityInfo, ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
 
 import { GlassSurface } from '@/components/ui/GlassSurface';
 import { useTheme, type Theme } from '@/theme/ThemeProvider';
@@ -18,12 +18,28 @@ export function StreamRecoveryPill({ state }: { state: StreamRecoveryState }) {
   const theme = useTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const label = streamRecoveryLabel(state);
+  const previousLabelRef = useRef(label);
+
+  useEffect(() => {
+    const previousLabel = previousLabelRef.current;
+    previousLabelRef.current = label;
+    if (Platform.OS === 'ios' && label && label !== previousLabel) {
+      AccessibilityInfo.announceForAccessibilityWithOptions(label, { queue: true });
+    }
+  }, [label]);
+
   if (!label) {
     return null;
   }
 
   return (
-    <View pointerEvents="none" style={styles.wrap}>
+    <View
+      accessible
+      accessibilityLiveRegion={Platform.OS === 'android' ? 'polite' : undefined}
+      accessibilityRole="status"
+      pointerEvents="none"
+      style={styles.wrap}
+    >
       <GlassSurface level="pill" style={styles.pill}>
         <ActivityIndicator size="small" color={theme.colors.accent} />
         <Text style={styles.label}>{label}</Text>
