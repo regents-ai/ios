@@ -12,8 +12,8 @@
  * a color change, not motion.
  */
 
-import { useMemo, useState } from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { AccessibilityInfo, Platform, StyleSheet, Text, View } from 'react-native';
 import { Image, type ImageSource } from 'expo-image';
 
 import { RegentPressable } from '@/components/ui/RegentPressable';
@@ -52,15 +52,41 @@ function AppIconPicker({ appIcons }: { appIcons: typeof AppIconsModule }) {
   const styles = useMemo(() => makeStyles(theme), [theme]);
   // iOS owns the persisted choice; mirror it into state for instant feedback.
   const [activeIcon, setActiveIcon] = useState<string | null>(() => appIcons.getAppIconName());
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [changingIcon, setChangingIcon] = useState(false);
+  const changingIconRef = useRef(false);
+  const previousErrorRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const previousError = previousErrorRef.current;
+    previousErrorRef.current = errorMessage;
+    if (Platform.OS === 'ios' && errorMessage && errorMessage !== previousError) {
+      AccessibilityInfo.announceForAccessibilityWithOptions(errorMessage, { queue: true });
+    }
+  }, [errorMessage]);
 
   const selectIcon = async (name: string | null) => {
-    if (name === activeIcon) return;
+    if (changingIconRef.current || name === activeIcon) return;
     const previous = activeIcon;
+    changingIconRef.current = true;
+    setChangingIcon(true);
+    setErrorMessage(null);
     setActiveIcon(name);
     try {
       await appIcons.setAlternateAppIcon(name);
     } catch {
       setActiveIcon(previous);
+      setErrorMessage('Could not change the app icon. Try again.');
+    } finally {
+      // iOS owns the truth; re-read it when it answers, otherwise keep the
+      // selection already shown. Either way the picker must come back to life.
+      try {
+        setActiveIcon(appIcons.getAppIconName());
+      } catch {
+        // Native read failed: the optimistic or restored selection stands.
+      }
+      changingIconRef.current = false;
+      setChangingIcon(false);
     }
   };
 
@@ -76,7 +102,8 @@ function AppIconPicker({ appIcons }: { appIcons: typeof AppIconsModule }) {
               haptic="selection"
               accessibilityRole="button"
               accessibilityLabel={`Use the ${choice.label.toLowerCase()} app icon`}
-              accessibilityState={{ selected }}
+              accessibilityState={{ busy: changingIcon, disabled: changingIcon, selected }}
+              disabled={changingIcon}
               style={styles.option}
               onPress={() => selectIcon(choice.name)}
             >
@@ -90,6 +117,14 @@ function AppIconPicker({ appIcons }: { appIcons: typeof AppIconsModule }) {
           );
         })}
       </View>
+      {errorMessage ? (
+        <Text
+          accessibilityLiveRegion={Platform.OS === 'android' ? 'polite' : undefined}
+          style={styles.errorText}
+        >
+          {errorMessage}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -142,6 +177,12 @@ function makeStyles({ colors, fonts, type, space, radius }: Theme) {
     },
     optionLabelSelected: {
       color: colors.accent,
+    },
+    errorText: {
+      color: colors.error,
+      fontSize: type.caption.size,
+      lineHeight: type.caption.line,
+      fontFamily: fonts.ui,
     },
   });
 }

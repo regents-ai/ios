@@ -298,11 +298,25 @@ export default function AgentDetailScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <RegentPressable pressStyle="icon" onPress={() => router.back()} style={styles.iconButton}>
+        <RegentPressable
+          accessibilityLabel="Go back"
+          accessibilityRole="button"
+          pressStyle="icon"
+          onPress={() => router.back()}
+          style={styles.iconButton}
+        >
           <Ionicons name="chevron-back" size={22} color={colors.text} />
         </RegentPressable>
         <Text style={styles.headerTitle}>{agent.name}</Text>
-        <RegentPressable pressStyle="icon" onPress={() => loadAgent(true)} disabled={refreshing} style={styles.iconButton}>
+        <RegentPressable
+          accessibilityLabel="Refresh agent"
+          accessibilityRole="button"
+          accessibilityState={{ busy: refreshing, disabled: refreshing }}
+          pressStyle="icon"
+          onPress={() => loadAgent(true)}
+          disabled={refreshing}
+          style={styles.iconButton}
+        >
           <SpinningRefreshIcon refreshing={refreshing} size={18} color={colors.accent} />
         </RegentPressable>
       </View>
@@ -566,9 +580,9 @@ function makeStyles({ colors, fonts }: Theme) {
     paddingBottom: 8,
   },
   iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
     borderColor: colors.hairlineStrong,

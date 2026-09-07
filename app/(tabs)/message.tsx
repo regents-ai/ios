@@ -181,6 +181,9 @@ export default function MessageTab() {
         </View>
         <View style={styles.headerActions}>
           <RegentPressable
+            accessibilityLabel="Refresh messages"
+            accessibilityRole="button"
+            accessibilityState={{ busy: refreshing, disabled: refreshing }}
             pressStyle="icon"
             onPress={() => loadThreads(true)}
             disabled={refreshing}
@@ -319,9 +322,9 @@ function makeStyles({ colors, fonts }: Theme) {
     gap: 10,
   },
   iconButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
     borderColor: colors.hairlineStrong,
