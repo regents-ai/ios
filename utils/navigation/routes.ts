@@ -29,6 +29,10 @@ export const routes = {
     return '/staking';
   },
 
+  auction(reference: string): Href {
+    return { pathname: '/auction/[id]', params: { id: reference } };
+  },
+
   settings(): Href {
     return '/settings';
   },

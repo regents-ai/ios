@@ -161,6 +161,7 @@ function RootLayoutContent() {
           <Stack.Screen name="portal-return" options={cardSlideBottom} />
           <Stack.Screen name="offramp-send" options={cardSlideBottom} />
           <Stack.Screen name="staking" options={cardSlideRight} />
+          <Stack.Screen name="auction/[id]" options={cardSlideRight} />
           <Stack.Screen name="agent/[id]" options={cardSlideRight} />
           <Stack.Screen name="agent/[id]/regent-manager" options={cardSlideRight} />
           <Stack.Screen name="agent/[id]/voice" options={cardSlideBottom} />

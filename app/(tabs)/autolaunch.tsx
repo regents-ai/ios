@@ -1,273 +1,427 @@
+import { StatusPill } from '@/components/agent-surfaces/StatusPill';
+import { SpinningRefreshIcon } from '@/components/motion/SpinningRefreshIcon';
+import { ProfileButton } from '@/components/navigation/ProfileButton';
+import { ListRetryRow } from '@/components/ui/ListRetryRow';
+import { RegentPressable } from '@/components/ui/RegentPressable';
 import { useTheme, type Theme } from '@/theme/ThemeProvider';
+import type { AutolaunchAuction } from '@/types/autolaunch';
+import { formatRelativeTime } from '@/utils/agent-surfaces/formatters';
+import {
+  auctionReference,
+  auctionStatus,
+  chainLabel,
+  launchKindLabel,
+  nameCopy,
+  priceCopy,
+  raisedCopy,
+} from '@/utils/autolaunch/auctionDisplay';
+import { auctionStatusTone } from '@/utils/autolaunch/auctionTone';
+import { listAutolaunchAuctions } from '@/utils/autolaunch/client';
+import { describeListLoadFailure, type ListLoadFailure } from '@/utils/listLoadFailure';
+import { routes } from '@/utils/navigation/routes';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
-import { useMemo } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { memo, useCallback, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  FlatList,
+  RefreshControl,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  View,
+  type ListRenderItem,
+} from 'react-native';
 
-const BUY_STEPS = [
-  'Open the current launch page in Autolaunch.',
-  'Read the story, momentum, and price before you buy.',
-  'Come back here when you want to check the next one.',
-];
+type AuctionRowProps = {
+  auction: AutolaunchAuction;
+  onPressAuction: (auction: AutolaunchAuction) => void;
+};
+
+const AuctionRow = memo(function AuctionRow({ auction, onPressAuction }: AuctionRowProps) {
+  const theme = useTheme();
+  const { colors } = theme;
+  const styles = useMemo(() => makeStyles(theme), [theme]);
+  const status = auctionStatus(auction.state);
+  const tone = auctionStatusTone(status.tone, colors);
+  const raised = raisedCopy(auction);
+  const opened = auction.chain === 'base' && auction.opened_at ? formatRelativeTime(auction.opened_at) : null;
+  const summary = auction.chain === 'base' ? auction.summary : null;
+  const handlePress = useCallback(() => {
+    onPressAuction(auction);
+  }, [auction, onPressAuction]);
+
+  // One flattened accessibility element per row, state words included.
+  const rowAccessibilityLabel = [
+    nameCopy(auction),
+    launchKindLabel(auction.kind),
+    status.label,
+    priceCopy(auction),
+    raised ? `${raised} raised` : null,
+    opened ? `opened ${opened}` : null,
+  ]
+    .filter(Boolean)
+    .join(', ');
+
+  return (
+    <RegentPressable
+      pressStyle="card"
+      style={styles.row}
+      onPress={handlePress}
+      accessible
+      accessibilityRole="button"
+      accessibilityLabel={rowAccessibilityLabel}
+      accessibilityHint="Opens this auction"
+    >
+      <View style={styles.rowHeader}>
+        <View style={styles.rowTitleGroup}>
+          <Text style={styles.rowKind}>
+            {launchKindLabel(auction.kind)} · {chainLabel(auction.chain)}
+          </Text>
+          <Text style={styles.rowTitle} numberOfLines={2}>{auction.title}</Text>
+          {auction.token_symbol ? <Text style={styles.rowSymbol}>{auction.token_symbol}</Text> : null}
+        </View>
+        <StatusPill
+          label={status.label}
+          color={tone.accent}
+          backgroundColor={tone.wash}
+          showDot={status.open}
+          compact
+        />
+      </View>
+
+      {summary ? <Text style={styles.rowSummary} numberOfLines={2}>{summary}</Text> : null}
+
+      <View style={styles.rowFooter}>
+        <View style={styles.rowMetaGroup}>
+          <Text style={styles.rowMeta}>{priceCopy(auction)}</Text>
+          {raised ? <Text style={styles.rowMeta}>{raised} raised</Text> : null}
+          {opened ? <Text style={styles.rowMetaMuted}>Opened {opened}</Text> : null}
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+      </View>
+    </RegentPressable>
+  );
+});
+
+function RowSeparator() {
+  return <View style={{ height: 12 }} />;
+}
 
 export default function AutolaunchTab() {
   const router = useRouter();
   const theme = useTheme();
   const { colors } = theme;
   const styles = useMemo(() => makeStyles(theme), [theme]);
+  const [auctions, setAuctions] = useState<AutolaunchAuction[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<ListLoadFailure | null>(null);
+
+  const loadAuctions = useCallback(async (refresh = false) => {
+    try {
+      if (refresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+
+      setAuctions(await listAutolaunchAuctions());
+      setLoadError(null);
+    } catch (error) {
+      setLoadError(describeListLoadFailure(error, 'Unable to load auctions right now.'));
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadAuctions();
+    }, [loadAuctions])
+  );
+
+  const openCount = auctions.filter((auction) => auctionStatus(auction.state).open).length;
+
+  const handleAuctionPress = useCallback((auction: AutolaunchAuction) => {
+    router.push(routes.auction(auctionReference(auction)));
+  }, [router]);
+
+  const renderAuction = useCallback<ListRenderItem<AutolaunchAuction>>(
+    ({ item }) => <AuctionRow auction={item} onPressAuction={handleAuctionPress} />,
+    [handleAuctionPress]
+  );
+
+  const listHeader = useMemo(() => (
+    <View style={styles.listHeader}>
+      <View style={styles.header}>
+        <View style={styles.titleGroup}>
+          <Text style={styles.eyebrow}>Autolaunch</Text>
+          <Text style={styles.title}>Follow the latest launches</Text>
+          <Text style={styles.subtitle}>
+            Revstake token and Memestock auctions on Autolaunch, newest first.
+          </Text>
+        </View>
+        <View style={styles.headerActions}>
+          <RegentPressable
+            accessibilityLabel="Refresh auctions"
+            accessibilityRole="button"
+            accessibilityState={{ busy: refreshing, disabled: refreshing }}
+            pressStyle="icon"
+            onPress={() => loadAuctions(true)}
+            disabled={refreshing}
+            style={styles.iconButton}
+          >
+            <SpinningRefreshIcon refreshing={refreshing} size={18} color={colors.accent} />
+          </RegentPressable>
+          <ProfileButton />
+        </View>
+      </View>
+
+      <View style={styles.summaryRow}>
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryValue}>{openCount}</Text>
+          <Text style={styles.summaryLabel}>Open now</Text>
+        </View>
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryValue}>{auctions.length}</Text>
+          <Text style={styles.summaryLabel}>Listed</Text>
+        </View>
+      </View>
+
+      {loadError ? (
+        <ListRetryRow
+          title={loadError.title}
+          message={loadError.message}
+          offline={loadError.offline}
+          onRetry={() => loadAuctions()}
+          retryHint="Tries loading the auctions again"
+        />
+      ) : null}
+    </View>
+  ), [auctions.length, colors, loadAuctions, loadError, openCount, refreshing, styles]);
+
+  const listEmpty = useMemo(() => {
+    if (loading) {
+      return (
+        <View style={styles.emptyState}>
+          <ActivityIndicator color={colors.accent} />
+          <Text style={styles.emptyTitle}>Loading auctions</Text>
+        </View>
+      );
+    }
+
+    // The retry row in the header already explains a failed load; showing
+    // "No auctions are open yet" under it would be misleading.
+    if (loadError) {
+      return null;
+    }
+
+    return (
+      <View style={styles.emptyState}>
+        <View style={styles.emptyIcon}>
+          <Ionicons name="rocket-outline" size={24} color={colors.accent} />
+        </View>
+        <Text style={styles.emptyTitle}>No auctions are open yet</Text>
+        <Text style={styles.emptyBody}>Launches open soon. Pull down to check again.</Text>
+      </View>
+    );
+  }, [colors, loadError, loading, styles]);
 
   return (
-    <ScrollView
-      contentInsetAdjustmentBehavior="automatic"
-      contentContainerStyle={styles.content}
-      style={styles.container}
-    >
-      <View style={styles.heroCard}>
-        <Text style={styles.eyebrow}>Buy</Text>
-        <Text style={styles.heroTitle}>Back promising agents on Autolaunch</Text>
-        <Text style={styles.heroBody}>
-          When a team is ready for outside support, this is the handoff. Open the launch page, decide
-          if you want in, and come back to keep following the story.
-        </Text>
-
-        <View style={styles.heroActions}>
-          <Pressable
-            onPress={() => Linking.openURL('https://autolaunch.sh')}
-            style={({ pressed }) => [styles.primaryButton, pressed && styles.primaryButtonPressed]}
-          >
-            <Text style={styles.primaryButtonText}>Open Autolaunch</Text>
-          </Pressable>
-
-          <Pressable
-            onPress={() => router.push('/agents')}
-            style={({ pressed }) => [styles.secondaryButton, pressed && styles.secondaryButtonPressed]}
-          >
-            <Text style={styles.secondaryButtonText}>Back to Regents</Text>
-          </Pressable>
-        </View>
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>How this fits</Text>
-        <View style={styles.featureList}>
-          <View style={styles.featureCard}>
-            <Ionicons name="sparkles-outline" size={18} color={colors.accent} />
-            <View style={styles.featureCopy}>
-              <Text style={styles.featureTitle}>Keep the story short</Text>
-              <Text style={styles.featureBody}>
-                Autolaunch works best when the reason to believe is clear in a few lines.
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.featureCard}>
-            <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.accent} />
-            <View style={styles.featureCopy}>
-              <Text style={styles.featureTitle}>Agent Brief first</Text>
-              <Text style={styles.featureBody}>
-                Use Agent Brief to understand what an agent team is building before you buy, then come back to track what you hold.
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.featureCard}>
-            <Ionicons name="wallet-outline" size={18} color={colors.accent} />
-            <View style={styles.featureCopy}>
-              <Text style={styles.featureTitle}>Wallet stays close</Text>
-              <Text style={styles.featureBody}>
-                Funding and payments stay nearby, so you can move quickly without a crowded app.
-              </Text>
-            </View>
-          </View>
-        </View>
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>What you will do</Text>
-        <View style={styles.steps}>
-          {BUY_STEPS.map((step, index) => (
-            <View key={step} style={styles.stepRow}>
-              <View style={styles.stepBadge}>
-                <Text style={styles.stepBadgeText}>{index + 1}</Text>
-              </View>
-              <Text style={styles.stepText}>{step}</Text>
-            </View>
-          ))}
-        </View>
-      </View>
-
-      <View style={styles.noteCard}>
-        <Text style={styles.noteTitle}>Keep it light</Text>
-        <Text style={styles.noteBody}>
-          This screen is only for the handoff. The rest of the app should help you decide what is
-          worth opening, not bury you in a trading screen.
-        </Text>
-      </View>
-    </ScrollView>
+    <SafeAreaView style={styles.container}>
+      <FlatList
+        style={styles.scroller}
+        data={auctions}
+        renderItem={renderAuction}
+        keyExtractor={auctionReference}
+        ItemSeparatorComponent={RowSeparator}
+        ListHeaderComponent={listHeader}
+        ListEmptyComponent={listEmpty}
+        contentContainerStyle={styles.content}
+        contentInsetAdjustmentBehavior="automatic"
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={() => loadAuctions(true)} tintColor={colors.accent} />
+        }
+      />
+    </SafeAreaView>
   );
 }
 
 function makeStyles({ colors, fonts }: Theme) {
   return StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  content: {
-    paddingHorizontal: 20,
-    paddingBottom: 120,
-    gap: 16,
-  },
-  heroCard: {
-    backgroundColor: colors.surfaceElevated,
-    borderWidth: 1,
-    borderColor: colors.hairlineStrong,
-    borderRadius: 28,
-    padding: 22,
-    gap: 14,
-  },
-  eyebrow: {
-    color: colors.accent,
-    fontSize: 12,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    fontFamily: fonts.ui,
-  },
-  heroTitle: {
-    color: colors.text,
-    fontSize: 32,
-    lineHeight: 38,
-    fontFamily: fonts.title,
-  },
-  heroBody: {
-    color: colors.textMuted,
-    fontSize: 15,
-    lineHeight: 22,
-    fontFamily: fonts.ui,
-  },
-  heroActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  primaryButton: {
-    backgroundColor: colors.accent,
-    borderRadius: 16,
-    paddingHorizontal: 18,
-    paddingVertical: 13,
-  },
-  primaryButtonPressed: {
-    opacity: 0.92,
-    transform: [{ scale: 0.985 }],
-  },
-  primaryButtonText: {
-    color: colors.onAccent,
-    fontSize: 14,
-    fontFamily: fonts.ui,
-  },
-  secondaryButton: {
-    backgroundColor: colors.surfaceElevated,
-    borderRadius: 16,
-    paddingHorizontal: 18,
-    paddingVertical: 13,
-    borderWidth: 1,
-    borderColor: colors.hairlineStrong,
-  },
-  secondaryButtonPressed: {
-    opacity: 0.95,
-  },
-  secondaryButtonText: {
-    color: colors.text,
-    fontSize: 14,
-    fontFamily: fonts.ui,
-  },
-  card: {
-    backgroundColor: colors.surfaceElevated,
-    borderWidth: 1,
-    borderColor: colors.hairlineStrong,
-    borderRadius: 24,
-    padding: 20,
-    gap: 14,
-  },
-  sectionTitle: {
-    color: colors.text,
-    fontSize: 22,
-    fontFamily: fonts.title,
-  },
-  featureList: {
-    gap: 10,
-  },
-  featureCard: {
-    flexDirection: 'row',
-    gap: 12,
-    backgroundColor: colors.surface,
-    borderRadius: 18,
-    padding: 16,
-  },
-  featureCopy: {
-    flex: 1,
-    gap: 4,
-  },
-  featureTitle: {
-    color: colors.text,
-    fontSize: 16,
-    fontFamily: fonts.title,
-  },
-  featureBody: {
-    color: colors.textMuted,
-    fontSize: 13,
-    lineHeight: 19,
-    fontFamily: fonts.ui,
-  },
-  steps: {
-    gap: 10,
-  },
-  stepRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    backgroundColor: colors.surfaceElevated,
-    borderRadius: 18,
-    padding: 14,
-  },
-  stepBadge: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: colors.accentWash,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepBadgeText: {
-    color: colors.accent,
-    fontSize: 12,
-    fontFamily: fonts.title,
-  },
-  stepText: {
-    flex: 1,
-    color: colors.text,
-    fontSize: 14,
-    lineHeight: 20,
-    fontFamily: fonts.ui,
-  },
-  noteCard: {
-    backgroundColor: colors.accentWash,
-    borderWidth: 1,
-    borderColor: colors.hairlineStrong,
-    borderRadius: 24,
-    padding: 20,
-    gap: 8,
-  },
-  noteTitle: {
-    color: colors.text,
-    fontSize: 22,
-    fontFamily: fonts.title,
-  },
-  noteBody: {
-    color: colors.text,
-    fontSize: 14,
-    lineHeight: 20,
-    fontFamily: fonts.ui,
-  },
+    container: {
+      flex: 1,
+      backgroundColor: colors.bg,
+    },
+    scroller: {
+      flex: 1,
+    },
+    content: {
+      paddingHorizontal: 20,
+      paddingBottom: 120,
+    },
+    listHeader: {
+      gap: 16,
+      paddingBottom: 16,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: 16,
+      paddingTop: 8,
+    },
+    titleGroup: {
+      flex: 1,
+      minWidth: 0,
+      gap: 6,
+    },
+    headerActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    iconButton: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: colors.surfaceElevated,
+      borderWidth: 1,
+      borderColor: colors.hairlineStrong,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    eyebrow: {
+      color: colors.accent,
+      fontSize: 12,
+      textTransform: 'uppercase',
+      fontFamily: fonts.ui,
+    },
+    title: {
+      color: colors.text,
+      fontSize: 32,
+      lineHeight: 38,
+      fontFamily: fonts.title,
+    },
+    subtitle: {
+      color: colors.textMuted,
+      fontSize: 15,
+      lineHeight: 21,
+      fontFamily: fonts.ui,
+    },
+    summaryRow: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    summaryCard: {
+      flex: 1,
+      backgroundColor: colors.surfaceElevated,
+      borderWidth: 1,
+      borderColor: colors.hairlineStrong,
+      borderRadius: 20,
+      padding: 16,
+      gap: 4,
+    },
+    summaryValue: {
+      color: colors.text,
+      fontSize: 26,
+      fontFamily: fonts.title,
+    },
+    summaryLabel: {
+      color: colors.textMuted,
+      fontSize: 13,
+      fontFamily: fonts.ui,
+    },
+    row: {
+      backgroundColor: colors.surfaceElevated,
+      borderWidth: 1,
+      borderColor: colors.hairlineStrong,
+      borderRadius: 20,
+      padding: 16,
+      gap: 12,
+    },
+    rowHeader: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    rowTitleGroup: {
+      flex: 1,
+      minWidth: 0,
+      gap: 4,
+    },
+    rowKind: {
+      color: colors.accent,
+      fontSize: 12,
+      fontFamily: fonts.ui,
+    },
+    rowTitle: {
+      color: colors.text,
+      fontSize: 18,
+      lineHeight: 22,
+      fontFamily: fonts.title,
+    },
+    rowSymbol: {
+      color: colors.textMuted,
+      fontSize: 13,
+      fontFamily: fonts.ui,
+    },
+    rowSummary: {
+      color: colors.textMuted,
+      fontSize: 13,
+      lineHeight: 19,
+      fontFamily: fonts.ui,
+    },
+    rowFooter: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    rowMetaGroup: {
+      flex: 1,
+      minWidth: 0,
+      gap: 3,
+    },
+    rowMeta: {
+      color: colors.text,
+      fontSize: 13,
+      fontFamily: fonts.ui,
+    },
+    rowMetaMuted: {
+      color: colors.textMuted,
+      fontSize: 12,
+      fontFamily: fonts.ui,
+    },
+    emptyState: {
+      alignItems: 'center',
+      gap: 10,
+      paddingVertical: 40,
+      paddingHorizontal: 20,
+    },
+    emptyIcon: {
+      width: 52,
+      height: 52,
+      borderRadius: 26,
+      backgroundColor: colors.accentWash,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    emptyTitle: {
+      color: colors.text,
+      fontSize: 18,
+      fontFamily: fonts.title,
+      textAlign: 'center',
+    },
+    emptyBody: {
+      color: colors.textMuted,
+      fontSize: 14,
+      lineHeight: 20,
+      fontFamily: fonts.ui,
+      textAlign: 'center',
+    },
   });
 }
