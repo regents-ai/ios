@@ -363,7 +363,6 @@ export const regentApi = {
   async stakeRegent(input: {
     walletAddress: string;
     amount: string;
-    receiver?: string;
   }): Promise<RegentStakingActionResponse> {
     return requestJson<RegentStakingActionResponse>(
       `${mobileRegentStakingPath}/stake`,

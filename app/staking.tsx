@@ -14,7 +14,6 @@ import {
 } from '@/utils/progressToast';
 import { regentApi } from '@/utils/regentApi/client';
 import {
-  hasPositiveRawAmount,
   needsStakingApproval,
   stakingActionCall,
   stakingApprovalCall,
@@ -31,7 +30,6 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   View,
@@ -103,8 +101,6 @@ export default function RegentStakingScreen() {
   const smartAccount = smartWalletAddress(currentUser?.evmSmartAccounts?.[0] as string | undefined);
   const [staking, setStaking] = useState<RegentStakingState | null>(null);
   const [amount, setAmount] = useState('');
-  const [stakeForDifferentWallet, setStakeForDifferentWallet] = useState(false);
-  const [receiver, setReceiver] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [pendingAction, setPendingAction] = useState<RegentStakingAction | null>(null);
@@ -159,10 +155,10 @@ export default function RegentStakingScreen() {
     }, [clearScheduledRefresh, loadStaking])
   );
 
-  const canStake = !!smartAccount && !!staking && !staking.paused && positiveDecimal(amount);
-  const canUnstake = !!smartAccount && !!staking && positiveDecimal(amount);
-  const canClaimUsdc = hasPositiveRawAmount(staking?.wallet_claimable_usdc_raw);
-  const canClaimRegent = hasPositiveRawAmount(staking?.wallet_claimable_regent_raw);
+  // Only a missing amount holds a button back: every other press reaches the
+  // wallet and the contract decides the outcome, including a repeat press
+  // while an earlier one is still pending.
+  const hasAmount = positiveDecimal(amount);
   const pendingCopy = pendingAction ? actionLoadingCopy(pendingAction, approvalStep) : null;
 
   const metricRows = useMemo(() => [
@@ -189,11 +185,7 @@ export default function RegentStakingScreen() {
       const walletAddress = smartAccount;
       const response =
         action === 'stake'
-          ? await regentApi.stakeRegent({
-              walletAddress,
-              amount,
-              ...(stakeForDifferentWallet && receiver.trim() ? { receiver: receiver.trim() } : {}),
-            })
+          ? await regentApi.stakeRegent({ walletAddress, amount })
           : action === 'unstake'
             ? await regentApi.unstakeRegent({ walletAddress, amount })
             : action === 'claim_usdc'
@@ -243,7 +235,7 @@ export default function RegentStakingScreen() {
       setPendingAction(null);
       setApprovalStep(false);
     }
-  }, [amount, clearScheduledRefresh, loadStaking, receiver, sendUserOperation, smartAccount, stakeForDifferentWallet]);
+  }, [amount, clearScheduledRefresh, loadStaking, sendUserOperation, smartAccount]);
 
   return (
     <View style={styles.container}>
@@ -294,7 +286,7 @@ export default function RegentStakingScreen() {
                   </View>
                 </View>
                 <Text style={styles.heroBody}>
-                  Rewards come from the live REGENT staking pool. Claim buttons use your current balances.
+                  Rewards come from the live REGENT staking pool on Base. Your figures are read fresh each time this screen opens.
                 </Text>
               </View>
 
@@ -326,61 +318,35 @@ export default function RegentStakingScreen() {
                   keyboardType="decimal-pad"
                   style={styles.amountInput}
                 />
-                <View style={styles.switchRow}>
-                  <View style={styles.switchCopy}>
-                    <Text style={styles.switchTitle}>Stake for another wallet</Text>
-                    <Text style={styles.switchText}>Send the staked position to a wallet you enter.</Text>
-                  </View>
-                  <Switch
-                    value={stakeForDifferentWallet}
-                    onValueChange={setStakeForDifferentWallet}
-                    trackColor={{ false: colors.border, true: colors.accent }}
-                    thumbColor={colors.surfaceElevated}
-                  />
-                </View>
-                {stakeForDifferentWallet ? (
-                  <TextInput
-                    value={receiver}
-                    onChangeText={setReceiver}
-                    placeholder="0x... or name.eth"
-                    placeholderTextColor={colors.textMuted}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    style={styles.receiverInput}
-                  />
-                ) : null}
               </View>
 
               <View style={styles.actionGrid}>
                 <ActionButton
                   label="Stake"
                   icon="lock-closed-outline"
-                  disabled={!canStake || !!pendingAction}
+                  disabled={!hasAmount}
                   onPress={() => void runStakingAction('stake')}
                 />
                 <ActionButton
                   label="Unstake"
                   icon="lock-open-outline"
-                  disabled={!canUnstake || !!pendingAction}
+                  disabled={!hasAmount}
                   onPress={() => void runStakingAction('unstake')}
                 />
                 <ActionButton
                   label="Claim USDC"
                   icon="cash-outline"
-                  disabled={!canClaimUsdc || !!pendingAction}
                   onPress={() => void runStakingAction('claim_usdc')}
                 />
                 <ActionButton
                   label="Claim REGENT"
                   icon="sparkles-outline"
-                  disabled={!canClaimRegent || !!pendingAction}
                   onPress={() => void runStakingAction('claim_regent')}
                 />
               </View>
 
               <RegentPressable
-                style={[styles.compoundButton, (!canClaimRegent || !!pendingAction) && styles.disabledButton]}
-                disabled={!canClaimRegent || !!pendingAction}
+                style={styles.compoundButton}
                 onPress={() => void runStakingAction('claim_and_restake_regent')}
               >
                 <Ionicons name="sync-outline" size={18} color={colors.onAccent} />
@@ -398,12 +364,12 @@ export default function RegentStakingScreen() {
 }
 
 function ActionButton({
-  disabled,
+  disabled = false,
   icon,
   label,
   onPress,
 }: {
-  disabled: boolean;
+  disabled?: boolean;
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   onPress: () => void;
@@ -633,38 +599,6 @@ function makeStyles({ colors, fonts }: Theme) {
     color: colors.text,
     fontSize: 22,
     fontFamily: fonts.title,
-  },
-  switchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  switchCopy: {
-    flex: 1,
-    minWidth: 0,
-    gap: 2,
-  },
-  switchTitle: {
-    color: colors.text,
-    fontSize: 14,
-    fontFamily: fonts.title,
-  },
-  switchText: {
-    color: colors.textMuted,
-    fontSize: 12,
-    lineHeight: 17,
-    fontFamily: fonts.ui,
-  },
-  receiverInput: {
-    minHeight: 50,
-    paddingHorizontal: 14,
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: colors.hairlineStrong,
-    backgroundColor: colors.surface,
-    color: colors.text,
-    fontSize: 14,
-    fontFamily: fonts.ui,
   },
   actionGrid: {
     flexDirection: 'row',

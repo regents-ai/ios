@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test, { beforeEach } from 'node:test';
 import type { Request, Response } from 'express';
-import { encodeFunctionData, parseUnits } from 'viem';
+import { decodeFunctionData, encodeFunctionData, erc20Abi, parseUnits } from 'viem';
 
 import {
   confirmPreparedWalletActionForUser,
@@ -38,13 +38,12 @@ import {
 } from './mobileMessageThreads.js';
 import {
   createPlatformAgentLinkClient,
-  createPlatformStakingClient,
   type PlatformAgentLinkClient,
   type PlatformProjection,
   type PlatformRwrClient,
   type RwrWorkItem,
-  type PlatformStakingClient,
 } from './platformProjection.js';
+import { REGENT_STAKING_ADDRESS, REGENT_TOKEN_ADDRESS, regentRevenueStakingAbi } from './regentStaking.js';
 import type { HermesVoiceClient } from './services/hermesVoiceClient.js';
 
 beforeEach(async () => {
@@ -398,7 +397,6 @@ const expectedRecipient = '0x2222222222222222222222222222222222222222';
 const expectedRegentWallet = '0x7AA4fb65E3a74F4797e95AA8EF1fD54e9b3d0812';
 const expectedFundingToken = '0x3333333333333333333333333333333333333333';
 const expectedData = '0x';
-const stakingContract = '0x9999999999999999999999999999999999999999';
 const erc20TransferAbi = [
   {
     type: 'function',
@@ -420,85 +418,6 @@ function fundingTransferData(input?: { recipient?: `0x${string}`; amount?: strin
   });
 }
 
-const stakingState = {
-  chain_id: 8453,
-  chain_label: 'Base',
-  contract_address: stakingContract,
-  owner_address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-  stake_token_address: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
-  usdc_address: '0xcccccccccccccccccccccccccccccccccccccccc',
-  treasury_recipient: '0xdddddddddddddddddddddddddddddddddddddddd',
-  revenue_share_supply_denominator_raw: '1000000000000000000',
-  revenue_share_supply_denominator: '1',
-  paused: false,
-  total_staked_raw: '1500000000000000000000',
-  total_staked: '1500',
-  total_usdc_received_raw: '25000000',
-  total_usdc_received: '25',
-  direct_deposit_usdc_raw: '1000000',
-  direct_deposit_usdc: '1',
-  treasury_residual_usdc_raw: '2000000',
-  treasury_residual_usdc: '2',
-  materialized_outstanding_raw: '3000000000000000000',
-  materialized_outstanding: '3',
-  available_reward_inventory_raw: '4000000000000000000',
-  available_reward_inventory: '4',
-  total_claimed_so_far_raw: '5000000000000000000',
-  total_claimed_so_far: '5',
-  wallet_address: expectedSigner,
-  connected_wallet_address: expectedSigner,
-  wallet_stake_balance_raw: '12000000000000000000',
-  wallet_stake_balance: '12',
-  wallet_token_balance_raw: '42000000000000000000',
-  wallet_token_balance: '42',
-  wallet_claimable_usdc_raw: '7000000',
-  wallet_claimable_usdc: '7',
-  wallet_claimable_regent_raw: '9000000000000000000',
-  wallet_claimable_regent: '9',
-  wallet_funded_claimable_regent_raw: '9000000000000000000',
-  wallet_funded_claimable_regent: '9',
-};
-
-function stakingAction(action: 'stake' | 'unstake' | 'claim_usdc' | 'claim_regent' | 'claim_and_restake_regent') {
-  return {
-    staking: {
-      chain_id: 8453,
-      chain_label: 'Base',
-      contract_address: stakingContract,
-      wallet_address: expectedSigner,
-    },
-    wallet_action: {
-      action_id: `${action}-action`,
-      owner_product: 'platform' as const,
-      resource: 'regent_staking' as const,
-      resource_id: stakingContract,
-      action,
-      chain_id: 8453,
-      to: stakingContract,
-      value: '0',
-      data: expectedData,
-      expected_signer: expectedSigner,
-      expires_at: '2026-05-06T18:00:00.000Z',
-      idempotency_key: `${action}-action`,
-      simulation: {
-        required: false,
-        status: 'not_required' as const,
-        block_number: null,
-      },
-      risk_copy: 'Review this staking action before signing.',
-      ...(action === 'stake'
-        ? {
-            approval: {
-              token: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
-              spender: stakingContract,
-              amount: '25000000000000000000',
-              data: '0x095ea7b3',
-            },
-          }
-        : {}),
-    },
-  };
-}
 
 function expectedReturnInput(
   input?: Partial<{
@@ -795,34 +714,6 @@ const resolvedApprovalClient: PlatformRwrClient = {
         },
       ],
     };
-  },
-};
-
-const platformStakingClient: PlatformStakingClient = {
-  async fetchStaking() {
-    return { kind: 'ok', data: { staking: stakingState } };
-  },
-  async stake(_auth, input) {
-    assert.equal(input.walletAddress, expectedSigner);
-    assert.equal(input.amount, '25');
-    return { kind: 'ok', data: stakingAction('stake') };
-  },
-  async unstake(_auth, input) {
-    assert.equal(input.walletAddress, expectedSigner);
-    assert.equal(input.amount, '25');
-    return { kind: 'ok', data: stakingAction('unstake') };
-  },
-  async claimUsdc(_auth, walletAddress) {
-    assert.equal(walletAddress, expectedSigner);
-    return { kind: 'ok', data: stakingAction('claim_usdc') };
-  },
-  async claimRegent(_auth, walletAddress) {
-    assert.equal(walletAddress, expectedSigner);
-    return { kind: 'ok', data: stakingAction('claim_regent') };
-  },
-  async claimAndRestakeRegent(_auth, walletAddress) {
-    assert.equal(walletAddress, expectedSigner);
-    return { kind: 'ok', data: stakingAction('claim_and_restake_regent') };
   },
 };
 
@@ -1176,94 +1067,6 @@ test('mobile Platform message routes forward bearer auth without cookies', async
   ]);
 });
 
-test('mobile staking routes forward bearer auth and preserve Platform wallet actions', async () => {
-  const forwarded: unknown[] = [];
-  const stakingClient: PlatformStakingClient = {
-    ...platformStakingClient,
-    async fetchStaking(auth, walletAddress) {
-      forwarded.push({ auth, walletAddress, action: 'fetch' });
-      return platformStakingClient.fetchStaking(auth, walletAddress);
-    },
-    async stake(auth, input) {
-      forwarded.push({ auth, input, action: 'stake' });
-      return platformStakingClient.stake(auth, input);
-    },
-  };
-
-  const readResponse = await requestMobileRoute(
-    platformProjection,
-    {
-      method: 'GET',
-      url: `/mobile/regent/staking?walletAddress=${expectedSigner}`,
-      headers: {
-        Authorization: 'Bearer mobile-token',
-        Cookie: 'platform_session=secret',
-      },
-    },
-    { platformStakingClient: stakingClient },
-  );
-  assert.equal(readResponse.status, 200);
-  assert.equal(readResponse.body.staking.wallet_address, expectedSigner);
-
-  const stakeResponse = await requestMobileRoute(
-    platformProjection,
-    {
-      method: 'POST',
-      url: '/mobile/regent/staking/stake',
-      headers: {
-        Authorization: 'Bearer mobile-token',
-        Cookie: 'platform_session=secret',
-      },
-      body: {
-        walletAddress: expectedSigner,
-        amount: '25',
-      },
-    },
-    { platformStakingClient: stakingClient },
-  );
-  assert.equal(stakeResponse.status, 200);
-  assert.equal(stakeResponse.body.wallet_action.owner_product, 'platform');
-  assert.equal(stakeResponse.body.wallet_action.action, 'stake');
-  assert.equal(stakeResponse.body.wallet_action.approval.spender, stakingContract);
-  assert.deepEqual(forwarded, [
-    {
-      auth: { authorization: 'Bearer mobile-token' },
-      walletAddress: expectedSigner,
-      action: 'fetch',
-    },
-    {
-      auth: { authorization: 'Bearer mobile-token' },
-      input: { walletAddress: expectedSigner, amount: '25' },
-      action: 'stake',
-    },
-  ]);
-});
-
-test('mobile staking routes cover unstake and all claim actions', async () => {
-  for (const [url, expectedAction] of [
-    ['/mobile/regent/staking/unstake', 'unstake'],
-    ['/mobile/regent/staking/claim-usdc', 'claim_usdc'],
-    ['/mobile/regent/staking/claim-regent', 'claim_regent'],
-    ['/mobile/regent/staking/claim-and-restake-regent', 'claim_and_restake_regent'],
-  ] as const) {
-    const response = await requestMobileRoute(
-      platformProjection,
-      {
-        method: 'POST',
-        url,
-        body:
-          expectedAction === 'unstake'
-            ? { walletAddress: expectedSigner, amount: '25' }
-            : { walletAddress: expectedSigner },
-      },
-      { platformStakingClient },
-    );
-
-    assert.equal(response.status, 200);
-    assert.equal(response.body.wallet_action.action, expectedAction);
-    assert.equal(response.body.wallet_action.owner_product, 'platform');
-  }
-});
 
 test('mobile agent-link claim forwards the code and bearer auth, relaying the connected agent as 201', async () => {
   const forwarded: unknown[] = [];
@@ -1464,41 +1267,6 @@ test('Platform agent-link client treats a 409 without a readable envelope as a c
     const client = createPlatformAgentLinkClient(fetchImpl);
 
     const result = await client.claim({}, 'PAIR-CODE');
-    assert.equal(result.kind, 'upstream_error');
-    if (result.kind === 'upstream_error') {
-      assert.equal(result.message, 'Platform response did not match the current contract.');
-    }
-  } finally {
-    if (previousPlatformUrl === undefined) {
-      delete process.env.PLATFORM_API_BASE_URL;
-    } else {
-      process.env.PLATFORM_API_BASE_URL = previousPlatformUrl;
-    }
-  }
-});
-
-test('Platform staking responses reject malformed transaction data before mobile signing', async () => {
-  const previousPlatformUrl = process.env.PLATFORM_API_BASE_URL;
-  process.env.PLATFORM_API_BASE_URL = 'https://platform.example';
-
-  try {
-    const malformedAction = {
-      ok: true,
-      ...stakingAction('stake'),
-      wallet_action: {
-        ...stakingAction('stake').wallet_action,
-        data: '0xabc',
-      },
-    };
-    const fetchImpl: typeof fetch = async () =>
-      new Response(JSON.stringify(malformedAction), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    const client = createPlatformStakingClient(fetchImpl);
-
-    const result = await client.stake({}, { walletAddress: expectedSigner, amount: '25' });
-
     assert.equal(result.kind, 'upstream_error');
     if (result.kind === 'upstream_error') {
       assert.equal(result.message, 'Platform response did not match the current contract.');
@@ -1777,6 +1545,58 @@ test('return requests require the displayed destination to match the transaction
   });
 
   assert.equal(response.status, 400);
+});
+
+// Invariant: every prepared staking call targets the Base staking contract,
+// calls the intended function, and names the signed-in wallet as both signer
+// and recipient. Nothing else about staking is worth an automated test.
+test('prepared staking calls target the staking contract with the wallet as signer and recipient', async () => {
+  const wallet = '0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e';
+  const amount = parseUnits('12.5', 18);
+  const cases = [
+    ['stake', { walletAddress: wallet, amount: '12.5' }, 'stake', [amount, wallet]],
+    ['unstake', { walletAddress: wallet, amount: '12.5' }, 'unstake', [amount, wallet]],
+    ['claim-usdc', { walletAddress: wallet }, 'claimUSDC', [wallet]],
+    ['claim-regent', { walletAddress: wallet }, 'claimRegent', [wallet]],
+    ['claim-and-restake-regent', { walletAddress: wallet }, 'claimAndRestakeRegent', undefined],
+  ] as const;
+
+  for (const [path, body, functionName, args] of cases) {
+    const response = await requestMobileRoute(platformProjection, {
+      method: 'POST',
+      url: `/mobile/regent/staking/${path}`,
+      body,
+    });
+
+    assert.equal(response.status, 200, path);
+    const walletAction = response.body.wallet_action;
+    assert.equal(walletAction.to, REGENT_STAKING_ADDRESS);
+    assert.equal(walletAction.expected_signer, wallet);
+    assert.equal(walletAction.chain_id, 8453);
+    assert.equal(walletAction.value, '0');
+
+    const decoded = decodeFunctionData({ abi: regentRevenueStakingAbi, data: walletAction.data });
+    assert.equal(decoded.functionName, functionName);
+    assert.deepEqual(decoded.args, args);
+
+    if (path === 'stake') {
+      const approval = decodeFunctionData({ abi: erc20Abi, data: walletAction.approval.data });
+      assert.equal(walletAction.approval.token, REGENT_TOKEN_ADDRESS);
+      assert.equal(walletAction.approval.spender, REGENT_STAKING_ADDRESS);
+      assert.equal(walletAction.approval.amount, amount.toString());
+      assert.equal(approval.functionName, 'approve');
+      assert.deepEqual(approval.args, [REGENT_STAKING_ADDRESS, amount]);
+    } else {
+      assert.equal(walletAction.approval, undefined);
+    }
+  }
+
+  const rejected = await requestMobileRoute(platformProjection, {
+    method: 'POST',
+    url: '/mobile/regent/staking/stake',
+    body: { walletAddress: wallet, amount: '0' },
+  });
+  assert.equal(rejected.status, 400);
 });
 
 test('mobile message and money routes remain mounted through the extracted router', async () => {

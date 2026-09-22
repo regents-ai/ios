@@ -150,9 +150,9 @@ test('Regent staking contract and client use the live staking surface only', () 
   assert.match(regentClient, /claimAndRestakeRegent\(input:/);
 });
 
-test('Platform staking wallet-action contract uses even-byte calldata constraints', () => {
+test('staking wallet-action contract uses even-byte calldata constraints', () => {
   const platformAction = contract.slice(
-    contract.indexOf('    PlatformWalletAction:'),
+    contract.indexOf('    RegentStakingWalletAction:'),
     contract.indexOf('    MobileRegentStakingActionResponse:')
   );
   const approval = platformAction.slice(platformAction.indexOf('        approval:'));

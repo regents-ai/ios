@@ -108,68 +108,34 @@ export type RegentStakingAction =
 export type RegentStakingState = {
   chain_id: number;
   chain_label: string;
+  block_number: number;
   contract_address: string;
-  owner_address: string;
   stake_token_address: string;
   usdc_address: string;
-  treasury_recipient: string;
-  revenue_share_supply_denominator_raw: string;
-  revenue_share_supply_denominator: string;
   paused: boolean;
   total_staked_raw: string;
   total_staked: string;
-  total_usdc_received_raw: string;
-  total_usdc_received: string;
-  direct_deposit_usdc_raw: string;
-  direct_deposit_usdc: string;
-  treasury_residual_usdc_raw: string;
-  treasury_residual_usdc: string;
-  materialized_outstanding_raw: string;
-  materialized_outstanding: string;
-  available_reward_inventory_raw: string;
-  available_reward_inventory: string;
-  total_claimed_so_far_raw: string;
-  total_claimed_so_far: string;
-  wallet_address: string | null;
-  connected_wallet_address: string | null;
-  wallet_stake_balance_raw: string | null;
-  wallet_stake_balance: string | null;
-  wallet_token_balance_raw: string | null;
-  wallet_token_balance: string | null;
-  wallet_claimable_usdc_raw: string | null;
-  wallet_claimable_usdc: string | null;
-  wallet_claimable_regent_raw: string | null;
-  wallet_claimable_regent: string | null;
-  wallet_funded_claimable_regent_raw: string | null;
-  wallet_funded_claimable_regent: string | null;
-};
-
-export type RegentStakingActionState = {
-  chain_id: number;
-  chain_label: string;
-  contract_address: string;
   wallet_address: string;
+  wallet_token_balance_raw: string;
+  wallet_token_balance: string;
+  wallet_stake_allowance_raw: string;
+  wallet_stake_balance_raw: string;
+  wallet_stake_balance: string;
+  wallet_claimable_usdc_raw: string;
+  wallet_claimable_usdc: string;
+  wallet_claimable_regent_raw: string;
+  wallet_claimable_regent: string;
+  wallet_funded_claimable_regent_raw: string;
+  wallet_funded_claimable_regent: string;
 };
 
-export type PlatformWalletAction = {
-  action_id: string;
-  owner_product: 'platform';
-  resource: 'regent_staking';
-  resource_id: string;
+export type RegentStakingWalletAction = {
   action: RegentStakingAction;
   chain_id: number;
   to: string;
   value: string;
   data: string;
   expected_signer: string;
-  expires_at: string;
-  idempotency_key: string;
-  simulation: {
-    required: boolean;
-    status: 'not_required' | 'pending' | 'passed' | 'failed';
-    block_number: number | null;
-  };
-  risk_copy: string;
   approval?: {
     token: string;
     spender: string;
@@ -179,8 +145,7 @@ export type PlatformWalletAction = {
 };
 
 export type RegentStakingActionResponse = {
-  staking: RegentStakingActionState;
-  wallet_action: PlatformWalletAction;
+  wallet_action: RegentStakingWalletAction;
 };
 
 // 'unknown' is the tolerant-decode case for unrecognized wire values.

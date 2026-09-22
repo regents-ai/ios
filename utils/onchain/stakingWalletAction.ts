@@ -1,4 +1,4 @@
-import { PlatformWalletAction } from '../../types/regents';
+import { RegentStakingWalletAction } from '../../types/regents';
 import { createPublicClient, erc20Abi, http, isAddress } from 'viem';
 import { base, baseSepolia } from 'viem/chains';
 
@@ -68,7 +68,7 @@ export function shouldRequestApprovalForAllowance(input: {
   return input.allowance < normalizeValue(input.requiredAmount);
 }
 
-export function stakingActionCall(walletAction: PlatformWalletAction, expectedSigner: string): StakingWalletCall {
+export function stakingActionCall(walletAction: RegentStakingWalletAction, expectedSigner: string): StakingWalletCall {
   const signer = normalizeAddress(expectedSigner, 'Your wallet');
   const actionSigner = normalizeAddress(walletAction.expected_signer, 'Your wallet');
   if (signer.toLowerCase() !== actionSigner.toLowerCase()) {
@@ -84,7 +84,7 @@ export function stakingActionCall(walletAction: PlatformWalletAction, expectedSi
   };
 }
 
-export function stakingApprovalCall(walletAction: PlatformWalletAction, expectedSigner: string): StakingWalletCall | null {
+export function stakingApprovalCall(walletAction: RegentStakingWalletAction, expectedSigner: string): StakingWalletCall | null {
   const approval = walletAction.approval;
   if (!approval) {
     return null;
@@ -99,7 +99,7 @@ export function stakingApprovalCall(walletAction: PlatformWalletAction, expected
   };
 }
 
-export async function needsStakingApproval(walletAction: PlatformWalletAction, expectedSigner: string) {
+export async function needsStakingApproval(walletAction: RegentStakingWalletAction, expectedSigner: string) {
   const approval = walletAction.approval;
   if (!approval) {
     return false;
