@@ -12,6 +12,7 @@ import { clearWalletInitFailureMessage, getWalletInitFailureMessage } from '@/ut
 import { isAuthManagedRoute, resolveAuthGateState } from '@/utils/authFlowState';
 import { useChatGptAuth } from '@/hooks/useChatGptAuth';
 import { useRegentsAuth } from '@/hooks/useRegentsAuth';
+import { DialOverlayHost } from '@/components/dial/DialOverlayHost';
 import { getMotionPreset } from '@/components/motion/easePresets';
 import { useReducedMotion } from '@/components/motion/useReducedMotion';
 import { setCountry, setSubdivision } from '@/utils/state/locationState';
@@ -196,7 +197,12 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     );
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      {children}
+      <DialOverlayHost />
+    </>
+  );
 }
 
 function makeStyles({ colors, fonts }: Theme) {

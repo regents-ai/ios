@@ -6,7 +6,6 @@ import { AuthGate } from "@/components/AuthGate";
 import { AuthInitializer } from "@/components/AuthInitializer";
 import { PushNotificationRouter } from "@/components/PushNotificationRouter";
 import { PendingRouteDrainer } from "@/components/PendingRouteDrainer";
-import { DialOverlayHost } from "@/components/dial/DialOverlayHost";
 import { useAppBootstrap } from "@/hooks/useAppBootstrap";
 import { useRegentsAuth } from "@/hooks/useRegentsAuth";
 import { fetchCdpAuthToken } from "@/utils/fetchCdpAuthToken";
@@ -76,10 +75,7 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={styles.root}>
       <ThemeProvider>
-        <View style={styles.root}>
-          <RootLayoutContent />
-          <DialOverlayHost />
-        </View>
+        <RootLayoutContent />
       </ThemeProvider>
     </GestureHandlerRootView>
   );

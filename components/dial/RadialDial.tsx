@@ -639,7 +639,7 @@ function RadialDialSurface({
         >
           <GestureDetector gesture={panGesture}>
             <Pressable
-              accessibilityLabel={expanded ? 'Close radial dial' : 'Open radial dial'}
+              accessibilityLabel={expanded ? 'Close quick actions' : 'Open quick actions'}
               accessibilityRole="button"
               accessibilityState={{ expanded }}
               onPress={handleCenterPress}

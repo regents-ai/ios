@@ -1,3 +1,4 @@
+import { useDialContentClearance } from '@/components/dial/dialLayout';
 import { LiveValueFlash } from '@/components/motion/LiveValueFlash';
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { RegentPressable } from '@/components/ui/RegentPressable';
@@ -96,6 +97,7 @@ export default function RegentStakingScreen() {
   const theme = useTheme();
   const { colors } = theme;
   const styles = useMemo(() => makeStyles(theme), [theme]);
+  const dialClearance = useDialContentClearance();
   const { currentUser } = useCurrentUser();
   const { sendUserOperation } = useSendUserOperation();
   const smartAccount = smartWalletAddress(currentUser?.evmSmartAccounts?.[0] as string | undefined);
@@ -241,7 +243,7 @@ export default function RegentStakingScreen() {
     <View style={styles.container}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.keyboardWrap}>
         <ScrollView
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[styles.content, { paddingBottom: dialClearance }]}
           contentInsetAdjustmentBehavior="automatic"
           keyboardShouldPersistTaps="handled"
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadStaking(true)} tintColor={colors.accent} />}
@@ -401,7 +403,6 @@ function makeStyles({ colors, fonts }: Theme) {
   },
   content: {
     paddingHorizontal: 20,
-    paddingBottom: 42,
     gap: 16,
   },
   headerRow: {

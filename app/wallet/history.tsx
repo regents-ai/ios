@@ -9,6 +9,8 @@ import {
   Text,
   View
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useDialContentClearance } from "../../components/dial/dialLayout";
 import { LiveValueFlash } from "../../components/motion/LiveValueFlash";
 import { SpinningRefreshIcon } from "../../components/motion/SpinningRefreshIcon";
 import { FailedTransactionBadge } from "../../components/ui/FailedTransactionCard";
@@ -51,6 +53,7 @@ export default function History() {
   const theme = useTheme();
   const { colors } = theme;
   const styles = useMemo(() => makeStyles(theme), [theme]);
+  const dialClearance = useDialContentClearance();
   const { getAccessToken, regentsUserId } = useRegentsAuth();
   // Row -> stacked layout for dense rows at accessibility font sizes.
   const typeLayout = resolveDynamicTypeLayout(PixelRatio.getFontScale());
@@ -306,7 +309,7 @@ export default function History() {
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView edges={['top']} style={styles.container}>
       <View style={styles.header}>
         <RegentPressable pressStyle="icon" onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="chevron-back" size={20} color={colors.text} />
@@ -366,7 +369,7 @@ export default function History() {
             data={transactions}
             renderItem={renderTransaction}
             keyExtractor={(item) => item.transaction_id}
-            contentContainerStyle={styles.listContainer}
+            contentContainerStyle={[styles.listContainer, { paddingBottom: dialClearance }]}
             ListHeaderComponent={renderActivityUpdates()}
             showsVerticalScrollIndicator={false}
             ItemSeparatorComponent={() => <View style={styles.separator} />}
@@ -390,7 +393,7 @@ export default function History() {
             }
           />
         )}
-    </View>
+    </SafeAreaView>
   );
 }
 

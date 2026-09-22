@@ -1,3 +1,4 @@
+import { useDialContentClearance } from '@/components/dial/dialLayout';
 import { ProfileButton } from '@/components/navigation/ProfileButton';
 import { RegentPressable } from '@/components/ui/RegentPressable';
 import { useTheme, type Theme } from '@/theme/ThemeProvider';
@@ -36,13 +37,14 @@ export default function EarnTab() {
   const theme = useTheme();
   const { colors } = theme;
   const styles = useMemo(() => makeStyles(theme), [theme]);
+  const dialClearance = useDialContentClearance();
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView
         style={styles.scroller}
         contentInsetAdjustmentBehavior="automatic"
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingBottom: dialClearance }]}
       >
         <View style={styles.header}>
           <View style={styles.titleGroup}>
@@ -119,7 +121,6 @@ function makeStyles({ colors, fonts }: Theme) {
   },
   content: {
     paddingHorizontal: 20,
-    paddingBottom: 120,
     gap: 16,
   },
   header: {

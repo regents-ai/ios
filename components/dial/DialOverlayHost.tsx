@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { usePathname, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { EDGE_GUTTER, TAB_BAR_CLEARANCE } from '@/components/dial/dialLayout';
 import { RadialDial } from '@/components/dial/RadialDial';
 import { resolveDialActionHref } from '@/components/dial/actionTargets';
 import {
@@ -21,9 +22,7 @@ import {
 } from '@/utils/messageComposerBridge';
 import { regentApi } from '@/utils/regentApi/client';
 
-const TAB_BAR_CLEARANCE = 96;
 const MESSAGE_COMPOSER_CLEARANCE = 92;
-const EDGE_GUTTER = 16;
 
 export function DialOverlayHost() {
   const pathname = usePathname();

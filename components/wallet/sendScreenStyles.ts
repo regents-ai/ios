@@ -101,7 +101,6 @@ export function makeSendScreenStyles({ colors, fonts }: Theme) {
   scrollContent: {
     paddingHorizontal: 20,
     paddingTop: 8,
-    paddingBottom: 28,
     gap: 18,
   },
   introBlock: {

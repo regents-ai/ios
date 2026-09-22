@@ -1,3 +1,4 @@
+import { useDialContentClearance } from '@/components/dial/dialLayout';
 import { FailedTransactionCard } from '@/components/ui/FailedTransactionCard';
 import { getEaseTransition } from '@/components/motion/easePresets';
 import { useReducedMotion } from '@/components/motion/useReducedMotion';
@@ -8,6 +9,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { EaseView } from 'react-native-ease';
 
 const SCREEN_OFFSET = 12;
@@ -67,6 +69,7 @@ export default function SupportScreen() {
   const { colors } = theme;
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const router = useRouter();
+  const dialClearance = useDialContentClearance();
   const reducedMotionEnabled = useReducedMotion();
   const [showFailedModal, setShowFailedModal] = useState(false);
   const [isFailedModalPresented, setIsFailedModalPresented] = useState(false);
@@ -134,7 +137,7 @@ export default function SupportScreen() {
   ];
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView edges={['top']} style={styles.container}>
       <View style={styles.header}>
         <RegentPressable pressStyle="icon" onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={colors.text} />
@@ -142,7 +145,7 @@ export default function SupportScreen() {
         <View style={styles.headerSpacer} />
       </View>
 
-      <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.content}>
+      <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={[styles.content, { paddingBottom: dialClearance }]}>
         <EaseView
           initialAnimate={{ opacity: 0, translateY: SCREEN_OFFSET }}
           animate={{ opacity: 1, translateY: 0 }}
@@ -256,7 +259,7 @@ export default function SupportScreen() {
           />
         </EaseView>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -284,7 +287,6 @@ function makeStyles({ colors, fonts }: Theme) {
   content: {
     paddingHorizontal: 20,
     paddingTop: 16,
-    paddingBottom: 36,
     gap: 28,
   },
   hero: {

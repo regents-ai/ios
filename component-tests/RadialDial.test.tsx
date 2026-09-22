@@ -138,13 +138,13 @@ describe('RadialDial', () => {
       />
     );
 
-    fireEvent.press(getByLabelText('Open radial dial'));
-    expect(getByLabelText('Close radial dial')).toBeTruthy();
+    fireEvent.press(getByLabelText('Open quick actions'));
+    expect(getByLabelText('Close quick actions')).toBeTruthy();
 
     fireEvent.press(getByTestId('dial-scrim'));
-    expect(getByLabelText('Open radial dial')).toBeTruthy();
+    expect(getByLabelText('Open quick actions')).toBeTruthy();
 
-    fireEvent.press(getByLabelText('Open radial dial'));
+    fireEvent.press(getByLabelText('Open quick actions'));
     expect(onExpand).toHaveBeenCalledTimes(2);
   });
 
@@ -159,7 +159,7 @@ describe('RadialDial', () => {
       />
     );
 
-    fireEvent.press(getByLabelText('Open radial dial'));
+    fireEvent.press(getByLabelText('Open quick actions'));
     fireEvent.press(getByLabelText('Pay'));
     fireEvent.press(getByLabelText('Send'));
 
@@ -167,7 +167,7 @@ describe('RadialDial', () => {
       kind: 'navigate',
       href: '/(tabs)/send',
     });
-    expect(getByLabelText('Open radial dial')).toBeTruthy();
+    expect(getByLabelText('Open quick actions')).toBeTruthy();
   });
 
   it('exposes button roles and expanded state for the center and submenu owner', () => {
@@ -180,7 +180,7 @@ describe('RadialDial', () => {
       />
     );
 
-    const closedCenter = getByLabelText('Open radial dial');
+    const closedCenter = getByLabelText('Open quick actions');
     expect(closedCenter.props.accessibilityRole).toBe('button');
     expect(closedCenter.props.accessibilityState).toEqual({ expanded: false });
 
@@ -217,7 +217,7 @@ describe('RadialDial', () => {
       />
     );
 
-    fireEvent.press(getByLabelText('Open radial dial'));
+    fireEvent.press(getByLabelText('Open quick actions'));
 
     const message = getByLabelText('Message');
     expect(message).toHaveStyle({ width: 152, height: 152 });
@@ -294,7 +294,7 @@ describe('RadialDial', () => {
       />
     );
 
-    fireEvent.press(getByLabelText('Open radial dial'));
+    fireEvent.press(getByLabelText('Open quick actions'));
     fireEvent.press(getByLabelText('Pay'));
 
     const canvasStyle = StyleSheet.flatten(getByTestId('radial-dial').props.style);
@@ -372,7 +372,7 @@ describe('RadialDial', () => {
       />
     );
 
-    fireEvent.press(getByLabelText('Open radial dial'));
+    fireEvent.press(getByLabelText('Open quick actions'));
     const positionStyle = StyleSheet.flatten(
       getByTestId('dial-petal-position-first-voice').props.style
     );
@@ -549,7 +549,7 @@ describe('RadialDial', () => {
       pan.onUpdate(profilePoint);
       await Promise.resolve();
     });
-    expect(getByLabelText('Close radial dial')).toBeTruthy();
+    expect(getByLabelText('Close quick actions')).toBeTruthy();
 
     await act(async () => {
       pan.onEnd(profilePoint, false);
@@ -558,7 +558,7 @@ describe('RadialDial', () => {
     });
 
     expect(onAction).not.toHaveBeenCalled();
-    expect(getByLabelText('Open radial dial')).toBeTruthy();
+    expect(getByLabelText('Open quick actions')).toBeTruthy();
     expect(runRegentEventHaptic).toHaveBeenCalledWith('dialCancelled');
   });
 

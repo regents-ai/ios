@@ -39,6 +39,7 @@ import {
   SEND_STAGGER_STEP as STAGGER_STEP,
   buildTimingTransition,
 } from '@/components/wallet/sendTransitions';
+import { useDialContentClearance } from '@/components/dial/dialLayout';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useEvmTransfer } from '@/hooks/wallet/useEvmTransfer';
 import { useFundingChoices } from '@/hooks/wallet/useFundingChoices';
@@ -59,6 +60,7 @@ export default function TransferScreen() {
   const theme = useTheme();
   const { colors } = theme;
   const styles = useMemo(() => makeSendScreenStyles(theme), [theme]);
+  const dialClearance = useDialContentClearance();
   const router = useRouter();
   const pathname = usePathname();
   const params = useLocalSearchParams();
@@ -375,7 +377,7 @@ export default function TransferScreen() {
       >
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: dialClearance }]}
           keyboardShouldPersistTaps="handled"
           contentInsetAdjustmentBehavior="automatic"
         >

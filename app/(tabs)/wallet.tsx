@@ -3,8 +3,10 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Platform, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { APIGuestCheckoutWidget, OnrampForm, useOnramp } from '@/components';
+import { useDialContentClearance } from '@/components/dial/dialLayout';
 import { LiveValueFlash } from '@/components/motion/LiveValueFlash';
 import { StaggerGroup } from '@/components/motion/StaggerGroup';
 import { StaggerItem } from '@/components/motion/StaggerItem';
@@ -37,6 +39,7 @@ export default function WalletScreen() {
   const theme = useTheme();
   const { colors } = theme;
   const styles = useMemo(() => makeStyles(theme), [theme]);
+  const dialClearance = useDialContentClearance();
   const [amount, setAmount] = useState('');
   const [regionKey, setRegionKey] = useState(() => `${getCountry()}-${getSubdivision()}`);
   const [isSwipeActive, setIsSwipeActive] = useState(false);
@@ -173,11 +176,11 @@ export default function WalletScreen() {
   ] as const;
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView edges={['top']} style={styles.container}>
       <WalletScreenHeader />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.keyboardWrap}>
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={{ paddingBottom: dialClearance }}
           contentInsetAdjustmentBehavior="automatic"
           keyboardShouldPersistTaps="handled"
           removeClippedSubviews={false}
@@ -333,7 +336,7 @@ export default function WalletScreen() {
         onConfirm={() => void handleAlertConfirm()}
         onCancel={handleAlertCancel}
       />
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -345,9 +348,6 @@ function makeStyles({ colors, fonts }: Theme) {
   },
   keyboardWrap: {
     flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: 28,
   },
   summaryCard: {
     marginHorizontal: 16,

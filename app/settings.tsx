@@ -1,3 +1,4 @@
+import { useDialContentClearance } from '@/components/dial/dialLayout';
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { AccountManagementSection, PhoneReverifyModal } from '@/components/settings/AccountSection';
 import { AppearanceToggle } from '@/components/settings/AppearanceToggle';
@@ -32,8 +33,7 @@ import {
   useSolanaAddress,
 } from '@coinbase/cdp-hooks';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
-import { useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -48,6 +48,7 @@ export default function SettingsScreen() {
   const theme = useTheme();
   const { colors } = theme;
   const styles = useMemo(() => makeStyles(theme), [theme]);
+  const dialClearance = useDialContentClearance();
   const { isInitialized } = useIsInitialized();
   const {
     linkedEmail,
@@ -204,7 +205,7 @@ export default function SettingsScreen() {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView style={styles.container} contentContainerStyle={styles.content} contentInsetAdjustmentBehavior="automatic">
+      <ScrollView style={styles.container} contentContainerStyle={[styles.content, { paddingBottom: dialClearance }]} contentInsetAdjustmentBehavior="automatic">
         <SettingsHero />
         <AppearanceToggle />
         <AppIconSection isExpoGo={isExpoGo} />
@@ -272,7 +273,6 @@ function makeStyles({ colors, fonts }: Theme) {
       paddingHorizontal: 20,
       paddingTop: 12,
       gap: 20,
-      paddingBottom: 40,
     },
     loadingContainer: {
       flex: 1,
