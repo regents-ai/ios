@@ -136,7 +136,7 @@ export default function TransferScreen() {
     contractAddress === '0x0000000000000000000000000000000000000000' ||
     contractAddress.toLowerCase() === '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
   );
-  const needsGasFee = isNativeToken && !isPaymasterSupported;
+  const needsGasFee = !!tokenSymbol && isNativeToken && !isPaymasterSupported;
 
   const {
     sendEvmTransfer,
@@ -562,7 +562,7 @@ export default function TransferScreen() {
 
             {needsGasFee && (
               <Text style={[styles.helper, styles.warningText]}>
-                Leave a small amount of {selectedToken?.token?.symbol} behind to cover network fees.
+                Leave a small amount of {tokenSymbol} behind to cover network fees.
               </Text>
             )}
           </EaseView>
