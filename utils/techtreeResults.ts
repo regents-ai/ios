@@ -98,7 +98,7 @@ export async function fetchTechtreeResults(beforeSequence?: number): Promise<{
   });
 
   if (!response.ok) {
-    throw new Error(`Techtree is not answering right now (status ${response.status}).`);
+    throw new Error('Techtree is not answering right now. Try again in a moment.');
   }
 
   const page = (await response.json()) as TechtreeResultsPage;
