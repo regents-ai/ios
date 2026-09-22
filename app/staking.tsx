@@ -623,7 +623,7 @@ function makeStyles({ colors, fonts }: Theme) {
   actionButtonText: {
     color: colors.text,
     fontSize: 14,
-    fontFamily: fonts.title,
+    fontFamily: fonts.ui,
   },
   compoundButton: {
     minHeight: 58,
@@ -638,7 +638,7 @@ function makeStyles({ colors, fonts }: Theme) {
   compoundButtonText: {
     color: colors.onAccent,
     fontSize: 15,
-    fontFamily: fonts.title,
+    fontFamily: fonts.ui,
   },
   disabledButton: {
     opacity: 0.48,
@@ -657,7 +657,7 @@ function makeStyles({ colors, fonts }: Theme) {
   primaryButtonText: {
     color: colors.onAccent,
     fontSize: 14,
-    fontFamily: fonts.title,
+    fontFamily: fonts.ui,
   },
   });
 }

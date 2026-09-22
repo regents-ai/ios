@@ -115,14 +115,13 @@ export const THEME_COLORS: Record<ThemeName, ThemeColors> = { light: LIGHT, dark
 /**
  * Font roles (design_system_stripped_liveview_ios.md): title = Geist Pixel
  * Circle (headers, display numbers), ui = Geist Pixel Square (body, labels).
- * Keep the logical role names stable even though the bundle registration names
- * are the two pixel faces already loaded in the app.
+ * Registration names are the faces loaded by the expo-font plugin.
  */
 export const FONTS = {
   /** Titles, headlines, display numbers. */
   title: 'GeistPixel-Circle',
-  /** App body, labels, captions. */
-  ui: 'GeistPixel-Square',
+  /** App body, labels, captions, controls. */
+  ui: 'Geist-Regular',
 } as const;
 
 /** Type scale (px), from --type-*-size / --type-*-line. */

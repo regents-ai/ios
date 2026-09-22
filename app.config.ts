@@ -55,7 +55,7 @@ const config: ExpoConfig = {
       ['expo-font', {
         fonts: [
           './assets/fonts/GeistPixel-Circle.woff2',
-          './assets/fonts/GeistPixel-Square.woff2',
+          './assets/fonts/Geist-Regular.ttf',
         ],
       }],
       ['expo-splash-screen', { image: './assets/images/splash-icon-regents.png', imageWidth: 200, resizeMode: 'contain', backgroundColor: '#0a0a0a' }],

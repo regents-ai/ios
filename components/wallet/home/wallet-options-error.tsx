@@ -60,7 +60,7 @@ function makeStyles({ colors, fonts }: Theme) {
       width: '100%',
     },
     retryText: {
-      color: '#fff',
+      color: colors.onAccent,
       fontSize: 13,
       fontFamily: fonts.ui,
     },

@@ -315,7 +315,7 @@ function makeStyles({ colors, fonts }: Theme) {
   primaryButtonText: {
     color: colors.onAccent,
     fontSize: 16,
-    fontFamily: fonts.title,
+    fontFamily: fonts.ui,
   },
   buttonPressed: {
     opacity: 0.92,

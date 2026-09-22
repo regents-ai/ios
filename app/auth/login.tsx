@@ -285,7 +285,9 @@ const styles = StyleSheet.create({
   chatGptButton: {
     minHeight: 58,
     borderRadius: 18,
-    backgroundColor: '#05070D',
+    backgroundColor: c.surfaceElevated,
+    borderWidth: 1,
+    borderColor: c.hairlineStrong,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 20,
