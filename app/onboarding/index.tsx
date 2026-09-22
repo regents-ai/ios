@@ -1,12 +1,12 @@
 /**
  * First-open welcome screen.
  *
- * Aesthetic modeled on the OpenClaw opening (bd regent-o5by): a brand glow
+ * Aesthetic modeled on the OpenClaw opening: a brand glow
  * blooms outward from center, the wordmark fades in over it, then a connect
  * sheet slides up from the bottom offering the three start paths:
  *   1. Existing Hermes Agent  -> /onboarding/connect-hermes
  *   2. Create Agent in Regents Cloud -> /onboarding/create-cloud-agent
- *   3. (low-key) Onramp USDC to an agent -> Fund tab (existing onramp)
+ *   3. (low-key) Add USDC for an agent -> Fund tab
  *
  * Shows once per install (utils/onboardingState). Returning users reach the
  * same three paths from Settings -> Connect.
@@ -306,7 +306,7 @@ export default function OnboardingWelcomeScreen() {
             }}
           >
             <Ionicons name="cash-outline" size={16} color={colors.textMuted} />
-            <Text style={styles.tertiaryText}>Onramp USDC to an agent</Text>
+            <Text style={styles.tertiaryText}>Add USDC for an agent</Text>
           </RegentPressable>
         </SafeAreaView>
       </Animated.View>

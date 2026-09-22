@@ -34,7 +34,7 @@ export function PinnedNoticeStrip({ notices }: { notices: LocalNotice[] }) {
     <View
       accessible
       accessibilityLiveRegion={Platform.OS === 'android' ? 'polite' : undefined}
-      accessibilityRole="status"
+      role="status"
       style={styles.wrap}
     >
       {notices.map((notice) => (

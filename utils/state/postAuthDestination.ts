@@ -1,5 +1,5 @@
 /**
- * Chosen-path intent carried through sign-in (bd regent-o5by).
+ * Chosen-path intent carried through sign-in.
  *
  * The first-open welcome screen offers three start paths before the person
  * has signed in. Whichever path they choose is remembered here so that when

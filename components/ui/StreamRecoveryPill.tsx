@@ -36,7 +36,7 @@ export function StreamRecoveryPill({ state }: { state: StreamRecoveryState }) {
     <View
       accessible
       accessibilityLiveRegion={Platform.OS === 'android' ? 'polite' : undefined}
-      accessibilityRole="status"
+      role="status"
       pointerEvents="none"
       style={styles.wrap}
     >

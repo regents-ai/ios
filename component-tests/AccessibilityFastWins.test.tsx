@@ -1,8 +1,7 @@
 import { act, fireEvent, waitFor } from '@testing-library/react-native';
 import React from 'react';
-import { AccessibilityInfo, Linking, StyleSheet, Text } from 'react-native';
+import { AccessibilityInfo, StyleSheet, Text } from 'react-native';
 
-import { InformationalHubScreen } from '@/components/learn/InformationalHubScreen';
 import { LiveValueFlash } from '@/components/motion/LiveValueFlash';
 import { AppIconSection } from '@/components/settings/AppIconSection';
 import { AppearanceToggle } from '@/components/settings/AppearanceToggle';
@@ -208,33 +207,6 @@ describe('accessibility fast wins', () => {
     expect(queryByText('Could not change the app icon. Try again.')).toBeNull();
   });
 
-  it('shows a clear alert when an informational link cannot be opened', async () => {
-    const openUrl = jest
-      .spyOn(Linking, 'openURL')
-      .mockRejectedValueOnce(new Error('No app can open this link'));
-    const { findByText, getByText } = renderThemed(
-      <InformationalHubScreen
-        title="Guide"
-        intro="Learn the basics."
-        purposeTitle="Purpose"
-        purposeBody="Understand the workflow."
-        whyItMatters={['Stay oriented']}
-        websiteLabel="Visit Regents"
-        websiteUrl="https://regents.sh"
-        resourceTitle="Resource"
-        resourceBody="Read more."
-        resourceLabel="Open guide"
-        resourceUrl="https://example.com/guide"
-      />,
-    );
-
-    fireEvent.press(getByText('Open guide'));
-
-    expect(await findByText('Unable to open link')).toBeTruthy();
-    expect(await findByText('No app can open this link')).toBeTruthy();
-    openUrl.mockRestore();
-  });
-
   it('exposes pinned notices as a status element', () => {
     const { getByRole } = renderThemed(
       <PinnedNoticeStrip
@@ -250,7 +222,7 @@ describe('accessibility fast wins', () => {
       />,
     );
 
-    expect(getByRole('status').props.accessibilityRole).toBe('status');
+    expect(getByRole('status').props.role).toBe('status');
   });
 
   it('uses semantic success color for live-value feedback', () => {
@@ -265,32 +237,4 @@ describe('accessibility fast wins', () => {
       tintStyle.backgroundColor,
     );
   });
-
-  it('gives informational hub actions link semantics and browser hints', async () => {
-    const openUrl = jest.spyOn(Linking, 'openURL').mockResolvedValueOnce(undefined);
-    const { getAllByRole, getByText } = renderThemed(
-      <InformationalHubScreen
-        title="Guide"
-        intro="Learn the basics."
-        purposeTitle="Purpose"
-        purposeBody="Understand the workflow."
-        whyItMatters={['Stay oriented']}
-        websiteLabel="Visit Regents"
-        websiteUrl="https://regents.sh"
-        resourceTitle="Resource"
-        resourceBody="Read more."
-        resourceLabel="Open guide"
-        resourceUrl="https://example.com/guide"
-      />,
-    );
-
-    const links = getAllByRole('link');
-    expect(links).toHaveLength(2);
-    expect(links.every((link) => link.props.accessibilityHint === 'Opens in your browser')).toBe(true);
-
-    fireEvent.press(getByText('Visit Regents'));
-    await waitFor(() => expect(openUrl).toHaveBeenCalledWith('https://regents.sh'));
-    openUrl.mockRestore();
-  });
-
 });

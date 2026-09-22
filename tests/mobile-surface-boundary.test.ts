@@ -5,12 +5,10 @@ import { readFileSync } from 'node:fs';
 test('Techtree mobile tab links to the owning product surface without shipping command help', () => {
   const techtree = readFileSync('app/(tabs)/techtree.tsx', 'utf8');
   const techtreeUrl = readFileSync('constants/TECHTREE_URL.ts', 'utf8');
-  const hub = readFileSync('components/learn/InformationalHubScreen.tsx', 'utf8');
 
   assert.match(techtree, /TECHTREE_URL/);
   assert.match(techtreeUrl, /https:\/\/techtree\.sh/);
   assert.doesNotMatch(techtree, /pnpm add|regent techtree start/);
-  assert.doesNotMatch(hub, /Clipboard|Copy install command|Copy start command/);
 });
 
 test('uuid uses the browser random source on native bundles', () => {
@@ -38,6 +36,7 @@ test('ChatGPT login can render before Regents account setup is ready', () => {
   assert.match(rootLayout, /!canUseRegentsAccount && !isLoginRoute/);
   assert.match(rootLayout, /Redirect href="\/auth\/login"/);
   assert.match(login, /hasRegentsAccountConfig/);
+  assert.match(config, /PRIVY_CLIENT_ID_PATTERN/);
   assert.match(config, /UUID_V4_PATTERN/);
 });
 

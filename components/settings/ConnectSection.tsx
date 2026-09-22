@@ -77,7 +77,7 @@ export function ConnectSection() {
     },
     {
       icon: 'cash-outline',
-      title: 'Onramp USDC to an agent',
+      title: 'Add USDC for an agent',
       detail: 'Load funds with Apple Pay or your card',
       onPress: () => router.push('/(tabs)/wallet'),
     },
