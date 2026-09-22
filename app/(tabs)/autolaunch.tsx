@@ -160,7 +160,7 @@ export default function AutolaunchTab() {
           <Text style={styles.eyebrow}>Autolaunch</Text>
           <Text style={styles.title}>Follow the latest launches</Text>
           <Text style={styles.subtitle}>
-            Revstake token and Memestock auctions on Autolaunch, newest first.
+            Revstake and Memestake auctions on Autolaunch, newest first.
           </Text>
         </View>
         <View style={styles.headerActions}>
