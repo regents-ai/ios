@@ -58,14 +58,9 @@ export function WalletDetailsSection({ walletDetails }: { walletDetails: WalletD
     balancesError,
     balancesExpanded,
     setBalancesExpanded,
-    loadingTestnetBalances,
-    testnetBalancesError,
-    testnetExpanded,
-    setTestnetExpanded,
     alertState,
     setAlertState,
     groupedMainnetBalances,
-    groupedTestnetBalances,
     featuredBaseUsdc,
     walletUsdTotal,
     hasAnyWalletBalance,
@@ -75,9 +70,8 @@ export function WalletDetailsSection({ walletDetails }: { walletDetails: WalletD
     handlePrimarySend,
     handlePrimaryCashOut,
     fetchBalances,
-    fetchTestnetBalances,
   } = walletDetails;
-  const refreshingWallet = loadingBalances || loadingTestnetBalances;
+  const refreshingWallet = loadingBalances;
 
   const renderBalanceRow = (balance: BalanceRecord, network: string, cashOutEnabled: boolean) => {
     const symbol = balance.token?.symbol || 'UNKNOWN';
@@ -159,7 +153,7 @@ export function WalletDetailsSection({ walletDetails }: { walletDetails: WalletD
               <Text style={styles.featuredTitle}>Base USDC is ready for agent work.</Text>
             </View>
             <View style={styles.featuredBadge}>
-              <Text style={styles.featuredBadgeText}>Primary route</Text>
+              <Text style={styles.featuredBadgeText}>Recommended</Text>
             </View>
           </View>
           <Text style={styles.featuredBody}>
@@ -246,7 +240,7 @@ export function WalletDetailsSection({ walletDetails }: { walletDetails: WalletD
       <View style={styles.card}>
         <RegentPressable haptic="selection" pressStyle="card" style={styles.cardHeader} onPress={() => setBalancesExpanded((current) => !current)}>
           <View style={styles.cardHeaderCopy}>
-            <Text style={styles.cardTitle}>Mainnet balances</Text>
+            <Text style={styles.cardTitle}>Balances</Text>
             <Text style={styles.cardHint}>Base stays at the top, with pay and cash-out actions close to each balance.</Text>
           </View>
           <Ionicons name={balancesExpanded ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} />
@@ -273,44 +267,6 @@ export function WalletDetailsSection({ walletDetails }: { walletDetails: WalletD
                     <Text style={styles.emptyText}>No funds yet.</Text>
                     ) : (
                       group.balances.map((balance) => renderBalanceRow(balance, group.network, true))
-                    )}
-                  </View>
-                ))
-              : null}
-          </>
-        ) : null}
-      </View>
-
-      <View style={styles.card}>
-        <RegentPressable haptic="selection" pressStyle="card" style={styles.cardHeader} onPress={() => setTestnetExpanded((current) => !current)}>
-          <View style={styles.cardHeaderCopy}>
-            <Text style={styles.cardTitle}>Testnet balances</Text>
-            <Text style={styles.cardHint}>Base Sepolia, Ethereum Sepolia, and Solana Devnet balances.</Text>
-          </View>
-          <Ionicons name={testnetExpanded ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} />
-        </RegentPressable>
-
-        {testnetExpanded ? (
-          <>
-            {loadingTestnetBalances ? renderLoadingSkeleton() : null}
-
-            {testnetBalancesError ? (
-              <View style={styles.feedbackBlock}>
-                <Text style={styles.errorText}>{testnetBalancesError}</Text>
-                <RegentPressable style={styles.primaryButton} onPress={() => void fetchTestnetBalances()}>
-                  <Text style={styles.primaryButtonText}>Retry</Text>
-                </RegentPressable>
-              </View>
-            ) : null}
-
-            {!loadingTestnetBalances && !testnetBalancesError
-              ? groupedTestnetBalances.map((group) => (
-                  <View key={group.network} style={styles.networkSection}>
-                    <Text style={styles.networkTitle}>{group.network}</Text>
-                    {group.balances.length === 0 ? (
-                    <Text style={styles.emptyText}>No funds yet.</Text>
-                    ) : (
-                      group.balances.map((balance) => renderBalanceRow(balance, group.network, false))
                     )}
                   </View>
                 ))

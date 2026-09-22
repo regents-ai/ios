@@ -11,6 +11,7 @@ import {
 import { openCoinbaseWidgetSession } from '@/utils/onramp/openCoinbaseWidgetSession';
 import { getVerifiedPhone } from '@/utils/state/verificationState';
 import { getWalletAddressForNetwork } from '@/utils/state/walletRuntimeState';
+import { userFacingMessage } from '@/utils/userFacingError';
 import {
   createGuestCheckoutDebugInfo,
   openSupportEmail,
@@ -163,7 +164,7 @@ export function useWalletOnrampSubmit({
           setAlertState({
             visible: true,
             title: `Link Email for ${paymentLabel}`,
-            message: `${paymentLabel} requires both email and phone verification for compliance.\n\nWould you like to link your email to this account to continue?`,
+            message: `${paymentLabel} needs a verified email and phone number.\n\nWould you like to add your email to continue?`,
             type: 'info',
             navigationPath: routes.emailVerify({ mode: 'link' }),
           });
@@ -178,7 +179,7 @@ export function useWalletOnrampSubmit({
             const isUSPhone = cdpPhone.startsWith('+1');
             const disclaimer = isUSPhone
               ? ''
-              : `\n\nNote: ${paymentLabel} is only available for US phone numbers. You can use this flow to experience the verification process.`;
+              : `\n\nNote: ${paymentLabel} needs a US phone number. You can still use More payment options.`;
 
             setAlertState({
               visible: true,
@@ -196,11 +197,12 @@ export function useWalletOnrampSubmit({
                     mode: 'signin',
                     autoSend: 'true',
                   }));
-                } catch (signOutError: any) {
+                } catch (signOutError) {
+                  console.error('Phone verification restart failed:', signOutError);
                   setAlertState({
                     visible: true,
-                    title: 'Error',
-                    message: signOutError.message || 'Failed to start verification. Please try again.',
+                    title: "Couldn't start verification",
+                    message: 'Please try again.',
                     type: 'error',
                   });
                 }
@@ -214,7 +216,7 @@ export function useWalletOnrampSubmit({
             setAlertState({
               visible: true,
               title: `Link Phone for ${paymentLabel}`,
-              message: `${paymentLabel} requires both email and phone verification for compliance.\n\nWould you like to link your phone to this account to continue?`,
+              message: `${paymentLabel} needs a verified email and phone number.\n\nWould you like to add your phone number to continue?`,
               type: 'info',
               navigationPath: routes.phoneVerify({ mode: 'link' }),
             });
@@ -228,11 +230,11 @@ export function useWalletOnrampSubmit({
           const isUSPhone = expiredPhone?.startsWith('+1');
           const disclaimer = isUSPhone
             ? ''
-            : `\n\nNote: ${paymentLabel} is only available for US phone numbers. You can use this flow to experience the verification process.`;
+            : `\n\nNote: ${paymentLabel} needs a US phone number. You can still use More payment options.`;
 
           setAlertState({
             visible: true,
-            title: 'Re-verify Phone for Apple Pay',
+            title: `Re-verify Phone for ${paymentLabel}`,
             message: `Your phone verification has expired (valid for 60 days).\n\nTo re-verify, we need to sign you out and send a new verification code to your phone.\n\nWould you like to continue?${disclaimer}`,
             type: 'info',
             onConfirmCallback: async () => {
@@ -246,11 +248,12 @@ export function useWalletOnrampSubmit({
                   mode: 'signin',
                   autoSend: 'true',
                 }));
-              } catch (signOutError: any) {
+              } catch (signOutError) {
+                console.error('Phone re-verification restart failed:', signOutError);
                 setAlertState({
                   visible: true,
-                  title: 'Error',
-                  message: signOutError.message || 'Failed to start re-verification. Please try again.',
+                  title: "Couldn't start verification",
+                  message: 'Please try again.',
                   type: 'error',
                 });
               }
@@ -275,8 +278,8 @@ export function useWalletOnrampSubmit({
           return;
         }
 
-        const errorMessage = error instanceof Error ? error.message : 'Unable to create transaction. Please try again.';
-        showSupportError('Transaction Failed', errorMessage, 'Transaction failed during submission');
+        const errorMessage = userFacingMessage(error, "We couldn't start your purchase. Please try again.");
+        showSupportError("Purchase didn't go through", errorMessage, 'Transaction failed during submission');
         console.error('Error submitting form:', error);
         setIsProcessingPayment(false);
       }

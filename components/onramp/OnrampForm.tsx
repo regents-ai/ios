@@ -14,6 +14,7 @@ import {
   isPhoneFresh60d,
 } from '@/utils/state/verificationState';
 import { getCurrentWalletAddress, setCurrentNetwork } from '@/utils/state/walletRuntimeState';
+import { paymentMethodLabel as describePaymentMethod } from '@/utils/onramp/paymentMethodLabel';
 
 import {
   AmountQuoteSection,
@@ -231,7 +232,7 @@ export function OnrampForm({
       max: Math.max(...allLimits.map((entry: any) => Number(entry.max))),
       currency: paymentCurrency,
       display: allLimits
-        .map((entry: any) => `${entry.id.replace('_', ' ').toLowerCase()}: ${Number(entry.min).toLocaleString()}-${Number(entry.max).toLocaleString()} ${paymentCurrency}`)
+        .map((entry: any) => `${describePaymentMethod(entry.id)}: ${Number(entry.min).toLocaleString()}-${Number(entry.max).toLocaleString()} ${paymentCurrency}`)
         .join(' • '),
       quotePaymentMethod: bestMethod,
     };
@@ -266,7 +267,7 @@ export function OnrampForm({
       return {
         isValid: true,
         error: null,
-        warning: `⚠️ You have ${lifetimeRemaining} transaction${lifetimeRemaining === 1 ? '' : 's'} remaining before reaching your limit.`,
+        warning: `You have ${lifetimeRemaining} purchase${lifetimeRemaining === 1 ? '' : 's'} left before you reach your limit.`,
       };
     }
 
@@ -569,7 +570,7 @@ export function OnrampForm({
         paymentCurrency={paymentCurrency}
         quoteDisclaimer={
           currentQuote && paymentMethod === 'COINBASE_WIDGET' && currencyLimits?.quotePaymentMethod
-            ? `This estimate is based on ${currencyLimits.quotePaymentMethod}. Final pricing may change if you pick a different payment method during checkout.`
+            ? `This estimate assumes you pay with ${describePaymentMethod(currencyLimits.quotePaymentMethod)}. Final pricing may change if you pick a different payment method during checkout.`
             : null
         }
         userLimits={userLimits}

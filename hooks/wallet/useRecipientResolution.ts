@@ -135,7 +135,8 @@ export function useRecipientResolution({
       setAddressError(null);
       return { ok: true, address: resolution.address };
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'We could not find that ENS name.';
+      console.warn('ENS lookup failed:', error);
+      const message = 'We could not find that ENS name.';
       setEnsResolution(null);
       setRecipientAddress('');
       setAddressError(message);
@@ -186,11 +187,8 @@ export function useRecipientResolution({
       const candidate = extractRecipientCandidate(qrData);
       handleAddressChange(candidate);
     } catch (error) {
-      showAlert(
-        'Could not read QR code',
-        error instanceof Error ? error.message : 'Choose a clearer photo and try again.',
-        'error'
-      );
+      console.warn('QR code read failed:', error);
+      showAlert('Could not read QR code', 'Choose a clearer photo and try again.', 'error');
     } finally {
       setScanningQrPhoto(false);
     }

@@ -91,7 +91,7 @@ export function useUserOpStatusAlerts({
         liveActivityRunIdRef.current = null;
       }
       const txHash = userOpData.transactionHash || userOpData.userOpHash || '';
-      const explorerUrl = getEvmExplorerUrl(network, txHash);
+      const explorerUrl = getEvmExplorerUrl(network, txHash) ?? undefined;
 
       if (isAgentFundingFlow) {
         const pendingAction = pendingFundingActionRef.current;
@@ -156,11 +156,8 @@ export function useUserOpStatusAlerts({
         finishPendingRun(liveActivityRunIdRef.current, 'failed');
         liveActivityRunIdRef.current = null;
       }
-      showAlert(
-        'Send failed',
-        userOpError.message || 'Please try again.',
-        'error'
-      );
+      console.error('Send failed:', userOpError);
+      showAlert('Send failed', 'Your transfer did not go through. Please try again.', 'error');
     }
   }, [amount, isAgentFundingFlow, isDefaultSendFlow, network, pendingFundingActionRef, recipientAddress, recipientLabel, selectedToken?.token?.symbol, showAlert, smartAccountAddress, userOpStatus, userOpData, userOpError]);
 

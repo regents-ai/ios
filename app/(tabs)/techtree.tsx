@@ -83,9 +83,10 @@ export default function TechtreeTab() {
       try {
         await Linking.openURL(url);
       } catch (error) {
+        console.warn('Link open failed:', error);
         showAlert({
           title: 'Unable to open link',
-          message: error instanceof Error ? error.message : 'Try again in a moment.',
+          message: 'Try again in a moment.',
           type: 'error',
         });
       }

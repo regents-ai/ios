@@ -130,16 +130,17 @@ export function APIGuestCheckoutWidget({
               break;
 
             case "onramp_api.cancel":
-              onAlert?.("Payment Cancelled", "The payment was cancelled by the user", 'info');
+              onAlert?.("Payment cancelled", "You cancelled the payment. Nothing was charged.", 'info');
               setIsProcessingPayment?.(false);
               onClose?.();
               break;
 
             case "onramp_api.commit_error":
             case "onramp_api.load_error":
+              console.error('Guest checkout payment error:', data.data?.errorCode, data.data?.errorMessage);
               onAlert?.(
-                "Payment Error",
-                `The payment failed: ${data.data?.errorCode} - ${data.data?.errorMessage}`,
+                "Payment didn't go through",
+                "Your payment didn't go through and nothing was charged. Try again or use another payment method.",
                 'error'
               );
               setIsProcessingPayment?.(false);
@@ -153,8 +154,8 @@ export function APIGuestCheckoutWidget({
               }
               setTransactionStatus?.('pending');
               onAlert?.(
-                "Payment Successful!",
-                "Your payment has been processed. We're now delivering your crypto to your wallet.",
+                "Payment received",
+                "Your payment went through. We're now delivering your purchase to your wallet.",
                 'success'
               );
               break;
@@ -162,8 +163,8 @@ export function APIGuestCheckoutWidget({
             case "onramp_api.polling_start":
               timeoutRef.current = setTimeout(() => {
                 onAlert?.(
-                  "Delivery Taking Longer",
-                  "Your payment was successful, but crypto delivery is taking longer than expected.",
+                  "Delivery is taking longer",
+                  "Your payment went through, but delivery to your wallet is taking longer than usual. You can close this and check back in Wallet History.",
                   'info'
                 );
               }, 300000);
@@ -175,7 +176,7 @@ export function APIGuestCheckoutWidget({
                 timeoutRef.current = null;
               }
               setTransactionStatus?.('success');
-              onAlert?.("Complete!", "Your crypto has been delivered to your wallet!", 'success');
+              onAlert?.("Delivered", "Your purchase has arrived in your wallet.", 'success');
               setTimeout(() => onClose?.(), 2000);
               break;
 
@@ -185,9 +186,10 @@ export function APIGuestCheckoutWidget({
                 timeoutRef.current = null;
               }
               setTransactionStatus?.('error');
+              console.error('Guest checkout delivery error:', data.data?.errorCode, data.data?.errorMessage);
               onAlert?.(
-                "Transaction Failed",
-                `There was an issue: ${data.data?.errorCode} - ${data.data?.errorMessage}`,
+                "Delivery didn't finish",
+                "We couldn't finish delivering your purchase. Contact support from Wallet History and we'll sort it out.",
                 'error'
               );
               setTimeout(() => onClose?.(), 2000);

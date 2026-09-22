@@ -14,6 +14,7 @@ import {
   getAssociatedTokenAddress,
 } from '@solana/spl-token';
 import { PublicKey, SystemProgram, Transaction, type Connection } from '@solana/web3.js';
+import { UserFacingError } from '@/utils/userFacingError';
 
 export type SolanaTransferRequest = {
   connection: Connection;
@@ -23,11 +24,10 @@ export type SolanaTransferRequest = {
   /** SPL mint address. Omit (or pass null) for native SOL transfers. */
   mintAddress?: string | null;
   tokenSymbol: string;
-  isDevnet: boolean;
 };
 
 export async function buildSolanaTransferTransaction(request: SolanaTransferRequest): Promise<Transaction> {
-  const { connection, fromAddress, recipientAddress, amountRaw, mintAddress, tokenSymbol, isDevnet } = request;
+  const { connection, fromAddress, recipientAddress, amountRaw, mintAddress, tokenSymbol } = request;
 
   const { blockhash } = await connection.getLatestBlockhash('confirmed');
 
@@ -53,7 +53,7 @@ export async function buildSolanaTransferTransaction(request: SolanaTransferRequ
   try {
     await getAccount(connection, fromTokenAccount);
   } catch {
-    throw new Error(
+    throw new UserFacingError(
       `You do not have any ${tokenSymbol} in this wallet yet.\n\nPlease receive ${tokenSymbol} before you try to send it.`
     );
   }
@@ -62,14 +62,7 @@ export async function buildSolanaTransferTransaction(request: SolanaTransferRequ
   const minFeeRequired = 0.00001 * 1e9;
 
   if (senderSolBalance < minFeeRequired) {
-    throw new Error(
-      `Insufficient SOL for transaction fees.\n\n` +
-      `Current SOL balance: ${(senderSolBalance / 1e9).toFixed(9)} SOL\n` +
-      `Required: At least 0.00001 SOL\n\n` +
-      (isDevnet
-        ? `Add test SOL from: https://faucet.solana.com`
-        : `Add SOL to your wallet and try again.`)
-    );
+    throw new UserFacingError('You need a little SOL to pay the network fee. Add SOL to this wallet and try again.');
   }
 
   const toTokenAccount = await getAssociatedTokenAddress(mint, toPubkey);
@@ -84,13 +77,8 @@ export async function buildSolanaTransferTransaction(request: SolanaTransferRequ
     const minRequired = 0.003 * 1e9;
 
     if (senderBalance < minRequired) {
-      throw new Error(
-        `The receiving wallet needs a little SOL before this send can finish.\n\n` +
-        `Current balance: ${(senderBalance / 1e9).toFixed(6)} SOL\n` +
-        `Required: ~0.003 SOL\n\n` +
-        (isDevnet
-          ? `Add test SOL from: https://faucet.solana.com`
-          : `Add SOL to your wallet and try again.`)
+      throw new UserFacingError(
+        `The recipient has not received ${tokenSymbol} before, so this send needs about 0.003 SOL to set up their account. Add SOL to this wallet and try again.`
       );
     }
   }

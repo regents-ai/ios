@@ -15,7 +15,7 @@ export function WalletOptionsError({ message, onRetry }: Props) {
   return (
     <View style={styles.errorBanner}>
       <View style={styles.copy}>
-        <Text style={styles.errorTitle}>Adding cash is not ready</Text>
+        <Text style={styles.errorTitle}>{"Adding money isn't ready"}</Text>
         <Text style={styles.errorMessage}>{message}</Text>
       </View>
       <RegentPressable onPress={onRetry} style={styles.retryButton}>

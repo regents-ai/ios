@@ -284,11 +284,11 @@ export default function RegentStakingScreen() {
                   </View>
                   <View style={[styles.statusPill, staking?.paused && styles.statusPillWarning]}>
                     <View style={[styles.statusDot, staking?.paused && styles.statusDotWarning]} />
-                    <Text style={styles.statusText}>{staking?.paused ? 'Paused' : staking?.chain_label || 'Base'}</Text>
+                    <Text style={styles.statusText}>{staking?.paused ? 'Paused' : 'Base'}</Text>
                   </View>
                 </View>
                 <Text style={styles.heroBody}>
-                  Rewards come from the live REGENT staking pool on Base. Your figures are read fresh each time this screen opens.
+                  Rewards come from the live REGENT staking pool on Base. Your numbers update each time you open this screen.
                 </Text>
               </View>
 

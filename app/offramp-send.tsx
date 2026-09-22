@@ -22,6 +22,7 @@ import { fetchOfframpTransaction, OfframpTransaction } from '@/utils/fetchOffram
 import { buildEvmTransferCall, isNativeEvmToken } from '@/utils/onchain/buildTransferCall';
 import { parseSolanaAmountToBaseUnits } from '@/utils/onchain/solanaAmount';
 import { getPendingOfframpBalance } from '@/utils/state/flowRuntimeState';
+import { userFacingMessage } from '@/utils/userFacingError';
 import {
   useCurrentUser,
   useSendSolanaTransaction,
@@ -134,17 +135,18 @@ export default function OfframpSendScreen() {
           }
 
           if (attempt === MAX_ATTEMPTS) {
-            setFetchError('Transaction not found. Coinbase may still be processing — please wait a moment and try again.');
+            setFetchError("We couldn't find this cash-out yet. Coinbase may still be processing it. Wait a moment and try again.");
             setLoading(false);
             return;
           }
-        } catch (err: any) {
+        } catch (err) {
           if (cancelled) {
             return;
           }
 
           if (attempt === MAX_ATTEMPTS) {
-            setFetchError(err.message || 'Failed to load transaction details.');
+            console.error('Cash-out lookup failed:', err);
+            setFetchError("We couldn't load this cash-out. Try again in a moment.");
             setLoading(false);
             return;
           }
@@ -174,18 +176,13 @@ export default function OfframpSendScreen() {
     if (userOpStatus === 'pending' && userOpData?.userOpHash) {
       setBanner({ state: 'working', message: 'Sending your funds to Coinbase. Keep this screen open.' });
     } else if (userOpStatus === 'success' && userOpData) {
-      const hash = userOpData.transactionHash || userOpData.userOpHash;
-      const network = transaction.network;
-      let explorerLine = '';
-      if (network === 'base') explorerLine = `\n\nView on Basescan:\nhttps://basescan.org/tx/${hash}`;
-      else if (network === 'ethereum') explorerLine = `\n\nView on Etherscan:\nhttps://etherscan.io/tx/${hash}`;
-
       showSuccessAlert(
-        'Sent! ✨',
-        `Successfully sent ${transaction.sell_amount.value} ${transaction.asset} to Coinbase.\n\nCoinbase will process your cash-out and deposit fiat to your account.${explorerLine}`
+        'Sent',
+        `You sent ${transaction.sell_amount.value} ${transaction.asset} to Coinbase.\n\nCoinbase will finish your cash-out and send the money to your bank account.`
       );
     } else if (userOpStatus === 'error' && userOpError) {
-      setBanner({ state: 'error', message: `${userOpError.message} Please try again.` });
+      console.error('Cash-out transfer failed:', userOpError);
+      setBanner({ state: 'error', message: 'Your transfer did not go through. Please try again.' });
     }
   }, [showSuccessAlert, userOpStatus, userOpData, userOpError, transaction]);
 
@@ -207,7 +204,8 @@ export default function OfframpSendScreen() {
         await handleEvmOfframpSend();
       }
     } catch (err) {
-      setBanner({ state: 'error', message: err instanceof Error ? `${err.message} Please try again.` : 'Something went wrong. Please try again.' });
+      console.error('Cash-out transfer failed:', err);
+      setBanner({ state: 'error', message: userFacingMessage(err, 'Your transfer did not go through. Please try again.') });
     } finally {
       setSending(false);
     }
@@ -310,10 +308,9 @@ export default function OfframpSendScreen() {
       transaction: serialized,
     });
 
-    const explorerUrl = `https://solscan.io/tx/${result.transactionSignature}`;
     showSuccessAlert(
-      'Sent! ✨',
-      `Successfully sent ${sellAmountValue} ${asset} to Coinbase.\n\nCoinbase will process your cash-out and deposit fiat to your account.\n\nView on Solscan:\n${explorerUrl}`
+      'Sent',
+      `You sent ${sellAmountValue} ${asset} to Coinbase.\n\nCoinbase will finish your cash-out and send the money to your bank account.`
     );
   };
 
@@ -348,7 +345,7 @@ export default function OfframpSendScreen() {
         {!loading && fetchError && (
           <View style={styles.card}>
             <Ionicons name="alert-circle" size={40} color="#FF6B6B" style={{ alignSelf: 'center', marginBottom: 12 }} />
-            <Text style={[styles.sectionTitle, { color: '#FF6B6B', textAlign: 'center' }]}>Transaction Not Found</Text>
+            <Text style={[styles.sectionTitle, { color: '#FF6B6B', textAlign: 'center' }]}>{"We couldn't load this cash-out"}</Text>
             <Text style={[styles.helper, { textAlign: 'center', marginTop: 8 }]}>{fetchError}</Text>
             <RegentPressable style={[styles.button, { marginTop: 20 }]} onPress={() => router.back()}>
               <Text style={styles.buttonText}>Go Back</Text>
@@ -410,7 +407,7 @@ export default function OfframpSendScreen() {
             {banner ? <StatusBanner state={banner.state} message={banner.message} /> : null}
 
             <Text style={styles.disclaimer}>
-              Once this transfer is confirmed, Coinbase will validate and process your cash-out. Fiat will be deposited to your linked account.
+              Once this transfer is confirmed, Coinbase will finish your cash-out. The money goes to your linked bank account.
             </Text>
           </>
         )}

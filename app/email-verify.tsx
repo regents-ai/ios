@@ -87,8 +87,9 @@ export default function EmailVerifyScreen() {
           params: { email, mode },
         });
       }
-    } catch (error: any) {
-      setBanner({ state: 'error', message: error.message || 'We could not send the code. Please try again.' });
+    } catch (error) {
+      console.error('Verification code send failed:', error);
+      setBanner({ state: 'error', message: 'We could not send the code. Please try again.' });
     } finally {
       setSending(false);
     }

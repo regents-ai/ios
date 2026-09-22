@@ -9,6 +9,7 @@ import {
 } from '@/utils/state/flowRuntimeState';
 import { getVerifiedPhone, isPhoneFresh60d } from '@/utils/state/verificationState';
 import { getWalletAddressForNetwork } from '@/utils/state/walletRuntimeState';
+import { userFacingMessage } from '@/utils/userFacingError';
 
 type Params = {
   createOrder: (formData: OnrampFormData) => Promise<void>;
@@ -93,14 +94,12 @@ export function usePendingOnrampResume({
           clearPendingForm();
         } catch (error) {
           clearPendingForm();
-          const errorMessage = error instanceof Error ? error.message : 'Unable to create transaction. Please try again.';
-          setAlertState({
-            visible: true,
-            title: 'Transaction Failed',
-            message: `${errorMessage}\n\nContact support for help.`,
-            type: 'error',
-          });
-          showSupportError('Transaction Failed', errorMessage, 'Transaction failed during pending form resumption');
+          console.error('Pending purchase resume failed:', error);
+          showSupportError(
+            "Purchase didn't go through",
+            userFacingMessage(error, "We couldn't finish your purchase. Please try again."),
+            'Transaction failed during pending form resumption'
+          );
         }
       };
 

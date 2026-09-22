@@ -11,6 +11,7 @@ import { registerForPushNotifications, sendPushTokenToServer } from '@/utils/pus
 import { getCountry, getSubdivision, setSubdivision } from '@/utils/state/locationState';
 import { setCurrentPartnerUserRef } from '@/utils/state/flowRuntimeState';
 import { getVerifiedPhone, getVerifiedPhoneAt, isPhoneFresh60d } from '@/utils/state/verificationState';
+import { UserFacingError } from '@/utils/userFacingError';
 
 type UseOnrampCheckoutArgs = {
   getAssetSymbolFromName: (assetName: string) => string;
@@ -76,7 +77,7 @@ export function useOnrampCheckout({
         }
 
         if (phone !== cdpPhone || !isPhoneFresh60d()) {
-          const error: any = new Error(`Phone verification required for ${paymentLabel}. Please verify your phone on the Profile page.`);
+          const error: any = new Error(`Phone verification required for ${paymentLabel}. Verify your phone in Settings.`);
           error.code = 'MISSING_PHONE';
           throw error;
         }
@@ -98,7 +99,7 @@ export function useOnrampCheckout({
           const smartAccount = currentUser?.evmSmartAccounts?.[0] as string;
 
           if (!smartAccount) {
-            throw new Error('Your wallet is still getting ready. Try again in a moment.');
+            throw new UserFacingError('Your wallet is still getting ready. Try again in a moment.');
           }
 
           destinationAddress = smartAccount;
@@ -120,7 +121,7 @@ export function useOnrampCheckout({
         });
 
         if (!result.hostedUrl) {
-          throw new Error('No payment URL received');
+          throw new UserFacingError("We couldn't open checkout. Please try again.");
         }
 
         setHostedUrl(result.hostedUrl);
@@ -168,7 +169,7 @@ export function useOnrampCheckout({
           const smartAccount = currentUser?.evmSmartAccounts?.[0] as string;
 
           if (!smartAccount) {
-            throw new Error('Your wallet is still getting ready. Try again in a moment.');
+            throw new UserFacingError('Your wallet is still getting ready. Try again in a moment.');
           }
 
           destinationAddress = smartAccount;
@@ -176,7 +177,7 @@ export function useOnrampCheckout({
           const solanaAddress = currentUser?.solanaAccounts?.[0] as string;
 
           if (!solanaAddress) {
-            throw new Error('Your Solana wallet is still getting ready. Try again in a moment.');
+            throw new UserFacingError('Your Solana wallet is still getting ready. Try again in a moment.');
           }
 
           destinationAddress = solanaAddress;
@@ -200,7 +201,7 @@ export function useOnrampCheckout({
         const url = response?.session?.onrampUrl;
 
         if (!url) {
-          throw new Error('No onrampUrl returned');
+          throw new UserFacingError("We couldn't open checkout. Please try again.");
         }
 
         return url;

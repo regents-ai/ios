@@ -27,6 +27,7 @@ import { resolveDynamicTypeLayout } from "../../utils/dynamicTypeLayout";
 import { fetchOnrampEvents, type TransactionEvent } from "../../utils/fetchOnrampEvents";
 import { fetchTransactionHistory } from "../../utils/fetchTransactionHistory";
 import { describeListLoadFailure, type ListLoadFailure } from "../../utils/listLoadFailure";
+import { getNetworkLabel } from "../../utils/onchain/networkDisplay";
 
 
 type Transaction = {
@@ -178,8 +179,12 @@ export default function History() {
     });
   };
 
-  const formatStatusLabel = (status: string) =>
-    status.replace(/ONRAMP_TRANSACTION_STATUS_/g, '').replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
+  const formatStatusLabel = (status: string) => {
+    const normalizedStatus = status.toLowerCase();
+    if (normalizedStatus.includes("completed") || normalizedStatus.includes("success")) return "Complete";
+    if (isFailedTransaction(status)) return "Failed";
+    return "Processing";
+  };
 
   const describeActivityEvent = (event: TransactionEvent) => {
     const isCashOut = event.eventType.startsWith('offramp.');
@@ -212,7 +217,7 @@ export default function History() {
           const { failed, stageColor, stageLabel, title } = describeActivityEvent(event);
           const subtitleParts = [
             event.amount && event.currency ? `${event.amount} ${event.currency}` : null,
-            event.network,
+            event.network ? getNetworkLabel(event.network) : null,
             formatDate(event.occurredAt),
           ].filter(Boolean);
 
@@ -226,8 +231,8 @@ export default function History() {
                 <View style={styles.updateInfo}>
                   <Text style={styles.transactionTitle}>{title}</Text>
                   <Text style={styles.transactionSubtitle}>{subtitleParts.join(' • ')}</Text>
-                  {failed && event.failureReason ? (
-                    <Text style={styles.updateFailureText}>{event.failureReason}</Text>
+                  {failed ? (
+                    <Text style={styles.updateFailureText}>{"This didn't finish. Tap Get help and we'll sort it out."}</Text>
                   ) : null}
                 </View>
                 <View style={[styles.statusBadge, { borderColor: stageColor, backgroundColor: `${stageColor}15` }]}>
@@ -260,7 +265,7 @@ export default function History() {
     const statusLabel = formatStatusLabel(item.status);
     // One flattened accessibility element per row, with the state included in
     // the label. The interactive support badge stays a separate element.
-    const rowAccessibilityLabel = `${item.purchase_currency} purchase of $${item.payment_total.value}, ${statusLabel}, ${item.purchase_network}, ${formatDate(item.created_at)}`;
+    const rowAccessibilityLabel = `${item.purchase_currency} purchase of $${item.payment_total.value}, ${statusLabel}, ${getNetworkLabel(item.purchase_network)}, ${formatDate(item.created_at)}`;
 
     return (
       <View style={styles.transactionShell}>
@@ -278,7 +283,7 @@ export default function History() {
                 {item.purchase_currency} Purchase
               </Text>
               <Text style={styles.transactionSubtitle}>
-                {item.purchase_network} • {formatDate(item.created_at)}
+                {getNetworkLabel(item.purchase_network)} • {formatDate(item.created_at)}
               </Text>
             </View>
 

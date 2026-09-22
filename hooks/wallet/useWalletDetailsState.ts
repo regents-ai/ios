@@ -13,6 +13,7 @@ import { createOfframpSession } from '@/utils/createOfframpSession';
 import { setPendingOfframpBalance } from '@/utils/state/flowRuntimeState';
 import { setCurrentSolanaAddress, setCurrentWalletAddress } from '@/utils/state/walletRuntimeState';
 import { consumeWalletRefreshRequest, subscribeWalletRefresh } from '@/utils/walletRefresh';
+import { UserFacingError, userFacingMessage } from '@/utils/userFacingError';
 
 export type BalanceRecord = {
   network: string;
@@ -63,21 +64,12 @@ export function useWalletDetailsState() {
   const [balancesError, setBalancesError] = useState<string | null>(null);
   const [balancesExpanded, setBalancesExpanded] = useState(true);
 
-  const [testnetBalances, setTestnetBalances] = useState<BalanceRecord[]>([]);
-  const [loadingTestnetBalances, setLoadingTestnetBalances] = useState(false);
-  const [testnetBalancesError, setTestnetBalancesError] = useState<string | null>(null);
-  const [testnetExpanded, setTestnetExpanded] = useState(false);
   const [recentCopyKey, setRecentCopyKey] = useState<string | null>(null);
   const balancesRequestGateRef = useRef<LatestRequestGate | null>(null);
   if (balancesRequestGateRef.current === null) {
     balancesRequestGateRef.current = createLatestRequestGate();
   }
   const balancesRequestGate = balancesRequestGateRef.current;
-  const testnetBalancesRequestGateRef = useRef<LatestRequestGate | null>(null);
-  if (testnetBalancesRequestGateRef.current === null) {
-    testnetBalancesRequestGateRef.current = createLatestRequestGate();
-  }
-  const testnetBalancesRequestGate = testnetBalancesRequestGateRef.current;
 
   const [alertState, setAlertState] = useState<{
     visible: boolean;
@@ -138,71 +130,23 @@ export function useWalletDetailsState() {
     }
   }, [balancesRequestGate, primaryAddress, solanaAddress]);
 
-  const fetchTestnetBalances = useCallback(async () => {
-    if (!primaryAddress && !solanaAddress) {
-      return;
-    }
-
-    const requestId = testnetBalancesRequestGate.next();
-    const isLatestRequest = () => testnetBalancesRequestGate.isLatest(requestId);
-    setLoadingTestnetBalances(true);
-    setTestnetBalancesError(null);
-
-    try {
-      const balanceRequests: Promise<BalanceRecord[]>[] = [];
-
-      if (primaryAddress) {
-        balanceRequests.push(
-          fetchNetworkBalances(`${getBaseUrl()}/balances/evm?address=${primaryAddress}&network=base-sepolia`, 'Base Sepolia'),
-          fetchNetworkBalances(`${getBaseUrl()}/balances/evm?address=${primaryAddress}&network=ethereum-sepolia`, 'Ethereum Sepolia')
-        );
-      }
-
-      if (solanaAddress) {
-        balanceRequests.push(fetchNetworkBalances(`${getBaseUrl()}/balances/solana?address=${solanaAddress}&network=solana-devnet`, 'Solana Devnet'));
-      }
-
-      const allBalances = (await Promise.all(balanceRequests)).flat();
-      if (!isLatestRequest()) {
-        return;
-      }
-      setTestnetBalances(allBalances);
-    } catch (error) {
-      if (!isLatestRequest()) {
-        return;
-      }
-      console.warn('Failed to load testnet balances:', error);
-      setTestnetBalancesError('Unable to load testnet balances right now.');
-    } finally {
-      if (isLatestRequest()) {
-        setLoadingTestnetBalances(false);
-      }
-    }
-  }, [primaryAddress, solanaAddress, testnetBalancesRequestGate]);
-
   useEffect(() => {
     if (primaryAddress || solanaAddress) {
       void fetchBalances();
-      void fetchTestnetBalances();
     } else {
       balancesRequestGate.next();
-      testnetBalancesRequestGate.next();
       setBalances([]);
-      setTestnetBalances([]);
       setBalancesError(null);
-      setTestnetBalancesError(null);
       setLoadingBalances(false);
-      setLoadingTestnetBalances(false);
     }
-  }, [balancesRequestGate, fetchBalances, fetchTestnetBalances, primaryAddress, solanaAddress, testnetBalancesRequestGate]);
+  }, [balancesRequestGate, fetchBalances, primaryAddress, solanaAddress]);
 
   useFocusEffect(
     useCallback(() => {
       if (primaryAddress || solanaAddress) {
         void fetchBalances();
-        void fetchTestnetBalances();
       }
-    }, [fetchBalances, fetchTestnetBalances, primaryAddress, solanaAddress])
+    }, [fetchBalances, primaryAddress, solanaAddress])
   );
 
   // Out-of-band refresh requests (e.g. tapping an onramp push notification)
@@ -212,13 +156,12 @@ export function useWalletDetailsState() {
     const drainRefreshRequest = () => {
       if (consumeWalletRefreshRequest() && (primaryAddress || solanaAddress)) {
         void fetchBalances();
-        void fetchTestnetBalances();
       }
     };
 
     drainRefreshRequest();
     return subscribeWalletRefresh(drainRefreshRequest);
-  }, [fetchBalances, fetchTestnetBalances, primaryAddress, solanaAddress]);
+  }, [fetchBalances, primaryAddress, solanaAddress]);
 
   const groupedMainnetBalances = useMemo(
     () =>
@@ -227,15 +170,6 @@ export function useWalletDetailsState() {
         balances: balances.filter((balance) => balance.network === network),
       })),
     [balances]
-  );
-
-  const groupedTestnetBalances = useMemo(
-    () =>
-      ['Base Sepolia', 'Ethereum Sepolia', 'Solana Devnet'].map((network) => ({
-        network,
-        balances: testnetBalances.filter((balance) => balance.network === network),
-      })),
-    [testnetBalances]
   );
 
   const featuredBaseUsdc = useMemo(
@@ -275,8 +209,8 @@ export function useWalletDetailsState() {
   );
 
   const refreshWalletSnapshot = useCallback(async () => {
-    await Promise.all([fetchBalances(), fetchTestnetBalances()]);
-  }, [fetchBalances, fetchTestnetBalances]);
+    await fetchBalances();
+  }, [fetchBalances]);
 
   const handleTransfer = useCallback(
     (balance: BalanceRecord, network: string) => {
@@ -305,7 +239,7 @@ export function useWalletDetailsState() {
 
       try {
         if (!userId) {
-          throw new Error('You need to sign in before cashing out.');
+          throw new UserFacingError('You need to sign in before cashing out.');
         }
 
         const symbol = balance.token?.symbol || 'USDC';
@@ -313,7 +247,7 @@ export function useWalletDetailsState() {
         const address = isSolanaNetwork ? solanaAddress : primaryAddress;
 
         if (!address) {
-          throw new Error('No wallet address was found for this network.');
+          throw new UserFacingError('Your wallet for this network is not ready yet. Try again in a moment.');
         }
 
         setPendingOfframpBalance(balance);
@@ -333,8 +267,9 @@ export function useWalletDetailsState() {
             params: { partnerUserRef },
           });
         }
-      } catch (error: any) {
-        showAlert('Cash out failed', error.message || 'Unable to start cash out right now.', 'error');
+      } catch (error) {
+        console.error('Cash out failed:', error);
+        showAlert('Cash out failed', userFacingMessage(error, "We couldn't start your cash out. Try again in a moment."), 'error');
       }
     },
     [isExpoGo, primaryAddress, router, showAlert, solanaAddress, userId]
@@ -366,16 +301,10 @@ export function useWalletDetailsState() {
     balancesError,
     balancesExpanded,
     setBalancesExpanded,
-    testnetBalances,
-    loadingTestnetBalances,
-    testnetBalancesError,
-    testnetExpanded,
-    setTestnetExpanded,
     recentCopyKey,
     alertState,
     setAlertState,
     groupedMainnetBalances,
-    groupedTestnetBalances,
     featuredBaseUsdc,
     walletUsdTotal,
     hasAnyWalletBalance,
@@ -386,7 +315,6 @@ export function useWalletDetailsState() {
     handlePrimarySend,
     handlePrimaryCashOut,
     fetchBalances,
-    fetchTestnetBalances,
     isExpoGo,
   };
 }

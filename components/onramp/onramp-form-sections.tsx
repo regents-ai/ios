@@ -25,7 +25,7 @@ export function FocusPathSection({
         </View>
         <View style={[styles.badge, isBaseUsdcPath && styles.badgeActive]}>
           <Text style={[styles.badgeText, isBaseUsdcPath && styles.badgeTextActive]}>
-            {isBaseUsdcPath ? 'Ready' : 'Use this path'}
+            {isBaseUsdcPath ? 'Ready' : 'Use this'}
           </Text>
         </View>
       </View>
@@ -311,7 +311,7 @@ export function LocationSection({
       </View>
       {country === 'US' ? (
         <View style={[styles.rowBetween, styles.helperTight]}>
-          <Text style={styles.label}>Subdivision</Text>
+          <Text style={styles.label}>State</Text>
           <RegentPressable haptic="selection" pressStyle="chip" style={styles.selectChipLarge} onPress={onOpenSubdivisionPicker}>
             <Text style={styles.selectText}>{subdivision || 'Select'}</Text>
             <Ionicons name="chevron-down" size={16} color={colors.textMuted} />

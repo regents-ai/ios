@@ -152,11 +152,11 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
           <View style={styles.issueSteps}>
             <View style={styles.issueStepRow}>
               <View style={styles.issueStepDot} />
-              <Text style={styles.issueStepText}>Finish sign-in setup for this build.</Text>
+              <Text style={styles.issueStepText}>Check your internet connection.</Text>
             </View>
             <View style={styles.issueStepRow}>
               <View style={styles.issueStepDot} />
-              <Text style={styles.issueStepText}>Reopen the app after those details are ready.</Text>
+              <Text style={styles.issueStepText}>If it keeps happening, close and reopen Regents.</Text>
             </View>
           </View>
           <View style={styles.issueActions}>

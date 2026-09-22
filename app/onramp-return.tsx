@@ -26,7 +26,7 @@ export default function OnrampReturnScreen() {
           </Text>
           {hasReference ? (
             <View style={styles.referenceBox}>
-              <Text style={styles.referenceLabel}>Reference</Text>
+              <Text style={styles.referenceLabel}>Support reference</Text>
               <Text style={styles.referenceText}>{params.partnerUserRef}</Text>
             </View>
           ) : null}

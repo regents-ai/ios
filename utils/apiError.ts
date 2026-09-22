@@ -68,7 +68,7 @@ const FAILURE_COPY: Record<ApiFailureKind, { title: string; message: string }> =
       'Try again in a few minutes. If money was moving, check your recent activity before retrying.',
   },
   'invalid-response': {
-    title: 'We got an unexpected reply',
+    title: 'Something went wrong',
     message: 'Try again in a moment. If it keeps happening, contact support.',
   },
   unknown: {

@@ -164,11 +164,12 @@ export default function SettingsScreen() {
           autoSend: 'true',
         },
       });
-    } catch (error: any) {
+    } catch (error) {
+      console.error('Phone verification restart failed:', error);
       setAlertState({
         visible: true,
-        title: 'Error',
-        message: error.message || 'Unable to start phone verification.',
+        title: "Couldn't start verification",
+        message: 'Please try again.',
         type: 'error',
       });
     }

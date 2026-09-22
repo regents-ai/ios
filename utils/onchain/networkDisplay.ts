@@ -26,11 +26,10 @@ export function isSolanaNetwork(network: string) {
 }
 
 /**
- * Maps an EVM network to the explorer link for a transaction hash. Falls back
- * to a plain "Transaction Hash: ..." string for networks without a mapping,
- * which the alert layer treats as non-linkable.
+ * Maps an EVM network to the explorer link for a transaction hash, or null
+ * for networks without a known explorer.
  */
-export function getEvmExplorerUrl(network: string, txHash: string) {
+export function getEvmExplorerUrl(network: string, txHash: string): string | null {
   const networkLower = network.toLowerCase();
 
   if (networkLower === 'base') {
@@ -46,5 +45,5 @@ export function getEvmExplorerUrl(network: string, txHash: string) {
     return `https://sepolia.etherscan.io/tx/${txHash}`;
   }
 
-  return `Transaction Hash: ${txHash}`;
+  return null;
 }

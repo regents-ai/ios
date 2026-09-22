@@ -57,7 +57,6 @@ export function useSolanaTransfer({
         amountRaw,
         mintAddress: isSPLToken ? selectedToken.token.mintAddress : null,
         tokenSymbol,
-        isDevnet,
       });
 
       const serializedTransaction = transaction.serialize({
@@ -79,7 +78,7 @@ export function useSolanaTransfer({
       const successInfo = [
         `You sent ${amount} ${tokenSymbol}.`,
         '',
-        `Network: Solana ${isDevnet ? 'test network' : 'mainnet'}`,
+        'Network: Solana',
         `From: ${solanaAddress.slice(0, 6)}...${solanaAddress.slice(-4)}`,
         `To: ${recipientAddress.slice(0, 6)}...${recipientAddress.slice(-4)}`,
       ].join('\n');

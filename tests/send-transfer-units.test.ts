@@ -45,12 +45,12 @@ test('solana network detection is case-insensitive and substring-based', () => {
   assert.equal(isSolanaNetwork('base'), false);
 });
 
-test('explorer URLs map known EVM networks and fall back to a plain hash', () => {
+test('explorer URLs map known EVM networks and are null elsewhere', () => {
   assert.equal(getEvmExplorerUrl('base', '0xabc'), 'https://basescan.org/tx/0xabc');
   assert.equal(getEvmExplorerUrl('base-sepolia', '0xabc'), 'https://sepolia.basescan.org/tx/0xabc');
   assert.equal(getEvmExplorerUrl('ethereum', '0xabc'), 'https://etherscan.io/tx/0xabc');
   assert.equal(getEvmExplorerUrl('ethereum-sepolia', '0xabc'), 'https://sepolia.etherscan.io/tx/0xabc');
-  assert.equal(getEvmExplorerUrl('polygon', '0xabc'), 'Transaction Hash: 0xabc');
+  assert.equal(getEvmExplorerUrl('polygon', '0xabc'), null);
 });
 
 test('funding idempotency keys pin the intent and append the nonce', () => {
@@ -244,7 +244,6 @@ test('native SOL transfers build a single SystemProgram instruction', async () =
     amountRaw: 1_000_000n,
     mintAddress: null,
     tokenSymbol: 'SOL',
-    isDevnet: false,
   });
 
   assert.equal(transaction.instructions.length, 1);
@@ -264,7 +263,6 @@ test('SPL transfers fail with friendly copy when the sender holds no token accou
       amountRaw: 1n,
       mintAddress: mint.toBase58(),
       tokenSymbol: 'USDC',
-      isDevnet: false,
     }),
     /You do not have any USDC in this wallet yet/
   );
@@ -283,9 +281,8 @@ test('SPL transfers fail with the fee guard when the sender has no SOL', async (
       amountRaw: 1n,
       mintAddress: mint.toBase58(),
       tokenSymbol: 'USDC',
-      isDevnet: true,
     }),
-    /Insufficient SOL for transaction fees[\s\S]*faucet\.solana\.com/
+    /You need a little SOL to pay the network fee/
   );
 });
 
@@ -301,7 +298,6 @@ test('SPL transfers create the destination token account when it is missing', as
     amountRaw: 1n,
     mintAddress: mint.toBase58(),
     tokenSymbol: 'USDC',
-    isDevnet: false,
   });
 
   assert.equal(transaction.instructions.length, 2);
@@ -325,7 +321,6 @@ test('SPL transfers skip ATA creation when the destination account exists', asyn
     amountRaw: 1n,
     mintAddress: mint.toBase58(),
     tokenSymbol: 'USDC',
-    isDevnet: false,
   });
 
   assert.equal(transaction.instructions.length, 1);

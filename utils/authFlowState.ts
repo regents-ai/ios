@@ -30,7 +30,7 @@ export function resolveAuthGateState(input: AuthGateStateInput) {
     return {
       mode: 'issue' as const,
       title: 'Sign-in is unavailable',
-      message: 'This build cannot open the wallet right now. Finish setup, then try again.',
+      message: "We couldn't open your wallet. Check your connection and try again.",
     };
   }
 

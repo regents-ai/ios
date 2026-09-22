@@ -52,6 +52,7 @@ import { formatAddressPreview, getNetworkLabel, isSolanaNetwork } from '@/utils/
 import { getEnsResolutionCopy } from '@/utils/onchain/recipient';
 import { getInsufficientBalanceError, getSelfSendError } from '@/utils/onchain/sendValidation';
 import { getTokenBalance, getUsdEstimate } from '@/utils/onchain/tokenDisplay';
+import { userFacingMessage } from '@/utils/userFacingError';
 
 const AGENT_FUNDING_FLOW = 'agent-funding';
 const SEND_FLOW = 'send';
@@ -302,7 +303,7 @@ export default function TransferScreen() {
       }
     } catch (error) {
       console.error('Transfer error:', error);
-      showAlert('Send failed', error instanceof Error ? error.message : 'Something went wrong. Please try again.', 'error');
+      showAlert('Send failed', userFacingMessage(error, 'Something went wrong. Please try again.'), 'error');
     } finally {
       setSending(false);
     }
@@ -341,7 +342,7 @@ export default function TransferScreen() {
   const noBaseUsdcForFunding = isAgentFundingFlow && !loadingFundingBalance && !selectedToken && !fundingBalanceError;
   const noBaseUsdcForSend = isDefaultSendFlow && !loadingFundingBalance && !selectedToken && !fundingBalanceError;
   let alertConfirmText = 'Got it';
-  if (explorerUrl && !explorerUrl.startsWith('Transaction Hash:')) {
+  if (explorerUrl) {
     alertConfirmText = isAgentFundingFlow || isDefaultSendFlow ? 'View payment' : 'View send';
   }
 
@@ -674,12 +675,8 @@ export default function TransferScreen() {
               transition={buildTimingTransition(reduceMotion, STAGGER_STEP * 7)}
               style={[styles.card, styles.noticeCard]}
             >
-              <Text style={styles.noticeTitle}>Solana token send</Text>
-              <Text style={styles.noticeText}>
-                {network?.toLowerCase().includes('devnet')
-                  ? 'You may need a small amount of test SOL to finish this send.'
-                  : 'You need a small amount of SOL in your wallet to finish this send.'}
-              </Text>
+              <Text style={styles.noticeTitle}>Sending on Solana</Text>
+              <Text style={styles.noticeText}>You need a small amount of SOL in your wallet to finish this send.</Text>
             </EaseView>
           )}
 
@@ -726,7 +723,7 @@ export default function TransferScreen() {
         message={alertMessage}
         type={alertType}
         onConfirm={() => {
-          if (explorerUrl && !explorerUrl.startsWith('Transaction Hash:')) {
+          if (explorerUrl) {
             Linking.openURL(explorerUrl);
           }
           handleAlertDismiss();

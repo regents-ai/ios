@@ -97,11 +97,12 @@ export default function EmailCodeScreen() {
         await sendLinkCode({ email });
       }
       resetResendTimer();
-    } catch (error: any) {
+    } catch (error) {
+      console.error('Verification step failed:', error);
       setAlert({
         visible: true,
         title: 'Code not sent',
-        message: error.message || 'Please try again.',
+        message: 'Please try again.',
         type: 'error',
       });
     } finally {
@@ -149,11 +150,12 @@ export default function EmailCodeScreen() {
           }
         });
       }
-    } catch (error: any) {
+    } catch (error) {
+      console.error('Verification step failed:', error);
       setAlert({
         visible: true,
         title: 'Code did not match',
-        message: error.message || 'Please try again.',
+        message: 'Please try again.',
         type: 'error',
       });
     } finally {

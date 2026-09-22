@@ -27,6 +27,7 @@ import {
   getPhoneVerifyWasCanceled,
 } from '@/utils/state/flowRuntimeState';
 import { getCountry, getSubdivision } from '@/utils/state/locationState';
+import { getNetworkLabel } from '@/utils/onchain/networkDisplay';
 
 
 function formatAddress(address: string) {
@@ -51,7 +52,7 @@ export default function WalletScreen() {
   const { signOut: signOutWallet } = useSignOut();
   const effectiveIsSignedIn = isAuthenticated;
   const walletDetails = useWalletDetailsState();
-  const refreshingWallet = walletDetails.loadingBalances || walletDetails.loadingTestnetBalances;
+  const refreshingWallet = walletDetails.loadingBalances;
 
   const { address, onNetworkChange, setAddress } = useWalletAddresses({
     currentUser,
@@ -313,7 +314,7 @@ export default function WalletScreen() {
           setIsProcessingPayment={setIsProcessingPayment}
           onAlert={(title, message, type) => {
             const transactionSummary = currentTransaction
-              ? `\n\n${currentTransaction.amount} ${currentTransaction.paymentCurrency} → ${currentTransaction.asset} (${currentTransaction.network})`
+              ? `\n\n${currentTransaction.amount} ${currentTransaction.paymentCurrency} → ${currentTransaction.asset} (${getNetworkLabel(currentTransaction.network)})`
               : '';
 
             setAlertState({

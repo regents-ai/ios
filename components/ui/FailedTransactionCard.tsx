@@ -42,7 +42,7 @@ interface FailedTransactionCardProps {
 }
 
 export function FailedTransactionCard({
-  title = 'An error occurred',
+  title = "That didn't go through",
   message = "We're looking into it right now. Please try again later.",
   transaction,
   debugInfo,
@@ -65,7 +65,7 @@ export function FailedTransactionCard({
     } else {
       opened = await openSupportEmail({
         flowType: 'guest',
-        partnerName: 'Regents Mobile',
+        partnerName: 'Regents',
         errorMessage: errorMessage || message,
       } as GuestCheckoutDebugInfo);
     }
@@ -125,7 +125,7 @@ export function FailedTransactionCard({
         {/* Secure flow footer */}
         <View style={styles.footer}>
           <Ionicons name="lock-closed" size={14} color={colors.textMuted} />
-          <Text style={styles.footerText}>Secure transfer flow</Text>
+          <Text style={styles.footerText}>Secured by Coinbase</Text>
         </View>
       </View>
     </View>

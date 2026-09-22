@@ -42,7 +42,7 @@ type OnrampOptionsState = {
 };
 
 const PAYMENT_OPTIONS_UNAVAILABLE_MESSAGE =
-  'Adding cash is not available for this build yet. Wallet and sending tools are still available.';
+  "Adding money isn't available right now. You can still send and pay from your wallet.";
 
 export function useOnrampOptions(): OnrampOptionsState {
   const [options, setOptions] = useState<BuyOptions | null>(null);

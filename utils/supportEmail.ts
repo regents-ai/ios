@@ -133,7 +133,7 @@ function buildDebugBlock(info: TransactionDebugInfo | GuestCheckoutDebugInfo): s
   const appId = process.env.EXPO_PUBLIC_CDP_PROJECT_ID || 'unknown';
 
   const lines: string[] = [
-    '--- Debug Information (please do not edit) ---',
+    '--- Details for our support team (please leave as is) ---',
   ];
 
   // Check if it's a GuestCheckoutDebugInfo (has flowType)
@@ -231,7 +231,7 @@ export async function openSupportEmail(
   info: TransactionDebugInfo | GuestCheckoutDebugInfo
 ): Promise<boolean> {
   const entityHash = generateEntityHash(info);
-  const subject = `Guest Checkout Support Request [${entityHash}]`;
+  const subject = `Regents support request [${entityHash}]`;
 
   const body = `[Please describe your issue here]\n\n${buildDebugBlock(info)}`;
 
@@ -308,7 +308,7 @@ export function createGuestCheckoutDebugInfo(params: {
 
   return {
     flowType: 'guest',
-    partnerName: 'Regents Mobile',
+    partnerName: 'Regents',
     guestEntityHash: partnerUserRef ? `${partnerUserRef.slice(0, 20)}${Date.now().toString(36)}` : undefined,
     guestAsset: params.asset,
     guestNetwork: params.network,

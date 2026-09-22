@@ -88,11 +88,12 @@ export default function PhoneCodeScreen() {
       }
 
       resetResendTimer();
-    } catch (error: any) {
+    } catch (error) {
+      console.error('Verification step failed:', error);
       setAlert({
         visible: true,
         title: 'Could not resend the code',
-        message: error.message || 'Please try again.',
+        message: 'Please try again.',
         type: 'error',
       });
     } finally {
@@ -143,11 +144,12 @@ export default function PhoneCodeScreen() {
         });
         scheduleDismiss(() => router.dismissAll());
       }
-    } catch (error: any) {
+    } catch (error) {
+      console.error('Verification step failed:', error);
       setAlert({
         visible: true,
         title: 'That code did not work',
-        message: error.message || 'Please try again.',
+        message: 'Please try again.',
         type: 'error',
       });
     } finally {

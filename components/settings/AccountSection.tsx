@@ -126,12 +126,13 @@ export function WalletKeyExportSection({
         message: `Your ${isEvmExport ? 'Base and Ethereum' : 'Solana'} wallet key is now in the clipboard. Keep it somewhere safe and clear the clipboard when you are done.`,
         type: 'info',
       });
-    } catch (error: any) {
+    } catch (error) {
+      console.error('Wallet export failed:', error);
       runRegentHaptic('warning');
       setAlertState({
         visible: true,
         title: 'Export failed',
-        message: error.message || 'Unable to export the selected wallet.',
+        message: "We couldn't export this wallet. Please try again.",
         type: 'error',
       });
     } finally {

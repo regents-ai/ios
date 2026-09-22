@@ -1,4 +1,5 @@
 import { sendOnrampProxyRequest } from './network/onrampProxy';
+import { UserFacingError } from '@/utils/userFacingError';
 
 // Maps profile balance network name → Coinbase blockchain identifier
 function toBlockchainId(network: string): string {
@@ -58,7 +59,7 @@ export async function createOfframpSession({
     keyCount: tokenData && typeof tokenData === 'object' ? Object.keys(tokenData).length : 0,
   });
   if (!token) {
-    throw new Error('No cash-out session token was received.');
+    throw new UserFacingError("We couldn't start your cash out. Please try again.");
   }
 
   // 2. Deep link redirectUrl — Coinbase calls this after the user clicks "Cash out now".

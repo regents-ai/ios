@@ -112,26 +112,10 @@ function RootLayoutContent() {
       <View style={styles.missingConfigContainer}>
         <View style={styles.missingConfigCard}>
           <View style={styles.missingConfigBadge}>
-            <Text style={styles.missingConfigBadgeText}>Regents Mobile</Text>
+            <Text style={styles.missingConfigBadgeText}>Regents</Text>
           </View>
-          <Text style={styles.missingConfigTitle}>Sign-in is not ready yet</Text>
-          <Text style={styles.missingConfigText}>
-            Finish the mobile sign-in details for this build, then reopen the app.
-          </Text>
-          <View style={styles.missingConfigChecklist}>
-            <View style={styles.missingConfigRow}>
-              <View style={styles.missingConfigDot} />
-              <Text style={styles.missingConfigItem}>Add the sign-in details for Regents Mobile.</Text>
-            </View>
-            <View style={styles.missingConfigRow}>
-              <View style={styles.missingConfigDot} />
-              <Text style={styles.missingConfigItem}>Connect wallet access for this build.</Text>
-            </View>
-            <View style={styles.missingConfigRow}>
-              <View style={styles.missingConfigDot} />
-              <Text style={styles.missingConfigItem}>Reopen the app after saving those details.</Text>
-            </View>
-          </View>
+          <Text style={styles.missingConfigTitle}>{"Regents can't open right now"}</Text>
+          <Text style={styles.missingConfigText}>Update the app or try again later.</Text>
         </View>
       </View>
     );
@@ -221,34 +205,6 @@ const styles = StyleSheet.create({
     color: c.textMuted,
     fontSize: 16,
     lineHeight: 24,
-    fontFamily: FONTS.ui,
-  },
-  missingConfigChecklist: {
-    marginTop: 4,
-    backgroundColor: c.accentWash,
-    borderWidth: 1,
-    borderColor: c.hairlineStrong,
-    borderRadius: 18,
-    padding: 14,
-    gap: 12,
-  },
-  missingConfigRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-  },
-  missingConfigDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginTop: 7,
-    backgroundColor: c.accent,
-  },
-  missingConfigItem: {
-    flex: 1,
-    color: c.text,
-    fontSize: 14,
-    lineHeight: 20,
     fontFamily: FONTS.ui,
   },
 });
