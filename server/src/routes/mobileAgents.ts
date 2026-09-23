@@ -27,6 +27,7 @@ import {
   verifySignedAgentRequest,
   type SignedAgentRequestVerifier,
 } from '../services/siwaHttpVerifier.js';
+import { readSignedAgentJson } from './signedAgentRequest.js';
 
 const addAgentBodySchema = z
   .object({
@@ -50,20 +51,6 @@ const codeParamsSchema = z.object({ code: z.string().trim().min(1).max(20) });
 
 const pairBodySchema = z.object({ code: z.string().trim().min(1) }).strict();
 
-// The headers a SIWA-signed request carries, each exactly once. Any other
-// x-agent-* or x-siwa-* header is refused: nothing outside the proof may
-// steer the check. Mirrors KeyFleet's signed-agent plug.
-const PROOF_HEADERS = [
-  'signature',
-  'signature-input',
-  'content-digest',
-  'x-siwa-receipt',
-  'x-key-id',
-  'x-timestamp',
-  'x-agent-wallet-address',
-  'x-agent-chain-id',
-] as const;
-
 const AGENT_LIMIT_MESSAGE = `You can keep up to ${MAX_AGENTS_PER_USER} agents. Remove one to add another.`;
 const PAIR_BODY_MESSAGE = 'Send a JSON body with the pairing code, for example {"code":"ABCD-EFGH"}.';
 
@@ -78,38 +65,6 @@ function currentUserId(req: Request, res: Response) {
 
 function agentJson(agent: MobileAgentRecord, usdcBalance: string | null) {
   return { ...agent, usdcBalance };
-}
-
-/** Express lowercases header names; multi-value headers join the way HTTP does. */
-function forwardedHeaders(req: Request) {
-  const headers: Record<string, string> = {};
-  for (const [name, value] of Object.entries(req.headers)) {
-    if (typeof value === 'string') {
-      headers[name] = value;
-    } else if (Array.isArray(value)) {
-      headers[name] = value.join(', ');
-    }
-  }
-  return headers;
-}
-
-function rawBody(req: Request) {
-  return Buffer.isBuffer(req.body) ? req.body.toString('utf8') : '';
-}
-
-function isJsonContentType(value: string | undefined) {
-  return typeof value === 'string' && /^application\/json\s*(;.*)?$/i.test(value.trim());
-}
-
-/** Every proof header present once, and no stray agent or SIWA headers. */
-function hasWellFormedProofHeaders(req: Request) {
-  const counts = req.headersDistinct;
-  const once = PROOF_HEADERS.every((name) => counts[name]?.length === 1);
-  const stray = Object.keys(counts).some(
-    (name) =>
-      (name.startsWith('x-agent-') || name.startsWith('x-siwa-')) && !(PROOF_HEADERS as readonly string[]).includes(name),
-  );
-  return once && !stray;
 }
 
 type Handler = (req: Request, res: Response) => Promise<unknown>;
@@ -292,49 +247,18 @@ export function createMobileAgentRoutes(input: {
   }));
 
   router.post('/agent/pair', guarded(async (req, res) => {
-    if (!isJsonContentType(req.headers['content-type'])) {
-      return sendError(res, 415, 'UnsupportedMediaType', 'Send the pairing code as JSON with content-type application/json.');
-    }
-    if (!hasWellFormedProofHeaders(req)) {
-      return sendError(res, 400, 'BadRequest', 'The signed request headers are not in the expected shape. Sign the request again and resend it.');
-    }
-
-    const body = rawBody(req);
-    let parsedBody: z.infer<typeof pairBodySchema>;
-    try {
-      const candidate = pairBodySchema.safeParse(JSON.parse(body));
-      if (!candidate.success) {
-        return sendError(res, 400, 'BadRequest', PAIR_BODY_MESSAGE);
-      }
-      parsedBody = candidate.data;
-    } catch {
-      return sendError(res, 400, 'BadRequest', PAIR_BODY_MESSAGE);
-    }
-
-    const verification = await verifySignedRequest({
-      method: req.method,
-      path: req.originalUrl || req.url,
-      headers: forwardedHeaders(req),
-      body,
+    const signed = await readSignedAgentJson(req, res, {
+      verify: verifySignedRequest,
+      schema: pairBodySchema,
+      notJsonMessage: 'Send the pairing code as JSON with content-type application/json.',
+      bodyMessage: PAIR_BODY_MESSAGE,
+      unavailableMessage: "Agent pairing isn't available on this server right now.",
     });
-
-    if (verification.kind === 'missing_config') {
-      console.error(`❌ [AGENTS] ${verification.requiredEnv} is not set; agents cannot pair.`);
-      return sendError(res, 503, 'PairingUnavailable', "Agent pairing isn't available on this server right now.");
-    }
-    if (verification.kind === 'unavailable') {
-      console.warn('⚠️ [AGENTS] Sign-in service unavailable:', { reason: verification.reason });
-      return sendError(res, 503, 'SignInServiceBusy', 'Sign-in service is busy, try again.');
-    }
-    if (verification.kind === 'replayed') {
-      return sendError(res, 409, 'SignedRequestReplayed', 'This signed request was already used. Send a fresh one.');
-    }
-    if (verification.kind === 'rejected') {
-      console.warn('⚠️ [AGENTS] Signed pairing request rejected:', { status: verification.status });
-      return sendError(res, 401, 'SignedRequestRejected', 'This signed request was not accepted. Sign in again and retry with a fresh request.');
+    if (!signed) {
+      return;
     }
 
-    const result = await redeemPairingCode(parsedBody.code, verification.walletAddress, deps);
+    const result = await redeemPairingCode(signed.body.code, signed.walletAddress, deps);
     if (result.kind === 'expired') {
       return sendError(res, 409, 'PairingCodeExpired', 'This pairing code has expired or is not valid. Ask for a new one from the app.');
     }

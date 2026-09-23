@@ -1,51 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { Request, Response } from 'express';
 
-import {
-  localMobileAgentsKv,
-  MAX_AGENTS_PER_USER,
-  PAIRING_CODE_LIFETIME_MS,
-  type LocalEntries,
-  type LocalEntriesStore,
-} from './mobileAgents.js';
+import { localMobileAgentsKv, MAX_AGENTS_PER_USER, PAIRING_CODE_LIFETIME_MS } from './mobileAgents.js';
+import { AGENT_WALLET, memoryEntriesStore, PROOF_HEADERS, routeRequester } from './routeHarness.testing.js';
 import { createMobileAgentRoutes } from './routes/mobileAgents.js';
 import type { SignedAgentRequestVerifier } from './services/siwaHttpVerifier.js';
-
-type RouteInput = {
-  method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
-  url: string;
-  userId?: string;
-  body?: unknown;
-  rawBody?: string;
-  headers?: Record<string, string>;
-};
-
-const PROOF_HEADERS = {
-  signature: 'sig1=:abc:',
-  'signature-input': 'sig1=("@method" "@path")',
-  'content-digest': 'sha-256=:abc:',
-  'x-siwa-receipt': 'receipt',
-  'x-key-id': '0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e',
-  'x-timestamp': '1700000000',
-  'x-agent-wallet-address': '0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e',
-  'x-agent-chain-id': '8453',
-};
-
-function memoryEntriesStore(): LocalEntriesStore & { state: LocalEntries } {
-  const clone = (value: LocalEntries): LocalEntries => JSON.parse(JSON.stringify(value));
-  const store = {
-    state: { entries: {} } as LocalEntries,
-    read: () => clone(store.state),
-    update(mutator: (state: LocalEntries) => void) {
-      const next = clone(store.state);
-      mutator(next);
-      store.state = next;
-      return clone(next);
-    },
-  };
-  return store;
-}
 
 function createHarness(input?: { verifier?: SignedAgentRequestVerifier; now?: () => number }) {
   const entries = memoryEntriesStore();
@@ -58,51 +17,9 @@ function createHarness(input?: { verifier?: SignedAgentRequestVerifier; now?: ()
       balances: Object.fromEntries(addresses.map((address) => [address.toLowerCase(), '0'])),
     }),
     verifySignedRequest: input?.verifier ?? (async () => ({ kind: 'rejected', status: 401 })),
-  }) as unknown as {
-    handle(request: Request, response: Response, next: (error?: unknown) => void): void;
-  };
+  });
 
-  const request = (call: RouteInput) =>
-    new Promise<{ status: number; body: any }>((resolve, reject) => {
-      let statusCode = 200;
-      const headers = { 'content-type': 'application/json', ...(call.headers ?? {}) };
-      const req = {
-        method: call.method,
-        url: call.url,
-        originalUrl: call.url,
-        path: call.url,
-        headers,
-        headersDistinct: Object.fromEntries(Object.entries(headers).map(([name, value]) => [name, [value]])),
-        body: call.rawBody !== undefined ? Buffer.from(call.rawBody) : call.body,
-        query: {},
-        params: {},
-        userId: call.userId,
-        header() {
-          return undefined;
-        },
-        get() {
-          return undefined;
-        },
-      } as unknown as Request;
-      const res = {
-        status(code: number) {
-          statusCode = code;
-          return this;
-        },
-        json(payload: unknown) {
-          resolve({ status: statusCode, body: payload });
-          return this;
-        },
-        setHeader() {
-          return this;
-        },
-        req,
-      } as unknown as Response;
-
-      router.handle(req, res, (error?: unknown) => reject(error ?? new Error(`unhandled ${call.method} ${call.url}`)));
-    });
-
-  return { request, entries };
+  return { request: routeRequester(router), entries };
 }
 
 // Invariant: a pairing code links exactly the wallet the SIWA server verified
@@ -230,4 +147,57 @@ test('agents belong to the user who added them', async () => {
   assert.equal(damaged.body.error.code, 'AgentsUnavailable');
   assert.equal((await request({ method: 'POST', url: '/mobile/agents', userId: 'damaged', body: { name: 'X', kind: 'other', walletAddress: '0x2222222222222222222222222222222222222222' } })).status, 500);
   assert.equal(entries.state.entries[damagedKey]?.value, '{"not":"a list"}');
+});
+
+// Invariant: the wallet index names every user who has the wallet paired. A
+// confirmed pairing adds the user; removing that paired agent takes them off;
+// an agent added by address alone never appears in it.
+test('the wallet index follows confirmed pairings and removals', async () => {
+  const { request, entries } = createHarness({
+    verifier: async () => ({ kind: 'verified', walletAddress: AGENT_WALLET }),
+  });
+  const indexKey = `regents:mobile-agents:v1:wallet:${AGENT_WALLET.toLowerCase()}`;
+  const indexed = () => {
+    const entry = entries.state.entries[indexKey];
+    return entry ? JSON.parse(entry.value) : null;
+  };
+  const pair = async (userId: string) => {
+    const issued = await request({ method: 'POST', url: '/mobile/agents/pairing-codes', userId, body: { name: 'Muse', kind: 'muse' } });
+    const code: string = issued.body.code;
+    assert.equal((await request({ method: 'POST', url: '/agent/pair', rawBody: JSON.stringify({ code }), headers: PROOF_HEADERS })).status, 200);
+    const confirmed = await request({ method: 'POST', url: `/mobile/agents/pairing-codes/${code}/confirm`, userId });
+    assert.equal(confirmed.status, 200);
+    return confirmed.body.agent;
+  };
+
+  const listed = await request({
+    method: 'POST',
+    url: '/mobile/agents',
+    userId: 'owner',
+    body: { name: 'Muse', kind: 'muse', walletAddress: AGENT_WALLET },
+  });
+  assert.equal(indexed(), null);
+
+  // Pairing a wallet already listed by address pairs that same entry.
+  const ownerAgent = await pair('owner');
+  assert.equal(ownerAgent.id, listed.body.agent.id);
+  assert.deepEqual(indexed(), ['owner']);
+  const friendAgent = await pair('friend');
+  assert.deepEqual(indexed(), ['owner', 'friend']);
+  await pair('owner');
+  assert.deepEqual(indexed(), ['owner', 'friend']);
+
+  const addressOnly = await request({
+    method: 'POST',
+    url: '/mobile/agents',
+    userId: 'owner',
+    body: { name: 'Grok Bot', kind: 'grok_bot', walletAddress: '0x1111111111111111111111111111111111111111' },
+  });
+  assert.equal((await request({ method: 'DELETE', url: `/mobile/agents/${addressOnly.body.agent.id}`, userId: 'owner' })).status, 200);
+  assert.deepEqual(indexed(), ['owner', 'friend']);
+
+  assert.equal((await request({ method: 'DELETE', url: `/mobile/agents/${ownerAgent.id}`, userId: 'owner' })).status, 200);
+  assert.deepEqual(indexed(), ['friend']);
+  assert.equal((await request({ method: 'DELETE', url: `/mobile/agents/${friendAgent.id}`, userId: 'friend' })).status, 200);
+  assert.deepEqual(indexed(), []);
 });

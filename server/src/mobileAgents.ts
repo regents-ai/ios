@@ -6,17 +6,23 @@ import { createJsonFileStore } from './jsonFileStore.js';
 /**
  * "My agents": the list each signed-in user keeps of the agents they fund.
  *
- * Storage is one key per user (that user's agent list) and one key per
- * pairing code (with a native ten-minute expiry). Redis in release; locally a
- * JSON file holds the same entries. Nothing is shared between users, so a
- * damaged value only ever affects the one user or code it belongs to, and a
- * damaged value is reported, never replaced or written back.
+ * Storage is one key per user (that user's agent list), one key per pairing
+ * code (with a native ten-minute expiry), and one key per paired agent wallet
+ * listing the users who paired it. Redis in release; locally a JSON file
+ * holds the same entries. A damaged value only ever affects the one user,
+ * code or wallet it belongs to, and it is reported, never replaced or written
+ * back.
  *
  * Pairing is two steps. The agent redeems the code with a SIWA-signed
  * request, which records its verified wallet address on the code; the user
  * then confirms that address in the app, which moves it into their list and
  * deletes the code. Redemption is a compare-and-swap from "waiting" to
  * "redeemed", so exactly one agent wins a code.
+ *
+ * The wallet index answers "who paired this agent?" for signed agent
+ * requests. It always holds every user whose list has that wallet paired:
+ * the user is added before a confirmation writes the list and removed after
+ * a removal writes it, so a reader checks each listed user's own list.
  */
 
 export const MOBILE_AGENT_KINDS = ['muse', 'grok_bot', 'hermes', 'other'] as const;
@@ -57,6 +63,8 @@ const pairingCodeRecordSchema = z
   })
   .strict();
 
+const walletUsersSchema = z.array(z.string().min(1));
+
 export type MobileAgentRecord = z.infer<typeof agentRecordSchema>;
 type PairingCodeRecord = z.infer<typeof pairingCodeRecordSchema>;
 
@@ -71,7 +79,7 @@ export class MobileAgentsStateError extends Error {
   }
 }
 
-function parseStored<T>(schema: z.ZodType<T>, key: string, raw: string): T {
+export function parseStored<T>(schema: z.ZodType<T>, key: string, raw: string): T {
   let json: unknown;
   try {
     json = JSON.parse(raw);
@@ -192,6 +200,7 @@ export type MobileAgentsDeps = {
 
 const userKey = (userId: string) => `${KEY_PREFIX}:user:${userId}`;
 const codeKey = (code: string) => `${KEY_PREFIX}:code:${code}`;
+const walletKey = (walletAddress: string) => `${KEY_PREFIX}:wallet:${walletAddress.toLowerCase()}`;
 
 function sameAddress(first: string, second: string) {
   return first.toLowerCase() === second.toLowerCase();
@@ -217,24 +226,66 @@ async function readUserAgents(kv: MobileAgentsKv, userId: string): Promise<Mobil
 }
 
 /**
- * Read-modify-write of one user's list. `mutate` returns whether the list
- * changed; a parse failure throws before anything is written.
+ * Read-modify-write of one stored value. `decode` reads the raw value (null:
+ * absent); `mutate` changes it in place and returns whether to write it. A
+ * parse failure throws before anything is written, and a concurrent write
+ * makes the whole step run again on the fresh value.
  */
-async function updateUserAgents<R>(
+export async function compareAndSwapUpdate<T, R>(
+  kv: MobileAgentsKv,
+  key: string,
+  decode: (raw: string | null) => T,
+  mutate: (value: T) => { write: boolean; result: R },
+): Promise<R> {
+  for (let attempt = 1; attempt <= MAX_WRITE_ATTEMPTS; attempt += 1) {
+    const raw = await kv.get(key);
+    const value = decode(raw);
+    const { write, result } = mutate(value);
+    if (!write || (await kv.compareAndSwap(key, raw, JSON.stringify(value)))) {
+      return result;
+    }
+  }
+  throw new Error(`Update for ${key} kept conflicting with concurrent writers.`);
+}
+
+function updateUserAgents<R>(
   kv: MobileAgentsKv,
   userId: string,
   mutate: (agents: MobileAgentRecord[]) => { write: boolean; result: R },
 ): Promise<R> {
   const key = userKey(userId);
-  for (let attempt = 1; attempt <= MAX_WRITE_ATTEMPTS; attempt += 1) {
-    const raw = await kv.get(key);
-    const agents = raw === null ? [] : parseStored(agentListSchema, key, raw);
-    const { write, result } = mutate(agents);
-    if (!write || (await kv.compareAndSwap(key, raw, JSON.stringify(agents)))) {
-      return result;
+  return compareAndSwapUpdate(kv, key, (raw) => (raw === null ? [] : parseStored(agentListSchema, key, raw)), mutate);
+}
+
+function updateWalletUsers(kv: MobileAgentsKv, walletAddress: string, mutate: (userIds: string[]) => boolean) {
+  const key = walletKey(walletAddress);
+  return compareAndSwapUpdate(
+    kv,
+    key,
+    (raw) => (raw === null ? [] : parseStored(walletUsersSchema, key, raw)),
+    (userIds) => ({ write: mutate(userIds), result: undefined }),
+  );
+}
+
+function addWalletUser(kv: MobileAgentsKv, walletAddress: string, userId: string) {
+  return updateWalletUsers(kv, walletAddress, (userIds) => {
+    if (userIds.includes(userId)) {
+      return false;
     }
-  }
-  throw new Error(`Agent list update for ${key} kept conflicting with concurrent writers.`);
+    userIds.push(userId);
+    return true;
+  });
+}
+
+function removeWalletUser(kv: MobileAgentsKv, walletAddress: string, userId: string) {
+  return updateWalletUsers(kv, walletAddress, (userIds) => {
+    const index = userIds.indexOf(userId);
+    if (index < 0) {
+      return false;
+    }
+    userIds.splice(index, 1);
+    return true;
+  });
 }
 
 async function readPairingCode(kv: MobileAgentsKv, code: string): Promise<{ raw: string; record: PairingCodeRecord } | null> {
@@ -291,15 +342,22 @@ export function renameAgentForUser(
   });
 }
 
-export function removeAgentForUser(userId: string, agentId: string, deps: MobileAgentsDeps): Promise<boolean> {
-  return updateUserAgents<boolean>(deps.kv, userId, (agents) => {
+export async function removeAgentForUser(userId: string, agentId: string, deps: MobileAgentsDeps): Promise<boolean> {
+  const removed = await updateUserAgents<MobileAgentRecord | null>(deps.kv, userId, (agents) => {
     const index = agents.findIndex((candidate) => candidate.id === agentId);
     if (index < 0) {
-      return { write: false, result: false };
+      return { write: false, result: null };
     }
-    agents.splice(index, 1);
-    return { write: true, result: true };
+    const [agent] = agents.splice(index, 1);
+    return { write: true, result: agent ?? null };
   });
+  if (!removed) {
+    return false;
+  }
+  if (removed.paired) {
+    await removeWalletUser(deps.kv, removed.walletAddress, userId);
+  }
+  return true;
 }
 
 export async function createPairingCodeForUser(
@@ -391,6 +449,7 @@ export async function confirmPairingForUser(userId: string, rawCode: string, dep
     return { kind: 'not_ready' };
   }
 
+  await addWalletUser(deps.kv, walletAddress, userId);
   const result = await updateUserAgents<ConfirmPairingResult>(deps.kv, userId, (agents) => {
     const existing = agents.find((agent) => sameAddress(agent.walletAddress, walletAddress));
     if (existing) {
@@ -416,6 +475,29 @@ export async function confirmPairingForUser(userId: string, rawCode: string, dep
     await deps.kv.del(codeKey(code));
   }
   return result;
+}
+
+/**
+ * Every user who has this wallet paired, with their own list entry for it.
+ * The wallet index may name a user whose list no longer pairs the wallet (a
+ * confirmation that hit the list limit); that user's list is the answer.
+ */
+export async function pairedAgentsForWallet(
+  walletAddress: string,
+  deps: MobileAgentsDeps,
+): Promise<{ userId: string; agent: MobileAgentRecord }[]> {
+  const key = walletKey(walletAddress);
+  const raw = await deps.kv.get(key);
+  const userIds = raw === null ? [] : parseStored(walletUsersSchema, key, raw);
+  const pairings = await Promise.all(
+    userIds.map(async (userId) => {
+      const agent = (await readUserAgents(deps.kv, userId)).find(
+        (candidate) => candidate.paired && sameAddress(candidate.walletAddress, walletAddress),
+      );
+      return agent ? { userId, agent } : null;
+    }),
+  );
+  return pairings.filter((pairing) => pairing !== null);
 }
 
 /** "Not mine": drops the code so the recorded address is never listed. */
