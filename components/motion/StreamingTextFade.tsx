@@ -5,7 +5,9 @@
  * the drain reveals text word by word, this fades each newly revealed word in
  * on a compressing stamp-chain. Only the last FADE_WINDOW words animate — the
  * rest are absorbed into a single solid Text node, so the live animated-node
- * count is capped no matter how long the reply is (the ticket's memory risk).
+ * count is capped no matter how long the reply is. Without that cap, a long
+ * streamed reply would keep one animated node per word and grow memory
+ * without bound.
  */
 
 import { useEffect, useRef, useState } from 'react';

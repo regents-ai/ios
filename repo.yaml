@@ -3,7 +3,6 @@ repo: ios
 owner: ios
 path: ios
 release_group: public_beta
-stack_contract: ../meta/stack.yaml
 owns:
   - mobile_wallet
   - mobile_action_signing

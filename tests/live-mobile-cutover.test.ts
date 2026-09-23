@@ -18,7 +18,7 @@ test('mobile Regent contract exposes the current route family', () => {
 });
 
 test('mobile app and backend do not use the old preview route family', () => {
-  const result = spawnSync('rg', ['-n', '/mobile-preview|mobile-preview', 'app', 'utils', 'types', 'server/src', 'server/api', 'api-contract.openapiv3.yaml'], {
+  const result = spawnSync('rg', ['-n', '/mobile-preview|mobile-preview', 'app', 'utils', 'types', 'server/src', 'api-contract.openapiv3.yaml'], {
     cwd: resolve(testDir, '..'),
     encoding: 'utf8',
   });

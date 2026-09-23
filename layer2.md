@@ -1,7 +1,7 @@
 <!-- BEGIN REGENT META GENERATED -->
 ## Layer 2 Generated View
 
-Generated from `meta/stack.yaml` and repo `repo.yaml` files. Local notes may live outside this block.
+Summary of this repo's `repo.yaml`. Local notes may live outside this block.
 
 - Owner: `ios`
 - Release group: `public_beta`
@@ -43,10 +43,10 @@ Regents Mobile is the iPhone entry path for Regent. It owns the iOS app, the mob
 
 ## Source-Of-Truth Files
 
-- `/Users/sean/Documents/regent/ios/api-contract.openapiv3.yaml`
-- `/Users/sean/Documents/regent/ios/mobile-services-contract.openapiv3.yaml`
-- `/Users/sean/Documents/regent/ios/README.md`
-- `/Users/sean/Documents/regent/ios/IMPLEMENTATION_PLAN.md`
+- `/Users/sean/Documents/regent/repos/ios/api-contract.openapiv3.yaml`
+- `/Users/sean/Documents/regent/repos/ios/mobile-services-contract.openapiv3.yaml`
+- `/Users/sean/Documents/regent/repos/ios/README.md`
+- `/Users/sean/Documents/regent/repos/ios/IMPLEMENTATION_PLAN.md`
 
 ## Inputs
 

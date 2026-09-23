@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -51,21 +51,6 @@ function implementedRoutes() {
   return routes;
 }
 
-test('server route forwarders exist for auth, live Regent, and message endpoints', () => {
-  const files = [
-    '../server/api/auth/me.js',
-    '../server/api/auth/cdp-token.js',
-    '../server/api/.well-known/jwks.json.js',
-    '../server/api/mobile/[...slug].js',
-    '../server/api/push-tokens/debug/[user_id].js',
-  ];
-
-  for (const file of files) {
-    const fullPath = resolve(testDir, file);
-    assert.equal(existsSync(fullPath), true, file);
-  }
-});
-
 test('served backend routes stay declared in the mobile API contract', () => {
   const contract = readFileSync(resolve(testDir, '../api-contract.openapiv3.yaml'), 'utf8');
   const routePaths = [
@@ -112,47 +97,6 @@ test('implemented backend route methods match the mobile API contract', () => {
 
   assert.deepEqual([...implemented].filter((route) => !declared.has(route)).sort(), []);
   assert.deepEqual([...declared].filter((route) => !implemented.has(route)).sort(), []);
-});
-
-test('removed SMS forwarders stay absent', () => {
-  assert.equal(existsSync(resolve(testDir, '../server/api/auth/sms/start.js')), false);
-  assert.equal(existsSync(resolve(testDir, '../server/api/auth/sms/verify.js')), false);
-});
-
-test('mobile Regent forwarder preserves the live route prefix', () => {
-  const contents = readFileSync(resolve(testDir, '../server/api/mobile/[...slug].js'), 'utf8');
-
-  assert.match(contents, /\/mobile\//);
-});
-
-test('mobile message routes use the live mobile prefix only', () => {
-  const contents = readFileSync(resolve(testDir, '../server/api/mobile/[...slug].js'), 'utf8');
-
-  assert.match(contents, /\/mobile\//);
-});
-
-test('serverless route forwarders load the built server app', () => {
-  const files = [
-    '../server/api/healthz.js',
-    '../server/api/push-tokens.js',
-    '../server/api/push-tokens/ping.js',
-    '../server/api/auth/me.js',
-    '../server/api/auth/cdp-token.js',
-    '../server/api/.well-known/jwks.json.js',
-    '../server/api/server/api.js',
-    '../server/api/mobile/[...slug].js',
-    '../server/api/push-tokens/debug/[user_id].js',
-    '../server/api/balances/evm.js',
-    '../server/api/balances/solana.js',
-    '../server/api/webhooks/onramp.js',
-    '../server/api/events/onramp.js',
-  ];
-
-  for (const file of files) {
-    const contents = readFileSync(resolve(testDir, file), 'utf8');
-    assert.match(contents, /dist\/app\.js/, file);
-    assert.doesNotMatch(contents, /src\/app\.js/, file);
-  }
 });
 
 test('root package scripts do not point at ignored local scripts', () => {

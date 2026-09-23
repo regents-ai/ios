@@ -734,7 +734,7 @@ app.get('/balances/solana', async (req, res) => {
  * POST /push-tokens
  *
  * Stores user's Expo push token for sending notifications
- * Uses Vercel KV (production) or in-memory Map (local dev)
+ * Uses Redis (production) or in-memory Map (local dev)
  * Called when user opens app and registers for notifications
  */
 
