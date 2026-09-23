@@ -10,17 +10,13 @@ import { useAppBootstrap } from "@/hooks/useAppBootstrap";
 import { useRegentsAuth } from "@/hooks/useRegentsAuth";
 import { fetchCdpAuthToken } from "@/utils/fetchCdpAuthToken";
 import { hasRegentsAccountConfig, readMobilePublicConfig } from "@/utils/mobilePublicConfig";
-import { ThemeProvider } from "@/theme/ThemeProvider";
-import { FONTS, THEME_COLORS } from "@/theme/tokens";
+import { ThemeProvider, useTheme, type Theme } from "@/theme/ThemeProvider";
 import { useMemo } from "react";
 import 'react-native-get-random-values';
 import 'react-native-url-polyfill/auto';
 import { StyleSheet, Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
-// The missing-config screen uses the dark token set directly: it is always
-// shown on the dark ground regardless of the user's appearance preference.
-const c = THEME_COLORS.dark;
 const cardSlideRight = { presentation: 'card', animation: 'slide_from_right' } as const;
 const cardSlideBottom = { presentation: 'card', animation: 'slide_from_bottom' } as const;
 
@@ -108,17 +104,7 @@ function RootLayoutContent() {
   }
 
   if (!canUseRegentsAccount || !config.privyAppId || !config.privyClientId || !config.cdpProjectId) {
-    return (
-      <View style={styles.missingConfigContainer}>
-        <View style={styles.missingConfigCard}>
-          <View style={styles.missingConfigBadge}>
-            <Text style={styles.missingConfigBadgeText}>Regents</Text>
-          </View>
-          <Text style={styles.missingConfigTitle}>{"Regents can't open right now"}</Text>
-          <Text style={styles.missingConfigText}>Update the app or try again later.</Text>
-        </View>
-      </View>
-    );
+    return <MissingConfigScreen />;
   }
 
   return (
@@ -153,13 +139,34 @@ function RootLayoutContent() {
   );
 }
 
+function MissingConfigScreen() {
+  const theme = useTheme();
+  const styles = useMemo(() => makeMissingConfigStyles(theme), [theme]);
+
+  return (
+    <View style={styles.missingConfigContainer}>
+      <View style={styles.missingConfigCard}>
+        <View style={styles.missingConfigBadge}>
+          <Text style={styles.missingConfigBadgeText}>Regents</Text>
+        </View>
+        <Text style={styles.missingConfigTitle}>{"Regents can't open right now"}</Text>
+        <Text style={styles.missingConfigText}>Update the app or try again later.</Text>
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   root: {
     flex: 1,
   },
+});
+
+function makeMissingConfigStyles({ colors, fonts }: Theme) {
+  return StyleSheet.create({
   missingConfigContainer: {
     flex: 1,
-    backgroundColor: c.bg,
+    backgroundColor: colors.bg,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 32,
@@ -167,13 +174,13 @@ const styles = StyleSheet.create({
   missingConfigCard: {
     width: '100%',
     maxWidth: 380,
-    backgroundColor: c.surfaceElevated,
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: c.hairlineStrong,
+    borderColor: colors.hairlineStrong,
     borderRadius: 28,
     padding: 24,
     gap: 14,
-    shadowColor: c.accent,
+    shadowColor: colors.accent,
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.08,
     shadowRadius: 20,
@@ -181,30 +188,31 @@ const styles = StyleSheet.create({
   },
   missingConfigBadge: {
     alignSelf: 'flex-start',
-    backgroundColor: c.accentWash,
+    backgroundColor: colors.accentWash,
     borderWidth: 1,
-    borderColor: c.hairlineStrong,
+    borderColor: colors.hairlineStrong,
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
   missingConfigBadgeText: {
-    color: c.accent,
+    color: colors.accent,
     fontSize: 12,
     letterSpacing: 0.8,
     textTransform: 'uppercase',
-    fontFamily: FONTS.ui,
+    fontFamily: fonts.ui,
   },
   missingConfigTitle: {
-    color: c.text,
+    color: colors.text,
     fontSize: 28,
     lineHeight: 34,
-    fontFamily: FONTS.title,
+    fontFamily: fonts.title,
   },
   missingConfigText: {
-    color: c.textMuted,
+    color: colors.textMuted,
     fontSize: 16,
     lineHeight: 24,
-    fontFamily: FONTS.ui,
+    fontFamily: fonts.ui,
   },
-});
+  });
+}

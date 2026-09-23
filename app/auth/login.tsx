@@ -1,5 +1,5 @@
 import { RegentPressable } from '@/components/ui/RegentPressable';
-import { FONTS, THEME_COLORS } from '@/theme/tokens';
+import { useTheme, type Theme } from '@/theme/ThemeProvider';
 import { useChatGptAuth } from '@/hooks/useChatGptAuth';
 import { useRegentsAuth } from '@/hooks/useRegentsAuth';
 import { hasRegentsAccountConfig } from '@/utils/mobilePublicConfig';
@@ -7,7 +7,7 @@ import { hasSeenOnboarding } from '@/utils/onboardingState';
 import { resolvePostAuthLanding } from '@/utils/state/postAuthDestination';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { EaseView } from 'react-native-ease';
 import {
   AccessibilityInfo,
@@ -21,10 +21,6 @@ import {
   View,
 } from 'react-native';
 
-// This route can render before the ThemeProvider wraps the tree (see
-// app/_layout.tsx), so it cannot read useTheme(). It uses the dark token set
-// directly, mirroring the pre-config fallback screen in _layout.tsx.
-const c = THEME_COLORS.dark;
 const SCREEN_OFFSET = 12;
 const CARD_OFFSET = 8;
 const STAGGER_STEP = 50;
@@ -50,6 +46,9 @@ function RegentsAccountRedirect({ hasChatGptSession }: { hasChatGptSession: bool
 }
 
 export default function LoginScreen() {
+  const theme = useTheme();
+  const { colors } = theme;
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const { error: chatGptError, isLoading: isChatGptLoading, isReady: isChatGptReady, session: chatGptSession, signIn } = useChatGptAuth();
   const router = useRouter();
   const [reduceMotion, setReduceMotion] = useState(false);
@@ -117,7 +116,7 @@ export default function LoginScreen() {
             transition={buildEntryTransition(reduceMotion)}
             style={styles.loadingCard}
           >
-            <ActivityIndicator color={c.accent} style={styles.loadingSpinner} />
+            <ActivityIndicator color={colors.accent} style={styles.loadingSpinner} />
             <Text style={styles.loadingTitle}>Regents</Text>
             <Text style={styles.loadingText}>Getting sign-in ready...</Text>
           </EaseView>
@@ -212,9 +211,9 @@ export default function LoginScreen() {
             >
               <RegentPressable style={[styles.chatGptButton, isChatGptLoading && styles.disabledButton]} onPress={handleChatGptSignIn} disabled={isChatGptLoading}>
                 <View style={styles.chatGptButtonContent}>
-                  <Ionicons name="sparkles-outline" size={20} color={c.text} />
-                  {isChatGptLoading ? <ActivityIndicator color={c.text} /> : <Text style={styles.chatGptButtonText}>Sign in with ChatGPT</Text>}
-                  <Ionicons name="arrow-forward" size={22} color={c.text} />
+                  <Ionicons name="sparkles-outline" size={20} color={colors.text} />
+                  {isChatGptLoading ? <ActivityIndicator color={colors.text} /> : <Text style={styles.chatGptButtonText}>Sign in with ChatGPT</Text>}
+                  <Ionicons name="arrow-forward" size={22} color={colors.text} />
                 </View>
               </RegentPressable>
             </EaseView>
@@ -231,10 +230,11 @@ export default function LoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles({ colors, fonts }: Theme) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: c.bg,
+    backgroundColor: colors.bg,
   },
   keyboardWrap: {
     flex: 1,
@@ -251,43 +251,43 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   brand: {
-    color: c.text,
+    color: colors.text,
     fontSize: 44,
     lineHeight: 48,
-    fontFamily: FONTS.title,
+    fontFamily: fonts.title,
   },
   title: {
-    color: c.text,
+    color: colors.text,
     textAlign: 'center',
     fontSize: 32,
     lineHeight: 38,
-    fontFamily: FONTS.title,
+    fontFamily: fonts.title,
   },
   subtitle: {
-    color: c.textMuted,
+    color: colors.textMuted,
     textAlign: 'center',
     fontSize: 18,
     lineHeight: 24,
-    fontFamily: FONTS.ui,
+    fontFamily: fonts.ui,
     marginBottom: 26,
   },
   actionWrap: {
     width: '100%',
   },
   accountTitle: {
-    color: c.text,
+    color: colors.text,
     textAlign: 'center',
     fontSize: 22,
     lineHeight: 28,
-    fontFamily: FONTS.title,
+    fontFamily: fonts.title,
     marginBottom: 2,
   },
   chatGptButton: {
     minHeight: 58,
     borderRadius: 18,
-    backgroundColor: c.surfaceElevated,
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: c.hairlineStrong,
+    borderColor: colors.hairlineStrong,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 20,
@@ -300,65 +300,65 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   chatGptButtonText: {
-    color: c.text,
+    color: colors.text,
     fontSize: 18,
-    fontFamily: FONTS.ui,
+    fontFamily: fonts.ui,
     flex: 1,
     textAlign: 'center',
   },
   primaryButton: {
     minHeight: 58,
     borderRadius: 18,
-    backgroundColor: c.accent,
+    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 20,
   },
   primaryButtonText: {
-    color: c.onAccent,
+    color: colors.onAccent,
     fontSize: 18,
-    fontFamily: FONTS.ui,
+    fontFamily: fonts.ui,
   },
   secondaryButton: {
     minHeight: 58,
     borderRadius: 18,
-    backgroundColor: c.surfaceElevated,
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: c.hairlineStrong,
+    borderColor: colors.hairlineStrong,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 20,
   },
   secondaryButtonText: {
-    color: c.text,
+    color: colors.text,
     fontSize: 18,
-    fontFamily: FONTS.ui,
+    fontFamily: fonts.ui,
   },
   disabledButton: {
     opacity: 0.65,
   },
   helperText: {
-    color: c.textMuted,
+    color: colors.textMuted,
     textAlign: 'center',
     fontSize: 14,
     lineHeight: 20,
-    fontFamily: FONTS.ui,
+    fontFamily: fonts.ui,
     marginTop: 8,
   },
   errorText: {
-    color: c.error,
+    color: colors.error,
     textAlign: 'center',
     fontSize: 14,
     lineHeight: 20,
-    fontFamily: FONTS.ui,
+    fontFamily: fonts.ui,
     marginTop: 8,
   },
   accountSetupText: {
-    color: c.textMuted,
+    color: colors.textMuted,
     textAlign: 'center',
     fontSize: 15,
     lineHeight: 22,
-    fontFamily: FONTS.ui,
+    fontFamily: fonts.ui,
   },
   loadingWrap: {
     flex: 1,
@@ -366,10 +366,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   loadingCard: {
-    backgroundColor: c.surfaceElevated,
+    backgroundColor: colors.surfaceElevated,
     borderRadius: 28,
     borderWidth: 1,
-    borderColor: c.hairlineStrong,
+    borderColor: colors.hairlineStrong,
     paddingHorizontal: 28,
     paddingVertical: 36,
     alignItems: 'center',
@@ -380,16 +380,17 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   loadingTitle: {
-    color: c.text,
+    color: colors.text,
     fontSize: 24,
     lineHeight: 30,
-    fontFamily: FONTS.title,
+    fontFamily: fonts.title,
   },
   loadingText: {
-    color: c.textMuted,
+    color: colors.textMuted,
     textAlign: 'center',
     fontSize: 15,
     lineHeight: 22,
-    fontFamily: FONTS.ui,
+    fontFamily: fonts.ui,
   },
-});
+  });
+}

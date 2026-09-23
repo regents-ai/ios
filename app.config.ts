@@ -58,7 +58,15 @@ const config: ExpoConfig = {
           './assets/fonts/Geist-Regular.ttf',
         ],
       }],
-      ['expo-splash-screen', { image: './assets/images/splash-icon-regents.png', imageWidth: 200, resizeMode: 'contain', backgroundColor: '#0a0a0a' }],
+      // Light launch screen to match the app; the dark variant only shows when
+      // the device itself is in dark mode, the same rule every other screen uses.
+      ['expo-splash-screen', {
+        image: './assets/images/icon-regents-light.png',
+        imageWidth: 200,
+        resizeMode: 'contain',
+        backgroundColor: '#fafafa',
+        dark: { image: './assets/images/splash-icon-regents.png', backgroundColor: '#0a0a0a' },
+      }],
       ['expo-build-properties', { ios: { deploymentTarget: '16.0' } }],
       ['expo-notifications', {
         icon: './assets/images/icon.png',
