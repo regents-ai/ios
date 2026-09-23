@@ -50,7 +50,7 @@ The app also keeps "My agents": the list of agents a person funds. An agent is a
 - Receive funds by copying the Base and Ethereum wallet address.
 - Cash out supported balances through the Coinbase cash-out flow.
 - Review wallet history and failed transaction support details.
-- Check $REGENT staking and reward actions from the mobile staking screen.
+- Check $REGENT staking and reward actions from the Earn tab.
 
 Base USDC is the primary route for agent funding. Other balances may appear in the wallet detail view, but Base USDC remains the recommended path.
 

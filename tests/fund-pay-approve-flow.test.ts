@@ -18,7 +18,7 @@ test('main mobile tabs lead with fund, pay, and earn', () => {
   assert.match(layout, /name="agents"[\s\S]*href: null/);
   assert.match(layout, /name="autolaunch"[\s\S]*href: null/);
   assert.match(sendTab, /export \{ default \} from '\.\.\/wallet\/send'/);
-  assert.match(earnTab, /Bring people into Regents/);
+  assert.match(earnTab, /regentApi\.getRegentStaking\(/);
   assert.match(profileButton, /accessibilityLabel="Open profile"/);
 });
 

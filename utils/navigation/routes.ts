@@ -26,8 +26,8 @@ export const routes = {
       : '/wallet/send';
   },
 
-  staking(): Href {
-    return '/staking';
+  earn(): Href {
+    return '/earn';
   },
 
   auction(reference: string): Href {
