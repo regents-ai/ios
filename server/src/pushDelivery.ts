@@ -13,6 +13,8 @@ type PushNotificationInput = {
   title: string;
   body: string;
   data: Record<string, string | undefined>;
+  /** The notification category the app registered, which gives the notification its action buttons. */
+  category?: string;
 };
 
 type PushDeliveryDeps = {
@@ -77,6 +79,7 @@ async function createDefaultApnsNotification(input: PushNotificationInput) {
     topic: 'com.regentslabs.mobile',
     sound: 'default',
     payload: input.data,
+    category: input.category,
   });
 }
 
@@ -128,6 +131,7 @@ export async function sendPushNotification(
       title: input.title,
       body: input.body,
       data: input.data,
+      categoryId: input.category,
     }),
   });
 
