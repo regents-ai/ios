@@ -7,7 +7,9 @@ info:
 
     Mobile wallet flows are live. The mobile backend owns each signed-in user's "My agents"
     list: agents added by wallet address or paired by proving their key through a signed
-    pairing request, with live Base USDC balances read for the list.
+    pairing request, with live Base USDC balances read for the list. A paired agent can ask the
+    people who paired it for Base USDC with a signed payment request; they pay it from their phone
+    wallet or decline it.
 x-regent-capability:
   status: beta
   owner: ios
@@ -1274,6 +1276,386 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '429':
           $ref: '#/components/responses/RateLimitError'
+  /agent/payment-requests:
+    post:
+      operationId: createAgentPaymentRequest
+      summary: Ask the people who paired this agent for Base USDC (called by the agent)
+      description: |
+        Called by the agent itself, not the app, with a SIWA-signed request for the `regents-mobile`
+        audience, checked exactly as `/agent/pair` checks it (every proof header once, no other
+        `x-agent-*` or `x-siwa-*` headers, a JSON body of at most 4 KiB). The verified wallet must be
+        paired with at least one person; each of them gets their own request and a push notification
+        with Pay and Decline buttons. Requests do not expire.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAgentPaymentRequest'
+      responses:
+        '201':
+          description: One request was made for each person who paired this wallet
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentPaymentRequestCreated'
+        '400':
+          description: Body is not JSON with a valid address, amount and note, or the proof headers are not in the expected shape
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '401':
+          description: The signed request was rejected by the SIWA server
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '403':
+          description: The verified wallet is not paired with anyone
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '409':
+          description: The signed request was already seen
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '413':
+          description: The body is larger than 4 KiB
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '415':
+          description: The body is not sent as JSON
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '500':
+          description: Stored request state could not be read
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: Signed agent requests are not available on this server, or the sign-in service is busy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+  /agent/payment-requests/{id}:
+    get:
+      operationId: getAgentPaymentRequest
+      summary: Read the outcome of one of this agent's payment requests (called by the agent)
+      description: |
+        A SIWA-signed request without a body, so it signs no `content-digest`; every other proof header
+        appears once. Only the wallet that made the request can read it; any other wallet gets 404.
+      security: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request's status, and the paying transaction once paid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentPaymentRequestStatus'
+        '400':
+          description: The proof headers are not in the expected shape
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '401':
+          description: The signed request was rejected by the SIWA server
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: No request with this id was made by the verified wallet
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '409':
+          description: The signed request was already seen
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '500':
+          description: Stored request state could not be read
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: Signed agent requests are not available on this server, or the sign-in service is busy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+  /mobile/payment-requests:
+    get:
+      operationId: listMobilePaymentRequests
+      summary: List the signed-in user's payment requests, newest first
+      description: The newest hundred requests; older ones are dropped.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: The user's requests
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [requests]
+                properties:
+                  requests:
+                    type: array
+                    maxItems: 100
+                    items:
+                      $ref: '#/components/schemas/MobilePaymentRequest'
+        '401':
+          description: Authentication is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '500':
+          description: Stored request state could not be read
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+  /mobile/payment-requests/{id}:
+    get:
+      operationId: getMobilePaymentRequest
+      summary: Read one of the signed-in user's payment requests
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MobilePaymentRequestResponse'
+        '401':
+          description: Authentication is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: No request with this id is in the signed-in user's list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '500':
+          description: Stored request state could not be read
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+  /mobile/payment-requests/{id}/prepare:
+    post:
+      operationId: prepareMobilePaymentRequestPayment
+      summary: Prepare the USDC transfer that pays a request
+      description: >-
+        Returns the single Base USDC transfer to the requested address for the requested amount, sent
+        by the wallet the app declares. Every call prepares the payment, whatever the request's status.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MobilePaymentRequestWalletRequest'
+      responses:
+        '200':
+          description: Payment prepared
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MobilePaymentRequestPrepareResponse'
+        '400':
+          description: The wallet address is missing or invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '401':
+          description: Authentication is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: No request with this id is in the signed-in user's list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '500':
+          description: Stored request state could not be read
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+  /mobile/payment-requests/{id}/paid:
+    post:
+      operationId: confirmMobilePaymentRequestPaid
+      summary: Mark a request paid from its Base transaction
+      description: >-
+        Reads the transaction's receipt on Base and marks the request paid only when the receipt
+        succeeded and carries a USDC Transfer from the declared wallet to the requested address for
+        exactly the requested amount. A later payment replaces the recorded transaction.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MobilePaymentRequestPaidRequest'
+      responses:
+        '200':
+          description: The request is marked paid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MobilePaymentRequestResponse'
+        '400':
+          description: The wallet address or transaction hash is missing or invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '401':
+          description: Authentication is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: No request with this id is in the signed-in user's list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '409':
+          description: Base does not show the transaction yet, or it does not pay this request exactly
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '500':
+          description: Stored request state could not be read
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '502':
+          description: Base could not be read
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: Base RPC is not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+  /mobile/payment-requests/{id}/decline:
+    post:
+      operationId: declineMobilePaymentRequest
+      summary: Decline a payment request
+      description: A declined request can still be paid later. A paid request cannot be declined.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request is declined
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MobilePaymentRequestResponse'
+        '401':
+          description: Authentication is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: No request with this id is in the signed-in user's list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '409':
+          description: The request is already paid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '500':
+          description: Stored request state could not be read
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
 components:
   securitySchemes:
     bearerAuth:
@@ -2027,6 +2409,155 @@ components:
           type: string
           format: date-time
           description: Present when status is waiting or needs_confirmation
+    PaymentRequestStatus:
+      type: string
+      enum: [waiting, paid, declined]
+    CreateAgentPaymentRequest:
+      type: object
+      required: [to, amount, note]
+      additionalProperties: false
+      properties:
+        to:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
+          description: The Base address that receives the USDC
+        amount:
+          type: string
+          pattern: '^[0-9]+(\.[0-9]{1,6})?$'
+          description: USDC as a decimal above zero with at most 6 decimal places, for example "5.00"
+        note:
+          type: string
+          minLength: 1
+          maxLength: 140
+          description: What the money is for, in the agent's own words (trimmed)
+    AgentPaymentRequestCreated:
+      type: object
+      required: [requestIds, message]
+      properties:
+        requestIds:
+          type: array
+          minItems: 1
+          items:
+            type: string
+          description: One request per person who paired this wallet
+        message:
+          type: string
+    AgentPaymentRequestStatus:
+      type: object
+      required: [id, status, txHash]
+      properties:
+        id:
+          type: string
+        status:
+          $ref: '#/components/schemas/PaymentRequestStatus'
+        txHash:
+          type: string
+          nullable: true
+          pattern: '^0x[a-fA-F0-9]{64}$'
+          description: The Base transaction of the latest confirmed payment; null until paid
+    MobilePaymentRequest:
+      type: object
+      required: [id, agentId, agentName, agentWallet, to, amount, amountRaw, note, createdAt, status, txHash]
+      properties:
+        id:
+          type: string
+        agentId:
+          type: string
+        agentName:
+          type: string
+          description: The agent's name in the user's list when it asked
+        agentWallet:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
+        to:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
+          description: The Base address that receives the USDC
+        amount:
+          type: string
+          description: USDC as a decimal with at least two decimal places, for example "5.00"
+        amountRaw:
+          type: string
+          pattern: '^[1-9][0-9]*$'
+          description: USDC in atomic units (6 decimals)
+        note:
+          type: string
+          minLength: 1
+          maxLength: 140
+        createdAt:
+          type: string
+          format: date-time
+        status:
+          $ref: '#/components/schemas/PaymentRequestStatus'
+        txHash:
+          type: string
+          nullable: true
+          pattern: '^0x[a-fA-F0-9]{64}$'
+    MobilePaymentRequestResponse:
+      type: object
+      required: [request]
+      properties:
+        request:
+          $ref: '#/components/schemas/MobilePaymentRequest'
+    MobilePaymentRequestWalletRequest:
+      type: object
+      required: [walletAddress]
+      additionalProperties: false
+      properties:
+        walletAddress:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
+    MobilePaymentRequestPaidRequest:
+      type: object
+      required: [walletAddress, txHash]
+      additionalProperties: false
+      properties:
+        walletAddress:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
+        txHash:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{64}$'
+    PaymentRequestWalletAction:
+      description: The single Base USDC transfer that pays a request, sent by the wallet named as expected_signer.
+      type: object
+      additionalProperties: false
+      required: [action, chain_id, request_id, to, value, data, expected_signer, recipient, amount_raw]
+      properties:
+        action:
+          type: string
+          enum: [pay]
+        chain_id:
+          type: integer
+          enum: [8453]
+        request_id:
+          type: string
+        to:
+          type: string
+          enum: ['0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913']
+          description: Base USDC
+        value:
+          type: string
+          enum: ['0']
+        data:
+          type: string
+          pattern: '^0x([a-fA-F0-9]{2})*$'
+        expected_signer:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
+        recipient:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
+        amount_raw:
+          type: string
+          pattern: '^[1-9][0-9]*$'
+    MobilePaymentRequestPrepareResponse:
+      type: object
+      additionalProperties: false
+      required: [wallet_action]
+      properties:
+        wallet_action:
+          $ref: '#/components/schemas/PaymentRequestWalletAction'
     ErrorEnvelope:
       type: object
       required: [error]

@@ -19,6 +19,7 @@ import { isReleaseRuntime } from './runtime.js';
 import { createMobileRoutes } from './mobileRoutes.js';
 import { fileMobileAgentsKv, redisMobileAgentsKv } from './mobileAgents.js';
 import { createMobileAgentRoutes } from './routes/mobileAgents.js';
+import { createPaymentRequestRoutes } from './routes/paymentRequests.js';
 import { createPortalPairingRoutes } from './routes/portalPairing.js';
 import { createAutolaunchRoutes } from './routes/autolaunch.js';
 import {
@@ -187,10 +188,10 @@ app.use(cors({
 // For webhook signature verification, we need raw body
 // Use express.raw() for webhook routes before JSON parsing
 app.use('/webhooks/onramp', express.raw({ type: 'application/json' }));
-// The agent pairing request is SIWA-signed over its exact bytes, so keep the
-// raw body for the signature check instead of a parsed and re-serialized one.
-// A pairing request is one short JSON object; anything larger is refused.
-app.use('/agent/pair', express.raw({ type: () => true, limit: 4096 }));
+// Agent requests (pairing, payment requests) are SIWA-signed over their exact
+// bytes, so keep the raw body for the signature check instead of a parsed and
+// re-serialized one. Each is one short JSON object; anything larger is refused.
+app.use('/agent', express.raw({ type: () => true, limit: 4096 }));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -243,7 +244,7 @@ app.use((req, res, next) => {
     req.path === '/.well-known/jwks.json' ||
     req.path === '/oauth/callback' ||
     req.path.startsWith('/webhooks') ||
-    req.path === '/agent/pair' ||
+    req.path.startsWith('/agent/') ||
     req.path === '/push-tokens/ping'
   ) {
     return next();
@@ -280,8 +281,22 @@ app.post('/auth/cdp-token', async (req, res) => {
 });
 
 app.use(createMobileRoutes());
-app.use('/agent/pair', publicWriteRateLimiter);
-app.use(createMobileAgentRoutes({ kv: useDatabase ? redisMobileAgentsKv(database) : fileMobileAgentsKv() }));
+app.use('/agent', (req, res, next) =>
+  (req.method === 'GET' ? publicReadRateLimiter : publicWriteRateLimiter)(req, res, next),
+);
+const mobileAgentsKv = useDatabase ? redisMobileAgentsKv(database) : fileMobileAgentsKv();
+app.use(createMobileAgentRoutes({ kv: mobileAgentsKv }));
+app.use(createPaymentRequestRoutes({
+  kv: mobileAgentsKv,
+  async notifyUser(userId, notification) {
+    const tokenData = await readPushTokenForUser(userId);
+    if (!tokenData) {
+      console.log('⚠️ [PAYMENT REQUESTS] No push token registered for this user.');
+      return;
+    }
+    await sendPushNotification(tokenData, notification, { apnProvider });
+  },
+}));
 app.use(createAutolaunchRoutes());
 
 /**
