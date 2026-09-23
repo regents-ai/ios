@@ -53,12 +53,3 @@ export const CONSENT_CHOICES: readonly {
   { outcome: 'approve-once', label: 'Approve once', tone: 'primary' },
   { outcome: 'deny', label: 'Deny', tone: 'plain' },
 ];
-
-/**
- * Guard against ever introducing a persisted or session grant: the consent
- * model is stateless by construction. Exposed so a test can assert that only
- * once/deny exist and nothing is retained.
- */
-export function consentIsStateless(): true {
-  return true;
-}

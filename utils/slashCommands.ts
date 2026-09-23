@@ -16,7 +16,7 @@ export type SlashCommand = {
   /** One-line description shown in the panel. */
   description: string;
   /** Optional named sub-argument the command takes after its name. */
-  argument?: { name: string; options?: string[] };
+  argument?: { name: string };
   /** True for money-moving commands that must route to the confirm flow. */
   confirms: boolean;
 };
@@ -76,21 +76,4 @@ export function parseSlashInput(draft: string): SlashParse {
 export function filterCommands(query: string): SlashCommand[] {
   const lower = query.toLowerCase();
   return SLASH_COMMANDS.filter((command) => command.name.startsWith(lower));
-}
-
-/** Sub-argument options that start with the partial argument, if any. */
-export function filterArgumentOptions(command: SlashCommand, argument: string): string[] {
-  if (!command.argument?.options) {
-    return [];
-  }
-  const lower = argument.toLowerCase();
-  return command.argument.options.filter((option) => option.toLowerCase().startsWith(lower));
-}
-
-/**
- * Whether the parsed input is a money command that must NOT run inline — the
- * composer must route it into the confirm flow instead of sending text.
- */
-export function requiresConfirmRouting(parse: SlashParse): boolean {
-  return parse.mode === 'argument' && parse.command.confirms;
 }

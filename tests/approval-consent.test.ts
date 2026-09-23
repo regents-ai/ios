@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 
 import {
   CONSENT_CHOICES,
-  consentIsStateless,
   mayProceedAfterConsent,
   requiresApproval,
   type ConsentOutcome,
@@ -36,11 +35,4 @@ test('the consent model offers ONLY once and deny — no session, no always-allo
 test('there is no "always" or "session" grant anywhere in the choices', () => {
   const joined = JSON.stringify(CONSENT_CHOICES).toLowerCase();
   assert.doesNotMatch(joined, /always|session|remember|forever/);
-});
-
-test('consent is stateless by construction — nothing is persisted', () => {
-  assert.equal(consentIsStateless(), true);
-  // Two consecutive approvals are independent: each is a fresh once-grant.
-  assert.equal(mayProceedAfterConsent('approve-once'), true);
-  assert.equal(mayProceedAfterConsent('approve-once'), true);
 });

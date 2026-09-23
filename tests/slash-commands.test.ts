@@ -5,7 +5,6 @@ import {
   SLASH_COMMANDS,
   filterCommands,
   parseSlashInput,
-  requiresConfirmRouting,
 } from '../utils/slashCommands';
 
 test('non-slash input is not autocomplete', () => {
@@ -35,13 +34,6 @@ test('a known command plus a space enters sub-argument mode', () => {
 test('an unknown command name stays in command mode, not argument mode', () => {
   const parse = parseSlashInput('/bogus xyz');
   assert.equal(parse.mode, 'command');
-});
-
-test('money commands require confirm routing; read-only commands do not', () => {
-  assert.equal(requiresConfirmRouting(parseSlashInput('/send 10')), true);
-  assert.equal(requiresConfirmRouting(parseSlashInput('/stake 5')), true);
-  assert.equal(requiresConfirmRouting(parseSlashInput('/balance ')), false);
-  assert.equal(requiresConfirmRouting(parseSlashInput('/')), false);
 });
 
 test('send and stake are marked as confirming commands', () => {

@@ -62,10 +62,5 @@ export function resolveCacheGate<T>(
   return null;
 }
 
-/** Mutations are only allowed against live data, never a cached snapshot. */
-export function mutationsAllowed(mode: CacheMode): boolean {
-  return mode === 'live';
-}
-
 /** Unmistakable stale label for cached values. */
 export const CACHED_MODE_BANNER = 'Offline — showing your last saved view. Values may be out of date.';

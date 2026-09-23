@@ -29,8 +29,3 @@ export function resolveDynamicTypeLayout(fontScale: number): DynamicTypeLayout {
     spacingScale: clamped,
   };
 }
-
-/** Scales a base spacing value by the layout's spacing scale, rounded. */
-export function scaleSpacing(base: number, layout: DynamicTypeLayout): number {
-  return Math.round(base * layout.spacingScale);
-}

@@ -240,27 +240,3 @@ export async function sendPushTokenToServer(pushToken: string, userId: string, g
     console.error('❌ [PUSH] Error sending push token to server:', error);
   }
 }
-
-/**
- * Show local notification (for testing)
- */
-export async function showLocalNotification(title: string, body: string, data?: any): Promise<void> {
-  if (Platform.OS === 'web') {
-    return;
-  }
-
-  const Notifications = await getNotificationsModule();
-  if (!Notifications) {
-    return;
-  }
-
-  await Notifications.scheduleNotificationAsync({
-    content: {
-      title,
-      body,
-      sound: true,
-      data,
-    },
-    trigger: null, // Show immediately
-  });
-}

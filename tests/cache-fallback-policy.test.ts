@@ -4,7 +4,6 @@ import assert from 'node:assert/strict';
 import { ApiError } from '../utils/apiError';
 import {
   mayFallBackToCache,
-  mutationsAllowed,
   resolveCacheGate,
 } from '../utils/cacheFallbackPolicy';
 
@@ -39,9 +38,4 @@ test('an ineligible failure never serves cache, even if cache exists', () => {
 
 test('an eligible failure with no cache surfaces the error', () => {
   assert.equal(resolveCacheGate({ ok: false, error: new TypeError('offline') }, null), null);
-});
-
-test('mutations are blocked in cached mode and allowed live', () => {
-  assert.equal(mutationsAllowed('live'), true);
-  assert.equal(mutationsAllowed('cached'), false);
 });

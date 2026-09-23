@@ -32,10 +32,3 @@ export async function getAccessTokenGlobal(): Promise<string | null> {
 
   return globalGetAccessToken();
 }
-
-/**
- * Check if access token getter is initialized
- */
-export function isAccessTokenInitialized(): boolean {
-  return globalGetAccessToken !== null;
-}

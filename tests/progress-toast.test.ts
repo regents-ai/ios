@@ -3,9 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   TOAST_AUTO_DISMISS_MS,
-  dismissToast,
   resolveToastSuccess,
-  shouldAutoDismissToast,
   showProgressToast,
 } from '../utils/progressToast';
 
@@ -42,15 +40,4 @@ test('success over a previous success re-keys, so the checkmark re-animates', ()
   const first = resolveToastSuccess(null, 'Stake sent', 0);
   const second = resolveToastSuccess(first, 'Stake sent', 1_000);
   assert.notEqual(second.id, first.id);
-});
-
-test('auto-dismiss fires only after the 6s window and is cancellable', () => {
-  const success = resolveToastSuccess(null, 'Unstake sent', 1_000);
-  assert.equal(shouldAutoDismissToast(success, 1_000 + TOAST_AUTO_DISMISS_MS - 1), false);
-  assert.equal(shouldAutoDismissToast(success, 1_000 + TOAST_AUTO_DISMISS_MS), true);
-  assert.equal(shouldAutoDismissToast(dismissToast(), 999_999), false);
-});
-
-test('progress toasts never auto-dismiss', () => {
-  assert.equal(shouldAutoDismissToast(showProgressToast('Working'), Number.MAX_SAFE_INTEGER), false);
 });

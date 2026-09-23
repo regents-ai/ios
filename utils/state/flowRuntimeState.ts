@@ -1,7 +1,6 @@
 let currentPartnerUserRef: string | null = null;
 let pendingTransactionForm: any = null;
 let pendingOfframpBalance: any = null;
-let phoneVerifyCanceled = false;
 
 export function setPendingForm(form: any) {
   pendingTransactionForm = form;
@@ -29,16 +28,4 @@ export function setCurrentPartnerUserRef(reference: string | null) {
 
 export function getCurrentPartnerUserRef() {
   return currentPartnerUserRef;
-}
-
-export function markPhoneVerifyCanceled() {
-  phoneVerifyCanceled = true;
-}
-
-export function getPhoneVerifyWasCanceled() {
-  return phoneVerifyCanceled;
-}
-
-export function clearPhoneVerifyWasCanceled() {
-  phoneVerifyCanceled = false;
 }

@@ -7,7 +7,3 @@ export function nextVerificationResendSecond(current: number) {
 
   return Math.max(0, Math.floor(current) - 1);
 }
-
-export function isVerificationResendReady(seconds: number) {
-  return nextVerificationResendSecond(seconds) === 0 && seconds <= 0;
-}

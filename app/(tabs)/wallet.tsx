@@ -22,10 +22,6 @@ import { useWalletAddresses } from '@/hooks/onramp/use-wallet-addresses';
 import { useWalletOnrampSubmit } from '@/hooks/onramp/use-wallet-onramp-submit';
 import { useWalletDetailsState } from '@/hooks/wallet/useWalletDetailsState';
 import { routes } from '@/utils/navigation/routes';
-import {
-  clearPhoneVerifyWasCanceled,
-  getPhoneVerifyWasCanceled,
-} from '@/utils/state/flowRuntimeState';
 import { getCountry, getSubdivision } from '@/utils/state/locationState';
 import { getNetworkLabel } from '@/utils/onchain/networkDisplay';
 
@@ -141,12 +137,7 @@ export default function WalletScreen() {
       if (effectiveIsSignedIn) {
         void fetchOptions();
       }
-
-      if (getPhoneVerifyWasCanceled()) {
-        setIsProcessingPayment(false);
-        clearPhoneVerifyWasCanceled();
-      }
-    }, [effectiveIsSignedIn, fetchOptions, setIsProcessingPayment])
+    }, [effectiveIsSignedIn, fetchOptions])
   );
 
   const quickActions = [

@@ -5,7 +5,6 @@ import {
   MAX_LAYOUT_FONT_SCALE,
   STACK_FONT_SCALE,
   resolveDynamicTypeLayout,
-  scaleSpacing,
 } from '../utils/dynamicTypeLayout';
 
 test('normal font sizes keep the horizontal row layout', () => {
@@ -30,10 +29,4 @@ test('bad font-scale values fall back to the row layout at base spacing', () => 
   assert.equal(nan.direction, 'row');
   assert.equal(nan.spacingScale, 1);
   assert.equal(resolveDynamicTypeLayout(0).direction, 'row');
-});
-
-test('scaleSpacing multiplies and rounds base spacing', () => {
-  const stacked = resolveDynamicTypeLayout(1.5);
-  assert.equal(scaleSpacing(12, stacked), 18);
-  assert.equal(scaleSpacing(8, resolveDynamicTypeLayout(1)), 8);
 });

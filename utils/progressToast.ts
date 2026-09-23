@@ -49,8 +49,3 @@ export function resolveToastSuccess(
 export function dismissToast(): null {
   return null;
 }
-
-/** Whether the auto-dismiss window has elapsed. */
-export function shouldAutoDismissToast(state: ProgressToastState | null, nowMs: number): boolean {
-  return !!state && state.dismissAtMs !== null && nowMs >= state.dismissAtMs;
-}

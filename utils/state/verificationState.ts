@@ -64,13 +64,6 @@ export function phoneExpiry() {
   return verifiedPhoneAt ? new Date(verifiedPhoneAt + PHONE_TTL_MS) : null;
 }
 
-export async function forceUnverifyPhone() {
-  verifiedPhone = null;
-  verifiedPhoneAt = null;
-  verifiedPhoneUserId = null;
-  await AsyncStorage.multiRemove([PHONE_KEY, PHONE_AT_KEY, PHONE_USER_KEY]);
-}
-
 export function daysUntilExpiry() {
   if (!verifiedPhoneAt) {
     return -1;

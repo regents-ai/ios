@@ -124,18 +124,6 @@ export function CoinbaseAlert({
   );
 }
 
-// Quick alert for simple messages
-export function showCoinbaseAlert(
-  title: string, 
-  message: string, 
-  type: AlertType = 'info'
-): Promise<void> {
-  return new Promise((resolve) => {
-    // This would need a global alert manager, but for now we'll use the component approach
-    resolve();
-  });
-}
-
 function makeStyles({ colors, fonts, type }: Theme) {
   return StyleSheet.create({
     backdrop: {

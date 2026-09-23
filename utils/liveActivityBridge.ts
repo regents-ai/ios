@@ -28,7 +28,6 @@ import {
   reconcileOnRelaunch,
   redactedRuns,
   startRun,
-  updateProgress,
   type LiveActivityState,
   type PendingRun,
   type RedactedRun,
@@ -126,11 +125,6 @@ export function startPendingRun(input: {
   currency?: string;
 }): void {
   applyState(startRun(state, { ...input, createdAtMs: Date.now() }));
-}
-
-/** Applies a progress update; the model throttles churn internally. */
-export function updatePendingRunProgress(id: string, progress: number): void {
-  applyState(updateProgress(state, id, progress, Date.now()));
 }
 
 /** Ends a run — the mirrored activity is ended on the lock screen too. */

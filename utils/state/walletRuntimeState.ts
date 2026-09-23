@@ -22,10 +22,6 @@ export function setCurrentNetwork(network: string) {
   notifyWalletRuntimeListeners();
 }
 
-export function getCurrentNetwork() {
-  return currentNetwork;
-}
-
 export function subscribeWalletRuntime(listener: () => void) {
   listeners.add(listener);
 
