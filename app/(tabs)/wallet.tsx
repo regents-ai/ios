@@ -6,6 +6,7 @@ import { KeyboardAvoidingView, Platform, RefreshControl, ScrollView, StyleSheet,
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { APIGuestCheckoutWidget, OnrampForm, useOnramp } from '@/components';
+import { AgentFundHero } from '@/components/agents/AgentFundHero';
 import { useDialContentClearance } from '@/components/dial/dialLayout';
 import { LiveValueFlash } from '@/components/motion/LiveValueFlash';
 import { StaggerGroup } from '@/components/motion/StaggerGroup';
@@ -185,6 +186,10 @@ export default function WalletScreen() {
           }
           scrollEnabled={!isSwipeActive}
         >
+          <View style={styles.hero}>
+            <AgentFundHero />
+          </View>
+
           <StaggerGroup>
             <StaggerItem order={0}>
               <View style={styles.summaryCard}>
@@ -340,6 +345,9 @@ function makeStyles({ colors, fonts }: Theme) {
   },
   keyboardWrap: {
     flex: 1,
+  },
+  hero: {
+    marginTop: 16,
   },
   summaryCard: {
     marginHorizontal: 16,
