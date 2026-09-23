@@ -168,6 +168,7 @@ export function useWalletOnrampSubmit({
             type: 'info',
             navigationPath: routes.emailVerify({ mode: 'link' }),
           });
+          setIsProcessingPayment(false);
           return;
         }
 
@@ -220,6 +221,7 @@ export function useWalletOnrampSubmit({
               type: 'info',
               navigationPath: routes.phoneVerify({ mode: 'link' }),
             });
+            setIsProcessingPayment(false);
           }
           return;
         }
