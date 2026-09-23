@@ -17,6 +17,9 @@ export type ApiFailureKind =
   | 'rate-limited'
   | 'server'
   | 'invalid-response'
+  | 'wallet-cancelled'
+  | 'wallet-fee-shortfall'
+  | 'wallet'
   | 'unknown';
 
 export class ApiError extends Error {
@@ -71,15 +74,74 @@ const FAILURE_COPY: Record<ApiFailureKind, { title: string; message: string }> =
     title: 'Something went wrong',
     message: 'Try again in a moment. If it keeps happening, contact support.',
   },
+  'wallet-cancelled': {
+    title: 'Cancelled in your wallet',
+    message: 'You cancelled in your wallet, so nothing was sent.',
+  },
+  'wallet-fee-shortfall': {
+    title: 'Not enough ETH for the network fee',
+    message: 'Your wallet needs a little ETH on this network to pay the fee. Add some, then try again.',
+  },
+  wallet: {
+    title: 'Your wallet could not send this',
+    message: 'Your wallet did not send this. Check the wallet, then try again.',
+  },
   unknown: {
     title: 'That did not work',
     message: 'Try again in a moment. If it keeps happening, contact support.',
   },
 };
 
+const WALLET_CANCELLED = /user rejected|user denied|rejected the request|cancelled by user|canceled by user/i;
+const WALLET_FEE_SHORTFALL = /AA21|didn't pay prefund|did not pay prefund|insufficient funds|insufficient balance|exceeds transaction sender account balance/i;
+const WALLET_SEND = /user ?operation|bundler|paymaster|smart account|entry ?point|AA\d\d/i;
+
+/** Every message along the error's cause chain, so wallet and bundler text is seen wherever it sits. */
+function errorText(error: unknown, depth = 0): string {
+  if (depth > 5 || error === null || typeof error !== 'object') {
+    return typeof error === 'string' ? error : '';
+  }
+
+  const record = error as { message?: unknown; details?: unknown; shortMessage?: unknown; cause?: unknown };
+  return [record.message, record.shortMessage, record.details]
+    .filter((part): part is string => typeof part === 'string')
+    .concat(errorText(record.cause, depth + 1))
+    .join('\n');
+}
+
+/**
+ * A failure raised by the user's wallet while sending, classified from the
+ * wallet's own error: a cancellation (EIP-1193 code 4001), a fee shortfall
+ * reported by the bundler, or another wallet-side refusal.
+ */
+function asWalletError(error: unknown): ApiError | null {
+  if (error === null || typeof error !== 'object') {
+    return null;
+  }
+
+  const code = (error as { code?: unknown }).code;
+  const text = errorText(error);
+  if (code === 4001 || WALLET_CANCELLED.test(text)) {
+    return new ApiError('wallet-cancelled', FAILURE_COPY['wallet-cancelled'].message);
+  }
+  if (WALLET_FEE_SHORTFALL.test(text)) {
+    return new ApiError('wallet-fee-shortfall', FAILURE_COPY['wallet-fee-shortfall'].message);
+  }
+  if (WALLET_SEND.test(text)) {
+    return new ApiError('wallet', FAILURE_COPY.wallet.message);
+  }
+
+  return null;
+}
+
 function asApiError(error: unknown): ApiError {
   if (error instanceof ApiError) {
     return error;
+  }
+
+  const walletError = asWalletError(error);
+  if (walletError) {
+    return walletError;
   }
 
   // fetch rejects with a TypeError when the network is unreachable.
