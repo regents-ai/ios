@@ -16,7 +16,7 @@ import { DialOverlayHost } from '@/components/dial/DialOverlayHost';
 import { getMotionPreset } from '@/components/motion/easePresets';
 import { useReducedMotion } from '@/components/motion/useReducedMotion';
 import { setCountry, setSubdivision } from '@/utils/state/locationState';
-import { clearPostAuthDestination, resolvePostAuthLanding } from '@/utils/state/postAuthDestination';
+import { clearPostAuthDestination, landAfterSignIn } from '@/utils/state/postAuthDestination';
 import { setCurrentSolanaAddress, setCurrentWalletAddress } from '@/utils/state/walletRuntimeState';
 import { useIsInitialized, useSignOut } from '@coinbase/cdp-hooks';
 import { router, useRootNavigationState, useSegments } from 'expo-router';
@@ -117,7 +117,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
     const currentSegment = segments[0];
     const inManagedAuthRoute = isAuthManagedRoute(currentSegment);
-    const redirectTo = !isAuthenticated && !inManagedAuthRoute ? '/auth/login' : isAuthenticated && currentSegment === 'auth' ? resolvePostAuthLanding() : null;
+    const redirectTo = !isAuthenticated && !inManagedAuthRoute ? 'login' : isAuthenticated && currentSegment === 'auth' ? 'landing' : null;
 
     if (!redirectTo) {
       // A signed-in person outside the sign-in/onboarding flow has arrived at
@@ -130,7 +130,11 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
     const redirectTimer = setTimeout(() => {
       try {
-        router.replace(redirectTo);
+        if (redirectTo === 'login') {
+          router.replace('/auth/login');
+        } else {
+          landAfterSignIn(router);
+        }
       } catch (e) {
         console.error('Navigation error:', e);
       }

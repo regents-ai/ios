@@ -3,24 +3,6 @@ import assert from 'node:assert/strict';
 
 import { routeIntentFromNotificationData } from '../utils/pushNotificationRouting';
 
-test('mobile message push payload routes to the message thread screen', () => {
-  assert.deepEqual(
-    routeIntentFromNotificationData({
-      type: 'mobile_message',
-      eventType: 'assistant_message',
-      eventId: 'run:401',
-      threadId: '101~202~301',
-    }),
-    {
-      href: {
-        pathname: '/message/[id]',
-        params: { id: '101~202~301' },
-      },
-      refreshWallet: false,
-    },
-  );
-});
-
 test('onramp push payloads route to the wallet tab with a refresh request', () => {
   assert.deepEqual(
     routeIntentFromNotificationData({
@@ -61,9 +43,6 @@ test('offramp push payloads route to the wallet tab with a refresh request', () 
 
 test('push routing ignores missing malformed or unrelated payloads', () => {
   assert.equal(routeIntentFromNotificationData(null), null);
-  assert.equal(routeIntentFromNotificationData({ type: 'mobile_message' }), null);
-  assert.equal(routeIntentFromNotificationData({ type: 'mobile_message', threadId: '101~202abc' }), null);
-  assert.equal(routeIntentFromNotificationData({ type: 'mobile_message', threadId: '0~202~301' }), null);
-  assert.equal(routeIntentFromNotificationData({ type: 'other', threadId: '101~202~301' }), null);
+  assert.equal(routeIntentFromNotificationData({ type: 'other' }), null);
   assert.equal(routeIntentFromNotificationData({ type: 'onramp_pending', transactionId: 'txn-1' }), null);
 });

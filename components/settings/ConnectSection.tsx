@@ -58,10 +58,10 @@ export function ConnectSection() {
     onPress: () => void;
   }[] = [
     {
-      icon: 'terminal-outline',
-      title: 'Existing Hermes Agent',
-      detail: 'Link the agent already running on your computer',
-      onPress: () => router.push('/onboarding/connect-hermes'),
+      icon: 'people-outline',
+      title: 'Add an agent',
+      detail: 'Pair an agent or paste its wallet address',
+      onPress: () => router.push(routes.addAgent()),
     },
     {
       icon: 'link-outline',

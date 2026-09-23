@@ -5,9 +5,9 @@ info:
   description: |
     Source-of-truth contract for the current Regents Mobile backend surface.
 
-    Mobile wallet flows are live. Mobile Regent records are sourced from Platform projection.
-    Message records are sourced from Platform Regent Work Runtime. The mobile backend only owns
-    wallet intent and receipt state needed for phone wallet rails.
+    Mobile wallet flows are live. The mobile backend owns each signed-in user's "My agents"
+    list: agents added by wallet address or paired by proving their key through a signed
+    pairing request, with live Base USDC balances read for the list.
 x-regent-capability:
   status: beta
   owner: ios
@@ -22,17 +22,6 @@ x-regent-rate-limits:
     verified_cli_signed_agent: not exposed in this contract
     internal_service: not exposed in this contract
   cli_allowance_requires_verified_siwa: false
-x-regent-message-contract:
-  owner: ios
-  routes:
-    - /mobile/message/threads
-    - /mobile/message/threads/{thread_id}
-    - /mobile/message/threads/{thread_id}/events
-    - /mobile/message/threads/{thread_id}/messages
-    - /mobile/message/threads/{thread_id}/approvals/{approval_id}
-    - /internal/mobile/message/push
-  talk_source: Platform Regent Work Runtime
-  transport_boundary: Mobile Message threads are sourced from Platform Regent Work Runtime. The mobile app does not own a separate peer-to-peer message transport.
 paths:
   /healthz:
     get:
@@ -443,472 +432,6 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '429':
           $ref: '#/components/responses/RateLimitError'
-  /internal/mobile/message/push:
-    post:
-      operationId: sendMobileMessagePush
-      summary: Send one mobile Message push notification from a Platform RWR event
-      security:
-        - platformWebhookToken: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/MobileMessagePushRequest'
-      responses:
-        '202':
-          description: Push trigger accepted
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MobileMessagePushResponse'
-        '400':
-          description: Push trigger body does not match the current contract
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '401':
-          description: Platform webhook token is missing or invalid
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '503':
-          description: Push trigger or delivery is not configured
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '429':
-          $ref: '#/components/responses/RateLimitError'
-  /mobile/regents:
-    get:
-      operationId: listMobileRegents
-      summary: List mobile Regent cards
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: Mobile Regent list
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [regents]
-                properties:
-                  regents:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/RegentSummary'
-        '502':
-          description: Platform projection is unavailable
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '503':
-          description: Platform projection base URL is not configured
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '429':
-          $ref: '#/components/responses/RateLimitError'
-  /mobile/regents/{id}:
-    get:
-      operationId: getMobileRegent
-      summary: Fetch one mobile Regent card
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Mobile Regent detail
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RegentDetail'
-        '404':
-          description: Regent not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '502':
-          description: Platform projection is unavailable
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '503':
-          description: Platform projection base URL is not configured
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '429':
-          $ref: '#/components/responses/RateLimitError'
-  /mobile/regents/{id}/manager:
-    get:
-      operationId: getMobileRegentManager
-      summary: Fetch one Regent Manager summary
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Regent Manager summary
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RegentManagerDetail'
-        '404':
-          description: Regent Manager summary not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '429':
-          $ref: '#/components/responses/RateLimitError'
-  /mobile/regents/{id}/base-snapshot:
-    get:
-      operationId: getMobileRegentBaseSnapshot
-      summary: Fetch one mobile Regent Base snapshot
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Mobile Regent Base snapshot
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MobileRegentBaseSnapshot'
-        '404':
-          description: Regent not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '502':
-          description: Platform projection is unavailable
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '503':
-          description: Platform projection base URL is not configured
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '429':
-          $ref: '#/components/responses/RateLimitError'
-  /mobile/regents/{id}/return-requests:
-    post:
-      operationId: createRegentReturnRequest
-      summary: Create one Regent-to-wallet return request
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-        - in: header
-          name: Idempotency-Key
-          required: true
-          schema:
-            type: string
-          description: Reuse the same value if the same return request is submitted again.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateRegentReturnRequest'
-      responses:
-        '201':
-          description: Return request created
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [returnRequest]
-                properties:
-                  returnRequest:
-                    $ref: '#/components/schemas/RegentReturnRequest'
-        '404':
-          description: Regent not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '429':
-          $ref: '#/components/responses/RateLimitError'
-  /mobile/regents/{id}/funding-intents:
-    post:
-      operationId: createRegentFundingIntent
-      summary: Create one wallet-to-Regent funding intent
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-        - in: header
-          name: Idempotency-Key
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateRegentFundingIntent'
-      responses:
-        '201':
-          description: Funding intent created
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [fundingIntent]
-                properties:
-                  fundingIntent:
-                    $ref: '#/components/schemas/RegentFundingIntent'
-        '400':
-          description: Invalid funding details or funding destination
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '404':
-          description: Regent not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '409':
-          description: Regent wallet is not ready for funding
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '429':
-          $ref: '#/components/responses/RateLimitError'
-  /mobile/regents/{id}/funding-intents/{funding_intent_id}:
-    get:
-      operationId: getRegentFundingIntent
-      summary: Fetch one wallet-to-Regent funding intent
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-        - in: path
-          name: funding_intent_id
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Funding intent detail
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [fundingIntent]
-                properties:
-                  fundingIntent:
-                    $ref: '#/components/schemas/RegentFundingIntent'
-        '404':
-          description: Funding intent not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '429':
-          $ref: '#/components/responses/RateLimitError'
-  /mobile/regents/{id}/funding-intents/{funding_intent_id}/confirm:
-    post:
-      operationId: confirmRegentFundingIntent
-      summary: Confirm one wallet-to-Regent funding intent with a chain receipt
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-        - in: path
-          name: funding_intent_id
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ConfirmChainReceiptRequest'
-      responses:
-        '200':
-          description: Funding intent confirmed from chain receipt
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [fundingIntent]
-                properties:
-                  fundingIntent:
-                    $ref: '#/components/schemas/RegentFundingIntent'
-        '404':
-          description: Funding intent not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '409':
-          description: Chain receipt is not ready or does not match this funding intent
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '502':
-          description: Base RPC receipt lookup failed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '503':
-          description: Base RPC is not configured for receipt verification
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '429':
-          $ref: '#/components/responses/RateLimitError'
-  /mobile/regents/{id}/return-requests/{return_request_id}:
-    get:
-      operationId: getRegentReturnRequest
-      summary: Fetch one Regent-to-wallet return request
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-        - in: path
-          name: return_request_id
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Return request detail
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [returnRequest]
-                properties:
-                  returnRequest:
-                    $ref: '#/components/schemas/RegentReturnRequest'
-        '404':
-          description: Return request not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '429':
-          $ref: '#/components/responses/RateLimitError'
-  /mobile/regents/{id}/return-requests/{return_request_id}/confirm:
-    post:
-      operationId: confirmRegentReturnRequest
-      summary: Confirm one Regent return request with a chain receipt
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-        - in: path
-          name: return_request_id
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ConfirmChainReceiptRequest'
-      responses:
-        '200':
-          description: Return request confirmed from chain receipt
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [returnRequest]
-                properties:
-                  returnRequest:
-                    $ref: '#/components/schemas/RegentReturnRequest'
-        '404':
-          description: Return request not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '409':
-          description: Chain receipt is not ready or does not match this return
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '502':
-          description: Base RPC receipt lookup failed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '503':
-          description: Base RPC is not configured for receipt verification
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '429':
-          $ref: '#/components/responses/RateLimitError'
   /mobile/regent/staking:
     get:
       operationId: getMobileRegentStaking
@@ -1227,10 +750,39 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '429':
           $ref: '#/components/responses/RateLimitError'
-  /mobile/agent-links/claim:
+  /mobile/agents:
+    get:
+      operationId: listMobileAgents
+      summary: List the signed-in user's agents with live Base USDC balances
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: The signed-in user's agents
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [agents, balancesAvailable]
+                properties:
+                  agents:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MobileAgent'
+                  balancesAvailable:
+                    type: boolean
+                    description: False when Base balances could not be read; every usdcBalance is then null
+        '401':
+          description: Authentication is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
     post:
-      operationId: claimMobileAgentLink
-      summary: Connect an existing agent by submitting its pairing code
+      operationId: addMobileAgent
+      summary: Add an agent by its Base wallet address
       security:
         - bearerAuth: []
       requestBody:
@@ -1238,559 +790,311 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/MobileAgentLinkClaimRequest'
+              $ref: '#/components/schemas/AddMobileAgentRequest'
       responses:
         '201':
-          description: Agent connected to this account
+          description: Agent added to the signed-in user's list
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MobileAgentLinkClaimResponse'
+                type: object
+                required: [agent]
+                properties:
+                  agent:
+                    $ref: '#/components/schemas/MobileAgent'
         '400':
-          description: Pairing code is missing or invalid
+          description: Name, kind, or wallet address is missing or invalid
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
-        '404':
-          description: Pairing code was not recognized
+        '401':
+          description: Authentication is required
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '409':
-          description: Pairing code has expired, or the agent is already connected to a different account
+          description: An agent with this wallet address is already in the list
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
-        '502':
-          description: Platform is unavailable
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+  /mobile/agents/pairing-codes:
+    post:
+      operationId: createMobileAgentPairingCode
+      summary: Create a single-use pairing code for an agent to prove its wallet key
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMobileAgentPairingCodeRequest'
+      responses:
+        '201':
+          description: Pairing code issued; it expires after ten minutes and works once
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MobileAgentPairingCode'
+        '400':
+          description: Name or kind is missing or invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '401':
+          description: Authentication is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+  /mobile/agents/pairing-codes/{code}:
+    get:
+      operationId: getMobileAgentPairingCode
+      summary: Check whether an agent has signed in with one of the signed-in user's pairing codes
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The code is waiting, needs the user's confirmation, or is gone (expired, used up, discarded or not theirs)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MobileAgentPairingStatus'
+        '401':
+          description: Authentication is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+    delete:
+      operationId: discardMobileAgentPairingCode
+      summary: Discard a pairing code ("Not mine"), dropping any address an agent signed in with
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The code is gone
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [discarded]
+                properties:
+                  discarded:
+                    type: boolean
+                    enum: [true]
+        '401':
+          description: Authentication is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+  /mobile/agents/pairing-codes/{code}/confirm:
+    post:
+      operationId: confirmMobileAgentPairing
+      summary: Confirm the address an agent signed in with, listing it as paired
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The agent is listed as paired; the code is spent
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [agent]
+                properties:
+                  agent:
+                    $ref: '#/components/schemas/MobileAgent'
+        '401':
+          description: Authentication is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '409':
+          description: The code expired or is not theirs, no agent has used it yet, or the list is full
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+  /mobile/agents/{agent_id}:
+    patch:
+      operationId: renameMobileAgent
+      summary: Rename one of the signed-in user's agents
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: agent_id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RenameMobileAgentRequest'
+      responses:
+        '200':
+          description: Agent renamed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [agent]
+                properties:
+                  agent:
+                    $ref: '#/components/schemas/MobileAgent'
+        '400':
+          description: Name is missing or invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '401':
+          description: Authentication is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: No agent with this ID is in the signed-in user's list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+    delete:
+      operationId: removeMobileAgent
+      summary: Remove one of the signed-in user's agents
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: agent_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Agent removed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [removed]
+                properties:
+                  removed:
+                    type: boolean
+                    enum: [true]
+        '401':
+          description: Authentication is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: No agent with this ID is in the signed-in user's list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+  /agent/pair:
+    post:
+      operationId: pairMobileAgent
+      summary: Pair an agent to the user who issued its pairing code (called by the agent)
+      description: |
+        Called by the agent itself, not the app. The request is a SIWA-signed HTTP request for the
+        `regents-mobile` audience (headers `x-siwa-receipt`, `x-key-id`, `x-timestamp`,
+        `x-agent-wallet-address`, `x-agent-chain-id`, `content-digest`, `signature-input`,
+        `signature`), each exactly once and with no other `x-agent-*` or `x-siwa-*` headers, with a
+        JSON body of at most 4 KiB. The backend verifies the envelope with the SIWA server for the
+        Base wallet principal and, when the code is valid, records the verified wallet address as
+        waiting for the user who created the code to confirm it in the app. Each signed request and
+        each code can be used once.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PairMobileAgentRequest'
+      responses:
+        '200':
+          description: The address is recorded; the user confirms it in the app
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PairMobileAgentAccepted'
+        '400':
+          description: Body is not JSON with a pairing code, or the proof headers are missing, repeated or accompanied by unknown agent headers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '401':
+          description: The signed request was rejected by the SIWA server
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '409':
+          description: The pairing code is unknown, expired, or already used, or the signed request was already seen
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '413':
+          description: The body is larger than 4 KiB
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '415':
+          description: The body is not sent as JSON
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '503':
-          description: Platform base URL is not configured
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '429':
-          $ref: '#/components/responses/RateLimitError'
-  /mobile/wallet-actions/{type}/prepare:
-    post:
-      operationId: prepareMobileWalletAction
-      summary: Prepare one mobile wallet action for signing
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: type
-          required: true
-          schema:
-            type: string
-            enum: [funding, return]
-        - in: header
-          name: Idempotency-Key
-          required: true
-          schema:
-            type: string
-          description: Reuse the same value if the same wallet action is prepared again.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PrepareWalletActionRequest'
-      responses:
-        '201':
-          description: Wallet action prepared
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [wallet_action]
-                properties:
-                  wallet_action:
-                    $ref: '#/components/schemas/PreparedWalletAction'
-        '429':
-          $ref: '#/components/responses/RateLimitError'
-  /mobile/wallet-actions/{action_id}/confirm:
-    post:
-      operationId: confirmMobileWalletAction
-      summary: Confirm one prepared wallet action with a chain receipt
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: action_id
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ConfirmChainReceiptRequest'
-      responses:
-        '200':
-          description: Wallet action confirmed
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [wallet_action]
-                properties:
-                  wallet_action:
-                    $ref: '#/components/schemas/PreparedWalletAction'
-        '404':
-          description: Wallet action not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '409':
-          description: Chain receipt is not ready or does not match this action
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '410':
-          description: Prepared wallet action expired
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '502':
-          description: Base RPC receipt lookup failed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '503':
-          description: Base RPC is not configured for receipt verification
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '429':
-          $ref: '#/components/responses/RateLimitError'
-  /mobile/message/threads:
-    get:
-      operationId: listMobileMessageThreads
-      summary: List mobile Message threads from Platform Regent Work Runtime
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: Mobile Message thread list sourced from Platform RWR work items
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [threads]
-                properties:
-                  threads:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/MessageThread'
-        '429':
-          $ref: '#/components/responses/RateLimitError'
-    post:
-      operationId: createMobileMessageThread
-      summary: Create one mobile Message thread as a Platform RWR work item
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateMessageThreadRequest'
-      responses:
-        '201':
-          description: Mobile Message thread created from Platform RWR records
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [thread]
-                properties:
-                  thread:
-                    $ref: '#/components/schemas/MessageThreadDetail'
-        '429':
-          $ref: '#/components/responses/RateLimitError'
-  /mobile/agents/{agent_id}/voice/status:
-    get:
-      operationId: getMobileHermesVoiceStatus
-      summary: Check whether Hermes voice is ready for one mobile Regent
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: agent_id
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Hermes voice status
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HermesVoiceStatus'
-        '403':
-          description: ChatGPT connection is required before voice starts
-          x-regent-error-codes: [ChatGptAccountRequired, HermesVoiceUnavailable]
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '429':
-          $ref: '#/components/responses/RateLimitError'
-  /mobile/agents/{agent_id}/voice/session:
-    post:
-      operationId: createMobileHermesVoiceSession
-      summary: Create one short-lived Hermes voice session
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: agent_id
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateHermesVoiceSessionRequest'
-      responses:
-        '201':
-          description: Short-lived Hermes voice session
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HermesVoiceSession'
-        '403':
-          description: ChatGPT connection is required before voice starts
-          x-regent-error-codes: [ChatGptAccountRequired, HermesVoiceUnavailable]
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '429':
-          $ref: '#/components/responses/RateLimitError'
-  /mobile/agents/{agent_id}/voice/prewarm:
-    post:
-      operationId: prewarmMobileHermesVoice
-      summary: Prepare Hermes voice for one mobile Regent
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: agent_id
-          required: true
-          schema:
-            type: string
-      responses:
-        '202':
-          description: Hermes voice prewarm accepted
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [ok]
-                properties:
-                  ok:
-                    type: boolean
-        '403':
-          description: ChatGPT connection is required before voice starts
-          x-regent-error-codes: [ChatGptAccountRequired, HermesVoiceUnavailable]
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '429':
-          $ref: '#/components/responses/RateLimitError'
-  /mobile/agents/{agent_id}/voice/disconnect:
-    post:
-      operationId: disconnectMobileHermesVoice
-      summary: End one Hermes voice session
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: agent_id
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [session_id]
-              additionalProperties: false
-              properties:
-                session_id:
-                  type: string
-      responses:
-        '200':
-          description: Hermes voice session ended
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [ok]
-                properties:
-                  ok:
-                    type: boolean
-        '404':
-          description: Voice session was not found
-          x-regent-error-codes: [VoiceSessionNotFound]
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '429':
-          $ref: '#/components/responses/RateLimitError'
-  /mobile/agents/{agent_id}/voice/tool-results:
-    post:
-      operationId: submitMobileHermesVoiceToolResult
-      summary: Submit one iOS voice tool result
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: agent_id
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/HermesVoiceToolResult'
-      responses:
-        '202':
-          description: Hermes voice tool result accepted
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [ok]
-                properties:
-                  ok:
-                    type: boolean
-        '403':
-          description: ChatGPT connection is required before voice results are accepted
-          x-regent-error-codes: [ChatGptAccountRequired, HermesVoiceUnavailable]
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '404':
-          description: Voice session was not found
-          x-regent-error-codes: [VoiceSessionNotFound]
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '429':
-          $ref: '#/components/responses/RateLimitError'
-  /mobile/message/threads/{thread_id}:
-    get:
-      operationId: getMobileMessageThread
-      summary: Fetch one mobile Message thread from Platform Regent Work Runtime
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: thread_id
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Mobile Message thread detail sourced from Platform RWR
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [thread]
-                properties:
-                  thread:
-                    $ref: '#/components/schemas/MessageThreadDetail'
-        '400':
-          description: Mobile Message thread ID is malformed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '404':
-          description: Mobile Message thread not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '429':
-          $ref: '#/components/responses/RateLimitError'
-  /mobile/message/threads/{thread_id}/events:
-    get:
-      operationId: getMobileMessageThreadEvents
-      summary: Fetch new mobile Message events from Platform Regent Work Runtime
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: thread_id
-          required: true
-          schema:
-            type: string
-        - in: query
-          name: since_event_id
-          required: false
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Mobile Message events sourced from Platform RWR run events and approvals
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [events, latestEventId]
-                properties:
-                  events:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/MessageThreadEvent'
-                  latestEventId:
-                    type: string
-        '400':
-          description: Mobile Message thread ID or event marker is malformed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '404':
-          description: Mobile Message thread not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '429':
-          $ref: '#/components/responses/RateLimitError'
-  /mobile/message/threads/{thread_id}/messages:
-    post:
-      operationId: postMobileMessageThreadMessage
-      summary: Start a Platform RWR run from one mobile Message
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: thread_id
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [text]
-              properties:
-                text:
-                  type: string
-                source:
-                  type: string
-                  enum: [text, voice_summary]
-                  default: text
-      responses:
-        '202':
-          description: Mobile Message thread updated from the new Platform RWR run
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [thread]
-                properties:
-                  thread:
-                    $ref: '#/components/schemas/MessageThreadDetail'
-        '400':
-          description: Mobile Message thread ID or message body is malformed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '404':
-          description: Mobile Message thread not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '429':
-          $ref: '#/components/responses/RateLimitError'
-  /mobile/message/threads/{thread_id}/approvals/{approval_id}:
-    post:
-      operationId: resolveMobileMessageThreadApproval
-      summary: Resolve one Platform RWR approval from mobile Message
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: thread_id
-          required: true
-          schema:
-            type: string
-        - in: path
-          name: approval_id
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [decision]
-              properties:
-                decision:
-                  type: string
-                  enum: [approved, denied]
-      responses:
-        '200':
-          description: Mobile Message review step updated
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [thread]
-                properties:
-                  thread:
-                    $ref: '#/components/schemas/MessageThreadDetail'
-        '400':
-          description: Mobile Message thread ID, review step ID, or decision is malformed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '404':
-          description: Mobile Message thread or review step not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '409':
-          description: Review step is expired or already resolved
+          description: Agent pairing is not available on this server, or the sign-in service is busy
           content:
             application/json:
               schema:
@@ -1803,10 +1107,6 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-    platformWebhookToken:
-      type: apiKey
-      in: header
-      name: X-Regent-Platform-Webhook-Token
   responses:
     RateLimitError:
       description: Too many requests
@@ -1821,322 +1121,6 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorEnvelope'
   schemas:
-    RegentStatus:
-      type: string
-      enum: [active, attention, paused]
-    RegentRuntimeStatus:
-      type: string
-      enum: [online, waiting, offline]
-    PlatformFormationStatus:
-      type: string
-      enum: [pending, blocked, provisioning, ready]
-    PlatformBillingStatus:
-      type: string
-      enum: [trial, free-day, prepaid, paused, zero, failed]
-    PlatformRuntimeStatus:
-      type: string
-      enum: [provisioning, ready, paused, blocked]
-    RegentPlatformState:
-      type: object
-      required:
-        - claimedName
-        - slug
-        - formationStatus
-        - billingStatus
-        - runtimeStatus
-        - blockers
-        - dashboardUrl
-      properties:
-        claimedName:
-          type: string
-        slug:
-          type: string
-        formationStatus:
-          $ref: '#/components/schemas/PlatformFormationStatus'
-        billingStatus:
-          $ref: '#/components/schemas/PlatformBillingStatus'
-        runtimeStatus:
-          $ref: '#/components/schemas/PlatformRuntimeStatus'
-        blockers:
-          type: array
-          items:
-            type: string
-        dashboardUrl:
-          type: string
-          format: uri
-        prepaidBalanceUsd:
-          type: string
-        freeDayEndsAt:
-          type: string
-          format: date-time
-        nextPauseAt:
-          type: string
-          format: date-time
-    RegentSummary:
-      type: object
-      required:
-        - id
-        - name
-        - status
-        - runtimeStatus
-        - walletAddress
-        - platformState
-        - voice
-        - lastActiveAt
-      properties:
-        id:
-          type: string
-        name:
-          type: string
-        status:
-          $ref: '#/components/schemas/RegentStatus'
-        runtimeStatus:
-          $ref: '#/components/schemas/RegentRuntimeStatus'
-        walletAddress:
-          type: string
-        platformState:
-          $ref: '#/components/schemas/RegentPlatformState'
-        voice:
-          $ref: '#/components/schemas/MobileRegentVoice'
-        lastActiveAt:
-          type: string
-          format: date-time
-        treasuryNote:
-          type: string
-    RegentActivity:
-      type: object
-      required: [id, title, detail, at]
-      properties:
-        id:
-          type: string
-        title:
-          type: string
-        detail:
-          type: string
-        at:
-          type: string
-          format: date-time
-    MobileRegentBaseSnapshot:
-      type: object
-      additionalProperties: false
-      required: [chainId, blockNumber, contractAddress, observedAt, stale, snapshot]
-      properties:
-        chainId:
-          type: integer
-          enum: [8453]
-        blockNumber:
-          type: integer
-          nullable: true
-          minimum: 0
-        contractAddress:
-          type: string
-          nullable: true
-        observedAt:
-          type: string
-          format: date-time
-        stale:
-          type: boolean
-        snapshot:
-          type: object
-          additionalProperties: false
-          required: [regentId, name, walletAddress, runtimeStatus, platformState]
-          properties:
-            regentId:
-              type: string
-            name:
-              type: string
-            walletAddress:
-              type: string
-            runtimeStatus:
-              $ref: '#/components/schemas/RegentRuntimeStatus'
-            platformState:
-              $ref: '#/components/schemas/RegentPlatformState'
-    RegentReturnRequest:
-      type: object
-      required:
-        - id
-        - regentId
-        - amount
-        - currency
-        - destinationWalletAddress
-        - chainId
-        - expectedSigner
-        - to
-        - value
-        - data
-        - status
-        - createdAt
-        - updatedAt
-      properties:
-        id:
-          type: string
-        regentId:
-          type: string
-        amount:
-          type: string
-        currency:
-          type: string
-        destinationWalletAddress:
-          type: string
-          description: Must match the transaction `to` address.
-          pattern: '^0x[a-fA-F0-9]{40}$'
-        chainId:
-          type: integer
-          enum: [8453]
-        expectedSigner:
-          type: string
-          pattern: '^0x[a-fA-F0-9]{40}$'
-        to:
-          type: string
-          pattern: '^0x[a-fA-F0-9]{40}$'
-        value:
-          type: string
-          pattern: '^[0-9]+$'
-        data:
-          type: string
-          pattern: '^0x([a-fA-F0-9]{2})*$'
-        status:
-          type: string
-          enum: [requested, approved, broadcasting, confirmed, failed]
-        createdAt:
-          type: string
-          format: date-time
-        updatedAt:
-          type: string
-          format: date-time
-        txHash:
-          type: string
-        blockNumber:
-          type: integer
-          minimum: 0
-    CreateRegentFundingIntent:
-      type: object
-      required:
-        - amount
-        - currency
-        - sourceWalletAddress
-        - destinationWalletAddress
-        - chainId
-        - tokenAddress
-        - tokenDecimals
-        - expectedSigner
-        - to
-        - value
-        - data
-      properties:
-        amount:
-          type: string
-        currency:
-          type: string
-        sourceWalletAddress:
-          type: string
-          pattern: '^0x[a-fA-F0-9]{40}$'
-        destinationWalletAddress:
-          type: string
-          description: Must match the Regent wallet address from the current Platform projection and the ERC-20 transfer recipient.
-          pattern: '^0x[a-fA-F0-9]{40}$'
-        chainId:
-          type: integer
-          enum: [8453]
-        tokenAddress:
-          type: string
-          pattern: '^0x[a-fA-F0-9]{40}$'
-        tokenDecimals:
-          type: integer
-          description: Decimals of the token being transferred. The displayed amount is checked against the transfer calldata using these decimals.
-          minimum: 0
-          maximum: 255
-        expectedSigner:
-          type: string
-          pattern: '^0x[a-fA-F0-9]{40}$'
-        to:
-          type: string
-          pattern: '^0x[a-fA-F0-9]{40}$'
-        value:
-          type: string
-          pattern: '^[0-9]+$'
-        data:
-          type: string
-          pattern: '^0x([a-fA-F0-9]{2})*$'
-    RegentFundingIntent:
-      type: object
-      required:
-        - id
-        - regentId
-        - amount
-        - currency
-        - sourceWalletAddress
-        - destinationWalletAddress
-        - chainId
-        - tokenAddress
-        - expectedSigner
-        - to
-        - value
-        - data
-        - status
-        - createdAt
-        - updatedAt
-      properties:
-        id:
-          type: string
-        regentId:
-          type: string
-        amount:
-          type: string
-        currency:
-          type: string
-        sourceWalletAddress:
-          type: string
-          pattern: '^0x[a-fA-F0-9]{40}$'
-        destinationWalletAddress:
-          type: string
-          pattern: '^0x[a-fA-F0-9]{40}$'
-        chainId:
-          type: integer
-          enum: [8453]
-        tokenAddress:
-          type: string
-          pattern: '^0x[a-fA-F0-9]{40}$'
-        expectedSigner:
-          type: string
-          pattern: '^0x[a-fA-F0-9]{40}$'
-        to:
-          type: string
-          pattern: '^0x[a-fA-F0-9]{40}$'
-        value:
-          type: string
-          pattern: '^[0-9]+$'
-        data:
-          type: string
-          pattern: '^0x([a-fA-F0-9]{2})*$'
-        status:
-          type: string
-          enum: [created, signed, confirmed, failed]
-        createdAt:
-          type: string
-          format: date-time
-        updatedAt:
-          type: string
-          format: date-time
-        txHash:
-          type: string
-        blockNumber:
-          type: integer
-          minimum: 0
-    ConfirmChainReceiptRequest:
-      type: object
-      required: [txHash, chainId]
-      properties:
-        txHash:
-          type: string
-        chainId:
-          type: integer
-        blockNumber:
-          type: integer
-          minimum: 0
-        status:
-          type: string
-          enum: [confirmed]
     WalletBalanceResponse:
       type: object
       required: [balances, totalBalances]
@@ -2166,39 +1150,6 @@ components:
         tokenType:
           type: string
           enum: [native, expo]
-    MobileMessagePushRequest:
-      type: object
-      additionalProperties: false
-      required: [userId, threadId, eventId, eventType, agentName]
-      properties:
-        userId:
-          type: string
-          minLength: 1
-        threadId:
-          type: string
-          minLength: 1
-        eventId:
-          type: string
-          minLength: 1
-        eventType:
-          type: string
-          enum: [assistant_message, approval_request]
-        agentName:
-          type: string
-          minLength: 1
-        message:
-          type: string
-          maxLength: 240
-    MobileMessagePushResponse:
-      type: object
-      additionalProperties: false
-      required: [delivered]
-      properties:
-        delivered:
-          type: boolean
-        reason:
-          type: string
-          enum: [no_token]
     MobileRegentStakingWalletRequest:
       type: object
       additionalProperties: false
@@ -2250,29 +1201,6 @@ components:
           format: date-time
           nullable: true
       additionalProperties: false
-    MobileAgentLinkClaimRequest:
-      type: object
-      additionalProperties: false
-      required: [code]
-      properties:
-        code:
-          type: string
-          minLength: 1
-          description: The pairing code scanned from the agent's QR.
-    MobileAgentLinkClaimResponse:
-      type: object
-      additionalProperties: false
-      required: [connectedAgent]
-      properties:
-        connectedAgent:
-          type: object
-          additionalProperties: false
-          required: [id, name]
-          properties:
-            id:
-              type: string
-            name:
-              type: string
     RegentStakingState:
       description: >-
         One wallet's staking figures, every one read from Base at the same block.
@@ -2379,477 +1307,6 @@ components:
       properties:
         wallet_action:
           $ref: '#/components/schemas/RegentStakingWalletAction'
-    PrepareWalletActionRequest:
-      type: object
-      required: [regentId, expectedSigner, to, value, data, riskCopy]
-      properties:
-        regentId:
-          type: string
-        expectedSigner:
-          type: string
-          pattern: '^0x[a-fA-F0-9]{40}$'
-        to:
-          type: string
-          pattern: '^0x[a-fA-F0-9]{40}$'
-        value:
-          type: string
-          pattern: '^[0-9]+$'
-        data:
-          type: string
-          pattern: '^0x([a-fA-F0-9]{2})*$'
-        riskCopy:
-          type: string
-          minLength: 1
-          maxLength: 200
-        amount:
-          type: string
-        currency:
-          type: string
-    PreparedWalletAction:
-      type: object
-      required:
-        - action_id
-        - owner_product
-        - resource
-        - resource_id
-        - action
-        - chain_id
-        - to
-        - value
-        - data
-        - expected_signer
-        - expires_at
-        - idempotency_key
-        - simulation
-        - risk_copy
-        - status
-      properties:
-        action_id:
-          type: string
-        owner_product:
-          type: string
-          enum: [ios]
-        resource:
-          type: string
-          enum: [mobile_wallet_action]
-        resource_id:
-          type: string
-        action:
-          type: string
-          enum: [funding, return]
-        chain_id:
-          type: integer
-          enum: [8453]
-        to:
-          type: string
-          pattern: '^0x[a-fA-F0-9]{40}$'
-        value:
-          type: string
-          pattern: '^[0-9]+$'
-        data:
-          type: string
-          pattern: '^0x([a-fA-F0-9]{2})*$'
-        expected_signer:
-          type: string
-          pattern: '^0x[a-fA-F0-9]{40}$'
-        expires_at:
-          type: string
-          format: date-time
-          description: Prepared wallet actions expire 10 minutes after creation.
-        idempotency_key:
-          type: string
-        simulation:
-          type: object
-          additionalProperties: false
-          required: [required, status]
-          properties:
-            required:
-              type: boolean
-            status:
-              type: string
-              enum: [not_required, pending, passed, failed]
-            block_number:
-              type: integer
-              nullable: true
-        risk_copy:
-          type: string
-        status:
-          type: string
-          enum: [prepared, confirmed, expired, failed]
-        tx_hash:
-          type: string
-        block_number:
-          type: integer
-          minimum: 0
-    RegentDetail:
-      allOf:
-        - $ref: '#/components/schemas/RegentSummary'
-        - type: object
-          required:
-            - runtimeHeadline
-            - mission
-            - recentActivity
-            - returnRequests
-          properties:
-            runtimeHeadline:
-              type: string
-            mission:
-              type: string
-            recentActivity:
-              type: array
-              items:
-                $ref: '#/components/schemas/RegentActivity'
-            returnRequests:
-              type: array
-              items:
-                $ref: '#/components/schemas/RegentReturnRequest'
-    RegentManagerGoal:
-      type: object
-      required: [id, title, status]
-      properties:
-        id:
-          type: string
-        title:
-          type: string
-        status:
-          type: string
-        note:
-          type: string
-    RegentManagerTask:
-      type: object
-      required: [id, title, status]
-      properties:
-        id:
-          type: string
-        title:
-          type: string
-        status:
-          type: string
-        owner:
-          type: string
-        note:
-          type: string
-    RegentManagerEvent:
-      type: object
-      required: [id, title, detail, at]
-      properties:
-        id:
-          type: string
-        title:
-          type: string
-        detail:
-          type: string
-        at:
-          type: string
-          format: date-time
-    RegentManagerRosterMember:
-      type: object
-      required: [id, name, role, status]
-      properties:
-        id:
-          type: string
-        name:
-          type: string
-        role:
-          type: string
-        status:
-          type: string
-    RegentManagerDetail:
-      type: object
-      required:
-        - regentId
-        - headline
-        - companySummary
-        - dashboardUrl
-        - goals
-        - activeTasks
-        - recentEvents
-        - roster
-      properties:
-        regentId:
-          type: string
-        headline:
-          type: string
-        companySummary:
-          type: string
-        dashboardUrl:
-          type: string
-        goals:
-          type: array
-          items:
-            $ref: '#/components/schemas/RegentManagerGoal'
-        activeTasks:
-          type: array
-          items:
-            $ref: '#/components/schemas/RegentManagerTask'
-        recentEvents:
-          type: array
-          items:
-            $ref: '#/components/schemas/RegentManagerEvent'
-        roster:
-          type: array
-          items:
-            $ref: '#/components/schemas/RegentManagerRosterMember'
-    CreateRegentReturnRequest:
-      type: object
-      required: [amount, currency, destinationWalletAddress, chainId, expectedSigner, to, value, data]
-      properties:
-        amount:
-          type: string
-        currency:
-          type: string
-        destinationWalletAddress:
-          type: string
-          description: Must match the transaction `to` address.
-          pattern: '^0x[a-fA-F0-9]{40}$'
-        chainId:
-          type: integer
-          enum: [8453]
-        expectedSigner:
-          type: string
-          pattern: '^0x[a-fA-F0-9]{40}$'
-        to:
-          type: string
-          pattern: '^0x[a-fA-F0-9]{40}$'
-        value:
-          type: string
-          pattern: '^[0-9]+$'
-        data:
-          type: string
-          pattern: '^0x([a-fA-F0-9]{2})*$'
-    MessageThreadStatus:
-      type: string
-      enum: [idle, running, waiting, failed]
-    PendingMessageApproval:
-      type: object
-      required: [requestId, action, regentName, riskCopy, resolved]
-      properties:
-        requestId:
-          type: string
-        action:
-          type: string
-          description: The action the Regent is asking to take, from the Platform RWR approval type.
-        regentName:
-          type: string
-          description: The Regent asking for this approval.
-        riskCopy:
-          type: string
-          description: Plain-language risk assessment from the Platform RWR approval risk summary.
-        amount:
-          type: string
-          description: Requested amount, from the Platform RWR approval payload `amount` key.
-        currency:
-          type: string
-          description: Token symbol for the requested amount, from the payload `currency` key.
-        amountUsd:
-          type: string
-          description: US dollar value of the requested amount when known, from the payload `amount_usd` key.
-        contractAddress:
-          type: string
-          description: Target contract address, from the payload `contract_address` key.
-        expiresAt:
-          type: string
-          format: date-time
-          description: When this approval stops being valid. Absent when the Platform approval has no expiry.
-        resolved:
-          type: boolean
-    MessageThread:
-      type: object
-      required:
-        - id
-        - platformThreadId
-        - title
-        - agentId
-        - agentName
-        - source
-        - status
-        - latestNote
-        - lastUpdatedAt
-      properties:
-        id:
-          type: string
-          description: One, two, or three positive integer segments separated by `~`. A one-segment ID starts a company thread before Platform has a work item.
-        platformThreadId:
-          type: string
-        title:
-          type: string
-        agentId:
-          type: string
-        agentName:
-          type: string
-        source:
-          type: string
-          enum: [platform_rwr]
-        status:
-          $ref: '#/components/schemas/MessageThreadStatus'
-        latestNote:
-          type: string
-        lastUpdatedAt:
-          type: string
-          format: date-time
-        pendingApproval:
-          $ref: '#/components/schemas/PendingMessageApproval'
-    MessageThreadDetail:
-      allOf:
-        - $ref: '#/components/schemas/MessageThread'
-        - type: object
-          required: [composerPlaceholder]
-          properties:
-            composerPlaceholder:
-              type: string
-    HermesVoiceAccount:
-      type: object
-      additionalProperties: false
-      required: [required, satisfied, provider]
-      properties:
-        required:
-          type: boolean
-          enum: [true]
-        satisfied:
-          type: boolean
-        provider:
-          type: string
-          enum: [openai_chatgpt]
-        connect_url:
-          type: string
-          format: uri
-          nullable: true
-    MobileRegentVoice:
-      type: object
-      additionalProperties: false
-      required: [enabled, health, account]
-      properties:
-        enabled:
-          type: boolean
-        health:
-          type: string
-          enum: [ok, degraded, unavailable]
-        account:
-          $ref: '#/components/schemas/HermesVoiceAccount'
-    CreateHermesVoiceSessionRequest:
-      type: object
-      additionalProperties: false
-      required: [device_capabilities]
-      properties:
-        voice:
-          type: string
-          default: marin
-        locale:
-          type: string
-        timezone:
-          type: string
-        reasoning_effort:
-          type: string
-          enum: [minimal, low, medium, high, xhigh]
-          default: low
-        device_capabilities:
-          type: array
-          items:
-            type: string
-        preferred_transport:
-          type: string
-          enum: [webrtc]
-          default: webrtc
-    HermesVoiceSession:
-      type: object
-      additionalProperties: false
-      required: [session_id, agent_id, realtime, tools, expires_at, account]
-      properties:
-        session_id:
-          type: string
-        agent_id:
-          type: string
-        expires_at:
-          type: string
-          format: date-time
-        account:
-          $ref: '#/components/schemas/HermesVoiceAccount'
-        realtime:
-          type: object
-          additionalProperties: false
-          required: [provider, model, client_secret, client_secret_expires_at]
-          properties:
-            provider:
-              type: string
-              enum: [openai-realtime]
-            model:
-              type: string
-              default: gpt-realtime-2
-            client_secret:
-              type: string
-            client_secret_expires_at:
-              type: string
-              format: date-time
-            calls_url:
-              type: string
-              default: https://api.openai.com/v1/realtime/calls
-        tools:
-          type: array
-          items:
-            $ref: '#/components/schemas/HermesVoiceTool'
-    HermesVoiceStatus:
-      type: object
-      additionalProperties: false
-      required: [enabled, health, agent_id, account]
-      properties:
-        enabled:
-          type: boolean
-        health:
-          type: string
-          enum: [ok, degraded, unavailable]
-        agent_id:
-          type: string
-        account:
-          $ref: '#/components/schemas/HermesVoiceAccount'
-        active_session_id:
-          type: string
-          nullable: true
-        active_turn_id:
-          type: string
-          nullable: true
-        queue_depth:
-          type: integer
-        last_event_id:
-          type: string
-          nullable: true
-    HermesVoiceTool:
-      type: object
-      additionalProperties: false
-      required: [name, owner, description]
-      properties:
-        name:
-          type: string
-        owner:
-          type: string
-          enum: [hermes, ios]
-        description:
-          type: string
-        requires_approval:
-          type: boolean
-          default: false
-    HermesVoiceToolResult:
-      type: object
-      additionalProperties: false
-      required: [session_id, tool_call_id, ok]
-      properties:
-        session_id:
-          type: string
-        tool_call_id:
-          type: string
-        ok:
-          type: boolean
-        result: {}
-        error:
-          type: object
-          nullable: true
-    CreateMessageThreadRequest:
-      type: object
-      required: [agentId, agentName]
-      properties:
-        agentId:
-          type: string
-        agentName:
-          type: string
     CoinbaseProxyRequest:
       type: object
       additionalProperties: false
@@ -2974,49 +1431,158 @@ components:
           type: string
         failureReason:
           type: string
-    MessageThreadEvent:
+    MobileAgentKind:
+      type: string
+      enum: [muse, grok_bot, hermes, other]
+    MobileAgent:
       type: object
-      required: [eventId, type, threadId, ts]
+      required: [id, name, kind, walletAddress, paired, createdAt, usdcBalance]
       properties:
-        eventId:
+        id:
           type: string
-        type:
+        name:
           type: string
-        threadId:
+        kind:
+          $ref: '#/components/schemas/MobileAgentKind'
+        walletAddress:
           type: string
-        ts:
+          pattern: '^0x[a-fA-F0-9]{40}      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, product, status, path, request_id, message]
+          properties:
+            code:
+              type: string
+            product:
+              type: string
+              enum: [ios]
+            status:
+              type: integer
+            path:
+              type: string
+            request_id:
+              type: string
+              nullable: true
+            message:
+              type: string
+            next_steps:
+              type: string
+              nullable: true
+          additionalProperties: false
+
+          description: The agent's Base wallet address
+        paired:
+          type: boolean
+          description: True only when the agent proved it holds this wallet's key through a pairing code
+        createdAt:
           type: string
           format: date-time
-        chunk:
+        usdcBalance:
           type: string
-        text:
+          nullable: true
+          description: Live Base USDC balance as a decimal string; null when Base could not be read
+    AddMobileAgentRequest:
+      type: object
+      required: [name, kind, walletAddress]
+      additionalProperties: false
+      properties:
+        name:
           type: string
-        role:
+          minLength: 1
+          maxLength: 60
+        kind:
+          $ref: '#/components/schemas/MobileAgentKind'
+        walletAddress:
           type: string
-          enum: [user, assistant, system]
+          pattern: '^0x[a-fA-F0-9]{40}      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, product, status, path, request_id, message]
+          properties:
+            code:
+              type: string
+            product:
+              type: string
+              enum: [ios]
+            status:
+              type: integer
+            path:
+              type: string
+            request_id:
+              type: string
+              nullable: true
+            message:
+              type: string
+            next_steps:
+              type: string
+              nullable: true
+          additionalProperties: false
+
+    RenameMobileAgentRequest:
+      type: object
+      required: [name]
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 60
+    CreateMobileAgentPairingCodeRequest:
+      type: object
+      required: [name, kind]
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 60
+        kind:
+          $ref: '#/components/schemas/MobileAgentKind'
+    MobileAgentPairingCode:
+      type: object
+      required: [code, expiresAt]
+      properties:
+        code:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+    PairMobileAgentRequest:
+      type: object
+      required: [code]
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+          minLength: 1
+    PairMobileAgentAccepted:
+      type: object
+      required: [status, message]
+      properties:
         status:
           type: string
-        requestId:
-          type: string
-        action:
-          type: string
-        regentName:
-          type: string
-        riskCopy:
-          type: string
-        amount:
-          type: string
-        currency:
-          type: string
-        amountUsd:
-          type: string
-        contractAddress:
-          type: string
-        result:
-          type: string
-          enum: [approved, denied, timed_out]
+          enum: [awaiting_confirmation]
         message:
           type: string
+    MobileAgentPairingStatus:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [waiting, needs_confirmation, expired]
+        walletAddress:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
+          description: Present when status is needs_confirmation
+        expiresAt:
+          type: string
+          format: date-time
+          description: Present when status is waiting or needs_confirmation
     ErrorEnvelope:
       type: object
       required: [error]

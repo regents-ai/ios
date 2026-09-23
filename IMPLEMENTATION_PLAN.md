@@ -1,83 +1,57 @@
 # Regents Mobile Implementation Plan
 
-This document describes the next build after the mobile Regent route cutover.
+This document describes the next build after the "My agents" cutover.
 
 ## Current Reality
 
 Today the app has two live mobile groups:
 
 - Wallet flows: sign-in, wallet opening, buy, cash-out, wallet send, receive, and history.
-- Regent mobile surfaces: Regents, Regent Manager, Talk, and explicit wallet review steps.
+- My agents: the list of agents a person funds, kept by the phone backend.
 
-The old preview route family has been removed from the app, backend, and contract.
+An agent enters the list in one of two ways:
 
-The mobile routes now read product-backed records where the owning product exposes them:
+- The person pastes its Base wallet address. The agent is listed as "address only".
+- The person gives the agent a pairing code. The agent sends a signed request to
+  `POST /agent/pair`, the backend verifies the signature with the SIWA server for the
+  `regents-mobile` audience, and the app asks the person to confirm the verified wallet
+  address. Once confirmed, the agent is listed as paired.
 
-- Regent list, detail, and Regent Manager summaries come from Platform projection.
-- Talk sessions, messages, events, and approvals come from Platform Regent Work Runtime.
-- The iOS backend owns only wallet intent and receipt state needed by the phone wallet rails.
+Every listed agent shows its live Base USDC balance, read by the backend in one call.
+Funding an agent is the existing wallet send flow, prefilled with Base USDC and the
+agent's address; the person reviews and signs on the phone and no server step sits in
+between.
+
+The backend keeps only the per-user agent list (one entry per user, at most fifty
+agents) and unspent pairing codes (one entry per code, gone after ten minutes), in
+Redis in release and a JSON file locally. It holds no agent conversations, work records, voice
+sessions, or funding receipts.
 
 ## What The Next Build Should Do
 
-The next build should connect the current mobile routes to a person’s Regent account while keeping the wallet side intact.
-
-That next build should:
-
-1. keep the current mobile contract as the source of truth
-2. keep those routes connected to the owning product records
-3. keep only wallet intent and receipt state in backend storage
-4. keep wallet review steps explicit and user-confirmed
+1. keep `api-contract.openapiv3.yaml` as the source of truth for the mobile routes
+2. keep the agent list owned by the phone backend, never by another product
+3. keep every money step user-signed from the phone wallet
+4. keep pairing single-use and short-lived
 
 ## Product Direction
 
-Keep the existing foundation:
-
 - Coinbase remains the wallet base for buy, cash-out, wallet send, and wallet identity support.
-- Happy remains donor material for future terminal interaction patterns and mobile presentation ideas.
-- Base and USDC remain the main happy path for the money side of the app.
+- Base USDC remains the main happy path for the money side of the app.
+- Any agent with a Base wallet can be listed; Muse, Grok Bot, and Hermes are named kinds, everything else is "Other agent".
 
 ## Next Build Scope
 
-### 1. Live Regent list and detail
+### 1. Agent balance history
 
-- Keep loading the signed-in person’s Regents from Platform projection.
-- Show current balances, status, latest updates, and wallet addresses from live backend data.
-- Keep the `/mobile/regents` route family as the only mobile Regent entry point.
+- Show recent USDC movement for a listed agent from chain reads, not from a product record.
 
-### 2. Live Regent Manager summary
+### 2. Paired-agent actions
 
-- Keep Regent Manager summaries attached to Platform projection.
-- Keep the mobile summary focused on the most useful phone-sized information first.
-- Add a larger view only when it points to the person’s real destination.
-
-### 3. Live Talk
-
-- Keep mobile Talk attached to Platform Regent Work Runtime records.
-- Keep message sending and review handling attached to the current mobile contract.
-- Restore local notifications only when they reflect real account activity.
-
-### 4. Live money movement between wallet and agent
-
-- Add real wallet-to-Regent funding only after the live Regent wallet contract is in place.
-- Add real Regent-to-wallet returns only after the live backend can safely create and track them.
-- Keep the money and review steps explicit and easy to understand from the phone.
-
-## Delivery Order
-
-Recommended order:
-
-1. contract updates
-2. stronger Platform-backed empty/error states
-3. iOS app checks against real records
-4. richer Talk actions
-5. live money movement
+- Let a paired agent ask the phone for funds with a signed request, shown to the person as a plain payment request that they accept or ignore in the wallet.
 
 ## Acceptance For The Next Build
 
-The next build is done when:
-
-- a signed-in person sees their real Regents from Platform projection
-- Regent Manager shows Platform-backed account summaries
-- Talk sessions reflect Platform Regent Work Runtime activity
-- wallet-to-Regent and Regent-to-wallet steps work against live backend data
-- old preview route names remain absent
+- a signed-in person sees only their own agents, with live Base USDC balances
+- a pairing code links one verified wallet to the person who created it, once, within ten minutes
+- funding an agent goes through the wallet review step and signs on the phone

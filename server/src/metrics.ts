@@ -42,13 +42,6 @@ export const mobileCashOutTotal = new Counter({
   registers: [metricsRegistry],
 });
 
-export const mobileSendTotal = new Counter({
-  name: 'mobile_send_total',
-  help: 'Wallet sends resolved against a verified Base chain receipt at the wallet-intent confirm endpoints.',
-  labelNames: ['result'],
-  registers: [metricsRegistry],
-});
-
 export const mobilePushRegistrationsTotal = new Counter({
   name: 'mobile_push_registrations_total',
   help: 'Push tokens registered and stored for signed-in users.',
@@ -62,7 +55,7 @@ export function statusClass(statusCode: number) {
 
 /**
  * Records one observation per finished response. The route label is the
- * matched Express route pattern (e.g. /mobile/regents/:id), never the raw
+ * matched Express route pattern (e.g. /mobile/agents/:agent_id), never the raw
  * URL; requests that match no route are bucketed as "unmatched" so hostile
  * path scans cannot explode label cardinality.
  */

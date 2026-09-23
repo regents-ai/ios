@@ -7,7 +7,6 @@ import {
   createHttpMetricsMiddleware,
   metricsRegistry,
   mobilePushRegistrationsTotal,
-  mobileSendTotal,
   mobileWalletOpenedTotal,
   recordTransactionWebhookOutcome,
   resetMetricsForTests,
@@ -81,17 +80,15 @@ test('verified transaction webhook outcomes count buys and cash-outs by result',
   assert.match(text, /mobile_cash_out_total\{result="failed"\} 1/);
 });
 
-test('the five BI counters expose the exact metric names the dashboard queries', async () => {
+test('the four BI counters expose the exact metric names the dashboard queries', async () => {
   mobileWalletOpenedTotal.inc();
   mobilePushRegistrationsTotal.inc();
-  mobileSendTotal.inc({ result: 'ok' });
   recordTransactionWebhookOutcome('onramp.transaction.success');
   recordTransactionWebhookOutcome('offramp.transaction.success');
 
   const text = await metricsRegistry.metrics();
   assert.match(text, /mobile_wallet_opened_total 1/);
   assert.match(text, /mobile_push_registrations_total 1/);
-  assert.match(text, /mobile_send_total\{result="ok"\} 1/);
   assert.match(text, /mobile_buy_total\{result="ok"\} 1/);
   assert.match(text, /mobile_cash_out_total\{result="ok"\} 1/);
 });

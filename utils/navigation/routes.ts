@@ -1,5 +1,7 @@
 import { Href } from 'expo-router';
 
+import type { MobileAgentKind } from '@/types/regents';
+
 type EmailVerifyMode = 'signin' | 'link';
 type PhoneVerifyMode = 'signin' | 'link' | 'reverify';
 
@@ -14,7 +16,6 @@ export const routes = {
 
   walletSend(params?: {
     flow?: 'agent-funding' | 'send';
-    regentId?: string;
     recipientAddress?: string;
     recipientLabel?: string;
     network?: string;
@@ -37,35 +38,20 @@ export const routes = {
     return '/settings';
   },
 
-  localVoicePairing(params: { regentId: string; agentWallet: string; name?: string }): Href {
-    return {
-      pathname: '/settings/local-voice',
-      params: params.name
-        ? { id: params.regentId, wallet: params.agentWallet, name: params.name }
-        : { id: params.regentId, wallet: params.agentWallet },
-    };
+  agents(): Href {
+    return '/(tabs)/agents';
   },
 
-  message(): Href {
-    return '/message';
+  addAgent(): Href {
+    return '/agent/add';
   },
 
-  messageThread(threadId: string): Href {
-    return { pathname: '/message/[id]', params: { id: threadId } };
+  agentPairing(params: { name: string; kind: MobileAgentKind }): Href {
+    return { pathname: '/agent/pair', params };
   },
 
-  agent(regentId: string): Href {
-    return { pathname: '/agent/[id]', params: { id: regentId } };
-  },
-
-  regentManager(regentId: string): Href {
-    return { pathname: '/agent/[id]/regent-manager', params: { id: regentId } };
-  },
-
-  agentVoice(regentId: string, name?: string): Href {
-    return name
-      ? { pathname: '/agent/[id]/voice', params: { id: regentId, name } }
-      : { pathname: '/agent/[id]/voice', params: { id: regentId } };
+  agent(agentId: string): Href {
+    return { pathname: '/agent/[id]', params: { id: agentId } };
   },
 
   emailVerify(params: { mode: EmailVerifyMode; initialEmail?: string }): Href {

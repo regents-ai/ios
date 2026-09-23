@@ -4,7 +4,7 @@
  * Aesthetic modeled on the OpenClaw opening: a brand glow
  * blooms outward from center, the wordmark fades in over it, then a connect
  * sheet slides up from the bottom offering the three start paths:
- *   1. Existing Hermes Agent  -> /onboarding/connect-hermes
+ *   1. Add an agent -> /agent/add
  *   2. Create Agent in Regents Cloud -> /onboarding/create-cloud-agent
  *   3. (low-key) Add USDC for an agent -> Fund tab
  *
@@ -237,16 +237,16 @@ export default function OnboardingWelcomeScreen() {
             pressStyle="card"
             style={styles.optionRow}
             onPress={() => {
-              setPostAuthDestination('/onboarding/connect-hermes');
-              router.push('/onboarding/connect-hermes');
+              setPostAuthDestination('/agent/add');
+              finish('/auth/login');
             }}
           >
             <View style={styles.optionIcon}>
-              <Ionicons name="terminal-outline" size={22} color={colors.accent} />
+              <Ionicons name="people-outline" size={22} color={colors.accent} />
             </View>
             <View style={styles.optionCopy}>
-              <Text style={styles.optionTitle}>Existing Hermes Agent</Text>
-              <Text style={styles.optionDetail}>Link the agent already running on your computer</Text>
+              <Text style={styles.optionTitle}>Add an agent</Text>
+              <Text style={styles.optionDetail}>Pair an agent or paste its wallet address</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </RegentPressable>

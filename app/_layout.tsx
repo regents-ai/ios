@@ -129,9 +129,8 @@ function RootLayoutContent() {
           <Stack.Screen name="staking" options={cardSlideRight} />
           <Stack.Screen name="auction/[id]" options={cardSlideRight} />
           <Stack.Screen name="agent/[id]" options={cardSlideRight} />
-          <Stack.Screen name="agent/[id]/regent-manager" options={cardSlideRight} />
-          <Stack.Screen name="agent/[id]/voice" options={cardSlideBottom} />
-          <Stack.Screen name="message/[id]" options={cardSlideRight} />
+          <Stack.Screen name="agent/add" options={cardSlideRight} />
+          <Stack.Screen name="agent/pair" options={cardSlideRight} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         </Stack>
       </WalletProviders>

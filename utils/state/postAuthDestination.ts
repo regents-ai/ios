@@ -13,7 +13,7 @@
  */
 
 export type PostAuthDestination =
-  | '/onboarding/connect-hermes'
+  | '/agent/add'
   | '/onboarding/connect-portal'
   | '/onboarding/create-cloud-agent'
   | '/(tabs)/wallet';
@@ -33,4 +33,24 @@ export function clearPostAuthDestination() {
 /** Where sign-in should land: the chosen path if one is pending, else the agents list. */
 export function resolvePostAuthLanding(): PostAuthDestination | typeof DEFAULT_LANDING {
   return pendingDestination ?? DEFAULT_LANDING;
+}
+
+type LandingRouter = {
+  replace(href: '/(tabs)/agents' | PostAuthDestination | typeof DEFAULT_LANDING): void;
+  push(href: '/agent/add'): void;
+};
+
+/**
+ * Moves a freshly signed-in person to their landing. "Add an agent" is a
+ * screen pushed over the agents tab, so Back returns to the list and the tab
+ * bar stays underneath; every other landing replaces the sign-in screen.
+ */
+export function landAfterSignIn(router: LandingRouter) {
+  const landing = resolvePostAuthLanding();
+  if (landing === '/agent/add') {
+    router.replace('/(tabs)/agents');
+    router.push('/agent/add');
+    return;
+  }
+  router.replace(landing);
 }

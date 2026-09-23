@@ -21,7 +21,7 @@ import {
 } from 'react-native';
 
 import { getVerificationSuccessAction } from '../utils/authFlowState';
-import { resolvePostAuthLanding } from '../utils/state/postAuthDestination';
+import { landAfterSignIn } from '../utils/state/postAuthDestination';
 
 export default function EmailCodeScreen() {
   const theme = useTheme();
@@ -129,7 +129,7 @@ export default function EmailCodeScreen() {
         await loginWithCode({ email, code: otp });
         const nextAction = getVerificationSuccessAction(mode);
         if (nextAction === 'go_wallet') {
-          router.replace(resolvePostAuthLanding());
+          landAfterSignIn(router);
         } else {
           router.dismissAll();
         }
@@ -144,7 +144,7 @@ export default function EmailCodeScreen() {
         scheduleDismiss(() => {
           const nextAction = getVerificationSuccessAction(mode);
           if (nextAction === 'go_wallet') {
-            router.replace(resolvePostAuthLanding());
+            landAfterSignIn(router);
           } else {
             router.dismissAll();
           }

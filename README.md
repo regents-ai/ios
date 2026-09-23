@@ -8,11 +8,11 @@
 
 Regents Mobile, built by Regents Labs, is the iPhone wallet for Regent users. The live path is the wallet: open a wallet, add funds, send, receive, cash out, and review history with Base USDC as the happy path.
 
-The app also contains preview surfaces for connecting to a hosted Regent, Regent Manager, Talk, Paperclip, and terminal-style work. Treat those as preview until the related product status is marked live.
+The app also keeps "My agents": the list of agents a person funds. An agent is added by pasting its Base wallet address or by giving it a pairing code, and every listed agent shows its live Base USDC balance.
 
 > [!IMPORTANT]
-> The wallet is the live path and moves real money on Base. Everything else in the app is
-> preview and should not be described as being at the same level of availability.
+> The wallet is the live path and moves real money on Base. Funding an agent is a wallet
+> send that the person reviews and signs on the phone.
 
 ## Where this sits
 
@@ -45,7 +45,8 @@ The app also contains preview surfaces for connecting to a hosted Regent, Regent
 
 - Open a mobile wallet after signing in.
 - Add USDC on Base, with Apple Pay shown when it is available for the user and region.
-- Send funds to another wallet or fund an agent working balance.
+- Send funds to another wallet or fund one of your agents.
+- Keep a list of your agents: add one by wallet address or pair it with a code, and see its Base USDC balance.
 - Receive funds by copying the Base and Ethereum wallet address.
 - Cash out supported balances through the Coinbase cash-out flow.
 - Review wallet history and failed transaction support details.
@@ -53,11 +54,11 @@ The app also contains preview surfaces for connecting to a hosted Regent, Regent
 
 Base USDC is the primary route for agent funding. Other balances may appear in the wallet detail view, but Base USDC remains the recommended path.
 
-## Preview Regent Surfaces
+## My Agents
 
-The Agents, Message, Regent Manager, and voice screens let the app connect to Regent work records and agent conversations. These screens are present, but the founder status ledger marks live hosted Regent connection, Paperclip, and terminal as preview.
+The agents list is owned by the phone backend under `server/`. Pasting a wallet address lists an agent straight away. A pairing code (single-use, ten minutes) lets an agent that can run commands prove it holds its wallet key: it sends a signed request to `POST /agent/pair`, the backend checks the signature with the SIWA server for the `regents-mobile` audience and records the verified address as waiting. The pairing screen shows the exact instructions to paste to the agent, then asks the person to confirm the address the agent signed in with; only a confirmed address is listed as paired. If balances cannot be read, the list still loads and says so.
 
-Preview surfaces can help test agent funding, replies, approvals, and work updates. They should not be described as the same level of availability as wallet opening, buy, cash-out, send, receive, or history.
+Funding an agent opens the wallet send flow prefilled with Base USDC and the agent's address. Balances shown in the list are live Base USDC reads.
 
 ## Run locally
 
@@ -126,7 +127,7 @@ has its own suite:
 
 ## Agent Orientation
 
-Start with `AGENTS.md`, `repo.yaml`, and `layer2.md` before editing. The app uses Expo Router under `app/`, shared UI under `components/`, wallet and Regent API helpers under `hooks/` and `utils/`, and the local mobile backend under `server/`.
+Start with `AGENTS.md`, `repo.yaml`, and `layer2.md` before editing. The app uses Expo Router under `app/`, shared UI under `components/`, wallet and mobile API helpers under `hooks/` and `utils/`, and the local mobile backend under `server/` (agents list in `server/src/mobileAgents.ts`, routes in `server/src/routes/mobileAgents.ts`).
 
 The in-repo API source of truth is `api-contract.openapiv3.yaml`. `mobile-services-contract.openapiv3.yaml` currently documents that there are no separate shipped shared mobile service routes.
 

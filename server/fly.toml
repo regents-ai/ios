@@ -9,8 +9,10 @@ kill_timeout = "5s"
 [env]
   NODE_ENV = "production"
   PORT = "8080"
+  # Verifies SIWA-signed agent pairing requests (POST /agent/pair).
+  SIWA_SERVER_URL = "https://siwa-server.fly.dev"
 
-# All server state (wallet intents, voice sessions, push tokens, webhook
+# All server state (agents list, pairing codes, push tokens, webhook
 # dedupe, transaction event feed) lives in Redis (REDIS_URL), so machines are
 # stateless and the app can scale beyond one machine.
 [http_service]
