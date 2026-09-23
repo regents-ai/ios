@@ -1,5 +1,6 @@
 import { getBaseUrl } from '@/constants/BASE_URL';
 import {
+  BasePortfolio,
   MobileAgent,
   MobileAgentKind,
   MobileAgentPairingCode,
@@ -13,6 +14,7 @@ import { authenticatedFetch } from '@/utils/authenticatedFetch';
 
 const mobileAgentsPath = '/mobile/agents';
 const mobileAgentPairingCodesPath = '/mobile/agents/pairing-codes';
+const mobilePortfolioPath = '/mobile/portfolio';
 const mobileRegentStakingPath = '/mobile/regent/staking';
 const mobilePortalPairingPath = '/mobile/portal-pairing';
 const mobilePortalPairingStartPath = '/mobile/portal-pairing/start';
@@ -40,6 +42,7 @@ type MobileRegentStakingPath =
 
 type RegentApiPath =
   | MobileAgentsPath
+  | `${typeof mobilePortfolioPath}?wallets=${string}`
   | MobileRegentStakingPath
   | typeof mobilePortalPairingPath
   | typeof mobilePortalPairingStartPath
@@ -84,6 +87,17 @@ const mobileRegentStakingWithWalletPath = (walletAddress: string): `${typeof mob
   `${mobileRegentStakingPath}?walletAddress=${encodeURIComponent(walletAddress)}`;
 
 export const regentApi = {
+  /** Base holdings and staking position for one to five wallets, in the order given. */
+  async getPortfolio(input: { wallets: string[] }): Promise<BasePortfolio> {
+    const payload = await requestJson<{ portfolio: BasePortfolio }>(
+      `${mobilePortfolioPath}?wallets=${input.wallets.map(encodeURIComponent).join(',')}`,
+      undefined,
+      'Unable to load balances right now.'
+    );
+
+    return payload.portfolio;
+  },
+
   listAgents(): Promise<MobileAgentsList> {
     return requestJson<MobileAgentsList>(
       mobileAgentsPath,

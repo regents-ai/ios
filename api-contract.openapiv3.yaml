@@ -432,6 +432,57 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '429':
           $ref: '#/components/responses/RateLimitError'
+  /mobile/portfolio:
+    get:
+      operationId: getMobilePortfolio
+      summary: Read what each listed wallet holds on Base, including its REGENT staking position
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: wallets
+          required: true
+          description: One to five comma-separated wallet addresses
+          schema:
+            type: string
+            pattern: '^0x[a-fA-F0-9]{40}(,0x[a-fA-F0-9]{40}){0,4}$'
+      responses:
+        '200':
+          description: Holdings for every listed wallet, read at one Base block
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [portfolio]
+                properties:
+                  portfolio:
+                    $ref: '#/components/schemas/BasePortfolio'
+        '400':
+          description: One to five valid wallet addresses are required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '401':
+          description: Authentication is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '502':
+          description: Base could not be read
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: Base RPC is not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
   /mobile/regent/staking:
     get:
       operationId: getMobileRegentStaking
@@ -1374,6 +1425,42 @@ components:
           format: date-time
           nullable: true
       additionalProperties: false
+    BasePortfolio:
+      description: What each listed wallet holds on Base, every figure read at the same block.
+      type: object
+      additionalProperties: false
+      required: [chain_id, block_number, wallets]
+      properties:
+        chain_id:
+          type: integer
+          enum: [8453]
+        block_number: { type: integer }
+        wallets:
+          type: array
+          items:
+            $ref: '#/components/schemas/BaseWalletHoldings'
+    BaseWalletHoldings:
+      description: >-
+        One wallet's ETH, USDC and REGENT balances and its REGENT staking
+        position, as decimal token amounts.
+      type: object
+      additionalProperties: false
+      required:
+        - wallet_address
+        - eth_balance
+        - usdc_balance
+        - regent_balance
+        - staked_regent
+        - claimable_usdc
+        - claimable_regent
+      properties:
+        wallet_address: { type: string, pattern: '^0x[a-fA-F0-9]{40}$' }
+        eth_balance: { type: string }
+        usdc_balance: { type: string }
+        regent_balance: { type: string }
+        staked_regent: { type: string }
+        claimable_usdc: { type: string }
+        claimable_regent: { type: string }
     RegentStakingState:
       description: >-
         One wallet's staking figures, every one read from Base at the same block.

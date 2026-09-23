@@ -69,6 +69,7 @@ test('served backend routes stay declared in the mobile API contract', () => {
     '/push-tokens/debug/{user_id}',
     '/webhooks/onramp',
     '/events/onramp',
+    '/mobile/portfolio',
     '/mobile/regent/staking',
     '/mobile/portal-pairing',
     '/mobile/agents',
