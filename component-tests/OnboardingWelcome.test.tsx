@@ -25,7 +25,7 @@ describe('OnboardingWelcomeScreen', () => {
     // sign-in, so this screen must mount with only the theme context present.
     const { getByText } = renderThemed(<OnboardingWelcomeScreen />);
 
-    expect(getByText('Existing Hermes Agent')).toBeTruthy();
+    expect(getByText('Add an agent')).toBeTruthy();
     expect(getByText('Create Agent in Regents Cloud')).toBeTruthy();
   });
 

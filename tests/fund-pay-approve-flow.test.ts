@@ -6,7 +6,7 @@ function read(path: string) {
   return readFileSync(path, 'utf8');
 }
 
-test('main mobile tabs lead with fund, pay, earn, and message', () => {
+test('main mobile tabs lead with fund, pay, and earn', () => {
   const layout = read('app/(tabs)/_layout.tsx');
   const sendTab = read('app/(tabs)/send.tsx');
   const earnTab = read('app/(tabs)/earn.tsx');
@@ -15,25 +15,25 @@ test('main mobile tabs lead with fund, pay, earn, and message', () => {
   assert.match(layout, /name="wallet"[\s\S]*title: 'Fund'/);
   assert.match(layout, /name="send"[\s\S]*title: 'Pay'/);
   assert.match(layout, /name="earn"[\s\S]*title: 'Earn'/);
-  assert.match(layout, /name="message"[\s\S]*title: 'Message'/);
   assert.match(layout, /name="agents"[\s\S]*href: null/);
   assert.match(layout, /name="autolaunch"[\s\S]*href: null/);
+  assert.doesNotMatch(layout, /name="message"/);
   assert.match(sendTab, /export \{ default \} from '\.\.\/wallet\/send'/);
   assert.match(earnTab, /Bring people into Regents/);
   assert.match(profileButton, /accessibilityLabel="Open profile"/);
 });
 
-test('agents and wallet screens use the agent money story', () => {
+test('my agents list and wallet screens use the agent money story', () => {
   const agents = read('app/(tabs)/agents.tsx');
   const wallet = read('app/(tabs)/wallet.tsx');
   const onramp = read('components/onramp/onramp-form-sections.tsx');
 
-  assert.match(agents, /Fund an AI agent in seconds/);
-  assert.match(agents, /Fund Agent/);
+  assert.match(agents, /regentApi\.listAgents\(\)/);
+  assert.match(agents, /Add your first agent/);
+  assert.match(agents, /routes\.addAgent\(\)/);
   assert.match(agents, /Add USDC/);
-  assert.match(agents, /Message Agent/);
-  assert.match(agents, /Track Rewards/);
-  assert.match(agents, /Working balance/);
+  assert.match(agents, /formatUsdcBalance\(agent\.usdcBalance\)/);
+  assert.match(agents, /label="Paired"/);
 
   assert.match(wallet, /Add funds for agent work/);
   assert.match(wallet, /label: 'Pay'/);
@@ -42,23 +42,27 @@ test('agents and wallet screens use the agent money story', () => {
   assert.match(onramp, /Swipe to add USDC/);
 });
 
-test('agent detail starts the tracked fund-agent send flow', () => {
+test('agent detail starts the fund-agent send flow without a server prepare step', () => {
   const agentDetail = read('app/agent/[id].tsx');
   const routes = read('utils/navigation/routes.ts');
+  const evmTransferHook = read('hooks/wallet/useEvmTransfer.ts');
+  const userOpAlertsHook = read('hooks/wallet/useUserOpStatusAlerts.ts');
 
   assert.match(routes, /walletSend\(params\?:/);
   assert.match(agentDetail, /routes\.walletSend\(\{/);
   assert.match(agentDetail, /flow: 'agent-funding'/);
-  assert.match(agentDetail, /regentId: agent\.id/);
   assert.match(agentDetail, /recipientAddress: agent\.walletAddress/);
   assert.match(agentDetail, /recipientLabel: agent\.name/);
-  assert.match(agentDetail, /Fund Agent/);
+  assert.match(agentDetail, /Add funds/);
+  assert.match(agentDetail, /regentApi\.renameAgent/);
+  assert.match(agentDetail, /regentApi\.removeAgent/);
+  assert.match(agentDetail, /routes\.agentPairing\(/);
+  assert.doesNotMatch(`${evmTransferHook}\n${userOpAlertsHook}`, /regentApi|prepareWalletAction|confirmWalletAction|idempotency/i);
 });
 
-test('agent funding mode prefers Base USDC and records wallet actions', () => {
+test('agent funding mode prefers Base USDC and points to the Fund tab when short', () => {
   const send = read('app/wallet/send.tsx');
   const fundingChoicesHook = read('hooks/wallet/useFundingChoices.ts');
-  const evmTransferHook = read('hooks/wallet/useEvmTransfer.ts');
   const userOpAlertsHook = read('hooks/wallet/useUserOpStatusAlerts.ts');
   const confirmationModal = read('components/wallet/SendConfirmationModal.tsx');
   const fundingChoices = read('utils/fetchWalletFundingChoices.ts');
@@ -69,10 +73,8 @@ test('agent funding mode prefers Base USDC and records wallet actions', () => {
   assert.match(fundingChoicesHook, /choices\.find\(isBaseUsdcBalance\)/);
   assert.match(fundingChoicesHook, /setNetwork\('base'\)/);
   assert.match(send, /Add USDC first/);
+  assert.match(send, /router\.push\(routes\.wallet\(\)\)/);
   assert.match(send, /noBaseUsdcForSend/);
-  assert.match(evmTransferHook, /regentApi\.prepareWalletAction/);
-  assert.match(evmTransferHook, /type: 'funding'/);
-  assert.match(userOpAlertsHook, /regentApi\.confirmWalletAction/);
   assert.match(send, /Review payment/);
   assert.match(confirmationModal, /Review payment/);
   assert.match(confirmationModal, /Pay now/);
@@ -106,65 +108,4 @@ test('pay flow accepts Ethereum addresses, ENS names, paste, and QR photos', () 
   assert.match(send, /QR photo/);
   assert.match(recipientHook, /ImagePicker\.launchImageLibraryAsync/);
   assert.match(recipientHook, /scanFromURLAsync/);
-});
-
-test('message screens present agent messages and payment approvals plainly', () => {
-  const message = read('app/(tabs)/message.tsx');
-  const detail = read('app/message/[id].tsx');
-
-  assert.match(message, /Message your agent/);
-  assert.match(message, /approve payment requests/);
-  assert.match(message, /Agent messages, payment requests, and work updates/);
-  assert.match(message, /listMessageThreads/);
-  assert.doesNotMatch(message, /New message|ENS or Ethereum address|Lookup Recent Addresses|Lookup Regent Users/);
-  assert.doesNotMatch(message, /lookupRecentMessageContacts|listRegentMessageContacts|connectWalletChannel/);
-  assert.doesNotMatch(message, /Secure channel|secure agent chats/);
-  assert.match(message, /Payment approval/);
-  assert.match(detail, /Payment requested/);
-  assert.match(detail, /Agent requests \$\{approval\.amount\} \$\{approval\.currency\}/);
-  assert.match(detail, /Approve payment/);
-  assert.match(detail, /sendMessageThreadMessage/);
-  assert.match(detail, /resolveMessageThreadApproval/);
-  assert.doesNotMatch(detail, /Connect secure channel|connectAgentChannel/);
-});
-
-test('approval card shows the full structured review schema', () => {
-  const detail = read('app/message/[id].tsx');
-  const types = read('types/regents.ts');
-  const contract = read('api-contract.openapiv3.yaml');
-
-  // Contract and types carry the structured fields.
-  assert.match(contract, /PendingMessageApproval:[\s\S]*?required: \[requestId, action, regentName, riskCopy, resolved\]/);
-  assert.match(contract, /PendingMessageApproval:[\s\S]*?amountUsd:/);
-  assert.match(types, /export type PendingMessageApproval = \{[\s\S]*?amountUsd\?: string;[\s\S]*?expiresAt\?: string;[\s\S]*?\}/);
-
-  // Every schema field renders with a plain label.
-  assert.match(detail, />Action<\/Text>/);
-  assert.match(detail, />Requested by<\/Text>/);
-  assert.match(detail, />Amount<\/Text>/);
-  assert.match(detail, />Contract<\/Text>/);
-  assert.match(detail, />Expires<\/Text>/);
-  assert.match(detail, /\{pendingApproval\.riskCopy\}/);
-  assert.match(detail, /approvalAmountLabel/);
-  assert.match(detail, /approval\.amountUsd \? `\$\{base\} · \$\$\{approval\.amountUsd\} USD` : base/);
-  assert.match(detail, /approvalExpiryLabel/);
-  assert.match(detail, /In less than a minute/);
-});
-
-test('approve and deny are explicit, double-submit safe, and blocked once expired', () => {
-  const detail = read('app/message/[id].tsx');
-
-  // Both decisions disable while either is in flight.
-  const denyButton = detail.slice(detail.indexOf("resolveApproval('denied')") - 400, detail.indexOf("resolveApproval('denied')"));
-  const approveButton = detail.slice(detail.indexOf("resolveApproval('approved')") - 400, detail.indexOf("resolveApproval('approved')"));
-  assert.match(denyButton, /disabled=\{!!resolvingDecision\}/);
-  assert.match(approveButton, /disabled=\{!!resolvingDecision\}/);
-  assert.match(detail, /resolvingDecision === 'denied' \? 'Denying\.\.\.' : 'Deny'/);
-  assert.match(detail, /resolvingDecision === 'approved' \? 'Approving\.\.\.'/);
-
-  // Expired approvals cannot be resolved: render guard plus action guard.
-  assert.match(detail, /\{approvalExpired \? \(/);
-  assert.match(detail, /This request expired before a decision was made/);
-  assert.match(detail, /if \(isApprovalExpired\(approval, Date\.now\(\)\)\) \{\s*return;/);
-  assert.match(detail, /isApprovalExpired\(pendingApproval, nowMs\)/);
 });
