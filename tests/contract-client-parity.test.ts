@@ -1,10 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { parse } from 'yaml';
 
 const contract = readFileSync('api-contract.openapiv3.yaml', 'utf8');
 const regentClient = readFileSync('utils/regentApi/client.ts', 'utf8');
 const regentTypes = readFileSync('types/regents.ts', 'utf8');
+
+test('OpenAPI contract parses and every schema reference resolves', () => {
+  const document = parse(contract) as { openapi: string; components: { schemas: Record<string, unknown> } };
+  const schemas = new Set(Object.keys(document.components.schemas));
+  const references = [...contract.matchAll(/#\/components\/schemas\/([A-Za-z0-9_]+)/g)].map((match) => match[1]);
+
+  assert.match(document.openapi, /^3\./);
+  assert.deepEqual(
+    references.filter((name) => !schemas.has(name!)),
+    [],
+  );
+});
 
 test('OpenAPI operations have stable operation IDs', () => {
   const operations = [...contract.matchAll(/^    (get|post|put|patch|delete):$/gm)];
