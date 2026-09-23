@@ -15,9 +15,13 @@ import {
 } from '../autolaunchBids.js';
 
 /**
- * Bidding on Autolaunch auctions on Base from the app's own wallet. The
- * signed-in user names the wallet that signs; every prepared call is bound to
- * that wallet the way the staking routes bind theirs.
+ * Bidding on Autolaunch auctions on Base from the app's own wallet. Auctions
+ * are named by their Autolaunch id; the address and quote token come from
+ * autolaunch.sh's record and are checked against the chain before any call is
+ * prepared. The server trusts the wallet address the app declares, the same
+ * way the staking routes do: the prepared calls name that wallet as the bid's
+ * owner and expected signer, and the wallet itself is what proves ownership
+ * when it signs.
  */
 const evmAddressSchema = z
   .string()
@@ -25,12 +29,12 @@ const evmAddressSchema = z
   .transform((value) => value as Address);
 const decimalSchema = z.string().regex(/^\d+(?:\.\d+)?$/);
 
-const paramsSchema = z.object({ auction_address: evmAddressSchema });
+const paramsSchema = z.object({ auction_id: z.string().trim().min(1).max(200) });
 const positionQuerySchema = z.object({ walletAddress: evmAddressSchema });
 const bidBodySchema = z.object({
   walletAddress: evmAddressSchema,
   amount: decimalSchema,
-  maxPrice: decimalSchema.optional(),
+  maxPrice: decimalSchema,
 });
 const settlementBodySchema = z.object({
   walletAddress: evmAddressSchema,
@@ -39,10 +43,14 @@ const settlementBodySchema = z.object({
 
 // What the wallet is told when the auction, not the app, says no.
 const refusalCopy: Record<AutolaunchRefusal, string> = {
+  auction_not_found: 'Autolaunch has no auction with that id.',
+  auction_not_on_base: 'Only Base auctions can be bid on from the app.',
+  auction_missing_on_chain: 'This auction is not on Base at the address Autolaunch recorded.',
+  auction_currency_changed: 'This auction is not raising the money Autolaunch recorded for it.',
   auction_not_biddable: 'This auction is not taking bids right now.',
   invalid_amount: 'Enter an amount the auction accepts.',
   invalid_price: 'Enter a maximum price the auction accepts.',
-  price_below_admissible_tick: 'That maximum price is below the current price. Raise it or leave it blank.',
+  price_below_admissible_tick: 'That maximum price is below the current price. Raise it to bid.',
   amount_above_balance: 'Your wallet does not hold that much.',
   bid_preparation_unavailable: 'The bid could not be prepared against the auction right now.',
   bid_not_found: 'That bid does not exist on this auction.',
@@ -71,10 +79,13 @@ function respond<T>(res: Response, result: AutolaunchReadResult<T>, present: (va
       return sendError(res, 409, 'AutolaunchRefused', refusalCopy[result.reason]);
     case 'missing_rpc':
       console.error(`❌ [AUTOLAUNCH] ${result.requiredEnv} is not set; Base reads are unavailable`);
-      return sendError(res, 503, 'BaseRpcMissing', 'Base is not configured on this server.');
+      return sendError(res, 503, 'BaseRpcMissing', 'Bidding is unavailable right now. Please try again later.');
     case 'rpc_error':
       console.error(`❌ [AUTOLAUNCH] Base read failed: ${result.name}`);
       return sendError(res, 502, 'BaseRpcError', 'The auction could not be read from Base right now.');
+    case 'autolaunch_error':
+      console.error(`❌ [AUTOLAUNCH] Autolaunch auction lookup failed: ${result.name}`);
+      return sendError(res, 502, 'AutolaunchUnavailable', 'Autolaunch could not confirm this auction right now.');
   }
 }
 
@@ -90,42 +101,42 @@ export function createAutolaunchRoutes(input: AutolaunchRoutesInput = {}) {
   const prepareSettlement = input.prepareSettlement ?? ((settlement) => prepareAutolaunchSettlement(settlement));
   const router = Router();
 
-  router.get('/mobile/autolaunch/auctions/:auction_address/position', async (req: Request, res: Response) => {
+  router.get('/mobile/autolaunch/auctions/:auction_id/position', async (req: Request, res: Response) => {
     const params = paramsSchema.safeParse(req.params);
     const query = positionQuerySchema.safeParse({ walletAddress: queryValue(req, 'walletAddress') });
     if (!params.success || !query.success) {
-      return sendError(res, 400, 'BadRequest', 'A valid auction address and wallet address are required.');
+      return sendError(res, 400, 'BadRequest', 'A valid auction and wallet address are required.');
     }
 
-    const result = await readPosition(params.data.auction_address, query.data.walletAddress);
+    const result = await readPosition(params.data.auction_id, query.data.walletAddress);
     return respond(res, result, (position) => ({ position }));
   });
 
-  router.post('/mobile/autolaunch/auctions/:auction_address/bid', async (req: Request, res: Response) => {
+  router.post('/mobile/autolaunch/auctions/:auction_id/bid', async (req: Request, res: Response) => {
     const params = paramsSchema.safeParse(req.params);
     const body = bidBodySchema.safeParse(req.body);
     if (!params.success || !body.success) {
-      return sendError(res, 400, 'BadRequest', 'A valid auction address, wallet address and amount are required.');
+      return sendError(res, 400, 'BadRequest', 'A valid auction, wallet address, amount and maximum price are required.');
     }
 
     const result = await prepareBid({
-      auction: params.data.auction_address,
+      auctionId: params.data.auction_id,
       wallet: body.data.walletAddress,
       amount: body.data.amount,
-      maxPrice: body.data.maxPrice ?? null,
+      maxPrice: body.data.maxPrice,
     });
     return respond(res, result, (wallet_action) => ({ wallet_action }));
   });
 
-  router.post('/mobile/autolaunch/auctions/:auction_address/settle', async (req: Request, res: Response) => {
+  router.post('/mobile/autolaunch/auctions/:auction_id/settle', async (req: Request, res: Response) => {
     const params = paramsSchema.safeParse(req.params);
     const body = settlementBodySchema.safeParse(req.body);
     if (!params.success || !body.success) {
-      return sendError(res, 400, 'BadRequest', 'A valid auction address, wallet address and bid are required.');
+      return sendError(res, 400, 'BadRequest', 'A valid auction, wallet address and bid are required.');
     }
 
     const result = await prepareSettlement({
-      auction: params.data.auction_address,
+      auctionId: params.data.auction_id,
       wallet: body.data.walletAddress,
       bidId: BigInt(body.data.bidId),
     });

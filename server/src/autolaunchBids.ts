@@ -27,11 +27,14 @@ import { base } from 'viem/chains';
  * The auction pulls its currency through Permit2's allowance transfer, so a
  * plain ERC-20 approval to the auction would not work. Permit2's `approve` is
  * an ordinary call, which the app's smart account sends like any other.
+ *
+ * An auction is named by its Autolaunch id. The address and quote token come
+ * from autolaunch.sh's public record, and the chain has to agree: code at the
+ * address, and `currency()` equal to the recorded quote token.
  */
 export const AUTOLAUNCH_CHAIN_ID = 8453;
+export const AUTOLAUNCH_URL = 'https://autolaunch.sh';
 export const PERMIT2_ADDRESS: Address = '0x000000000022D473030F116dDEE9F6B43aC78BA3';
-/** The canonical CCA factory on Base that RegentLBPStrategy creates every auction through. */
-export const CCA_FACTORY_ADDRESS: Address = '0x000000001F26a0044BaA66024e7b6599c61963F8';
 
 const Q96 = 1n << 96n;
 const UINT128_MAX = (1n << 128n) - 1n;
@@ -44,6 +47,9 @@ const REVIEW_SECONDS = 600;
 const PERMIT2_SECONDS = 900;
 const MAX_TICK_WALK = 256;
 const MAX_CHECKPOINT_WALK = 256;
+/** Bid events are read in windows this wide, so no single log query spans an entire auction. */
+export const LOG_WINDOW_BLOCKS = 5_000n;
+const AUTOLAUNCH_TIMEOUT_MS = 10_000;
 
 const checkpointOutputs = [
   { name: 'clearingPrice', type: 'uint256' },
@@ -266,6 +272,7 @@ export type AutolaunchWalletCall = {
 export type AutolaunchBidWalletAction = {
   action: 'bid';
   chain_id: typeof AUTOLAUNCH_CHAIN_ID;
+  auction_id: string;
   auction_address: Address;
   expected_signer: Address;
   block_number: number;
@@ -274,30 +281,36 @@ export type AutolaunchBidWalletAction = {
   amount_raw: string;
   /** The exact maximum the bid carries, aligned down to the auction's price step. */
   max_price: string;
-  /** True when no maximum was given and the auction's own limit is used. */
-  max_price_capped: boolean;
 };
+
+/**
+ * Whether the amounts come from a simulated settlement. When the simulation
+ * itself could not run, the steps are the ones the auction's rules allow at
+ * this block and the amounts are only known after collecting.
+ */
+export type AutolaunchSettlementPreview = 'ready' | 'unavailable';
 
 export type AutolaunchSettlementWalletAction = {
   action: 'settle';
   chain_id: typeof AUTOLAUNCH_CHAIN_ID;
+  auction_id: string;
   auction_address: Address;
   expected_signer: Address;
   block_number: number;
   bid_id: string;
   calls: AutolaunchWalletCall[];
+  preview: AutolaunchSettlementPreview;
   currency_refunded: string | null;
   tokens_claimed: string | null;
 };
 
-export type AutolaunchBidSettlement =
-  | {
-      steps: ('exit' | 'claim')[];
-      currency_refunded: string | null;
-      tokens_claimed: string | null;
-      reason: null;
-    }
-  | { steps: []; currency_refunded: null; tokens_claimed: null; reason: AutolaunchSettlementReason | 'auction_open' };
+export type AutolaunchBidSettlement = {
+  steps: ('exit' | 'claim')[];
+  preview: AutolaunchSettlementPreview;
+  currency_refunded: string | null;
+  tokens_claimed: string | null;
+  reason: AutolaunchSettlementReason | 'auction_open' | null;
+};
 
 export type AutolaunchBidPosition = {
   bid_id: string;
@@ -312,6 +325,7 @@ export type AutolaunchBidPosition = {
 export type AutolaunchAuctionPosition = {
   chain_id: typeof AUTOLAUNCH_CHAIN_ID;
   block_number: number;
+  auction_id: string;
   auction_address: Address;
   currency_address: Address;
   currency_decimals: number;
@@ -320,9 +334,8 @@ export type AutolaunchAuctionPosition = {
   end_block: number;
   claim_block: number;
   phase: AutolaunchAuctionPhase;
-  graduated: boolean;
-  /** The highest price a bid can carry, on the auction's price grid; used when a bid names none. */
-  max_bid_price: string;
+  /** As the final checkpoint records it once the auction has ended; null when that could not be read. */
+  graduated: boolean | null;
   wallet_address: Address;
   wallet_currency_balance_raw: string;
   wallet_currency_balance: string;
@@ -330,6 +343,10 @@ export type AutolaunchAuctionPosition = {
 };
 
 export type AutolaunchRefusal =
+  | 'auction_not_found'
+  | 'auction_not_on_base'
+  | 'auction_missing_on_chain'
+  | 'auction_currency_changed'
   | 'auction_not_biddable'
   | 'invalid_amount'
   | 'invalid_price'
@@ -348,26 +365,89 @@ export type AutolaunchReadResult<T> =
   | { kind: 'ok'; value: T }
   | { kind: 'refused'; reason: AutolaunchRefusal }
   | { kind: 'missing_rpc'; requiredEnv: 'BASE_RPC_URL' }
-  | { kind: 'rpc_error'; name: string };
+  | { kind: 'rpc_error'; name: string }
+  | { kind: 'autolaunch_error'; name: string };
 
 export type AutolaunchPositionReader = (
-  auction: Address,
+  auctionId: string,
   wallet: Address,
 ) => Promise<AutolaunchReadResult<AutolaunchAuctionPosition>>;
 export type AutolaunchBidPreparer = (input: {
-  auction: Address;
+  auctionId: string;
   wallet: Address;
   amount: string;
-  maxPrice: string | null;
+  maxPrice: string;
 }) => Promise<AutolaunchReadResult<AutolaunchBidWalletAction>>;
 export type AutolaunchSettlementPreparer = (input: {
-  auction: Address;
+  auctionId: string;
   wallet: Address;
   bidId: bigint;
 }) => Promise<AutolaunchReadResult<AutolaunchSettlementWalletAction>>;
 
+/** The Autolaunch record that names an auction: its address and the quote token it raises. */
+export type AutolaunchAuctionRecord = {
+  id: string;
+  address: Address;
+  quoteToken: Address;
+};
+
+/** Looks an auction up by id; null when Autolaunch has no such auction, a throw when it could not answer. */
+export type AutolaunchAuctionResolver = (auctionId: string) => Promise<AutolaunchAuctionRecord | null>;
+
+export type AutolaunchReadOptions = {
+  rpcUrl?: string;
+  resolveAuction?: AutolaunchAuctionResolver;
+};
+
 function baseRpcUrl() {
   return process.env.BASE_RPC_URL?.trim() || '';
+}
+
+class AutolaunchUnavailable extends Error {
+  constructor(cause: unknown) {
+    super('autolaunch_unavailable');
+    this.name = cause instanceof Error ? cause.name || 'Error' : typeof cause;
+  }
+}
+
+function isAddressString(value: unknown): value is Address {
+  return typeof value === 'string' && /^0x[a-fA-F0-9]{40}$/.test(value);
+}
+
+/**
+ * autolaunch.sh's public auction JSON. Only a Base auction with an address
+ * and a quote token address is a record this module can bind to.
+ */
+export async function fetchAutolaunchAuction(auctionId: string): Promise<AutolaunchAuctionRecord | null> {
+  let response: Response;
+  try {
+    response = await fetch(`${AUTOLAUNCH_URL}/api/v1/auctions/${encodeURIComponent(auctionId)}`, {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(AUTOLAUNCH_TIMEOUT_MS),
+    });
+  } catch (error) {
+    throw new AutolaunchUnavailable(error);
+  }
+
+  if (response.status === 404) {
+    return null;
+  }
+  if (!response.ok) {
+    throw new AutolaunchUnavailable(new Error(`HTTP ${response.status}`));
+  }
+
+  const body = (await response.json().catch((error: unknown) => {
+    throw new AutolaunchUnavailable(error);
+  })) as { data?: { id?: unknown; chain?: unknown; chain_id?: unknown; address?: unknown; quote_token?: { address?: unknown } } };
+  const auction = body.data;
+  if (!auction || auction.chain !== 'base' || auction.chain_id !== AUTOLAUNCH_CHAIN_ID) {
+    throw new Refused('auction_not_on_base');
+  }
+  if (typeof auction.id !== 'string' || !isAddressString(auction.address) || !isAddressString(auction.quote_token?.address)) {
+    throw new Refused('auction_not_on_base');
+  }
+
+  return { id: auction.id, address: auction.address, quoteToken: auction.quote_token.address };
 }
 
 function nowSeconds() {
@@ -555,9 +635,10 @@ class Refused extends Error {
 }
 
 async function withClient<T>(
-  rpcUrl: string,
-  read: (client: Client, blockNumber: bigint) => Promise<T>,
+  options: AutolaunchReadOptions,
+  read: (client: Client, blockNumber: bigint, resolveAuction: AutolaunchAuctionResolver) => Promise<T>,
 ): Promise<AutolaunchReadResult<T>> {
+  const rpcUrl = options.rpcUrl ?? baseRpcUrl();
   if (!rpcUrl) {
     return { kind: 'missing_rpc', requiredEnv: 'BASE_RPC_URL' };
   }
@@ -565,14 +646,46 @@ async function withClient<T>(
   try {
     const client = baseClient(rpcUrl);
     const blockNumber = await client.getBlockNumber();
-    return { kind: 'ok', value: await read(client, blockNumber) };
+    return { kind: 'ok', value: await read(client, blockNumber, options.resolveAuction ?? fetchAutolaunchAuction) };
   } catch (error) {
     if (error instanceof Refused) {
       return { kind: 'refused', reason: error.reason };
     }
+    if (error instanceof AutolaunchUnavailable) {
+      return { kind: 'autolaunch_error', name: error.name };
+    }
 
     return { kind: 'rpc_error', name: error instanceof Error ? error.name || 'Error' : typeof error };
   }
+}
+
+/**
+ * The auction the id names, once the chain agrees with the record: code at
+ * the recorded address and `currency()` equal to the recorded quote token.
+ */
+async function boundAuction(client: Client, auctionId: string, resolveAuction: AutolaunchAuctionResolver, blockNumber: bigint) {
+  let record: AutolaunchAuctionRecord | null;
+  try {
+    record = await resolveAuction(auctionId);
+  } catch (error) {
+    if (error instanceof Refused || error instanceof AutolaunchUnavailable) throw error;
+    throw new AutolaunchUnavailable(error);
+  }
+  if (!record) {
+    throw new Refused('auction_not_found');
+  }
+
+  const code = await client.getCode({ address: record.address, blockNumber });
+  if (!code || code === '0x') {
+    throw new Refused('auction_missing_on_chain');
+  }
+
+  const facts = await auctionFacts(client, record.address, blockNumber);
+  if (!sameAddress(facts.currency, record.quoteToken)) {
+    throw new Refused('auction_currency_changed');
+  }
+
+  return { record, facts };
 }
 
 function phaseAt(blockNumber: bigint, blocks: { start: bigint; end: bigint; claim: bigint }): AutolaunchAuctionPhase {
@@ -680,20 +793,23 @@ async function predecessorTick(client: Client, auction: Address, floor: bigint, 
   throw new Refused('bid_preparation_unavailable');
 }
 
+/** The ids of every bid the wallet placed, read window by window from the auction's start. */
 async function walletBids(client: Client, auction: Address, wallet: Address, fromBlock: bigint, toBlock: bigint) {
-  if (toBlock < fromBlock) {
-    return [];
+  const ids: bigint[] = [];
+
+  for (let windowStart = fromBlock; windowStart <= toBlock; windowStart += LOG_WINDOW_BLOCKS) {
+    const windowEnd = windowStart + LOG_WINDOW_BLOCKS - 1n < toBlock ? windowStart + LOG_WINDOW_BLOCKS - 1n : toBlock;
+    const logs = await client.getLogs({
+      address: auction,
+      event: bidSubmittedEvent,
+      args: { owner: wallet },
+      fromBlock: windowStart,
+      toBlock: windowEnd,
+    });
+    ids.push(...logs.map((log) => log.args.id!));
   }
 
-  const logs = await client.getLogs({
-    address: auction,
-    event: bidSubmittedEvent,
-    args: { owner: wallet },
-    fromBlock,
-    toBlock,
-  });
-
-  return logs.map((log) => log.args.id!).sort((first, second) => (first < second ? -1 : first > second ? 1 : 0));
+  return ids.sort((first, second) => (first < second ? -1 : first > second ? 1 : 0));
 }
 
 type BidRecord = {
@@ -936,8 +1052,50 @@ function eligibleSteps(auction: Address, bid: BidRecord, outcome: { exit: ExitOu
   };
 }
 
-async function settlementFor(client: Client, auction: Address, bid: BidRecord, endBlock: bigint, blockNumber: bigint) {
-  return eligibleSteps(auction, bid, await simulateSettlement(client, auction, bid, endBlock, blockNumber));
+type SettlementDecision =
+  | { kind: 'ok'; preview: AutolaunchSettlementPreview; value: SettlementSteps }
+  | { kind: 'refused'; reason: AutolaunchSettlementReason };
+
+/**
+ * The steps the wallet can send for this bid. With a working simulation the
+ * auction's own answer decides them and the amounts are known. When the
+ * simulation itself cannot run, the steps are what the auction's rules allow
+ * at this block: the plain exit once the auction has ended, the claim once
+ * the claim block has passed; a bid already returned only has the claim.
+ */
+async function settlementFor(
+  client: Client,
+  auction: Address,
+  bid: BidRecord,
+  blocks: { end: bigint; claim: bigint },
+  blockNumber: bigint,
+): Promise<SettlementDecision> {
+  try {
+    const outcome = await simulateSettlement(client, auction, bid, blocks.end, blockNumber);
+    const decision = eligibleSteps(auction, bid, outcome);
+    return decision.kind === 'ok' ? { ...decision, preview: 'ready' } : decision;
+  } catch (error) {
+    if (error instanceof Refused) throw error;
+    console.error(`❌ [AUTOLAUNCH] settlement simulation unavailable: ${error instanceof Error ? error.name : typeof error}`);
+  }
+
+  const exit = bid.exitedBlock === 0n && blockNumber >= blocks.end;
+  const claim = blockNumber >= blocks.claim;
+  if (!exit && !claim) {
+    return { kind: 'refused', reason: blockNumber < blocks.end ? 'auction_not_ended' : 'claim_not_open' };
+  }
+  const steps: ('exit' | 'claim')[] = [...(exit ? (['exit'] as const) : []), ...(claim ? (['claim'] as const) : [])];
+
+  return {
+    kind: 'ok',
+    preview: 'unavailable',
+    value: {
+      calls: settlementSequence({ auction, bidId: bid.id, exit: exit ? { kind: 'full' } : null, claim }),
+      steps,
+      currencyRefunded: null,
+      tokensClaimed: null,
+    },
+  };
 }
 
 /**
@@ -945,16 +1103,21 @@ async function settlementFor(client: Client, auction: Address, bid: BidRecord, e
  * flag only turns once someone checkpoints after the end, so it is read after
  * a simulated `checkpoint()`, exactly as the first settlement would see it.
  */
-async function finalGraduation(client: Client, auction: Address, blockNumber: bigint) {
-  const [, graduatedCall] = await simulate(client, blockNumber, [
-    { to: auction, data: encodeFunctionData({ abi: continuousClearingAuctionAbi, functionName: 'checkpoint' }) },
-    { to: auction, data: encodeFunctionData({ abi: continuousClearingAuctionAbi, functionName: 'isGraduated' }) },
-  ]);
-  if (graduatedCall!.status !== 'success') {
-    throw new Refused('settlement_reverted');
-  }
+async function finalGraduation(client: Client, auction: Address, blockNumber: bigint): Promise<boolean | null> {
+  try {
+    const [, graduatedCall] = await simulate(client, blockNumber, [
+      { to: auction, data: encodeFunctionData({ abi: continuousClearingAuctionAbi, functionName: 'checkpoint' }) },
+      { to: auction, data: encodeFunctionData({ abi: continuousClearingAuctionAbi, functionName: 'isGraduated' }) },
+    ]);
+    if (graduatedCall!.status !== 'success') {
+      return null;
+    }
 
-  return decodeFunctionResult({ abi: continuousClearingAuctionAbi, functionName: 'isGraduated', data: graduatedCall!.data });
+    return decodeFunctionResult({ abi: continuousClearingAuctionAbi, functionName: 'isGraduated', data: graduatedCall!.data });
+  } catch (error) {
+    console.error(`❌ [AUTOLAUNCH] final checkpoint simulation unavailable: ${error instanceof Error ? error.name : typeof error}`);
+    return null;
+  }
 }
 
 /**
@@ -963,12 +1126,13 @@ async function finalGraduation(client: Client, auction: Address, blockNumber: bi
  * bids with what settling it would do right now.
  */
 export async function readAutolaunchPosition(
-  auction: Address,
+  auctionId: string,
   wallet: Address,
-  rpcUrl = baseRpcUrl(),
+  options: AutolaunchReadOptions = {},
 ): Promise<AutolaunchReadResult<AutolaunchAuctionPosition>> {
-  return withClient(rpcUrl, async (client, blockNumber) => {
-    const facts = await auctionFacts(client, auction, blockNumber);
+  return withClient(options, async (client, blockNumber, resolveAuction) => {
+    const { record, facts } = await boundAuction(client, auctionId, resolveAuction, blockNumber);
+    const auction = record.address;
     const money = await walletCurrency(client, facts.currency, wallet, auction, blockNumber);
     const phase = phaseAt(blockNumber, { start: facts.startBlock, end: facts.endBlock, claim: facts.claimBlock });
     const graduated =
@@ -986,13 +1150,22 @@ export async function readAutolaunchPosition(
         max_price: priceDecimalFromQ96(bid.maxPrice, money.decimals),
         returned: bid.exitedBlock !== 0n,
         tokens_filled: formatUnits(bid.tokensFilled, TOKEN_DECIMALS),
-        settlement: await bidSettlementView(client, auction, bid, facts.endBlock, blockNumber, phase, money.decimals),
+        settlement: await bidSettlementView(
+          client,
+          auction,
+          bid,
+          { end: facts.endBlock, claim: facts.claimBlock },
+          blockNumber,
+          phase,
+          money.decimals,
+        ),
       });
     }
 
     return {
       chain_id: AUTOLAUNCH_CHAIN_ID,
       block_number: Number(blockNumber),
+      auction_id: record.id,
       auction_address: auction,
       currency_address: facts.currency,
       currency_decimals: money.decimals,
@@ -1002,7 +1175,6 @@ export async function readAutolaunchPosition(
       claim_block: Number(facts.claimBlock),
       phase,
       graduated,
-      max_bid_price: priceDecimalFromQ96((facts.maxBidPrice / facts.tickSpacing) * facts.tickSpacing, money.decimals),
       wallet_address: wallet,
       wallet_currency_balance_raw: money.balance.toString(),
       wallet_currency_balance: formatUnits(money.balance, money.decimals),
@@ -1015,22 +1187,23 @@ async function bidSettlementView(
   client: Client,
   auction: Address,
   bid: BidRecord,
-  endBlock: bigint,
+  blocks: { end: bigint; claim: bigint },
   blockNumber: bigint,
   phase: AutolaunchAuctionPhase,
   currencyDecimals: number,
 ): Promise<AutolaunchBidSettlement> {
   if (phase === 'not_started' || phase === 'open') {
-    return { steps: [], currency_refunded: null, tokens_claimed: null, reason: 'auction_open' };
+    return { steps: [], preview: 'ready', currency_refunded: null, tokens_claimed: null, reason: 'auction_open' };
   }
 
-  const settlement = await settlementFor(client, auction, bid, endBlock, blockNumber);
+  const settlement = await settlementFor(client, auction, bid, blocks, blockNumber);
   if (settlement.kind === 'refused') {
-    return { steps: [], currency_refunded: null, tokens_claimed: null, reason: settlement.reason };
+    return { steps: [], preview: 'ready', currency_refunded: null, tokens_claimed: null, reason: settlement.reason };
   }
 
   return {
     steps: settlement.value.steps,
+    preview: settlement.preview,
     currency_refunded:
       settlement.value.currencyRefunded === null ? null : formatUnits(settlement.value.currencyRefunded, currencyDecimals),
     tokens_claimed: settlement.value.tokensClaimed === null ? null : formatUnits(settlement.value.tokensClaimed, TOKEN_DECIMALS),
@@ -1042,16 +1215,16 @@ async function bidSettlementView(
  * Reviews one bid against the auction as it stands: the currency it raises,
  * the wallet's balance and allowances, the price grid, the clearing price the
  * next checkpoint would record, and the tick below the bid's own price.
- * A blank maximum means the auction's own limit.
  */
 export async function prepareAutolaunchBid(
-  input: { auction: Address; wallet: Address; amount: string; maxPrice: string | null },
-  rpcUrl = baseRpcUrl(),
+  input: { auctionId: string; wallet: Address; amount: string; maxPrice: string },
+  options: AutolaunchReadOptions = {},
 ): Promise<AutolaunchReadResult<AutolaunchBidWalletAction>> {
-  const { auction, wallet } = input;
+  const { wallet } = input;
 
-  return withClient(rpcUrl, async (client, blockNumber) => {
-    const facts = await auctionFacts(client, auction, blockNumber);
+  return withClient(options, async (client, blockNumber, resolveAuction) => {
+    const { record, facts } = await boundAuction(client, input.auctionId, resolveAuction, blockNumber);
+    const auction = record.address;
     if (blockNumber < facts.startBlock || blockNumber >= facts.endBlock) {
       throw new Refused('auction_not_biddable');
     }
@@ -1065,7 +1238,7 @@ export async function prepareAutolaunchBid(
       throw new Refused('amount_above_balance');
     }
 
-    const requested = input.maxPrice === null ? facts.maxBidPrice : priceQ96FromDecimal(input.maxPrice, money.decimals);
+    const requested = priceQ96FromDecimal(input.maxPrice, money.decimals);
     if (requested === null) {
       throw new Refused('invalid_price');
     }
@@ -1086,6 +1259,7 @@ export async function prepareAutolaunchBid(
     return {
       action: 'bid',
       chain_id: AUTOLAUNCH_CHAIN_ID,
+      auction_id: record.id,
       auction_address: auction,
       expected_signer: wallet,
       block_number: Number(blockNumber),
@@ -1104,7 +1278,6 @@ export async function prepareAutolaunchBid(
       amount: formatUnits(amount, money.decimals),
       amount_raw: amount.toString(),
       max_price: priceDecimalFromQ96(maxPriceQ96, money.decimals),
-      max_price_capped: input.maxPrice === null,
     };
   });
 }
@@ -1115,13 +1288,14 @@ export async function prepareAutolaunchBid(
  * refuses becomes a reason rather than a wallet prompt.
  */
 export async function prepareAutolaunchSettlement(
-  input: { auction: Address; wallet: Address; bidId: bigint },
-  rpcUrl = baseRpcUrl(),
+  input: { auctionId: string; wallet: Address; bidId: bigint },
+  options: AutolaunchReadOptions = {},
 ): Promise<AutolaunchReadResult<AutolaunchSettlementWalletAction>> {
-  const { auction, wallet, bidId } = input;
+  const { wallet, bidId } = input;
 
-  return withClient(rpcUrl, async (client, blockNumber) => {
-    const facts = await auctionFacts(client, auction, blockNumber);
+  return withClient(options, async (client, blockNumber, resolveAuction) => {
+    const { record, facts } = await boundAuction(client, input.auctionId, resolveAuction, blockNumber);
+    const auction = record.address;
     const [bid] = await bidRecords(client, auction, [bidId], blockNumber).catch(() => {
       throw new Refused('bid_not_found');
     });
@@ -1132,7 +1306,7 @@ export async function prepareAutolaunchSettlement(
       throw new Refused('not_your_bid');
     }
 
-    const settlement = await settlementFor(client, auction, bid, facts.endBlock, blockNumber);
+    const settlement = await settlementFor(client, auction, bid, { end: facts.endBlock, claim: facts.claimBlock }, blockNumber);
     if (settlement.kind === 'refused') {
       throw new Refused(settlement.reason);
     }
@@ -1142,11 +1316,13 @@ export async function prepareAutolaunchSettlement(
     return {
       action: 'settle',
       chain_id: AUTOLAUNCH_CHAIN_ID,
+      auction_id: record.id,
       auction_address: auction,
       expected_signer: wallet,
       block_number: Number(blockNumber),
       bid_id: bidId.toString(),
       calls: settlement.value.calls,
+      preview: settlement.preview,
       currency_refunded:
         settlement.value.currencyRefunded === null ? null : formatUnits(settlement.value.currencyRefunded, decimals),
       tokens_claimed: settlement.value.tokensClaimed === null ? null : formatUnits(settlement.value.tokensClaimed, TOKEN_DECIMALS),

@@ -1087,7 +1087,7 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '429':
           $ref: '#/components/responses/RateLimitError'
-  /mobile/autolaunch/auctions/{auction_address}/position:
+  /mobile/autolaunch/auctions/{auction_id}/position:
     get:
       operationId: getMobileAutolaunchAuctionPosition
       summary: Read the wallet's bids on one Autolaunch auction from Base
@@ -1099,11 +1099,13 @@ paths:
         - bearerAuth: []
       parameters:
         - in: path
-          name: auction_address
+          name: auction_id
+          description: The auction's Autolaunch id. Its address and quote token come from autolaunch.sh and are checked against Base.
           required: true
           schema:
             type: string
-            pattern: '^0x[a-fA-F0-9]{40}$'
+            minLength: 1
+            maxLength: 200
         - in: query
           name: walletAddress
           required: true
@@ -1128,7 +1130,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '502':
-          description: Base could not be read
+          description: Base could not be read, or Autolaunch could not confirm the auction
           content:
             application/json:
               schema:
@@ -1141,7 +1143,7 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '429':
           $ref: '#/components/responses/RateLimitError'
-  /mobile/autolaunch/auctions/{auction_address}/bid:
+  /mobile/autolaunch/auctions/{auction_id}/bid:
     post:
       operationId: prepareMobileAutolaunchBid
       summary: Prepare a bid on an Autolaunch auction
@@ -1154,11 +1156,13 @@ paths:
         - bearerAuth: []
       parameters:
         - in: path
-          name: auction_address
+          name: auction_id
+          description: The auction's Autolaunch id. Its address and quote token come from autolaunch.sh and are checked against Base.
           required: true
           schema:
             type: string
-            pattern: '^0x[a-fA-F0-9]{40}$'
+            minLength: 1
+            maxLength: 200
       requestBody:
         required: true
         content:
@@ -1185,7 +1189,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '502':
-          description: Base could not be read
+          description: Base could not be read, or Autolaunch could not confirm the auction
           content:
             application/json:
               schema:
@@ -1198,7 +1202,7 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '429':
           $ref: '#/components/responses/RateLimitError'
-  /mobile/autolaunch/auctions/{auction_address}/settle:
+  /mobile/autolaunch/auctions/{auction_id}/settle:
     post:
       operationId: prepareMobileAutolaunchSettlement
       summary: Prepare the return and token collection for one bid
@@ -1210,11 +1214,13 @@ paths:
         - bearerAuth: []
       parameters:
         - in: path
-          name: auction_address
+          name: auction_id
+          description: The auction's Autolaunch id. Its address and quote token come from autolaunch.sh and are checked against Base.
           required: true
           schema:
             type: string
-            pattern: '^0x[a-fA-F0-9]{40}$'
+            minLength: 1
+            maxLength: 200
       requestBody:
         required: true
         content:
@@ -1241,7 +1247,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '502':
-          description: Base could not be read
+          description: Base could not be read, or Autolaunch could not confirm the auction
           content:
             application/json:
               schema:
@@ -2549,7 +2555,7 @@ components:
     MobileAutolaunchBidRequest:
       type: object
       additionalProperties: false
-      required: [walletAddress, amount]
+      required: [walletAddress, amount, maxPrice]
       properties:
         walletAddress:
           type: string
@@ -2559,10 +2565,7 @@ components:
           type: string
           pattern: '^[0-9]+(\.[0-9]+)?$'
         maxPrice:
-          description: >-
-            The most the wallet pays per token, in whole currency units. Left
-            out, the bid accepts the auction's highest price and pays whatever
-            the final price turns out to be.
+          description: The most the wallet pays per token, in whole currency units.
           type: string
           pattern: '^[0-9]+(\.[0-9]+)?$'
     MobileAutolaunchSettlementRequest:
@@ -2602,7 +2605,7 @@ components:
       type: object
       additionalProperties: false
       required:
-        [action, chain_id, auction_address, expected_signer, block_number, calls, amount, amount_raw, max_price, max_price_capped]
+        [action, chain_id, auction_id, auction_address, expected_signer, block_number, calls, amount, amount_raw, max_price]
       properties:
         action:
           type: string
@@ -2610,6 +2613,8 @@ components:
         chain_id:
           type: integer
           enum: [8453]
+        auction_id:
+          type: string
         auction_address:
           type: string
           pattern: '^0x[a-fA-F0-9]{40}$'
@@ -2631,9 +2636,6 @@ components:
         max_price:
           description: The exact maximum the bid carries, aligned down to the auction's price step.
           type: string
-        max_price_capped:
-          description: True when no maximum was given and the auction's own limit is used.
-          type: boolean
     MobileAutolaunchBidResponse:
       type: object
       additionalProperties: false
@@ -2645,7 +2647,7 @@ components:
       type: object
       additionalProperties: false
       required:
-        [action, chain_id, auction_address, expected_signer, block_number, bid_id, calls, currency_refunded, tokens_claimed]
+        [action, chain_id, auction_id, auction_address, expected_signer, block_number, bid_id, calls, preview, currency_refunded, tokens_claimed]
       properties:
         action:
           type: string
@@ -2653,6 +2655,8 @@ components:
         chain_id:
           type: integer
           enum: [8453]
+        auction_id:
+          type: string
         auction_address:
           type: string
           pattern: '^0x[a-fA-F0-9]{40}$'
@@ -2669,12 +2673,18 @@ components:
           minItems: 1
           items:
             $ref: '#/components/schemas/AutolaunchWalletCall'
+        preview:
+          $ref: '#/components/schemas/AutolaunchSettlementPreview'
         currency_refunded:
-          description: Whole currency units the exit returns, or null when no exit is part of this settlement.
+          description: >-
+            Whole currency units the exit returns; null when no exit is part of
+            this settlement or the preview is unavailable.
           type: string
           nullable: true
         tokens_claimed:
-          description: Whole tokens the claim delivers, or null when no claim is part of this settlement.
+          description: >-
+            Whole tokens the claim delivers; null when no claim is part of this
+            settlement or the preview is unavailable.
           type: string
           nullable: true
     MobileAutolaunchSettlementResponse:
@@ -2684,19 +2694,28 @@ components:
       properties:
         wallet_action:
           $ref: '#/components/schemas/AutolaunchSettlementWalletAction'
+    AutolaunchSettlementPreview:
+      description: >-
+        Whether the amounts come from a simulated settlement. When the
+        simulation could not run, the steps are the ones the auction's rules
+        allow at this block and the amounts are only known after collecting.
+      type: string
+      enum: [ready, unavailable]
     AutolaunchBidSettlement:
       description: >-
         What collecting this bid would do right now. Steps are empty while the
         auction is open or the auction refuses both steps; reason then says why.
       type: object
       additionalProperties: false
-      required: [steps, currency_refunded, tokens_claimed, reason]
+      required: [steps, preview, currency_refunded, tokens_claimed, reason]
       properties:
         steps:
           type: array
           items:
             type: string
             enum: [exit, claim]
+        preview:
+          $ref: '#/components/schemas/AutolaunchSettlementPreview'
         currency_refunded:
           type: string
           nullable: true
@@ -2746,6 +2765,7 @@ components:
       required:
         - chain_id
         - block_number
+        - auction_id
         - auction_address
         - currency_address
         - currency_decimals
@@ -2755,7 +2775,6 @@ components:
         - claim_block
         - phase
         - graduated
-        - max_bid_price
         - wallet_address
         - wallet_currency_balance_raw
         - wallet_currency_balance
@@ -2766,6 +2785,8 @@ components:
           enum: [8453]
         block_number:
           type: integer
+        auction_id:
+          type: string
         auction_address:
           type: string
           pattern: '^0x[a-fA-F0-9]{40}$'
@@ -2787,10 +2808,9 @@ components:
           type: string
           enum: [not_started, open, ended, claimable]
         graduated:
+          description: As the final checkpoint records it once the auction has ended; null when that could not be read.
           type: boolean
-        max_bid_price:
-          description: The highest price per token a bid can carry, on the auction's price grid, in whole currency units.
-          type: string
+          nullable: true
         wallet_address:
           type: string
           pattern: '^0x[a-fA-F0-9]{40}$'
