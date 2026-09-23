@@ -33,11 +33,11 @@ describe('OnboardingWelcomeScreen', () => {
     mockReducedMotion = true;
 
     const { getByTestId } = renderThemed(<OnboardingWelcomeScreen />);
-    const wordmarkStyle = StyleSheet.flatten(getByTestId('onboarding-wordmark').props.style);
+    const heroStyle = StyleSheet.flatten(getByTestId('onboarding-hero').props.style);
     const sheetStyle = StyleSheet.flatten(getByTestId('onboarding-connect-sheet').props.style);
 
-    expect(wordmarkStyle.opacity).toBe(1);
-    expect(wordmarkStyle.transform).toBeUndefined();
+    expect(heroStyle.opacity).toBe(1);
+    expect(heroStyle.transform).toBeUndefined();
     expect(sheetStyle.opacity).toBe(1);
     expect(sheetStyle.transform).toBeUndefined();
   });

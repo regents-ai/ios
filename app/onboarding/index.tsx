@@ -2,7 +2,8 @@
  * First-open welcome screen.
  *
  * Aesthetic modeled on the OpenClaw opening: a brand glow
- * blooms outward from center, the wordmark fades in over it, then a connect
+ * blooms outward from center, the "fund your personal agent's wallet" hero
+ * (headline, agents, sliding crowns) fades in at the top, then a connect
  * sheet slides up from the bottom offering the three start paths:
  *   1. Add an agent -> /agent/add
  *   2. Create Agent in Regents Cloud -> /onboarding/create-cloud-agent
@@ -26,6 +27,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 
+import { AgentFundHero } from '@/components/agents/AgentFundHero';
 import { useReducedMotion } from '@/components/motion/useReducedMotion';
 import { RegentPressable } from '@/components/ui/RegentPressable';
 import { useTheme, type Theme } from '@/theme/ThemeProvider';
@@ -57,10 +59,10 @@ export default function OnboardingWelcomeScreen() {
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const { colors } = theme;
 
-  // One driver per glow band, plus title and sheet drivers.
+  // One driver per glow band, plus hero and sheet drivers.
   const bandDrivers = useRef(GLOW_BANDS.map(() => new Animated.Value(0))).current;
   const breathe = useRef(new Animated.Value(0)).current;
-  const titleDriver = useRef(new Animated.Value(0)).current;
+  const heroDriver = useRef(new Animated.Value(0)).current;
   const sheetDriver = useRef(new Animated.Value(0)).current;
 
   // This screen is one-shot: mark it seen as soon as it appears.
@@ -71,7 +73,7 @@ export default function OnboardingWelcomeScreen() {
   useEffect(() => {
     if (reducedMotion) {
       bandDrivers.forEach((driver) => driver.setValue(1));
-      titleDriver.setValue(1);
+      heroDriver.setValue(1);
       sheetDriver.setValue(1);
       return;
     }
@@ -87,7 +89,7 @@ export default function OnboardingWelcomeScreen() {
         }),
       ),
     );
-    const title = Animated.timing(titleDriver, {
+    const hero = Animated.timing(heroDriver, {
       toValue: 1,
       duration: 480,
       delay: 380,
@@ -119,7 +121,7 @@ export default function OnboardingWelcomeScreen() {
       ]),
     );
 
-    const entry = Animated.parallel([bloom, title, sheet]);
+    const entry = Animated.parallel([bloom, hero, sheet]);
     entry.start(({ finished }) => {
       if (finished) {
         breathing.start();
@@ -130,7 +132,7 @@ export default function OnboardingWelcomeScreen() {
       entry.stop();
       breathing.stop();
     };
-  }, [bandDrivers, breathe, reducedMotion, sheetDriver, titleDriver]);
+  }, [bandDrivers, breathe, reducedMotion, sheetDriver, heroDriver]);
 
   const glowBase = Math.round(width * 1.15);
   const accentRgb = hexToRgb(colors.accent);
@@ -176,25 +178,27 @@ export default function OnboardingWelcomeScreen() {
         </Animated.View>
       </View>
 
-      {/* Wordmark. */}
-      <View pointerEvents="none" style={styles.titleLayer}>
-        <Animated.Text
-          testID="onboarding-wordmark"
-          style={[
-            styles.brand,
-            {
-              opacity: reducedMotion ? 1 : titleDriver,
-              transform: reducedMotion
-                ? undefined
-                : [
-                    { translateY: titleDriver.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) },
-                  ],
-            },
-          ]}
-        >
-          Regents
-        </Animated.Text>
-      </View>
+      {/* Hero: headline, agents and sliding crowns. */}
+      <Animated.View
+        testID="onboarding-hero"
+        style={[
+          styles.heroLayer,
+          {
+            opacity: reducedMotion ? 1 : heroDriver,
+            transform: reducedMotion
+              ? undefined
+              : [
+                  { translateY: heroDriver.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) },
+                ],
+          },
+        ]}
+      >
+        <SafeAreaView>
+          <View style={styles.hero}>
+            <AgentFundHero />
+          </View>
+        </SafeAreaView>
+      </Animated.View>
 
       {/* Connect sheet. */}
       <Animated.View
@@ -329,18 +333,14 @@ function makeStyles({ colors, fonts, type, space, radius }: Theme) {
     glowBand: {
       position: 'absolute',
     },
-    titleLayer: {
-      ...StyleSheet.absoluteFillObject,
-      alignItems: 'center',
-      justifyContent: 'center',
-      // Sit the wordmark slightly above center so the sheet never crowds it.
-      paddingBottom: 220,
+    heroLayer: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
     },
-    brand: {
-      color: colors.text,
-      fontSize: 44,
-      lineHeight: 52,
-      fontFamily: fonts.title,
+    hero: {
+      paddingTop: space.s2,
     },
     sheet: {
       position: 'absolute',
