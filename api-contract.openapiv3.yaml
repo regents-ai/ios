@@ -1890,32 +1890,7 @@ components:
           $ref: '#/components/schemas/MobileAgentKind'
         walletAddress:
           type: string
-          pattern: '^0x[a-fA-F0-9]{40}      type: object
-      required: [error]
-      properties:
-        error:
-          type: object
-          required: [code, product, status, path, request_id, message]
-          properties:
-            code:
-              type: string
-            product:
-              type: string
-              enum: [ios]
-            status:
-              type: integer
-            path:
-              type: string
-            request_id:
-              type: string
-              nullable: true
-            message:
-              type: string
-            next_steps:
-              type: string
-              nullable: true
-          additionalProperties: false
-
+          pattern: '^0x[a-fA-F0-9]{40}$'
           description: The agent's Base wallet address
         paired:
           type: boolean
@@ -1940,32 +1915,7 @@ components:
           $ref: '#/components/schemas/MobileAgentKind'
         walletAddress:
           type: string
-          pattern: '^0x[a-fA-F0-9]{40}      type: object
-      required: [error]
-      properties:
-        error:
-          type: object
-          required: [code, product, status, path, request_id, message]
-          properties:
-            code:
-              type: string
-            product:
-              type: string
-              enum: [ios]
-            status:
-              type: integer
-            path:
-              type: string
-            request_id:
-              type: string
-              nullable: true
-            message:
-              type: string
-            next_steps:
-              type: string
-              nullable: true
-          additionalProperties: false
-
+          pattern: '^0x[a-fA-F0-9]{40}$'
     RenameMobileAgentRequest:
       type: object
       required: [name]
