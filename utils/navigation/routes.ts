@@ -30,6 +30,14 @@ export const routes = {
     return '/earn';
   },
 
+  autolaunch(): Href {
+    return '/autolaunch';
+  },
+
+  techtree(): Href {
+    return '/techtree';
+  },
+
   auction(reference: string): Href {
     return { pathname: '/auction/[id]', params: { id: reference } };
   },
