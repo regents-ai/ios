@@ -5,8 +5,8 @@ info:
   description: |
     There are no shipped shared mobile service routes in Regents Mobile.
 
-    The current mobile Regent, Regent Manager, and Talk routes are product-local routes
-    documented in `api-contract.openapiv3.yaml`, not shared Regent services.
+    The mobile agent list, pairing, staking, and Nous Portal routes are product-local
+    routes documented in `api-contract.openapiv3.yaml`, not shared Regent services.
 x-regent-capability:
   status: beta
   owner: ios

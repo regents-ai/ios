@@ -17,8 +17,8 @@ import {
 } from './metrics.js';
 import { isReleaseRuntime } from './runtime.js';
 import { createMobileRoutes } from './mobileRoutes.js';
+import { createMobileAgentRoutes } from './routes/mobileAgents.js';
 import { createPortalPairingRoutes } from './routes/portalPairing.js';
-import { processMobileMessagePushRequest } from './mobileMessagePush.js';
 import {
   createApnsProviderFromEnv,
   sendPushNotification,
@@ -68,7 +68,7 @@ import {
 
 // Redis storage setup - use external Redis for production, in-memory for local
 // dev. Redis holds all shared server state: push tokens, webhook dedupe, the
-// transaction event feed, wallet intents, and voice sessions.
+// transaction event feed, the agents list, and pairing state.
 let database: any = null;
 const databaseUrl = process.env.REDIS_URL;
 const useDatabase = !!databaseUrl;
@@ -185,6 +185,9 @@ app.use(cors({
 // For webhook signature verification, we need raw body
 // Use express.raw() for webhook routes before JSON parsing
 app.use('/webhooks/onramp', express.raw({ type: 'application/json' }));
+// The agent pairing request is SIWA-signed over its exact bytes, so keep the
+// raw body for the signature check instead of a parsed and re-serialized one.
+app.use('/agent/pair', express.raw({ type: () => true }));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -237,7 +240,7 @@ app.use((req, res, next) => {
     req.path === '/.well-known/jwks.json' ||
     req.path === '/oauth/callback' ||
     req.path.startsWith('/webhooks') ||
-    req.path === '/internal/mobile/message/push' ||
+    req.path === '/agent/pair' ||
     req.path === '/push-tokens/ping'
   ) {
     return next();
@@ -273,7 +276,9 @@ app.post('/auth/cdp-token', async (req, res) => {
   }
 });
 
-app.use(createMobileRoutes({ redis: useDatabase ? database : null }));
+app.use(createMobileRoutes());
+app.use('/agent/pair', publicWriteRateLimiter);
+app.use(createMobileAgentRoutes({ redis: useDatabase ? database : null }));
 
 /**
  * Coinbase proxy for the mobile wallet operations declared in api-contract.openapiv3.yaml.
@@ -838,21 +843,6 @@ app.post('/push-tokens', async (req, res) => {
     console.error('❌ [PUSH] Error:', summarizeErrorLog(error));
     sendError(res, 500, 'PushTokenStoreFailed', 'Unable to register this device for notifications right now.');
   }
-});
-
-app.post('/internal/mobile/message/push', webhookRateLimiter, async (req, res) => {
-  const result = await processMobileMessagePushRequest({
-    headers: req.headers,
-    body: req.body,
-  }, {
-    env: process.env,
-    readPushTokenForUser,
-    sendPushNotification: (tokenData, notification) => sendPushNotification(tokenData, notification, {
-      apnProvider,
-    }),
-  });
-
-  return res.status(result.status).json(result.body);
 });
 
 // Debug endpoint to check push token status
