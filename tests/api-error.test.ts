@@ -54,3 +54,26 @@ test('privacySafeLogCategory labels non-API errors without leaking messages', ()
   assert.equal(privacySafeLogCategory(new TypeError('fetch to https://x/y?token=abc failed')), 'api.network');
   assert.equal(privacySafeLogCategory(new Error('anything')), 'api.unknown');
 });
+
+test('describeApiError tells the user plainly when they cancelled in their wallet', () => {
+  const cancelled = Object.assign(new Error('The user rejected the request.'), { code: 4001 });
+  const described = describeApiError(cancelled);
+  assert.equal(described.title, 'Cancelled in your wallet');
+  assert.match(described.message, /nothing was sent/i);
+  assert.equal(privacySafeLogCategory(cancelled), 'api.wallet-cancelled');
+});
+
+test('describeApiError explains a network-fee shortfall reported by the bundler', () => {
+  const shortfall = new Error('UserOperation reverted during simulation', {
+    cause: { message: "AA21 didn't pay prefund" },
+  });
+  const described = describeApiError(shortfall);
+  assert.equal(described.title, 'Not enough ETH for the network fee');
+  assert.match(described.message, /ETH/);
+});
+
+test('describeApiError names other wallet-side refusals instead of the generic copy', () => {
+  const described = describeApiError(new Error('Failed to send user operation: bundler returned an error'));
+  assert.equal(described.title, 'Your wallet could not send this');
+  assert.doesNotMatch(described.message, /try again in a moment/i);
+});

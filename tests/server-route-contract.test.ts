@@ -39,6 +39,7 @@ function implementedRoutes() {
     'server/src/mobileRoutes.ts',
     'server/src/routes/mobileAgents.ts',
     'server/src/routes/portalPairing.ts',
+    'server/src/routes/autolaunch.ts',
   ];
 
   for (const file of files) {

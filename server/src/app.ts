@@ -20,6 +20,7 @@ import { createMobileRoutes } from './mobileRoutes.js';
 import { fileMobileAgentsKv, redisMobileAgentsKv } from './mobileAgents.js';
 import { createMobileAgentRoutes } from './routes/mobileAgents.js';
 import { createPortalPairingRoutes } from './routes/portalPairing.js';
+import { createAutolaunchRoutes } from './routes/autolaunch.js';
 import {
   createApnsProviderFromEnv,
   sendPushNotification,
@@ -281,6 +282,7 @@ app.post('/auth/cdp-token', async (req, res) => {
 app.use(createMobileRoutes());
 app.use('/agent/pair', publicWriteRateLimiter);
 app.use(createMobileAgentRoutes({ kv: useDatabase ? redisMobileAgentsKv(database) : fileMobileAgentsKv() }));
+app.use(createAutolaunchRoutes());
 
 /**
  * Coinbase proxy for the mobile wallet operations declared in api-contract.openapiv3.yaml.

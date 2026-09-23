@@ -1,8 +1,10 @@
 import { StatusPill } from '@/components/agent-surfaces/StatusPill';
+import { AuctionBidding } from '@/components/autolaunch/AuctionBidding';
 import { LiveValueFlash } from '@/components/motion/LiveValueFlash';
 import { SpinningRefreshIcon } from '@/components/motion/SpinningRefreshIcon';
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { ListRetryRow } from '@/components/ui/ListRetryRow';
+import { ProgressToast } from '@/components/ui/ProgressToast';
 import { RegentPressable } from '@/components/ui/RegentPressable';
 import { AUTOLAUNCH_URL } from '@/constants/AUTOLAUNCH_URL';
 import { useCoinbaseAlert } from '@/hooks/useCoinbaseAlert';
@@ -19,6 +21,7 @@ import {
 import { auctionStatusTone } from '@/utils/autolaunch/auctionTone';
 import { getAutolaunchAuction } from '@/utils/autolaunch/client';
 import { describeListLoadFailure, type ListLoadFailure } from '@/utils/listLoadFailure';
+import { dismissToast, type ProgressToastState } from '@/utils/progressToast';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
@@ -67,7 +70,8 @@ export default function AuctionDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<ListLoadFailure | null>(null);
-  const { alertProps, showAlert } = useCoinbaseAlert();
+  const { alertProps, showAlert, dismissAlert } = useCoinbaseAlert();
+  const [toast, setToast] = useState<ProgressToastState | null>(null);
 
   const loadAuction = useCallback(async (refresh = false) => {
     if (!reference) {
@@ -148,6 +152,7 @@ export default function AuctionDetailScreen() {
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={() => loadAuction(true)} tintColor={colors.accent} />
         }
@@ -230,10 +235,21 @@ export default function AuctionDetailScreen() {
               ) : null}
             </View>
 
+            {auction.chain === 'base' ? (
+              <AuctionBidding
+                auction={auction}
+                showAlert={showAlert}
+                setToast={setToast}
+                openOnAutolaunch={openOnAutolaunch}
+              />
+            ) : null}
+
             <View style={styles.card}>
-              <Text style={styles.sectionTitle}>Take part</Text>
+              <Text style={styles.sectionTitle}>On Autolaunch</Text>
               <Text style={styles.sectionBody}>
-                You can follow this auction here. To place a bid or collect tokens, open it on Autolaunch.
+                {auction.chain === 'base'
+                  ? 'The full auction page, with every bid and the launch story, lives on Autolaunch.'
+                  : 'Robinhood bids are placed on the Autolaunch website. Open the auction there to take part.'}
               </Text>
               <RegentPressable
                 accessibilityHint="Opens in your browser"
@@ -249,7 +265,8 @@ export default function AuctionDetailScreen() {
         ) : null}
       </ScrollView>
 
-      <CoinbaseAlert {...alertProps} />
+      <ProgressToast toast={toast} onDismiss={() => setToast(dismissToast())} />
+      <CoinbaseAlert {...alertProps} onCancel={dismissAlert} />
     </SafeAreaView>
   );
 }
