@@ -7,14 +7,21 @@
  */
 
 import { AUTOLAUNCH_URL } from '@/constants/AUTOLAUNCH_URL';
-import type { AutolaunchAuction, AutolaunchAuctionPage } from '@/types/autolaunch';
+import type { AutolaunchAuction, AutolaunchAuctionPage, AutolaunchBidQuote } from '@/types/autolaunch';
 import { ApiError, apiFailureKindForStatus } from '@/utils/apiError';
 
-type AutolaunchPath = '/api/v1/auctions' | `/api/v1/auctions/${string}`;
+type AutolaunchPath =
+  | '/api/v1/auctions'
+  | `/api/v1/auctions/${string}`
+  | `/api/v1/auctions/${string}/bid-quote`;
 
-async function autolaunchFetch<T>(path: AutolaunchPath): Promise<T> {
+async function autolaunchFetch<T>(path: AutolaunchPath, params?: Record<string, string>): Promise<T> {
   const response = await fetch(`${AUTOLAUNCH_URL}${path}`, {
-    headers: { Accept: 'application/json' },
+    method: params ? 'POST' : 'GET',
+    headers: params
+      ? { Accept: 'application/json', 'Content-Type': 'application/json' }
+      : { Accept: 'application/json' },
+    body: params ? JSON.stringify(params) : undefined,
   });
 
   let body: unknown = null;
@@ -45,6 +52,23 @@ export async function listAutolaunchAuctions(): Promise<AutolaunchAuction[]> {
 export async function getAutolaunchAuction(reference: string): Promise<AutolaunchAuction> {
   const body = await autolaunchFetch<{ data: AutolaunchAuction }>(
     `/api/v1/auctions/${encodeURIComponent(reference)}`
+  );
+  return body.data;
+}
+
+/**
+ * The site's own estimate of what a bid would get if the auction ended now.
+ * The site requires a maximum price; the caller passes the auction's own
+ * limit when the bidder set none.
+ */
+export async function quoteAutolaunchBid(input: {
+  auctionId: string;
+  amount: string;
+  maxPrice: string;
+}): Promise<AutolaunchBidQuote> {
+  const body = await autolaunchFetch<{ data: AutolaunchBidQuote }>(
+    `/api/v1/auctions/${encodeURIComponent(input.auctionId)}/bid-quote`,
+    { amount: input.amount, max_price: input.maxPrice }
   );
   return body.data;
 }
