@@ -47,6 +47,7 @@ The app also keeps "My agents": the list of agents a person funds. An agent is a
 - Add USDC on Base, with Apple Pay shown when it is available for the user and region.
 - Send funds to another wallet or fund one of your agents.
 - Keep a list of your agents: add one by wallet address or pair it with a code, and see its Base USDC balance.
+- Pay or decline the USDC your paired agents ask for, from the Requests tab or straight from the notification.
 - Receive funds by copying the Base and Ethereum wallet address.
 - Cash out supported balances through the Coinbase cash-out flow.
 - Review wallet history and failed transaction support details.
@@ -59,6 +60,23 @@ Base USDC is the primary route for agent funding. Other balances may appear in t
 The agents list is owned by the phone backend under `server/`. Pasting a wallet address lists an agent straight away. A pairing code (single-use, ten minutes) lets an agent that can run commands prove it holds its wallet key: it sends a signed request to `POST /agent/pair`, the backend checks the signature with the SIWA server for the `regents-mobile` audience and records the verified address as waiting. The pairing screen shows the exact instructions to paste to the agent, then asks the person to confirm the address the agent signed in with; only a confirmed address is listed as paired. If balances cannot be read, the list still loads and says so.
 
 Funding an agent opens the wallet send flow prefilled with Base USDC and the agent's address. Balances shown in the list are live Base USDC reads.
+
+## Payment requests
+
+A paired agent can ask its person for Base USDC. The request shows up in the Requests tab and arrives as a notification with Pay and Decline buttons. Pay sends the USDC from the phone wallet after the wallet's own confirmation.
+
+How an agent asks:
+
+- Send a signed request to `POST /agent/payment-requests`. It is signed the same way as `/agent/pair`: a SIWA receipt for the `regents-mobile` audience, every proof header once, and a JSON body of at most 4 KiB.
+- The body is `{"to": "0x…", "amount": "5.00", "note": "What it is for"}`. `to` is the Base address that receives the money, usually the agent's own wallet. `amount` is USDC above zero with at most 6 decimals. `note` is 1 to 140 characters and is shown to the person as the agent's own words.
+- Only a wallet someone has paired can ask. An unpaired wallet gets a 403 telling it to pair first. Each person who paired the wallet gets their own request, and the response lists the request ids.
+
+How an agent reads the answer:
+
+- Send a signed `GET /agent/payment-requests/{id}`. With no body, it signs no content digest.
+- It returns `{id, status, txHash}`. `status` is `waiting`, `paid` or `declined`, and `txHash` is the Base transaction of the latest payment. Only the wallet that asked can read a request.
+
+A request is marked paid only when Base shows a successful transaction with a USDC transfer from the person's wallet to `to` for exactly the amount asked. Each transaction counts for one request only, so one payment never marks two requests paid. Requests never expire. Each person keeps their newest 100. A declined request can still be paid later, and the Pay button works whatever the status.
 
 ## Run locally
 

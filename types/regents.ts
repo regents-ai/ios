@@ -93,3 +93,41 @@ export type RegentStakingWalletAction = {
 export type RegentStakingActionResponse = {
   wallet_action: RegentStakingWalletAction;
 };
+
+export type PaymentRequestStatus = 'waiting' | 'paid' | 'declined';
+
+/** A paired agent asking its person for Base USDC. */
+export type PaymentRequest = {
+  id: string;
+  agentId: string;
+  agentName: string;
+  agentWallet: string;
+  /** The Base address that receives the USDC. */
+  to: string;
+  /** USDC as a decimal with at least two decimal places, for example "5.00". */
+  amount: string;
+  amountRaw: string;
+  /** What the money is for, in the agent's own words. */
+  note: string;
+  createdAt: string;
+  status: PaymentRequestStatus;
+  /** The Base transaction of the latest confirmed payment. */
+  txHash: string | null;
+};
+
+export type PaymentRequestsList = {
+  requests: PaymentRequest[];
+};
+
+/** The single Base USDC transfer that pays a request, for the wallet named as expected_signer. */
+export type PaymentRequestWalletAction = {
+  action: 'pay';
+  chain_id: number;
+  request_id: string;
+  to: string;
+  value: string;
+  data: string;
+  expected_signer: string;
+  recipient: string;
+  amount_raw: string;
+};

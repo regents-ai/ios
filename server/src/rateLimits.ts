@@ -135,7 +135,7 @@ function isPublicRoute(req: Request) {
     req.path === '/metrics' ||
     req.path === '/.well-known/jwks.json' ||
     req.path.startsWith('/webhooks') ||
-    req.path === '/agent/pair' ||
+    req.path.startsWith('/agent/') ||
     req.path === '/push-tokens/ping'
   );
 }

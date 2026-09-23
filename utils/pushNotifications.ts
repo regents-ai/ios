@@ -1,4 +1,5 @@
 import { getBaseUrl } from '@/constants/BASE_URL';
+import { PAYMENT_REQUEST_ACTIONS, PAYMENT_REQUEST_CATEGORY } from '@/utils/pushNotificationRouting';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
@@ -35,6 +36,12 @@ export async function configureNotificationHandling(): Promise<void> {
       shouldShowList: true,
     }),
   });
+
+  // Both buttons open the app: paying needs the wallet's own confirmation.
+  await Notifications.setNotificationCategoryAsync(PAYMENT_REQUEST_CATEGORY, [
+    { identifier: PAYMENT_REQUEST_ACTIONS.pay, buttonTitle: 'Pay', options: { opensAppToForeground: true } },
+    { identifier: PAYMENT_REQUEST_ACTIONS.decline, buttonTitle: 'Decline', options: { opensAppToForeground: true } },
+  ]);
 }
 
 /**

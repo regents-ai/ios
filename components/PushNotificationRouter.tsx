@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 import { Platform } from 'react-native';
 
 import { setPendingRoute } from '@/utils/pendingRoute';
-import { routeIntentFromNotificationData } from '@/utils/pushNotificationRouting';
+import { routeIntentFromNotificationResponse } from '@/utils/pushNotificationRouting';
 import { requestWalletRefresh } from '@/utils/walletRefresh';
 
 async function getNotificationsModule() {
@@ -36,30 +36,37 @@ export function PushNotificationRouter() {
     let active = true;
     let subscription: { remove(): void } | undefined;
 
-    const handleResponse = (response: NotificationResponse | null | undefined) => {
-      if (!response) {
-        return;
-      }
-
-      const intent = routeIntentFromNotificationData(response.notification.request.content.data);
-      if (!intent) {
-        return;
-      }
-
-      // Write into the shared pending-route store; the root drains it once
-      // navigation is ready (dedupe by the notification key lives in the store).
-      const key = responseKey(response) ?? `notif-${Date.now()}`;
-      setPendingRoute({ key, href: intent.href });
-      if (intent.refreshWallet) {
-        requestWalletRefresh(key);
-      }
-    };
-
     getNotificationsModule()
       .then(async (Notifications) => {
         if (!active || !Notifications) {
           return;
         }
+
+        const handleResponse = (response: NotificationResponse | null | undefined) => {
+          if (!response) {
+            return;
+          }
+
+          const intent = routeIntentFromNotificationResponse(
+            response.notification.request.content.data,
+            response.actionIdentifier
+          );
+          if (!intent) {
+            return;
+          }
+
+          // Write into the shared pending-route store; the root drains it once
+          // navigation is ready (dedupe by the notification key lives in the store).
+          const key = responseKey(response) ?? `notif-${Date.now()}`;
+          setPendingRoute({ key, href: intent.href });
+          if (intent.refreshWallet) {
+            requestWalletRefresh(key);
+          }
+          // A Pay or Decline press is acted on once; a later launch must not replay it.
+          if (intent.startsAction) {
+            Notifications.clearLastNotificationResponse();
+          }
+        };
 
         subscription = Notifications.addNotificationResponseReceivedListener(handleResponse);
         const lastResponse = await Notifications.getLastNotificationResponseAsync();

@@ -8,6 +8,9 @@ import {
   MobileAgentsList,
   RegentStakingActionResponse,
   RegentStakingState,
+  PaymentRequest,
+  PaymentRequestsList,
+  PaymentRequestWalletAction,
 } from '@/types/regents';
 import { ApiError, apiFailureKindForStatus, privacySafeLogCategory } from '@/utils/apiError';
 import { authenticatedFetch } from '@/utils/authenticatedFetch';
@@ -19,6 +22,7 @@ const mobileRegentStakingPath = '/mobile/regent/staking';
 const mobilePortalPairingPath = '/mobile/portal-pairing';
 const mobilePortalPairingStartPath = '/mobile/portal-pairing/start';
 const mobilePortalPairingCompletePath = '/mobile/portal-pairing/complete';
+const mobilePaymentRequestsPath = '/mobile/payment-requests';
 
 export type PortalPairingStatus = {
   paired: boolean;
@@ -46,7 +50,9 @@ type RegentApiPath =
   | MobileRegentStakingPath
   | typeof mobilePortalPairingPath
   | typeof mobilePortalPairingStartPath
-  | typeof mobilePortalPairingCompletePath;
+  | typeof mobilePortalPairingCompletePath
+  | typeof mobilePaymentRequestsPath
+  | `${typeof mobilePaymentRequestsPath}/${string}`;
 
 async function readErrorMessage(response: Response, defaultMessage: string) {
   const payload = await response.json().catch(() => null);
@@ -83,7 +89,10 @@ const mobileAgentPath = (agentId: string): `${typeof mobileAgentsPath}/${string}
 const mobileAgentPairingCodePath = (code: string, suffix = ''): `${typeof mobileAgentsPath}/${string}` =>
   `${mobileAgentPairingCodesPath}/${encodeURIComponent(code)}${suffix}`;
 
-const mobileRegentStakingWithWalletPath = (walletAddress: string): `${typeof mobileRegentStakingPath}?walletAddress=${string}` =>
+const mobilePaymentRequestPath = (requestId: string, suffix = ''): `${typeof mobilePaymentRequestsPath}/${string}` =>
+  `${mobilePaymentRequestsPath}/${encodeURIComponent(requestId)}${suffix}`;
+
+const mobileRegentStakingWithWalletPath =(walletAddress: string): `${typeof mobileRegentStakingPath}?walletAddress=${string}` =>
   `${mobileRegentStakingPath}?walletAddress=${encodeURIComponent(walletAddress)}`;
 
 export const regentApi = {
@@ -251,5 +260,49 @@ export const regentApi = {
       { method: 'DELETE' },
       'Unable to disconnect Nous Portal right now.'
     );
+  },
+
+  listPaymentRequests(): Promise<PaymentRequestsList> {
+    return requestJson<PaymentRequestsList>(
+      mobilePaymentRequestsPath,
+      undefined,
+      'Unable to load your requests right now.'
+    );
+  },
+
+  async getPaymentRequest(requestId: string): Promise<PaymentRequest> {
+    const payload = await requestJson<{ request: PaymentRequest }>(
+      mobilePaymentRequestPath(requestId),
+      undefined,
+      'Unable to load this request right now.'
+    );
+    return payload.request;
+  },
+
+  async preparePaymentRequest(requestId: string, input: { walletAddress: string }): Promise<PaymentRequestWalletAction> {
+    const payload = await requestJson<{ wallet_action: PaymentRequestWalletAction }>(
+      mobilePaymentRequestPath(requestId, '/prepare'),
+      jsonInit('POST', input),
+      'Unable to prepare this payment right now.'
+    );
+    return payload.wallet_action;
+  },
+
+  async confirmPaymentRequestPaid(requestId: string, input: { walletAddress: string; txHash: string }): Promise<PaymentRequest> {
+    const payload = await requestJson<{ request: PaymentRequest }>(
+      mobilePaymentRequestPath(requestId, '/paid'),
+      jsonInit('POST', input),
+      'Unable to check this payment right now.'
+    );
+    return payload.request;
+  },
+
+  async declinePaymentRequest(requestId: string): Promise<PaymentRequest> {
+    const payload = await requestJson<{ request: PaymentRequest }>(
+      mobilePaymentRequestPath(requestId, '/decline'),
+      { method: 'POST' },
+      'Unable to decline this request right now.'
+    );
+    return payload.request;
   },
 };

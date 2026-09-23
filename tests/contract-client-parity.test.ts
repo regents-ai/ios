@@ -23,7 +23,7 @@ test('OpenAPI operations have stable operation IDs', () => {
   const operations = [...contract.matchAll(/^    (get|post|put|patch|delete):$/gm)];
   const operationIds = [...contract.matchAll(/^\s+operationId:\s+([A-Za-z0-9_]+)$/gm)].map((match) => match[1]);
 
-  assert.equal(operations.length, 38);
+  assert.equal(operations.length, 45);
   assert.equal(operationIds.length, operations.length);
   assert.equal(new Set(operationIds).size, operationIds.length);
 });
@@ -96,6 +96,29 @@ test('my agents contract is owned by the phone backend and covered by the client
   assert.match(regentClient, /confirmAgentPairing\(code: string\): Promise<MobileAgent>/);
   assert.match(regentClient, /discardAgentPairingCode\(code: string\): Promise<void>/);
   assert.doesNotMatch(regentClient, /\/agent\/pair/);
+});
+
+test('payment requests are asked for by agents and answered from the phone', () => {
+  // The agent asks and reads its answer with SIWA-signed requests, never with a user's bearer token.
+  assert.match(contract, /\/agent\/payment-requests:[\s\S]*operationId: createAgentPaymentRequest[\s\S]*security: \[\]/);
+  assert.match(contract, /\/agent\/payment-requests\/\{id\}:[\s\S]*operationId: getAgentPaymentRequest[\s\S]*security: \[\]/);
+  assert.match(contract, /\/mobile\/payment-requests:[\s\S]*operationId: listMobilePaymentRequests[\s\S]*bearerAuth/);
+  assert.match(contract, /\/mobile\/payment-requests\/\{id\}:[\s\S]*operationId: getMobilePaymentRequest/);
+  assert.match(contract, /\/mobile\/payment-requests\/\{id\}\/prepare:[\s\S]*operationId: prepareMobilePaymentRequestPayment/);
+  assert.match(contract, /\/mobile\/payment-requests\/\{id\}\/paid:[\s\S]*operationId: confirmMobilePaymentRequestPaid/);
+  assert.match(contract, /\/mobile\/payment-requests\/\{id\}\/decline:[\s\S]*operationId: declineMobilePaymentRequest/);
+  assert.match(contract, /PaymentRequestStatus:[\s\S]*enum: \[waiting, paid, declined\]/);
+  assert.match(
+    contract,
+    /MobilePaymentRequest:[\s\S]*required: \[id, agentId, agentName, agentWallet, to, amount, amountRaw, note, createdAt, status, txHash\]/,
+  );
+  assert.match(regentTypes, /export type PaymentRequestStatus = 'waiting' \| 'paid' \| 'declined'/);
+  assert.match(regentClient, /listPaymentRequests\(\): Promise<PaymentRequestsList>/);
+  assert.match(regentClient, /getPaymentRequest\(requestId: string\): Promise<PaymentRequest>/);
+  assert.match(regentClient, /preparePaymentRequest\(requestId: string, input: \{ walletAddress: string \}\)/);
+  assert.match(regentClient, /confirmPaymentRequestPaid\(requestId: string, input: \{ walletAddress: string; txHash: string \}\)/);
+  assert.match(regentClient, /declinePaymentRequest\(requestId: string\): Promise<PaymentRequest>/);
+  assert.doesNotMatch(regentClient, /\/agent\/payment-requests/);
 });
 
 test('Regent staking contract and client use the live staking surface only', () => {

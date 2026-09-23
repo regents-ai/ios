@@ -38,6 +38,7 @@ function implementedRoutes() {
     'server/src/app.ts',
     'server/src/mobileRoutes.ts',
     'server/src/routes/mobileAgents.ts',
+    'server/src/routes/paymentRequests.ts',
     'server/src/routes/portalPairing.ts',
     'server/src/routes/autolaunch.ts',
   ];
@@ -78,6 +79,13 @@ test('served backend routes stay declared in the mobile API contract', () => {
     '/mobile/agents/pairing-codes/{code}/confirm',
     '/mobile/agents/{agent_id}',
     '/agent/pair',
+    '/mobile/payment-requests',
+    '/mobile/payment-requests/{id}',
+    '/mobile/payment-requests/{id}/prepare',
+    '/mobile/payment-requests/{id}/paid',
+    '/mobile/payment-requests/{id}/decline',
+    '/agent/payment-requests',
+    '/agent/payment-requests/{id}',
   ];
 
   for (const routePath of routePaths) {
