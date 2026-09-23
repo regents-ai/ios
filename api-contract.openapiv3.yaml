@@ -763,12 +763,15 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [agents]
+                required: [agents, balancesAvailable]
                 properties:
                   agents:
                     type: array
                     items:
                       $ref: '#/components/schemas/MobileAgent'
+                  balancesAvailable:
+                    type: boolean
+                    description: False when Base balances could not be read; every usdcBalance is then null
         '401':
           description: Authentication is required
           content:
@@ -846,6 +849,101 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '401':
           description: Authentication is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+  /mobile/agents/pairing-codes/{code}:
+    get:
+      operationId: getMobileAgentPairingCode
+      summary: Check whether an agent has signed in with one of the signed-in user's pairing codes
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The code is waiting, needs the user's confirmation, or is gone (expired, used up, discarded or not theirs)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MobileAgentPairingStatus'
+        '401':
+          description: Authentication is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+    delete:
+      operationId: discardMobileAgentPairingCode
+      summary: Discard a pairing code ("Not mine"), dropping any address an agent signed in with
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The code is gone
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [discarded]
+                properties:
+                  discarded:
+                    type: boolean
+                    enum: [true]
+        '401':
+          description: Authentication is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+  /mobile/agents/pairing-codes/{code}/confirm:
+    post:
+      operationId: confirmMobileAgentPairing
+      summary: Confirm the address an agent signed in with, listing it as paired
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The agent is listed as paired; the code is spent
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [agent]
+                properties:
+                  agent:
+                    $ref: '#/components/schemas/MobileAgent'
+        '401':
+          description: Authentication is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '409':
+          description: The code expired or is not theirs, no agent has used it yet, or the list is full
           content:
             application/json:
               schema:
@@ -946,9 +1044,11 @@ paths:
         Called by the agent itself, not the app. The request is a SIWA-signed HTTP request for the
         `regents-mobile` audience (headers `x-siwa-receipt`, `x-key-id`, `x-timestamp`,
         `x-agent-wallet-address`, `x-agent-chain-id`, `content-digest`, `signature-input`,
-        `signature`). The backend verifies the envelope with the SIWA server and, when the code is
-        valid, records the verified wallet address as a paired agent in the list of the user who
-        created the code. Each signed request and each code can be used once.
+        `signature`), each exactly once and with no other `x-agent-*` or `x-siwa-*` headers, with a
+        JSON body of at most 4 KiB. The backend verifies the envelope with the SIWA server for the
+        Base wallet principal and, when the code is valid, records the verified wallet address as
+        waiting for the user who created the code to confirm it in the app. Each signed request and
+        each code can be used once.
       security: []
       requestBody:
         required: true
@@ -958,13 +1058,13 @@ paths:
               $ref: '#/components/schemas/PairMobileAgentRequest'
       responses:
         '200':
-          description: Agent paired
+          description: The address is recorded; the user confirms it in the app
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PairMobileAgentResponse'
+                $ref: '#/components/schemas/PairMobileAgentAccepted'
         '400':
-          description: Body is not JSON with a pairing code
+          description: Body is not JSON with a pairing code, or the proof headers are missing, repeated or accompanied by unknown agent headers
           content:
             application/json:
               schema:
@@ -976,19 +1076,25 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '409':
-          description: The pairing code is unknown, expired, or already used
+          description: The pairing code is unknown, expired, or already used, or the signed request was already seen
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
-        '502':
-          description: The SIWA server could not be reached
+        '413':
+          description: The body is larger than 4 KiB
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '415':
+          description: The body is not sent as JSON
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '503':
-          description: SIWA_SERVER_URL is not configured
+          description: Agent pairing is not available on this server, or the sign-in service is busy
           content:
             application/json:
               schema:
@@ -1453,51 +1559,30 @@ components:
         code:
           type: string
           minLength: 1
-    PairMobileAgentResponse:
+    PairMobileAgentAccepted:
       type: object
-      required: [paired, agent]
+      required: [status, message]
       properties:
-        paired:
-          type: boolean
-          enum: [true]
-        agent:
-          type: object
-          required: [id, name, kind, walletAddress]
-          properties:
-            id:
-              type: string
-            name:
-              type: string
-            kind:
-              $ref: '#/components/schemas/MobileAgentKind'
-            walletAddress:
-              type: string
-              pattern: '^0x[a-fA-F0-9]{40}      type: object
-      required: [error]
+        status:
+          type: string
+          enum: [awaiting_confirmation]
+        message:
+          type: string
+    MobileAgentPairingStatus:
+      type: object
+      required: [status]
       properties:
-        error:
-          type: object
-          required: [code, product, status, path, request_id, message]
-          properties:
-            code:
-              type: string
-            product:
-              type: string
-              enum: [ios]
-            status:
-              type: integer
-            path:
-              type: string
-            request_id:
-              type: string
-              nullable: true
-            message:
-              type: string
-            next_steps:
-              type: string
-              nullable: true
-          additionalProperties: false
-
+        status:
+          type: string
+          enum: [waiting, needs_confirmation, expired]
+        walletAddress:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
+          description: Present when status is needs_confirmation
+        expiresAt:
+          type: string
+          format: date-time
+          description: Present when status is waiting or needs_confirmation
     ErrorEnvelope:
       type: object
       required: [error]

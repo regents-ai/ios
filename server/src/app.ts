@@ -17,6 +17,7 @@ import {
 } from './metrics.js';
 import { isReleaseRuntime } from './runtime.js';
 import { createMobileRoutes } from './mobileRoutes.js';
+import { fileMobileAgentsKv, redisMobileAgentsKv } from './mobileAgents.js';
 import { createMobileAgentRoutes } from './routes/mobileAgents.js';
 import { createPortalPairingRoutes } from './routes/portalPairing.js';
 import {
@@ -187,7 +188,8 @@ app.use(cors({
 app.use('/webhooks/onramp', express.raw({ type: 'application/json' }));
 // The agent pairing request is SIWA-signed over its exact bytes, so keep the
 // raw body for the signature check instead of a parsed and re-serialized one.
-app.use('/agent/pair', express.raw({ type: () => true }));
+// A pairing request is one short JSON object; anything larger is refused.
+app.use('/agent/pair', express.raw({ type: () => true, limit: 4096 }));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -278,7 +280,7 @@ app.post('/auth/cdp-token', async (req, res) => {
 
 app.use(createMobileRoutes());
 app.use('/agent/pair', publicWriteRateLimiter);
-app.use(createMobileAgentRoutes({ redis: useDatabase ? database : null }));
+app.use(createMobileAgentRoutes({ kv: useDatabase ? redisMobileAgentsKv(database) : fileMobileAgentsKv() }));
 
 /**
  * Coinbase proxy for the mobile wallet operations declared in api-contract.openapiv3.yaml.
