@@ -258,7 +258,10 @@ export function createPaymentRequestRoutes(input: {
     if (!paid) {
       return sendError(res, 404, 'PaymentRequestNotFound', NOT_FOUND_MESSAGE);
     }
-    return res.json({ request: requestJson(paid) });
+    if (paid.kind === 'transaction_used') {
+      return sendError(res, 409, 'PaymentAlreadyUsed', 'This payment was already used for another request.');
+    }
+    return res.json({ request: requestJson(paid.request) });
   }));
 
   router.post('/mobile/payment-requests/:id/decline', guarded(async (req, res) => {

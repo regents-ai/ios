@@ -17,9 +17,11 @@ import {
  *
  * Storage is one key per request and one key per user holding that user's
  * request ids, newest first, capped at the newest hundred; the oldest
- * request drops out with its key. Requests never expire. They live in the
- * same key-value store as the agents list, and a damaged value is reported,
- * never replaced.
+ * request drops out with its key. Requests never expire. Each transaction
+ * that proved a payment keeps one key naming the request it paid; those keys
+ * are never deleted, so a transaction proves exactly one request, ever. All
+ * of this lives in the same key-value store as the agents list, and a
+ * damaged value is reported, never replaced.
  *
  * Nothing here gates paying. Status only records what happened: a request
  * becomes paid when Base shows the payment, and paying again, or paying a
@@ -59,6 +61,7 @@ export type PaymentRequestRecord = z.infer<typeof paymentRequestSchema>;
 
 const requestKey = (id: string) => `${KEY_PREFIX}:request:${id}`;
 const userRequestsKey = (userId: string) => `${KEY_PREFIX}:user:${userId}`;
+const transactionKey = (txHash: string) => `${KEY_PREFIX}:tx:${txHash.toLowerCase()}`;
 
 /** A positive USDC amount with at most six decimal places, in atomic units that fit a transfer. */
 export function parseUsdcAmount(value: string): bigint | null {
@@ -176,13 +179,38 @@ function updateRequestForUser<R>(
   );
 }
 
-/** Records a payment Base has shown; the latest payment's transaction is kept. */
-export function markPaymentRequestPaid(userId: string, id: string, txHash: string, deps: MobileAgentsDeps) {
-  return updateRequestForUser(userId, id, deps, (request) => {
+/**
+ * Claims the transaction for this request. The first claim wins for good;
+ * the same request claiming it again is the same claim.
+ */
+async function claimTransaction(kv: MobileAgentsKv, txHash: string, id: string): Promise<boolean> {
+  const key = transactionKey(txHash);
+  return (await kv.compareAndSwap(key, null, id)) || (await kv.get(key)) === id;
+}
+
+export type MarkPaymentRequestPaidResult =
+  | { kind: 'paid'; request: PaymentRequestRecord }
+  | { kind: 'transaction_used' };
+
+/**
+ * Records a payment Base has shown, once the transaction is claimed for this
+ * request; the latest payment's transaction is kept.
+ */
+export async function markPaymentRequestPaid(
+  userId: string,
+  id: string,
+  txHash: string,
+  deps: MobileAgentsDeps,
+): Promise<MarkPaymentRequestPaidResult | null> {
+  if (!(await claimTransaction(deps.kv, txHash, id))) {
+    return { kind: 'transaction_used' };
+  }
+  const request = await updateRequestForUser(userId, id, deps, (request) => {
     request.status = 'paid';
     request.txHash = txHash;
     return { write: true, result: request };
   });
+  return request && { kind: 'paid', request };
 }
 
 export type DeclinePaymentRequestResult = { kind: 'declined'; request: PaymentRequestRecord } | { kind: 'already_paid' };
