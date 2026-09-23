@@ -14,15 +14,17 @@ An agent enters the list in one of two ways:
 - The person pastes its Base wallet address. The agent is listed as "address only".
 - The person gives the agent a pairing code. The agent sends a signed request to
   `POST /agent/pair`, the backend verifies the signature with the SIWA server for the
-  `regents-mobile` audience, and the verified wallet address is listed as paired.
+  `regents-mobile` audience, and the app asks the person to confirm the verified wallet
+  address. Once confirmed, the agent is listed as paired.
 
 Every listed agent shows its live Base USDC balance, read by the backend in one call.
 Funding an agent is the existing wallet send flow, prefilled with Base USDC and the
 agent's address; the person reviews and signs on the phone and no server step sits in
 between.
 
-The backend keeps only the per-user agent list and unspent pairing codes (Redis in
-release, memory locally). It holds no agent conversations, work records, voice
+The backend keeps only the per-user agent list (one entry per user, at most fifty
+agents) and unspent pairing codes (one entry per code, gone after ten minutes), in
+Redis in release and a JSON file locally. It holds no agent conversations, work records, voice
 sessions, or funding receipts.
 
 ## What The Next Build Should Do

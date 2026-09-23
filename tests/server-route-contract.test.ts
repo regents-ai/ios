@@ -71,6 +71,10 @@ test('served backend routes stay declared in the mobile API contract', () => {
     '/mobile/regent/staking',
     '/mobile/portal-pairing',
     '/mobile/agents',
+    '/mobile/agents/pairing-codes',
+    '/mobile/agents/pairing-codes/{code}',
+    '/mobile/agents/pairing-codes/{code}/confirm',
+    '/mobile/agents/{agent_id}',
     '/agent/pair',
   ];
 

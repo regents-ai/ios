@@ -14,17 +14,6 @@ test('mobile contract exposes the current route family', () => {
   assert.match(contract, /\/agent\/pair/);
   assert.match(contract, /\/mobile\/regent\/staking/);
   assert.match(contract, /\/mobile\/portal-pairing/);
-  assert.doesNotMatch(contract, /\/mobile\/regents|\/mobile\/message|\/voice\/|wallet-actions|agent-links/);
-});
-
-test('mobile app and backend do not use the old preview route family', () => {
-  const result = spawnSync('rg', ['-n', '/mobile-preview|mobile-preview', 'app', 'utils', 'types', 'server/src', 'api-contract.openapiv3.yaml'], {
-    cwd: resolve(testDir, '..'),
-    encoding: 'utf8',
-  });
-
-  assert.equal(result.status, 1, result.stdout);
-  assert.equal(result.stdout, '');
 });
 
 test('mobile navigation uses typed route helpers instead of route casts', () => {

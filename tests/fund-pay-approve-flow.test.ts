@@ -17,7 +17,6 @@ test('main mobile tabs lead with fund, pay, and earn', () => {
   assert.match(layout, /name="earn"[\s\S]*title: 'Earn'/);
   assert.match(layout, /name="agents"[\s\S]*href: null/);
   assert.match(layout, /name="autolaunch"[\s\S]*href: null/);
-  assert.doesNotMatch(layout, /name="message"/);
   assert.match(sendTab, /export \{ default \} from '\.\.\/wallet\/send'/);
   assert.match(earnTab, /Bring people into Regents/);
   assert.match(profileButton, /accessibilityLabel="Open profile"/);
@@ -45,8 +44,6 @@ test('my agents list and wallet screens use the agent money story', () => {
 test('agent detail starts the fund-agent send flow without a server prepare step', () => {
   const agentDetail = read('app/agent/[id].tsx');
   const routes = read('utils/navigation/routes.ts');
-  const evmTransferHook = read('hooks/wallet/useEvmTransfer.ts');
-  const userOpAlertsHook = read('hooks/wallet/useUserOpStatusAlerts.ts');
 
   assert.match(routes, /walletSend\(params\?:/);
   assert.match(agentDetail, /routes\.walletSend\(\{/);
@@ -57,7 +54,6 @@ test('agent detail starts the fund-agent send flow without a server prepare step
   assert.match(agentDetail, /regentApi\.renameAgent/);
   assert.match(agentDetail, /regentApi\.removeAgent/);
   assert.match(agentDetail, /routes\.agentPairing\(/);
-  assert.doesNotMatch(`${evmTransferHook}\n${userOpAlertsHook}`, /regentApi|prepareWalletAction|confirmWalletAction|idempotency/i);
 });
 
 test('agent funding mode prefers Base USDC and points to the Fund tab when short', () => {

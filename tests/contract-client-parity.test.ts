@@ -10,7 +10,7 @@ test('OpenAPI operations have stable operation IDs', () => {
   const operations = [...contract.matchAll(/^    (get|post|put|patch|delete):$/gm)];
   const operationIds = [...contract.matchAll(/^\s+operationId:\s+([A-Za-z0-9_]+)$/gm)].map((match) => match[1]);
 
-  assert.equal(operations.length, 31);
+  assert.equal(operations.length, 34);
   assert.equal(operationIds.length, operations.length);
   assert.equal(new Set(operationIds).size, operationIds.length);
 });
@@ -65,17 +65,23 @@ test('Nous Portal pairing is additive, authenticated, and covered by the client'
 test('my agents contract is owned by the phone backend and covered by the client', () => {
   assert.match(contract, /\/mobile\/agents:[\s\S]*operationId: listMobileAgents[\s\S]*operationId: addMobileAgent/);
   assert.match(contract, /\/mobile\/agents\/pairing-codes:[\s\S]*operationId: createMobileAgentPairingCode/);
+  assert.match(contract, /\/mobile\/agents\/pairing-codes\/\{code\}:[\s\S]*operationId: getMobileAgentPairingCode[\s\S]*operationId: discardMobileAgentPairingCode/);
+  assert.match(contract, /\/mobile\/agents\/pairing-codes\/\{code\}\/confirm:[\s\S]*operationId: confirmMobileAgentPairing/);
   assert.match(contract, /\/mobile\/agents\/\{agent_id\}:[\s\S]*operationId: renameMobileAgent[\s\S]*operationId: removeMobileAgent/);
   // The agent itself calls /agent/pair with a SIWA-signed request, never with a user's bearer token.
   assert.match(contract, /\/agent\/pair:[\s\S]*operationId: pairMobileAgent[\s\S]*security: \[\]/);
   assert.match(contract, /MobileAgentKind:[\s\S]*enum: \[muse, grok_bot, hermes, other\]/);
   assert.match(contract, /MobileAgent:[\s\S]*required: \[id, name, kind, walletAddress, paired, createdAt, usdcBalance\]/);
   assert.match(regentTypes, /export type MobileAgentKind = 'muse' \| 'grok_bot' \| 'hermes' \| 'other'/);
-  assert.match(regentClient, /listAgents\(\): Promise<MobileAgent\[\]>/);
+  assert.match(contract, /MobileAgentPairingStatus:/);
+  assert.match(regentClient, /listAgents\(\): Promise<MobileAgentsList>/);
   assert.match(regentClient, /addAgent\(input: \{ name: string; kind: MobileAgentKind; walletAddress: string \}\)/);
   assert.match(regentClient, /renameAgent\(agentId: string, input: \{ name: string \}\)/);
   assert.match(regentClient, /removeAgent\(agentId: string\)/);
   assert.match(regentClient, /createAgentPairingCode\(input: \{ name: string; kind: MobileAgentKind \}\)/);
+  assert.match(regentClient, /getAgentPairingStatus\(code: string\): Promise<MobileAgentPairingStatus>/);
+  assert.match(regentClient, /confirmAgentPairing\(code: string\): Promise<MobileAgent>/);
+  assert.match(regentClient, /discardAgentPairingCode\(code: string\): Promise<void>/);
   assert.doesNotMatch(regentClient, /\/agent\/pair/);
 });
 
