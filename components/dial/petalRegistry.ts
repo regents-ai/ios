@@ -127,7 +127,8 @@ export const DIAL_PETAL_REGISTRY: DialPetalRegistry = {
 export function getDialRouteContext(pathname: string): DialRouteContext {
   if (
     /^\/(?:auth|onboarding)(?:\/|$)/.test(pathname) ||
-    /^\/(?:email|phone)-(?:verify|code)\/?$/.test(pathname)
+    /^\/(?:email|phone)-(?:verify|code)\/?$/.test(pathname) ||
+    /^\/(?:wallet\/)?send\/?$/.test(pathname)
   ) {
     return 'hidden';
   }

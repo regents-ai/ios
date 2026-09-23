@@ -78,7 +78,7 @@ test('Attach exposes only the supported Scan QR action', () => {
   ]);
 });
 
-test('pre-auth, onboarding, and verification contexts resolve to no dial petals', () => {
+test('pre-auth, onboarding, verification and send contexts resolve to no dial petals', () => {
   const hiddenPaths = [
     '/auth/login',
     '/auth/recovery',
@@ -89,6 +89,8 @@ test('pre-auth, onboarding, and verification contexts resolve to no dial petals'
     '/email-code',
     '/phone-verify',
     '/phone-code',
+    '/send',
+    '/wallet/send',
   ];
 
   for (const pathname of hiddenPaths) {
