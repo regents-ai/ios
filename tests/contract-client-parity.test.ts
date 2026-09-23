@@ -85,6 +85,29 @@ test('my agents contract is owned by the phone backend and covered by the client
   assert.doesNotMatch(regentClient, /\/agent\/pair/);
 });
 
+test('payment requests are asked for by agents and answered from the phone', () => {
+  // The agent asks and reads its answer with SIWA-signed requests, never with a user's bearer token.
+  assert.match(contract, /\/agent\/payment-requests:[\s\S]*operationId: createAgentPaymentRequest[\s\S]*security: \[\]/);
+  assert.match(contract, /\/agent\/payment-requests\/\{id\}:[\s\S]*operationId: getAgentPaymentRequest[\s\S]*security: \[\]/);
+  assert.match(contract, /\/mobile\/payment-requests:[\s\S]*operationId: listMobilePaymentRequests[\s\S]*bearerAuth/);
+  assert.match(contract, /\/mobile\/payment-requests\/\{id\}:[\s\S]*operationId: getMobilePaymentRequest/);
+  assert.match(contract, /\/mobile\/payment-requests\/\{id\}\/prepare:[\s\S]*operationId: prepareMobilePaymentRequestPayment/);
+  assert.match(contract, /\/mobile\/payment-requests\/\{id\}\/paid:[\s\S]*operationId: confirmMobilePaymentRequestPaid/);
+  assert.match(contract, /\/mobile\/payment-requests\/\{id\}\/decline:[\s\S]*operationId: declineMobilePaymentRequest/);
+  assert.match(contract, /PaymentRequestStatus:[\s\S]*enum: \[waiting, paid, declined\]/);
+  assert.match(
+    contract,
+    /MobilePaymentRequest:[\s\S]*required: \[id, agentId, agentName, agentWallet, to, amount, amountRaw, note, createdAt, status, txHash\]/,
+  );
+  assert.match(regentTypes, /export type PaymentRequestStatus = 'waiting' \| 'paid' \| 'declined'/);
+  assert.match(regentClient, /listPaymentRequests\(\): Promise<PaymentRequestsList>/);
+  assert.match(regentClient, /getPaymentRequest\(requestId: string\): Promise<PaymentRequest>/);
+  assert.match(regentClient, /preparePaymentRequest\(requestId: string, input: \{ walletAddress: string \}\)/);
+  assert.match(regentClient, /confirmPaymentRequestPaid\(requestId: string, input: \{ walletAddress: string; txHash: string \}\)/);
+  assert.match(regentClient, /declinePaymentRequest\(requestId: string\): Promise<PaymentRequest>/);
+  assert.doesNotMatch(regentClient, /\/agent\/payment-requests/);
+});
+
 test('Regent staking contract and client use the live staking surface only', () => {
   assert.match(contract, /\/mobile\/regent\/staking:[\s\S]*operationId: getMobileRegentStaking/);
   assert.match(contract, /\/mobile\/regent\/staking\/stake:[\s\S]*operationId: stakeMobileRegent/);
