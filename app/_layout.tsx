@@ -131,6 +131,7 @@ function RootLayoutContent() {
           <Stack.Screen name="agent/[id]" options={cardSlideRight} />
           <Stack.Screen name="agent/add" options={cardSlideRight} />
           <Stack.Screen name="agent/pair" options={cardSlideRight} />
+          <Stack.Screen name="request/[id]" options={cardSlideRight} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         </Stack>
       </WalletProviders>

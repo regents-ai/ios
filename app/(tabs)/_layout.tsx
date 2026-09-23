@@ -2,10 +2,12 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Tabs } from 'expo-router';
 import { View } from 'react-native';
 
+import { useWaitingRequestCount } from '@/hooks/usePaymentRequests';
 import { useTheme } from '@/theme/ThemeProvider';
 
 export default function TabLayout() {
   const { colors, fonts } = useTheme();
+  const waitingRequests = useWaitingRequestCount();
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <Tabs
@@ -65,6 +67,14 @@ export default function TabLayout() {
           options={{
             title: 'Earn',
             tabBarIcon: ({ color, size }) => <Ionicons name="sparkles-outline" size={size} color={color} />,
+          }}
+        />
+        <Tabs.Screen
+          name="requests"
+          options={{
+            title: 'Requests',
+            tabBarBadge: waitingRequests > 0 ? waitingRequests : undefined,
+            tabBarIcon: ({ color, size }) => <Ionicons name="mail-unread-outline" size={size} color={color} />,
           }}
         />
         <Tabs.Screen

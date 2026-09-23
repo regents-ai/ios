@@ -54,6 +54,17 @@ export const routes = {
     return { pathname: '/agent/[id]', params: { id: agentId } };
   },
 
+  requests(): Href {
+    return '/requests';
+  },
+
+  /** A payment request; `action` starts paying or declining as soon as the screen opens. */
+  paymentRequest(requestId: string, action?: 'pay' | 'decline'): Href {
+    return action
+      ? { pathname: '/request/[id]', params: { id: requestId, action } }
+      : { pathname: '/request/[id]', params: { id: requestId } };
+  },
+
   emailVerify(params: { mode: EmailVerifyMode; initialEmail?: string }): Href {
     return { pathname: '/email-verify', params };
   },
