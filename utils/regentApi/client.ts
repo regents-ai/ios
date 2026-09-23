@@ -288,7 +288,7 @@ export const regentApi = {
     return payload.wallet_action;
   },
 
-  async confirmPaymentRequestPaid(requestId: string, input: { walletAddress: string; txHash: string }): Promise<PaymentRequest> {
+  async confirmPaymentRequestPaid(requestId: string, input: { txHash: string; walletAccessToken: string }): Promise<PaymentRequest> {
     const payload = await requestJson<{ request: PaymentRequest }>(
       mobilePaymentRequestPath(requestId, '/paid'),
       jsonInit('POST', input),

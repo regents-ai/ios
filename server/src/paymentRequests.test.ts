@@ -19,6 +19,7 @@ import { createMobileAgentRoutes } from './routes/mobileAgents.js';
 import { createPaymentRequestRoutes, type PaymentRequestNotification } from './routes/paymentRequests.js';
 
 const PHONE_WALLET: Address = '0x4B0897b0513fdC7C541B6d9D7E929C4e5364D2dB';
+const PARTNER_WALLET: Address = '0x3333333333333333333333333333333333333333';
 const ELSEWHERE: Address = '0x2222222222222222222222222222222222222222';
 const TX_HASH = `0x${'a1'.repeat(32)}` as Hash;
 const OTHER_TX_HASH = `0x${'b2'.repeat(32)}` as Hash;
@@ -45,6 +46,7 @@ function createHarness() {
   const receipts = new Map<string, TransferReceiptReadResult>();
   let verifiedWallet = AGENT_WALLET;
   let failPushes = false;
+  let coinbaseDown = false;
   const verifySignedRequest = async () => ({ kind: 'verified' as const, walletAddress: verifiedWallet });
 
   const request = routeRequester(
@@ -57,6 +59,14 @@ function createHarness() {
       kv,
       verifySignedRequest,
       readReceipt: async (txHash) => receipts.get(txHash) ?? { kind: 'not_found' },
+      // A test wallet token is "<user id>|<smart account>"; an empty account means none.
+      async validateWalletToken(token) {
+        if (coinbaseDown) {
+          throw new Error('coinbase down');
+        }
+        const [sub, wallet] = token.split('|');
+        return { authenticationMethods: [{ type: 'jwt', kid: 'regents-mobile', sub: sub! }], evmSmartAccounts: wallet ? [wallet] : [] };
+      },
       async notifyUser(userId, notification) {
         if (failPushes) {
           throw new Error('push service down');
@@ -76,6 +86,14 @@ function createHarness() {
     request({ method: 'POST', url: '/agent/payment-requests', rawBody: JSON.stringify(body), headers: PROOF_HEADERS });
   const agentRead = (id: string) =>
     request({ method: 'GET', url: `/agent/payment-requests/${id}`, headers: BODYLESS_PROOF_HEADERS });
+  // Checks a payment as `userId`, whose wallet token names `tokenUser`'s wallet `wallet`.
+  const checkPaid = (userId: string, id: string, txHash: string, wallet: string = PHONE_WALLET, tokenUser = userId) =>
+    request({
+      method: 'POST',
+      url: `/mobile/payment-requests/${id}/paid`,
+      userId,
+      body: { txHash, walletAccessToken: `${tokenUser}|${wallet}` },
+    });
 
   return {
     request,
@@ -86,11 +104,15 @@ function createHarness() {
     pair,
     ask,
     agentRead,
+    checkPaid,
     signAs(wallet: string) {
       verifiedWallet = wallet;
     },
     failPushes(fail: boolean) {
       failPushes = fail;
+    },
+    coinbaseDown(down: boolean) {
+      coinbaseDown = down;
     },
   };
 }
@@ -181,9 +203,10 @@ test('a failed push still records the request', async () => {
 });
 
 // Invariant: paying prepares one USDC transfer for the person's own wallet,
-// and a request is marked paid only from a Base receipt that pays it exactly.
+// and a request is marked paid only from a Base receipt that pays it exactly
+// from the wallet Coinbase says is the signed-in person's.
 test('paying a request is prepared for the wallet and confirmed from Base', async () => {
-  const { pair, ask, request, receipts, agentRead, signAs } = createHarness();
+  const { pair, ask, request, receipts, agentRead, signAs, checkPaid } = createHarness();
   await pair('owner', 'Muse');
   const id: string = (await ask({ to: ELSEWHERE, amount: '12.5', note: 'Hosting' })).body.requestIds[0];
 
@@ -199,8 +222,7 @@ test('paying a request is prepared for the wallet and confirmed from Base', asyn
   );
   assert.deepEqual(decodeFunctionData({ abi: erc20Abi, data: action.data }).args, [ELSEWHERE, 12_500_000n]);
 
-  const markPaid = (txHash: string, walletAddress = PHONE_WALLET) =>
-    request({ method: 'POST', url: `/mobile/payment-requests/${id}/paid`, userId: 'owner', body: { walletAddress, txHash } });
+  const markPaid = (txHash: string, wallet: string = PHONE_WALLET) => checkPaid('owner', id, txHash, wallet);
 
   // Not on Base yet, then transactions that pay the wrong amount, the wrong
   // address, from the wrong wallet, or that failed: all refused.
@@ -219,8 +241,8 @@ test('paying a request is prepared for the wallet and confirmed from Base', asyn
   assert.equal((await request({ method: 'GET', url: `/mobile/payment-requests/${id}`, userId: 'owner' })).body.request.status, 'waiting');
 
   receipts.set(TX_HASH, { kind: 'ok', receipt: { status: 'success', logs: [transferLog(PHONE_WALLET, ELSEWHERE, 12_500_000n)] } });
-  // The same receipt claimed for another wallet is refused.
-  assert.equal((await markPaid(TX_HASH, AGENT_WALLET)).status, 409);
+  // The same receipt is refused while the person's own wallet is another one.
+  assert.equal((await markPaid(TX_HASH, AGENT_WALLET)).body.error.code, 'PaymentDoesNotMatch');
   const paid = await markPaid(TX_HASH);
   assert.equal(paid.status, 200);
   assert.deepEqual([paid.body.request.status, paid.body.request.txHash], ['paid', TX_HASH]);
@@ -230,14 +252,20 @@ test('paying a request is prepared for the wallet and confirmed from Base', asyn
   receipts.set(OTHER_TX_HASH, { kind: 'ok', receipt: { status: 'success', logs: [transferLog(PHONE_WALLET, ELSEWHERE, 12_500_000n)] } });
   assert.equal((await markPaid(OTHER_TX_HASH)).body.request.txHash, OTHER_TX_HASH);
 
-  // The payment cannot also mark an identical request paid, nor one for
-  // someone else who paired the same agent and names this wallet.
+  // The payment cannot also mark an identical request paid.
   await pair('partner', 'Muse');
   const [twinId, partnerId] = (await ask({ to: ELSEWHERE, amount: '12.5', note: 'Hosting' })).body.requestIds as [string, string];
+  const reused = await checkPaid('owner', twinId, TX_HASH);
+  assert.equal(reused.status, 409);
+  assert.deepEqual([reused.body.error.code, reused.body.error.message], ['PaymentAlreadyUsed', 'This payment was already used for another request.']);
+
+  // Someone else who paired the same agent cannot use it either: from their
+  // own wallet it does not match, and the owner's wallet is not theirs.
+  assert.equal((await checkPaid('partner', partnerId, TX_HASH, PARTNER_WALLET)).body.error.code, 'PaymentDoesNotMatch');
+  const borrowed = await checkPaid('partner', partnerId, TX_HASH, PHONE_WALLET, 'owner');
+  assert.equal(borrowed.status, 403);
+  assert.equal(borrowed.body.error.code, 'WalletNotYours');
   for (const [userId, requestId] of [['owner', twinId], ['partner', partnerId]] as const) {
-    const reused = await request({ method: 'POST', url: `/mobile/payment-requests/${requestId}/paid`, userId, body: { walletAddress: PHONE_WALLET, txHash: TX_HASH } });
-    assert.equal(reused.status, 409);
-    assert.deepEqual([reused.body.error.code, reused.body.error.message], ['PaymentAlreadyUsed', 'This payment was already used for another request.']);
     assert.equal((await request({ method: 'GET', url: `/mobile/payment-requests/${requestId}`, userId })).body.request.status, 'waiting');
   }
 
@@ -280,17 +308,40 @@ test('a transaction pays one request only', async () => {
 });
 
 test('checking a payment without a Base connection is plainly unavailable', async () => {
-  const { pair, ask, request, receipts } = createHarness();
+  const { pair, ask, receipts, checkPaid } = createHarness();
   await pair('owner', 'Muse');
   const id: string = (await ask({ to: AGENT_WALLET, amount: '5', note: 'API credits' })).body.requestIds[0];
 
   receipts.set(TX_HASH, { kind: 'missing_rpc', requiredEnv: 'BASE_RPC_URL' });
-  const missing = await request({ method: 'POST', url: `/mobile/payment-requests/${id}/paid`, userId: 'owner', body: { walletAddress: PHONE_WALLET, txHash: TX_HASH } });
+  const missing = await checkPaid('owner', id, TX_HASH);
   assert.equal(missing.status, 503);
   assert.equal(missing.body.error.message, 'Checking payments is unavailable right now.');
 
   receipts.set(TX_HASH, { kind: 'rpc_error', name: 'HttpRequestError' });
-  assert.equal((await request({ method: 'POST', url: `/mobile/payment-requests/${id}/paid`, userId: 'owner', body: { walletAddress: PHONE_WALLET, txHash: TX_HASH } })).status, 502);
+  assert.equal((await checkPaid('owner', id, TX_HASH)).status, 502);
+});
+
+// Invariant: a payment is checked only once Coinbase names the signed-in
+// person's own wallet.
+test('checking a payment needs the person\'s own wallet', async () => {
+  const { pair, ask, request, receipts, checkPaid, coinbaseDown } = createHarness();
+  await pair('owner', 'Muse');
+  const id: string = (await ask({ to: AGENT_WALLET, amount: '5', note: 'API credits' })).body.requestIds[0];
+  receipts.set(TX_HASH, { kind: 'ok', receipt: { status: 'success', logs: [transferLog(PHONE_WALLET, AGENT_WALLET, 5_000_000n)] } });
+
+  const noToken = await request({ method: 'POST', url: `/mobile/payment-requests/${id}/paid`, userId: 'owner', body: { txHash: TX_HASH } });
+  assert.equal(noToken.status, 400);
+
+  const noWallet = await checkPaid('owner', id, TX_HASH, '');
+  assert.equal(noWallet.body.error.code, 'WalletNotYours');
+
+  coinbaseDown(true);
+  const down = await checkPaid('owner', id, TX_HASH);
+  assert.equal(down.status, 502);
+  assert.equal(down.body.error.code, 'WalletCheckFailed');
+
+  coinbaseDown(false);
+  assert.equal((await checkPaid('owner', id, TX_HASH)).body.request.status, 'paid');
 });
 
 test('declining a request is recorded and seen by the agent', async () => {
@@ -314,7 +365,7 @@ test('declining a request is recorded and seen by the agent', async () => {
 // drops out along with its stored request but its transaction stays used,
 // and a damaged request is reported without being replaced.
 test('a person keeps the newest hundred requests', async () => {
-  const { pair, ask, request, entries, receipts } = createHarness();
+  const { pair, ask, request, entries, receipts, checkPaid } = createHarness();
   await pair('owner', 'Muse');
 
   const ids: string[] = [];
@@ -322,7 +373,7 @@ test('a person keeps the newest hundred requests', async () => {
     ids.push((await ask({ to: AGENT_WALLET, amount: String(index), note: `Request ${index}` })).body.requestIds[0]);
     if (index === 1) {
       receipts.set(TX_HASH, { kind: 'ok', receipt: { status: 'success', logs: [transferLog(PHONE_WALLET, AGENT_WALLET, 1_000_000n)] } });
-      const paid = await request({ method: 'POST', url: `/mobile/payment-requests/${ids[0]}/paid`, userId: 'owner', body: { walletAddress: PHONE_WALLET, txHash: TX_HASH } });
+      const paid = await checkPaid('owner', ids[0]!, TX_HASH);
       assert.equal(paid.status, 200);
     }
   }
@@ -335,7 +386,7 @@ test('a person keeps the newest hundred requests', async () => {
   assert.equal((await request({ method: 'GET', url: `/mobile/payment-requests/${ids[0]}`, userId: 'owner' })).status, 404);
   assert.equal(entries.state.entries[`regents:payment-requests:v1:tx:${TX_HASH}`]?.value, ids[0]);
   const again = (await ask({ to: AGENT_WALLET, amount: '1', note: 'Request 1 again' })).body.requestIds[0];
-  const reused = await request({ method: 'POST', url: `/mobile/payment-requests/${again}/paid`, userId: 'owner', body: { walletAddress: PHONE_WALLET, txHash: TX_HASH } });
+  const reused = await checkPaid('owner', again, TX_HASH);
   assert.equal(reused.body.error.code, 'PaymentAlreadyUsed');
 
   const damagedKey = `regents:payment-requests:v1:request:${ids[5]}`;

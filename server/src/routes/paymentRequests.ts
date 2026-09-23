@@ -23,6 +23,7 @@ import {
   txHashSchema,
   type PaymentRequestRecord,
 } from '../paymentRequests.js';
+import { readPhoneWallet, validateWalletAccessToken, type WalletAccessTokenValidator } from '../phoneWallet.js';
 import { verifySignedAgentRequest, type SignedAgentRequestVerifier } from '../services/siwaHttpVerifier.js';
 import { readSignedAgentJson, readSignedAgentRead } from './signedAgentRequest.js';
 
@@ -54,7 +55,7 @@ const agentRequestBodySchema = z
   .strict();
 
 const walletBodySchema = z.object({ walletAddress: evmAddressSchema }).strict();
-const paidBodySchema = z.object({ walletAddress: evmAddressSchema, txHash: txHashSchema }).strict();
+const paidBodySchema = z.object({ txHash: txHashSchema, walletAccessToken: z.string().min(1).max(4096) }).strict();
 const idParamsSchema = z.object({ id: z.string().trim().min(1).max(100) });
 
 const AGENT_BODY_MESSAGE =
@@ -97,6 +98,7 @@ export function createPaymentRequestRoutes(input: {
   notifyUser: NotifyUser;
   now?: () => number;
   readReceipt?: TransferReceiptReader;
+  validateWalletToken?: WalletAccessTokenValidator;
   verifySignedRequest?: SignedAgentRequestVerifier;
 }) {
   const router = Router();
@@ -105,6 +107,7 @@ export function createPaymentRequestRoutes(input: {
     deps.now = input.now;
   }
   const readReceipt = input.readReceipt ?? readBaseTransferReceipt;
+  const validateWalletToken = input.validateWalletToken ?? validateWalletAccessToken;
   const verifySignedRequest = input.verifySignedRequest ?? verifySignedAgentRequest;
   const unavailableMessage = "Payment requests aren't available on this server right now.";
 
@@ -226,11 +229,25 @@ export function createPaymentRequestRoutes(input: {
     const params = idParamsSchema.safeParse(req.params);
     const body = paidBodySchema.safeParse(req.body);
     if (!params.success || !body.success) {
-      return sendError(res, 400, 'BadRequest', 'A wallet address and payment transaction are required.');
+      return sendError(res, 400, 'BadRequest', 'Open your wallet, then check the payment again.');
     }
     const request = await paymentRequestForUser(userId, params.data.id, deps);
     if (!request) {
       return sendError(res, 404, 'PaymentRequestNotFound', NOT_FOUND_MESSAGE);
+    }
+
+    // The payment counts only from the signed-in person's own wallet.
+    const wallet = await readPhoneWallet(userId, body.data.walletAccessToken, validateWalletToken);
+    if (wallet.kind === 'missing_config') {
+      console.error('❌ [PAYMENT REQUESTS] Coinbase API credentials are not set; wallets cannot be checked.');
+      return sendError(res, 503, 'PaymentCheckUnavailable', 'Checking payments is unavailable right now.');
+    }
+    if (wallet.kind === 'coinbase_error') {
+      console.error('❌ [PAYMENT REQUESTS] Coinbase wallet check failed:', { name: wallet.name });
+      return sendError(res, 502, 'WalletCheckFailed', 'Your wallet could not be checked right now. Try again in a moment.');
+    }
+    if (wallet.kind === 'not_yours') {
+      return sendError(res, 403, 'WalletNotYours', 'This wallet is not signed in as you. Sign in again, then check the payment.');
     }
 
     const read = await readReceipt(body.data.txHash as Hash);
@@ -246,7 +263,7 @@ export function createPaymentRequestRoutes(input: {
       return sendError(res, 409, 'PaymentNotFound', 'Base does not show this payment yet. Try again in a moment.');
     }
     const pays = receiptPaysExactly(read.receipt, {
-      from: body.data.walletAddress as Address,
+      from: wallet.walletAddress,
       to: request.to as Address,
       amountRaw: BigInt(request.amountRaw),
     });

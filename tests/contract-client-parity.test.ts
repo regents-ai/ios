@@ -116,7 +116,7 @@ test('payment requests are asked for by agents and answered from the phone', () 
   assert.match(regentClient, /listPaymentRequests\(\): Promise<PaymentRequestsList>/);
   assert.match(regentClient, /getPaymentRequest\(requestId: string\): Promise<PaymentRequest>/);
   assert.match(regentClient, /preparePaymentRequest\(requestId: string, input: \{ walletAddress: string \}\)/);
-  assert.match(regentClient, /confirmPaymentRequestPaid\(requestId: string, input: \{ walletAddress: string; txHash: string \}\)/);
+  assert.match(regentClient, /confirmPaymentRequestPaid\(requestId: string, input: \{ txHash: string; walletAccessToken: string \}\)/);
   assert.match(regentClient, /declinePaymentRequest\(requestId: string\): Promise<PaymentRequest>/);
   assert.doesNotMatch(regentClient, /\/agent\/payment-requests/);
 });

@@ -76,7 +76,7 @@ How an agent reads the answer:
 - Send a signed `GET /agent/payment-requests/{id}`. With no body, it signs no content digest.
 - It returns `{id, status, txHash}`. `status` is `waiting`, `paid` or `declined`, and `txHash` is the Base transaction of the latest payment. Only the wallet that asked can read a request.
 
-A request is marked paid only when Base shows a successful transaction with a USDC transfer from the person's wallet to `to` for exactly the amount asked. Each transaction counts for one request only, so one payment never marks two requests paid. Requests never expire. Each person keeps their newest 100. A declined request can still be paid later, and the Pay button works whatever the status.
+A request is marked paid only when Base shows a successful transaction with a USDC transfer from the person's own phone wallet to `to` for exactly the amount asked. The server asks Coinbase which wallet is signed in as that person, so nobody can mark a request paid with someone else's payment. Each transaction counts for one request only, so one payment never marks two requests paid. Requests never expire. Each person keeps their newest 100. A declined request can still be paid later, and the Pay button works whatever the status.
 
 ## Run locally
 

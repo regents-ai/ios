@@ -1593,9 +1593,10 @@ paths:
       operationId: confirmMobilePaymentRequestPaid
       summary: Mark a request paid from its Base transaction
       description: >-
-        Reads the transaction's receipt on Base and marks the request paid only when the receipt
-        succeeded and carries a USDC Transfer from the declared wallet to the requested address for
-        exactly the requested amount. Each transaction confirms one request only, for good: the same
+        Asks Coinbase which wallet the wallet access token belongs to, and continues only when it
+        belongs to the signed-in user. Then reads the transaction's receipt on Base and marks the
+        request paid only when the receipt succeeded and carries a USDC Transfer from that wallet to
+        the requested address for exactly the requested amount. Each transaction confirms one request only, for good: the same
         request confirming it again succeeds, and any other request is refused. A later payment
         replaces the recorded transaction.
       security:
@@ -1620,13 +1621,19 @@ paths:
               schema:
                 $ref: '#/components/schemas/MobilePaymentRequestResponse'
         '400':
-          description: The wallet address or transaction hash is missing or invalid
+          description: The transaction hash or wallet access token is missing or invalid
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '401':
           description: Authentication is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '403':
+          description: The wallet access token does not belong to the signed-in user (WalletNotYours)
           content:
             application/json:
               schema:
@@ -1639,8 +1646,8 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '409':
           description: >-
-            Base does not show the transaction yet, it does not pay this request exactly, or it was
-            already used for another request (PaymentAlreadyUsed)
+            Base does not show the transaction yet, it does not pay this request exactly from the
+            signed-in user's wallet, or it was already used for another request (PaymentAlreadyUsed)
           content:
             application/json:
               schema:
@@ -1652,13 +1659,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '502':
-          description: Base could not be read
+          description: Coinbase could not check the wallet (WalletCheckFailed), or Base could not be read
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '503':
-          description: Base RPC is not configured
+          description: Coinbase API credentials or Base RPC are not configured
           content:
             application/json:
               schema:
@@ -2550,15 +2557,17 @@ components:
           pattern: '^0x[a-fA-F0-9]{40}$'
     MobilePaymentRequestPaidRequest:
       type: object
-      required: [walletAddress, txHash]
+      required: [txHash, walletAccessToken]
       additionalProperties: false
       properties:
-        walletAddress:
-          type: string
-          pattern: '^0x[a-fA-F0-9]{40}$'
         txHash:
           type: string
           pattern: '^0x[a-fA-F0-9]{64}$'
+        walletAccessToken:
+          description: The app's current Coinbase embedded wallet access token.
+          type: string
+          minLength: 1
+          maxLength: 4096
     PaymentRequestWalletAction:
       description: The single Base USDC transfer that pays a request, sent by the wallet named as expected_signer.
       type: object

@@ -33,14 +33,11 @@ import {
   type ProgressToastState,
 } from '@/utils/progressToast';
 import { regentApi } from '@/utils/regentApi/client';
-import { useCurrentUser, useSendUserOperation } from '@coinbase/cdp-hooks';
+import { useCurrentUser, useGetAccessToken, useSendUserOperation } from '@coinbase/cdp-hooks';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
-
-/** A payment the wallet reported as sent that Base has not yet confirmed for this request. */
-type UncheckedPayment = { txHash: string; walletAddress: string };
 
 function smartWalletAddress(value?: string | null): `0x${string}` | null {
   const trimmed = value?.trim();
@@ -57,15 +54,17 @@ export default function PaymentRequestScreen() {
   const { alertProps, showAlert } = useCoinbaseAlert();
   const { currentUser } = useCurrentUser();
   const { sendUserOperation, status: userOpStatus, data: userOpData, error: userOpError } = useSendUserOperation();
+  const { getAccessToken: getWalletAccessToken } = useGetAccessToken();
   const smartAccount = smartWalletAddress(currentUser?.evmSmartAccounts?.[0] as string | undefined);
 
   const [request, setRequest] = useState<PaymentRequest | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [toast, setToast] = useState<ProgressToastState | null>(null);
-  const [unchecked, setUnchecked] = useState<UncheckedPayment | null>(null);
-  // The last payment this screen sent, and the wallet that sent it.
-  const sentRef = useRef<{ hash: string; walletAddress: string } | null>(null);
+  // A payment the wallet reported as sent that Base has not yet confirmed for this request.
+  const [uncheckedTxHash, setUncheckedTxHash] = useState<string | null>(null);
+  // The last payment this screen sent.
+  const sentRef = useRef<string | null>(null);
   const lastHandledUserOpRef = useRef<string | null>(null);
   const startedActionRef = useRef(false);
 
@@ -100,18 +99,29 @@ export default function PaymentRequestScreen() {
     }, [loadRequest])
   );
 
-  const checkPayment = useCallback(async (payment: UncheckedPayment) => {
+  // The server confirms the payment came from this person's own wallet, so
+  // the check carries the wallet's current sign-in.
+  const checkPayment = useCallback(async (txHash: string) => {
+    const leaveUnchecked = (message: string) => {
+      setUncheckedTxHash(txHash);
+      setToast(() => dismissToast());
+      showAlert({ title: 'Your payment was sent', message, type: 'error' });
+    };
+
     try {
       setToast(() => showProgressToast('Checking your payment...'));
-      showRequest(await regentApi.confirmPaymentRequestPaid(requestId, payment));
-      setUnchecked(null);
+      const walletAccessToken = await getWalletAccessToken();
+      if (!walletAccessToken) {
+        leaveUnchecked('Open your wallet, then check the payment again.');
+        return;
+      }
+      showRequest(await regentApi.confirmPaymentRequestPaid(requestId, { txHash, walletAccessToken }));
+      setUncheckedTxHash(null);
       setToast((current) => resolveToastSuccess(current, 'Paid', Date.now()));
     } catch (error) {
-      setUnchecked(payment);
-      setToast(() => dismissToast());
-      showAlert({ title: 'Your payment was sent', message: describeApiError(error).message, type: 'error' });
+      leaveUnchecked(describeApiError(error).message);
     }
-  }, [requestId, showAlert, showRequest]);
+  }, [getWalletAccessToken, requestId, showAlert, showRequest]);
 
   // The wallet reports on the last payment it sent; each report is acted on
   // once. A payment that went through is checked on Base and marks the
@@ -124,7 +134,7 @@ export default function PaymentRequestScreen() {
     lastHandledUserOpRef.current = transitionKey;
 
     const sent = sentRef.current;
-    if (!sent || (userOpData?.userOpHash && userOpData.userOpHash !== sent.hash)) {
+    if (!sent || (userOpData?.userOpHash && userOpData.userOpHash !== sent)) {
       return;
     }
 
@@ -132,7 +142,7 @@ export default function PaymentRequestScreen() {
       sentRef.current = null;
       const txHash = userOpData?.transactionHash;
       if (txHash) {
-        void checkPayment({ txHash, walletAddress: sent.walletAddress });
+        void checkPayment(txHash);
       } else {
         setToast((current) => resolveToastSuccess(current, 'Payment sent', Date.now()));
       }
@@ -158,7 +168,7 @@ export default function PaymentRequestScreen() {
         useCdpPaymaster: false,
       });
 
-      sentRef.current = { hash: userOperationHash, walletAddress: smartAccount };
+      sentRef.current = userOperationHash;
       setToast(() => showProgressToast('Paying...'));
     } catch (error) {
       setToast(() => dismissToast());
@@ -313,8 +323,8 @@ export default function PaymentRequestScreen() {
               <Ionicons name="paper-plane-outline" size={16} color={colors.onAccent} />
               <Text style={styles.primaryButtonText}>Pay {request.amount} USDC</Text>
             </RegentPressable>
-            {unchecked ? (
-              <RegentPressable style={styles.secondaryButton} onPress={() => void checkPayment(unchecked)}>
+            {uncheckedTxHash ? (
+              <RegentPressable style={styles.secondaryButton} onPress={() => void checkPayment(uncheckedTxHash)}>
                 <Text style={styles.secondaryButtonText}>Check my payment again</Text>
               </RegentPressable>
             ) : null}
