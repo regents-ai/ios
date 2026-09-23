@@ -219,9 +219,9 @@ describe('RadialDial', () => {
 
     fireEvent.press(getByLabelText('Open quick actions'));
 
-    const message = getByLabelText('Message');
+    const message = getByLabelText('Agents');
     expect(message).toHaveStyle({ width: 152, height: 152 });
-    expect(getByText('Message').props.numberOfLines).toBe(2);
+    expect(getByText('Agents').props.numberOfLines).toBe(2);
 
     fireEvent.press(getByLabelText('Pay'));
     expect(getByLabelText('Send')).toHaveStyle({ width: 152, height: 152 });
@@ -309,10 +309,10 @@ describe('RadialDial', () => {
     expect(canvasTop + canvasSize).toBe(viewport.height - bottomOffset);
     expect(canvasTop + canvasSize).toBeLessThanOrEqual(keyboardTop);
 
-    const message = getByLabelText('Message');
+    const message = getByLabelText('Agents');
     const petalSize = StyleSheet.flatten(message.props.style).width as number;
     expect(petalSize).toBeLessThan(152);
-    expect(getByText('Message').props.allowFontScaling).not.toBe(false);
+    expect(getByText('Agents').props.allowFontScaling).not.toBe(false);
 
     const centerStyle = StyleSheet.flatten(
       getByTestId('dial-center-position').props.style
@@ -374,7 +374,7 @@ describe('RadialDial', () => {
 
     fireEvent.press(getByLabelText('Open quick actions'));
     const positionStyle = StyleSheet.flatten(
-      getByTestId('dial-petal-position-first-voice').props.style
+      getByTestId('dial-petal-position-first-agents').props.style
     );
     expect(positionStyle.transform).toBeUndefined();
   });
@@ -476,7 +476,7 @@ describe('RadialDial', () => {
       pan.onUpdate(releasePoint);
       await Promise.resolve();
     });
-    expect(getByLabelText('Voice').props.accessibilityState.selected).toBe(true);
+    expect(getByLabelText('Agents').props.accessibilityState.selected).toBe(true);
     expect(getByLabelText('Profile').props.accessibilityState.selected).toBe(false);
 
     await act(async () => {
@@ -485,7 +485,7 @@ describe('RadialDial', () => {
     });
 
     expect(onAction).toHaveBeenCalledTimes(1);
-    expect(onAction).toHaveBeenCalledWith({ kind: 'primaryAgentVoice' });
+    expect(onAction).toHaveBeenCalledWith({ kind: 'navigate', href: '/(tabs)/agents' });
     expect(onAction).not.toHaveBeenCalledWith({
       kind: 'navigate',
       href: '/settings',

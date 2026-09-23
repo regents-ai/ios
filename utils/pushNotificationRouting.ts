@@ -2,18 +2,12 @@ import type { Href } from 'expo-router';
 
 import { routes } from './navigation/routes';
 
-const threadIdPattern = /^[1-9][0-9]*(~[1-9][0-9]*){0,2}$/;
-
 const walletActivityNotificationTypes = new Set([
   'onramp_complete',
   'onramp_failed',
   'offramp_complete',
   'offramp_failed',
 ]);
-
-export function isMessageThreadId(value: unknown): value is string {
-  return typeof value === 'string' && threadIdPattern.test(value);
-}
 
 export type PushRouteIntent = {
   href: Href;
@@ -27,10 +21,6 @@ export function routeIntentFromNotificationData(data: unknown): PushRouteIntent 
   }
 
   const payload = data as Record<string, unknown>;
-
-  if (payload.type === 'mobile_message' && isMessageThreadId(payload.threadId)) {
-    return { href: routes.messageThread(payload.threadId), refreshWallet: false };
-  }
 
   if (typeof payload.type === 'string' && walletActivityNotificationTypes.has(payload.type)) {
     return { href: routes.wallet(), refreshWallet: true };

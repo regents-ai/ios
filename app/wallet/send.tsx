@@ -66,7 +66,6 @@ export default function TransferScreen() {
   const pathname = usePathname();
   const params = useLocalSearchParams();
   const recipientLabel = typeof params.recipientLabel === 'string' ? params.recipientLabel : null;
-  const regentId = typeof params.regentId === 'string' ? params.regentId : null;
   const isAgentFundingFlow = params.flow === AGENT_FUNDING_FLOW;
   const isSendTab = pathname === '/send';
   const isDefaultSendFlow = !isAgentFundingFlow && !params.token && (params.flow === SEND_FLOW || isSendTab);
@@ -143,18 +142,13 @@ export default function TransferScreen() {
     userOpStatus,
     userOpData,
     userOpError,
-    pendingFundingActionRef,
   } = useEvmTransfer({
     amount,
-    isAgentFundingFlow,
     isPaymasterSupported,
     network,
     recipientAddress,
-    recipientLabel,
-    regentId,
     selectedToken,
     smartAccountAddress,
-    tokenSymbol,
     showAlert,
   });
 
@@ -163,7 +157,6 @@ export default function TransferScreen() {
     isAgentFundingFlow,
     isDefaultSendFlow,
     network,
-    pendingFundingActionRef,
     recipientAddress,
     recipientLabel,
     selectedToken,

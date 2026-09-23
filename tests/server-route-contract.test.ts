@@ -37,7 +37,7 @@ function implementedRoutes() {
   const files = [
     'server/src/app.ts',
     'server/src/mobileRoutes.ts',
-    'server/src/routes/mobileVoice.ts',
+    'server/src/routes/mobileAgents.ts',
     'server/src/routes/portalPairing.ts',
   ];
 
@@ -68,8 +68,10 @@ test('served backend routes stay declared in the mobile API contract', () => {
     '/push-tokens/debug/{user_id}',
     '/webhooks/onramp',
     '/events/onramp',
-    '/mobile/regents',
-    '/mobile/message/threads',
+    '/mobile/regent/staking',
+    '/mobile/portal-pairing',
+    '/mobile/agents',
+    '/agent/pair',
   ];
 
   for (const routePath of routePaths) {

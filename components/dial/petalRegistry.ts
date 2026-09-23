@@ -1,25 +1,10 @@
 import type Ionicons from '@expo/vector-icons/Ionicons';
 import type { Href } from 'expo-router';
 
-import type { MessageComposerAction } from '@/utils/messageComposerBridge';
-
-export type MessageThreadDialCommand = MessageComposerAction | 'paste';
-
-export type DialPetalAction =
-  | {
-      kind: 'navigate';
-      href: Href;
-    }
-  | {
-      kind: 'primaryAgentVoice';
-    }
-  | {
-      kind: 'urgentMessage';
-    }
-  | {
-      kind: 'messageComposer';
-      command: MessageThreadDialCommand;
-    };
+export type DialPetalAction = {
+  kind: 'navigate';
+  href: Href;
+};
 
 export type DialPetal = {
   id: string;
@@ -29,7 +14,7 @@ export type DialPetal = {
   submenu?: readonly DialPetal[];
 };
 
-export type DialRouteContext = 'default' | 'hidden' | 'messageThread';
+export type DialRouteContext = 'default' | 'hidden';
 
 export type DialPetalRegistry = Readonly<
   Partial<Record<DialRouteContext, readonly DialPetal[]>> & {
@@ -39,10 +24,10 @@ export type DialPetalRegistry = Readonly<
 
 export const DEFAULT_DIAL_PETALS = [
   {
-    id: 'voice',
-    label: 'Voice',
-    icon: 'mic-outline',
-    action: { kind: 'primaryAgentVoice' },
+    id: 'agents',
+    label: 'Agents',
+    icon: 'people-outline',
+    action: { kind: 'navigate', href: '/(tabs)/agents' },
   },
   {
     id: 'profile',
@@ -70,58 +55,10 @@ export const DEFAULT_DIAL_PETALS = [
       },
     ],
   },
-  {
-    id: 'message',
-    label: 'Message',
-    icon: 'chatbubble-ellipses-outline',
-    action: { kind: 'urgentMessage' },
-  },
-] as const satisfies readonly DialPetal[];
-
-export const MESSAGE_THREAD_DIAL_PETALS = [
-  {
-    id: 'voice',
-    label: 'Voice',
-    icon: 'mic-outline',
-    action: { kind: 'messageComposer', command: 'voice' },
-  },
-  {
-    id: 'paste',
-    label: 'Paste',
-    icon: 'clipboard-outline',
-    action: { kind: 'messageComposer', command: 'paste' },
-  },
-  {
-    id: 'commands',
-    label: 'Commands',
-    icon: 'terminal-outline',
-    action: { kind: 'messageComposer', command: 'commands' },
-  },
-  {
-    id: 'keyboard',
-    label: 'Keyboard',
-    icon: 'keypad-outline',
-    action: { kind: 'messageComposer', command: 'keyboard' },
-  },
-  {
-    id: 'attach',
-    label: 'Attach',
-    icon: 'attach-outline',
-    action: { kind: 'messageComposer', command: 'scanQr' },
-    submenu: [
-      {
-        id: 'scan-qr',
-        label: 'Scan QR',
-        icon: 'qr-code-outline',
-        action: { kind: 'messageComposer', command: 'scanQr' },
-      },
-    ],
-  },
 ] as const satisfies readonly DialPetal[];
 
 export const DIAL_PETAL_REGISTRY: DialPetalRegistry = {
   default: DEFAULT_DIAL_PETALS,
-  messageThread: MESSAGE_THREAD_DIAL_PETALS,
 };
 
 export function getDialRouteContext(pathname: string): DialRouteContext {
@@ -133,7 +70,7 @@ export function getDialRouteContext(pathname: string): DialRouteContext {
     return 'hidden';
   }
 
-  return /^\/message\/[^/]+\/?$/.test(pathname) ? 'messageThread' : 'default';
+  return 'default';
 }
 
 export function resolveDialPetals(

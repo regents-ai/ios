@@ -14,8 +14,8 @@ test('sign-in lands on the agents list when no path was chosen', () => {
 
 test('a chosen onboarding path survives to the post-sign-in landing', () => {
   clearPostAuthDestination();
-  setPostAuthDestination('/onboarding/connect-hermes');
-  assert.equal(resolvePostAuthLanding(), '/onboarding/connect-hermes');
+  setPostAuthDestination('/agent/add');
+  assert.equal(resolvePostAuthLanding(), '/agent/add');
 });
 
 test('Nous Portal pairing survives the sign-in round trip', () => {
@@ -39,7 +39,7 @@ test('choosing a new path replaces the previous one', () => {
 });
 
 test('skipping onboarding clears the intent back to the default landing', () => {
-  setPostAuthDestination('/onboarding/connect-hermes');
+  setPostAuthDestination('/agent/add');
   clearPostAuthDestination();
   assert.equal(resolvePostAuthLanding(), '/agents');
 });

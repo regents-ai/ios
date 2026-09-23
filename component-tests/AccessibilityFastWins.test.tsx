@@ -6,8 +6,6 @@ import { LiveValueFlash } from '@/components/motion/LiveValueFlash';
 import { AppIconSection } from '@/components/settings/AppIconSection';
 import { AppearanceToggle } from '@/components/settings/AppearanceToggle';
 import { SettingsMenu } from '@/components/settings/SettingsShell';
-import { PinnedNoticeStrip } from '@/components/ui/PinnedNoticeStrip';
-import { ThemeProvider } from '@/theme/ThemeProvider';
 import { THEME_COLORS } from '@/theme/tokens';
 import { renderThemed } from './helpers/renderThemed';
 
@@ -66,40 +64,6 @@ describe('accessibility fast wins', () => {
     expect(radios.every((radio) => StyleSheet.flatten(radio.props.style).minHeight === 44)).toBe(
       true,
     );
-  });
-
-  it('queues changed pinned statuses on iOS without announcing the initial mount', () => {
-    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibilityWithOptions');
-    const firstNotice = {
-      id: 'notice-1',
-      pendingLabel: 'Saving reply',
-      confirmedLabel: 'Reply saved',
-      status: 'pending' as const,
-      createdAtMs: 1,
-    };
-    const { rerender } = renderThemed(<PinnedNoticeStrip notices={[firstNotice]} />);
-
-    expect(announce).not.toHaveBeenCalled();
-
-    rerender(
-      <ThemeProvider>
-        <PinnedNoticeStrip
-          notices={[
-            firstNotice,
-            {
-              id: 'notice-2',
-              pendingLabel: 'Uploading attachment',
-              confirmedLabel: 'Attachment uploaded',
-              status: 'pending',
-              createdAtMs: 2,
-            },
-          ]}
-        />
-      </ThemeProvider>,
-    );
-
-    expect(announce).toHaveBeenCalledTimes(1);
-    expect(announce).toHaveBeenCalledWith('Saving reply. Uploading attachment', { queue: true });
   });
 
   it('serializes app icon changes and reconciles with the native selection', async () => {
@@ -205,24 +169,6 @@ describe('accessibility fast wins', () => {
       }),
     );
     expect(queryByText('Could not change the app icon. Try again.')).toBeNull();
-  });
-
-  it('exposes pinned notices as a status element', () => {
-    const { getByRole } = renderThemed(
-      <PinnedNoticeStrip
-        notices={[
-          {
-            id: 'notice-1',
-            pendingLabel: 'Saving reply',
-            confirmedLabel: 'Reply saved',
-            status: 'pending',
-            createdAtMs: 1,
-          },
-        ]}
-      />,
-    );
-
-    expect(getByRole('status').props.role).toBe('status');
   });
 
   it('uses semantic success color for live-value feedback', () => {

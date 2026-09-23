@@ -10,7 +10,6 @@ import {
 import { Keypair, PublicKey, SystemProgram, type Connection } from '@solana/web3.js';
 
 import { buildSolanaTransferTransaction } from '../utils/onchain/buildSolanaTransfer';
-import { buildFundingIdempotencyKey } from '../utils/onchain/fundingIdempotency';
 import {
   formatAddressPreview,
   getEvmExplorerUrl,
@@ -51,39 +50,6 @@ test('explorer URLs map known EVM networks and are null elsewhere', () => {
   assert.equal(getEvmExplorerUrl('ethereum', '0xabc'), 'https://etherscan.io/tx/0xabc');
   assert.equal(getEvmExplorerUrl('ethereum-sepolia', '0xabc'), 'https://sepolia.etherscan.io/tx/0xabc');
   assert.equal(getEvmExplorerUrl('polygon', '0xabc'), null);
-});
-
-test('funding idempotency keys pin the intent and append the nonce', () => {
-  const key = buildFundingIdempotencyKey({
-    amount: '12.50',
-    expectedSigner: '0xABCDEF0000000000000000000000000000000001',
-    regentId: 'Regent-1',
-    recipientAddress: '0xABCDEF0000000000000000000000000000000002',
-    tokenAddress: '0xABCDEF0000000000000000000000000000000003',
-    nonce: 'nonce-123',
-  });
-
-  const segments = key.split(':');
-  assert.equal(segments[0], 'regents-mobile');
-  assert.equal(segments[1], 'fund-agent');
-  assert.equal(segments[2], 'regent-1'); // lowercased
-  assert.equal(segments[3], '0xabcdef0000000000000000000000000000000001');
-  assert.equal(segments[4], '0xabcdef0000000000000000000000000000000002');
-  assert.equal(segments[5], '0xabcdef0000000000000000000000000000000003');
-  assert.equal(segments[6], '12.50');
-  assert.equal(segments[7], 'nonce-123');
-});
-
-test('funding idempotency keys mark missing segments without dropping them', () => {
-  const key = buildFundingIdempotencyKey({
-    amount: '1',
-    expectedSigner: '0xabc',
-    regentId: 'regent-1',
-    recipientAddress: '0xdef',
-    nonce: 'n',
-  });
-
-  assert.equal(key, 'regents-mobile:fund-agent:regent-1:0xabc:0xdef:missing:1:n');
 });
 
 test('amounts above the available balance are rejected with friendly copy', () => {

@@ -1,15 +1,12 @@
-import { useEffect, useRef, type MutableRefObject } from 'react';
+import { useEffect, useRef } from 'react';
 
-import type { PendingFundingAction } from '@/hooks/wallet/useEvmTransfer';
 import type { ShowTransferAlert } from '@/hooks/wallet/useTransferAlert';
 import { finishPendingRun, startPendingRun } from '@/utils/liveActivityBridge';
 import { formatAddressPreview, getEvmExplorerUrl, getNetworkLabel } from '@/utils/onchain/networkDisplay';
-import { regentApi } from '@/utils/regentApi/client';
 
 /**
  * Watches user-operation status transitions and raises the pending / success
- * / failure alerts for the send flow, confirming tracked agent-funding wallet
- * actions on success.
+ * / failure alerts for the send flow.
  *
  * The once-per-transition ref ensures each alert fires exactly once per
  * status transition even though the effect also depends on alert-copy values
@@ -20,7 +17,6 @@ export function useUserOpStatusAlerts({
   isAgentFundingFlow,
   isDefaultSendFlow,
   network,
-  pendingFundingActionRef,
   recipientAddress,
   recipientLabel,
   selectedToken,
@@ -34,7 +30,6 @@ export function useUserOpStatusAlerts({
   isAgentFundingFlow: boolean;
   isDefaultSendFlow: boolean;
   network: string;
-  pendingFundingActionRef: MutableRefObject<PendingFundingAction | null>;
   recipientAddress: string;
   recipientLabel: string | null;
   selectedToken: any;
@@ -94,38 +89,6 @@ export function useUserOpStatusAlerts({
       const explorerUrl = getEvmExplorerUrl(network, txHash) ?? undefined;
 
       if (isAgentFundingFlow) {
-        const pendingAction = pendingFundingActionRef.current;
-        if (pendingAction && pendingAction.txHash !== txHash) {
-          pendingAction.txHash = txHash;
-          void (async () => {
-            try {
-              await regentApi.confirmWalletAction({
-                actionId: pendingAction.actionId,
-                txHash,
-                chainId: 8453,
-              });
-
-              const successInfo = [
-                `You sent ${amount} ${selectedToken?.token?.symbol || 'USDC'} to ${recipientLabel || 'this agent'}.`,
-                '',
-                `Network: ${getNetworkLabel(network)}`,
-                `Agent wallet: ${formatAddressPreview(recipientAddress)}`,
-              ].join('\n');
-
-              showAlert('Payment complete', successInfo, 'success', explorerUrl);
-            } catch {
-              const successInfo = [
-                `You sent ${amount} ${selectedToken?.token?.symbol || 'USDC'} to ${recipientLabel || 'this agent'}.`,
-                '',
-                'The payment is on its way. The receipt may take a moment to update.',
-              ].join('\n');
-
-              showAlert('Payment sent', successInfo, 'success', explorerUrl);
-            }
-          })();
-          return;
-        }
-
         const successInfo = [
           `You sent ${amount} ${selectedToken?.token?.symbol || 'USDC'} to ${recipientLabel || 'this agent'}.`,
           '',
@@ -159,7 +122,7 @@ export function useUserOpStatusAlerts({
       console.error('Send failed:', userOpError);
       showAlert('Send failed', 'Your transfer did not go through. Please try again.', 'error');
     }
-  }, [amount, isAgentFundingFlow, isDefaultSendFlow, network, pendingFundingActionRef, recipientAddress, recipientLabel, selectedToken?.token?.symbol, showAlert, smartAccountAddress, userOpStatus, userOpData, userOpError]);
+  }, [amount, isAgentFundingFlow, isDefaultSendFlow, network, recipientAddress, recipientLabel, selectedToken?.token?.symbol, showAlert, smartAccountAddress, userOpStatus, userOpData, userOpError]);
 
   // Clears transition tracking before a new submission so the next pending /
   // success / error sequence alerts again.

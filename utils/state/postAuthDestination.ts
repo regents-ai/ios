@@ -13,7 +13,7 @@
  */
 
 export type PostAuthDestination =
-  | '/onboarding/connect-hermes'
+  | '/agent/add'
   | '/onboarding/connect-portal'
   | '/onboarding/create-cloud-agent'
   | '/(tabs)/wallet';
