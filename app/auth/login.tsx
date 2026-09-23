@@ -1,3 +1,4 @@
+import { AgentFundHero } from '@/components/agents/AgentFundHero';
 import { RegentPressable } from '@/components/ui/RegentPressable';
 import { useTheme, type Theme } from '@/theme/ThemeProvider';
 import { useChatGptAuth } from '@/hooks/useChatGptAuth';
@@ -139,17 +140,9 @@ export default function LoginScreen() {
             initialAnimate={{ opacity: 0, translateY: CARD_OFFSET }}
             animate={{ opacity: 1, translateY: 0 }}
             transition={buildEntryTransition(reduceMotion)}
-            style={styles.brandWrap}
+            style={styles.heroWrap}
           >
-            <Text style={styles.brand}>Regents</Text>
-          </EaseView>
-
-          <EaseView
-            initialAnimate={{ opacity: 0, translateY: SCREEN_OFFSET }}
-            animate={{ opacity: 1, translateY: 0 }}
-            transition={buildEntryTransition(reduceMotion, STAGGER_STEP)}
-          >
-            <Text style={styles.title}>Fund an AI agent in seconds</Text>
+            <AgentFundHero />
           </EaseView>
 
           <EaseView
@@ -246,22 +239,10 @@ function makeStyles({ colors, fonts }: Theme) {
     paddingVertical: 32,
     gap: 18,
   },
-  brandWrap: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  brand: {
-    color: colors.text,
-    fontSize: 44,
-    lineHeight: 48,
-    fontFamily: fonts.title,
-  },
-  title: {
-    color: colors.text,
-    textAlign: 'center',
-    fontSize: 32,
-    lineHeight: 38,
-    fontFamily: fonts.title,
+  // The crown rows run edge to edge, past the screen padding.
+  heroWrap: {
+    marginHorizontal: -24,
+    marginBottom: 8,
   },
   subtitle: {
     color: colors.textMuted,
