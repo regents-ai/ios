@@ -236,7 +236,12 @@ export default function AuctionDetailScreen() {
             </View>
 
             {auction.chain === 'base' ? (
-              <AuctionBidding auction={auction} showAlert={showAlert} setToast={setToast} />
+              <AuctionBidding
+                auction={auction}
+                showAlert={showAlert}
+                setToast={setToast}
+                openOnAutolaunch={openOnAutolaunch}
+              />
             ) : null}
 
             <View style={styles.card}>

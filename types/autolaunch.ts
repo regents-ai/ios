@@ -71,7 +71,7 @@ export type AutolaunchBidQuote = {
 
 /**
  * The app backend's view of one wallet on one Base auction, declared under
- * /mobile/autolaunch/auctions/{auction_address} in api-contract.openapiv3.yaml.
+ * /mobile/autolaunch/auctions/{auction_id} in api-contract.openapiv3.yaml.
  */
 export type AutolaunchAuctionPhase = 'not_started' | 'open' | 'ended' | 'claimable';
 
@@ -87,8 +87,16 @@ export type AutolaunchSettlementReason =
   | 'partial_exit_unavailable'
   | 'settlement_reverted';
 
+/**
+ * Whether the amounts come from a simulated settlement. When the simulation
+ * could not run, the steps are the ones the auction's rules allow and the
+ * amounts are only known after collecting.
+ */
+export type AutolaunchSettlementPreview = 'ready' | 'unavailable';
+
 export type AutolaunchBidSettlement = {
   steps: ('exit' | 'claim')[];
+  preview: AutolaunchSettlementPreview;
   currency_refunded: string | null;
   tokens_claimed: string | null;
   reason: AutolaunchSettlementReason | null;
@@ -107,6 +115,7 @@ export type AutolaunchBidPosition = {
 export type AutolaunchAuctionPosition = {
   chain_id: number;
   block_number: number;
+  auction_id: string;
   auction_address: string;
   currency_address: string;
   currency_decimals: number;
@@ -115,8 +124,8 @@ export type AutolaunchAuctionPosition = {
   end_block: number;
   claim_block: number;
   phase: AutolaunchAuctionPhase;
-  graduated: boolean;
-  max_bid_price: string;
+  /** As the final checkpoint records it once the auction has ended; null when that could not be read. */
+  graduated: boolean | null;
   wallet_address: string;
   wallet_currency_balance_raw: string;
   wallet_currency_balance: string;
@@ -133,6 +142,7 @@ export type AutolaunchWalletCall = {
 export type AutolaunchBidWalletAction = {
   action: 'bid';
   chain_id: number;
+  auction_id: string;
   auction_address: string;
   expected_signer: string;
   block_number: number;
@@ -140,17 +150,18 @@ export type AutolaunchBidWalletAction = {
   amount: string;
   amount_raw: string;
   max_price: string;
-  max_price_capped: boolean;
 };
 
 export type AutolaunchSettlementWalletAction = {
   action: 'settle';
   chain_id: number;
+  auction_id: string;
   auction_address: string;
   expected_signer: string;
   block_number: number;
   bid_id: string;
   calls: AutolaunchWalletCall[];
+  preview: AutolaunchSettlementPreview;
   currency_refunded: string | null;
   tokens_claimed: string | null;
 };

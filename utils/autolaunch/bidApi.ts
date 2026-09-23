@@ -1,6 +1,6 @@
 /**
  * The app backend's Autolaunch bidding routes, declared under
- * /mobile/autolaunch/auctions/{auction_address} in api-contract.openapiv3.yaml.
+ * /mobile/autolaunch/auctions/{auction_id} in api-contract.openapiv3.yaml.
  *
  * Kept apart from utils/regentApi/client.ts: these three calls belong to the
  * auction screen alone and share nothing with the Regent routes.
@@ -45,46 +45,41 @@ function postJson(body: Record<string, string>): RequestInit {
   };
 }
 
-const auctionPath = (auctionAddress: string) =>
-  `/mobile/autolaunch/auctions/${encodeURIComponent(auctionAddress)}` as const;
+const auctionPath = (auctionId: string) => `/mobile/autolaunch/auctions/${encodeURIComponent(auctionId)}` as const;
 
 /** Where the auction stands and every bid this wallet placed on it, at one Base block. */
 export async function getAutolaunchPosition(input: {
-  auctionAddress: string;
+  auctionId: string;
   walletAddress: string;
 }): Promise<AutolaunchAuctionPosition> {
   const body = await requestJson<{ position: AutolaunchAuctionPosition }>(
-    `${auctionPath(input.auctionAddress)}/position?walletAddress=${encodeURIComponent(input.walletAddress)}`
+    `${auctionPath(input.auctionId)}/position?walletAddress=${encodeURIComponent(input.walletAddress)}`
   );
   return body.position;
 }
 
 /** The calls one bid needs, reviewed against the auction as it stands. */
 export async function prepareAutolaunchBid(input: {
-  auctionAddress: string;
+  auctionId: string;
   walletAddress: string;
   amount: string;
-  maxPrice: string | null;
+  maxPrice: string;
 }): Promise<AutolaunchBidWalletAction> {
   const body = await requestJson<{ wallet_action: AutolaunchBidWalletAction }>(
-    `${auctionPath(input.auctionAddress)}/bid`,
-    postJson({
-      walletAddress: input.walletAddress,
-      amount: input.amount,
-      ...(input.maxPrice === null ? {} : { maxPrice: input.maxPrice }),
-    })
+    `${auctionPath(input.auctionId)}/bid`,
+    postJson({ walletAddress: input.walletAddress, amount: input.amount, maxPrice: input.maxPrice })
   );
   return body.wallet_action;
 }
 
 /** The return and token collection the auction accepts for one bid right now. */
 export async function prepareAutolaunchSettlement(input: {
-  auctionAddress: string;
+  auctionId: string;
   walletAddress: string;
   bidId: string;
 }): Promise<AutolaunchSettlementWalletAction> {
   const body = await requestJson<{ wallet_action: AutolaunchSettlementWalletAction }>(
-    `${auctionPath(input.auctionAddress)}/settle`,
+    `${auctionPath(input.auctionId)}/settle`,
     postJson({ walletAddress: input.walletAddress, bidId: input.bidId })
   );
   return body.wallet_action;

@@ -3,10 +3,17 @@
  * with its review step, and the wallet's bids with what collecting each
  * would do right now.
  *
+ * The bid form only appears once the launch's treasury passes the live
+ * check the Autolaunch website runs at every bid press; until the app can
+ * run that check, a notice points to the website instead. Collecting a bid
+ * needs no treasury check, on the website or here.
+ *
  * Only invalid input or an auction state that makes the call impossible
  * holds a button back, and the screen says why. Every other press reaches
  * the wallet; the auction decides the outcome, including a repeat press
- * while an earlier one is still pending.
+ * while an earlier one is still pending. After a send, the screen follows
+ * the wallet's own report of the operation and says whether it went
+ * through; nothing about a send is stored.
  */
 
 import { LiveValueFlash } from '@/components/motion/LiveValueFlash';
@@ -21,6 +28,7 @@ import type {
 } from '@/types/autolaunch';
 import { describeApiError } from '@/utils/apiError';
 import { compactDecimal } from '@/utils/autolaunch/auctionDisplay';
+import { checkAutolaunchTreasury } from '@/utils/autolaunch/treasuryCheck';
 import {
   getAutolaunchPosition,
   prepareAutolaunchBid,
@@ -41,7 +49,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TextInput, View } from 'react-native';
 
 const ESTIMATE_DELAY_MS = 400;
-const REFRESH_AFTER_SEND_MS = 2200;
 
 type ToastSetter = (update: (current: ProgressToastState | null) => ProgressToastState | null) => void;
 
@@ -49,6 +56,15 @@ type Props = {
   auction: AutolaunchBaseAuction;
   showAlert: (input: CoinbaseAlertInput) => void;
   setToast: ToastSetter;
+  openOnAutolaunch: () => void;
+};
+
+/** What the last send was for, so the wallet's report of it reads as a bid or a collection. */
+type SentOperation = { hash: string; kind: 'bid' | 'collect' };
+
+const SEND_COPY: Record<SentOperation['kind'], { waiting: string; done: string; failed: string }> = {
+  bid: { waiting: 'Placing your bid...', done: 'Bid placed', failed: "Your bid didn't go through" },
+  collect: { waiting: 'Collecting...', done: 'Collected', failed: "Collecting didn't go through" },
 };
 
 function smartWalletAddress(value?: string | null): `0x${string}` | null {
@@ -73,9 +89,14 @@ function phaseCopy(position: AutolaunchAuctionPosition) {
     case 'ended':
       return 'Bidding has ended. Bids can be collected a few minutes after the close.';
     case 'claimable':
-      return position.graduated
-        ? 'Bidding has ended and the launch raised its minimum. Winning bids collect their tokens; unspent bids get their money back.'
-        : 'Bidding has ended without reaching its minimum. Every bid gets its money back.';
+      switch (position.graduated) {
+        case true:
+          return 'Bidding has ended and the launch raised its minimum. Winning bids collect their tokens; unspent bids get their money back.';
+        case false:
+          return 'Bidding has ended without reaching its minimum. Every bid gets its money back.';
+        case null:
+          return 'Bidding has ended. Collect each bid to see what it brings back.';
+      }
   }
 }
 
@@ -134,13 +155,13 @@ function collectOutcome(bid: AutolaunchBidPosition, currency: string | null, tok
   return parts.join(' · ');
 }
 
-export function AuctionBidding({ auction, showAlert, setToast }: Props) {
+export function AuctionBidding({ auction, showAlert, setToast, openOnAutolaunch }: Props) {
   const router = useRouter();
   const theme = useTheme();
   const { colors } = theme;
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const { currentUser } = useCurrentUser();
-  const { sendUserOperation } = useSendUserOperation();
+  const { sendUserOperation, status: userOpStatus, data: userOpData, error: userOpError } = useSendUserOperation();
   const smartAccount = smartWalletAddress(currentUser?.evmSmartAccounts?.[0] as string | undefined);
 
   const [position, setPosition] = useState<AutolaunchAuctionPosition | null>(null);
@@ -151,18 +172,13 @@ export function AuctionBidding({ auction, showAlert, setToast }: Props) {
   const [reviewing, setReviewing] = useState(false);
   const [quote, setQuote] = useState<AutolaunchBidQuote | null>(null);
   const [quoteState, setQuoteState] = useState<'idle' | 'loading' | 'unavailable'>('idle');
-  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The last operation this screen sent, for the feedback that follows it.
+  const sentRef = useRef<SentOperation | null>(null);
+  const lastHandledUserOpRef = useRef<string | null>(null);
 
   const currencySymbol = auction.quote_token.symbol;
   const tokenSymbol = auction.token_symbol;
-  const treasuryOnFile = auction.treasury_security !== null && auction.treasury_security !== undefined;
-
-  const clearScheduledRefresh = useCallback(() => {
-    if (refreshTimerRef.current) {
-      clearTimeout(refreshTimerRef.current);
-      refreshTimerRef.current = null;
-    }
-  }, []);
+  const treasury = checkAutolaunchTreasury(auction);
 
   const loadPosition = useCallback(async () => {
     if (!smartAccount) {
@@ -172,39 +188,57 @@ export function AuctionBidding({ auction, showAlert, setToast }: Props) {
 
     try {
       setPositionLoading(true);
-      setPosition(await getAutolaunchPosition({ auctionAddress: auction.address, walletAddress: smartAccount }));
+      setPosition(await getAutolaunchPosition({ auctionId: auction.id, walletAddress: smartAccount }));
       setPositionError(null);
     } catch (error) {
       setPositionError(describeApiError(error).message);
     } finally {
       setPositionLoading(false);
     }
-  }, [auction.address, smartAccount]);
+  }, [auction.id, smartAccount]);
 
   useFocusEffect(
     useCallback(() => {
       void loadPosition();
-      return clearScheduledRefresh;
-    }, [clearScheduledRefresh, loadPosition])
+    }, [loadPosition])
   );
 
-  const scheduleRefresh = useCallback(() => {
-    clearScheduledRefresh();
-    refreshTimerRef.current = setTimeout(() => {
-      refreshTimerRef.current = null;
+  // The wallet reports on the last operation it sent; each report is acted
+  // on once, then the position is read again so the bids card catches up.
+  useEffect(() => {
+    const transitionKey = `${userOpStatus}:${userOpData?.userOpHash ?? ''}`;
+    if (lastHandledUserOpRef.current === transitionKey) {
+      return;
+    }
+    lastHandledUserOpRef.current = transitionKey;
+
+    const sent = sentRef.current;
+    if (!sent || (userOpData?.userOpHash && userOpData.userOpHash !== sent.hash)) {
+      return;
+    }
+    const copy = SEND_COPY[sent.kind];
+
+    if (userOpStatus === 'success') {
+      sentRef.current = null;
+      setToast((current) => resolveToastSuccess(current, copy.done, Date.now()));
       void loadPosition();
-    }, REFRESH_AFTER_SEND_MS);
-  }, [clearScheduledRefresh, loadPosition]);
+    } else if (userOpStatus === 'error') {
+      sentRef.current = null;
+      setToast(() => dismissToast());
+      showAlert({ title: copy.failed, message: describeApiError(userOpError).message, type: 'error' });
+      void loadPosition();
+    }
+  }, [loadPosition, setToast, showAlert, userOpData, userOpError, userOpStatus]);
 
   const hasAmount = positiveDecimal(amount);
   const maxPriceGiven = maxPrice.trim() !== '';
-  const hasValidMaxPrice = !maxPriceGiven || positiveDecimal(maxPrice);
-  const quoteMaxPrice = maxPriceGiven ? maxPrice.trim() : position?.max_bid_price ?? null;
+  const hasMaxPrice = positiveDecimal(maxPrice);
+  const quoteMaxPrice = hasMaxPrice ? maxPrice.trim() : null;
 
   // The site's estimate follows the form with a short pause, so a bidder
   // typing an amount sees one answer rather than one per keystroke.
   useEffect(() => {
-    if (!hasAmount || !hasValidMaxPrice || !quoteMaxPrice) {
+    if (!hasAmount || !quoteMaxPrice) {
       setQuote(null);
       setQuoteState('idle');
       return;
@@ -232,7 +266,7 @@ export function AuctionBidding({ auction, showAlert, setToast }: Props) {
       current = false;
       clearTimeout(timer);
     };
-  }, [amount, auction.id, hasAmount, hasValidMaxPrice, quoteMaxPrice]);
+  }, [amount, auction.id, hasAmount, quoteMaxPrice]);
 
   const placeBid = useCallback(async () => {
     if (!smartAccount) {
@@ -242,29 +276,30 @@ export function AuctionBidding({ auction, showAlert, setToast }: Props) {
     try {
       setToast(() => showProgressToast('Opening bid review...'));
       const walletAction = await prepareAutolaunchBid({
-        auctionAddress: auction.address,
+        auctionId: auction.id,
         walletAddress: smartAccount,
         amount: amount.trim(),
-        maxPrice: maxPriceGiven ? maxPrice.trim() : null,
+        maxPrice: maxPrice.trim(),
       });
 
-      await sendUserOperation({
+      const { userOperationHash } = await sendUserOperation({
         evmSmartAccount: smartAccount,
         network: autolaunchNetworkForChain(walletAction.chain_id),
         calls: autolaunchWalletCalls(walletAction, smartAccount),
         useCdpPaymaster: false,
       });
 
-      setToast((current) => resolveToastSuccess(current, 'Bid sent', Date.now()));
+      sentRef.current = { hash: userOperationHash, kind: 'bid' };
+      setToast(() => showProgressToast(SEND_COPY.bid.waiting));
       setAmount('');
       setMaxPrice('');
       setReviewing(false);
-      scheduleRefresh();
     } catch (error) {
       setToast(() => dismissToast());
-      showAlert({ title: 'Bid did not finish', message: describeApiError(error).message, type: 'error' });
+      const failure = describeApiError(error);
+      showAlert({ title: failure.title, message: failure.message, type: 'error' });
     }
-  }, [amount, auction.address, maxPrice, maxPriceGiven, scheduleRefresh, sendUserOperation, setToast, showAlert, smartAccount]);
+  }, [amount, auction.id, maxPrice, sendUserOperation, setToast, showAlert, smartAccount]);
 
   const collectBid = useCallback(
     async (bid: AutolaunchBidPosition) => {
@@ -275,26 +310,27 @@ export function AuctionBidding({ auction, showAlert, setToast }: Props) {
       try {
         setToast(() => showProgressToast('Opening collection...'));
         const walletAction = await prepareAutolaunchSettlement({
-          auctionAddress: auction.address,
+          auctionId: auction.id,
           walletAddress: smartAccount,
           bidId: bid.bid_id,
         });
 
-        await sendUserOperation({
+        const { userOperationHash } = await sendUserOperation({
           evmSmartAccount: smartAccount,
           network: autolaunchNetworkForChain(walletAction.chain_id),
           calls: autolaunchWalletCalls(walletAction, smartAccount),
           useCdpPaymaster: false,
         });
 
-        setToast((current) => resolveToastSuccess(current, 'Collection sent', Date.now()));
-        scheduleRefresh();
+        sentRef.current = { hash: userOperationHash, kind: 'collect' };
+        setToast(() => showProgressToast(SEND_COPY.collect.waiting));
       } catch (error) {
         setToast(() => dismissToast());
-        showAlert({ title: 'Collection did not finish', message: describeApiError(error).message, type: 'error' });
+        const failure = describeApiError(error);
+        showAlert({ title: failure.title, message: failure.message, type: 'error' });
       }
     },
-    [auction.address, scheduleRefresh, sendUserOperation, setToast, showAlert, smartAccount]
+    [auction.id, sendUserOperation, setToast, showAlert, smartAccount]
   );
 
   if (!smartAccount) {
@@ -312,7 +348,8 @@ export function AuctionBidding({ auction, showAlert, setToast }: Props) {
   const balanceWords = position ? amountWords(position.wallet_currency_balance, currencySymbol) : null;
   const biddingOpen = auction.state === 'active' && position?.phase === 'open';
   const stateCopy = position ? phaseCopy(position) : null;
-  const estimateCopy = estimateWords(quote, quoteState, tokenSymbol, maxPriceGiven);
+  const estimateCopy = estimateWords(quote, quoteState, tokenSymbol);
+  const canReview = hasAmount && hasMaxPrice;
 
   return (
     <>
@@ -326,13 +363,25 @@ export function AuctionBidding({ auction, showAlert, setToast }: Props) {
 
         {position && !biddingOpen ? <Text style={styles.sectionBody}>{stateCopy ?? 'Bidding is closed.'}</Text> : null}
 
-        {position && biddingOpen && !treasuryOnFile ? (
-          <Text style={styles.sectionBody}>
-            Bidding waits until this launch&apos;s treasury check is on file. Check back shortly.
-          </Text>
+        {position && biddingOpen && !treasury.ok ? (
+          <>
+            <Text style={styles.sectionBody}>
+              Bidding in the app opens once the live treasury check is available here. You can bid on the Autolaunch
+              website now.
+            </Text>
+            <RegentPressable
+              accessibilityHint="Opens in your browser"
+              accessibilityRole="link"
+              style={styles.primaryButton}
+              onPress={openOnAutolaunch}
+            >
+              <Ionicons name="open-outline" size={16} color={colors.onAccent} />
+              <Text style={styles.primaryButtonText}>Open on Autolaunch</Text>
+            </RegentPressable>
+          </>
         ) : null}
 
-        {position && biddingOpen && treasuryOnFile && !reviewing ? (
+        {position && biddingOpen && treasury.ok && !reviewing ? (
           <>
             <View style={styles.fieldHeader}>
               <Text style={styles.fieldLabel}>Amount{currencySymbol ? ` in ${currencySymbol}` : ''}</Text>
@@ -352,28 +401,28 @@ export function AuctionBidding({ auction, showAlert, setToast }: Props) {
               accessibilityLabel="Bid amount"
             />
 
-            <Text style={styles.fieldLabel}>Most to pay per token (optional)</Text>
+            <Text style={styles.fieldLabel}>Most to pay per token{currencySymbol ? ` in ${currencySymbol}` : ''}</Text>
             <TextInput
               value={maxPrice}
               onChangeText={setMaxPrice}
-              placeholder="Any price"
+              placeholder="0.00"
               placeholderTextColor={colors.textMuted}
               keyboardType="decimal-pad"
               style={styles.input}
               accessibilityLabel="Maximum price per token"
             />
-            <Text style={styles.fieldHint}>
-              Your bid only counts while the auction price is at or below this figure; leave it blank to stay in at any price.
-            </Text>
-
-            {estimateCopy ? <Text style={styles.estimateText}>{estimateCopy}</Text> : null}
-            {maxPriceGiven && !hasValidMaxPrice ? (
-              <Text style={styles.warningText}>Enter the maximum as a plain number, or leave it blank.</Text>
+            <Text style={styles.fieldHint}>Your bid only counts while the auction price is at or below this figure.</Text>
+            {!maxPriceGiven ? (
+              <Text style={styles.fieldHint}>Enter the most you will pay per token to review your bid.</Text>
+            ) : !hasMaxPrice ? (
+              <Text style={styles.warningText}>Enter the maximum as a plain number above zero.</Text>
             ) : null}
 
+            {estimateCopy ? <Text style={styles.estimateText}>{estimateCopy}</Text> : null}
+
             <RegentPressable
-              style={[styles.primaryButton, (!hasAmount || !hasValidMaxPrice) && styles.disabledButton]}
-              disabled={!hasAmount || !hasValidMaxPrice}
+              style={[styles.primaryButton, !canReview && styles.disabledButton]}
+              disabled={!canReview}
               onPress={() => setReviewing(true)}
             >
               <Text style={styles.primaryButtonText}>Review bid</Text>
@@ -382,7 +431,7 @@ export function AuctionBidding({ auction, showAlert, setToast }: Props) {
           </>
         ) : null}
 
-        {position && biddingOpen && treasuryOnFile && reviewing ? (
+        {position && biddingOpen && treasury.ok && reviewing ? (
           <>
             <View style={styles.reviewRow}>
               <Text style={styles.reviewLabel}>You bid</Text>
@@ -390,13 +439,12 @@ export function AuctionBidding({ auction, showAlert, setToast }: Props) {
             </View>
             <View style={styles.reviewRow}>
               <Text style={styles.reviewLabel}>Most to pay per token</Text>
-              <Text style={styles.reviewValue}>
-                {maxPriceGiven ? amountWords(maxPrice.trim(), currencySymbol) : 'Any price'}
-              </Text>
+              <Text style={styles.reviewValue}>{amountWords(maxPrice.trim(), currencySymbol)}</Text>
             </View>
             {estimateCopy ? <Text style={styles.estimateText}>{estimateCopy}</Text> : null}
             <Text style={styles.fieldHint}>
-              Your wallet asks you to confirm once. Winning bids pay the final auction price, never more than your maximum, and unspent money comes back after the close.
+              Your wallet asks you to confirm once. The auction fills bids block by block at each block&apos;s
+              clearing price, never above your maximum, and unspent money comes back after the close.
             </Text>
             <RegentPressable style={styles.primaryButton} onPress={() => void placeBid()}>
               <Ionicons name="hammer-outline" size={16} color={colors.onAccent} />
@@ -427,7 +475,11 @@ export function AuctionBidding({ auction, showAlert, setToast }: Props) {
                 ) : null}
                 {bid.settlement.steps.length > 0 ? (
                   <>
-                    {outcome ? <Text style={styles.estimateText}>{outcome}</Text> : null}
+                    {bid.settlement.preview === 'unavailable' ? (
+                      <Text style={styles.fieldHint}>Amount shown after collecting.</Text>
+                    ) : outcome ? (
+                      <Text style={styles.estimateText}>{outcome}</Text>
+                    ) : null}
                     <RegentPressable style={styles.primaryButton} onPress={() => void collectBid(bid)}>
                       <Ionicons name="download-outline" size={16} color={colors.onAccent} />
                       <Text style={styles.primaryButtonText}>{collectLabel(bid, currencySymbol)}</Text>
@@ -448,8 +500,7 @@ export function AuctionBidding({ auction, showAlert, setToast }: Props) {
 function estimateWords(
   quote: AutolaunchBidQuote | null,
   quoteState: 'idle' | 'loading' | 'unavailable',
-  tokenSymbol: string | null,
-  maxPriceGiven: boolean
+  tokenSymbol: string | null
 ) {
   if (quoteState === 'loading') {
     return 'Working out what you would get...';
@@ -462,9 +513,6 @@ function estimateWords(
   }
   if (!quote.would_be_active_now) {
     return 'Your maximum is below the current price, so this bid would not count right now.';
-  }
-  if (quote.current_clearing_price === '0' && !maxPriceGiven) {
-    return 'The price is still forming, so there is no estimate yet.';
   }
 
   const tokens = amountWords(quote.estimated_tokens_if_end_now, tokenSymbol);
