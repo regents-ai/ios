@@ -117,13 +117,19 @@ function collectLabel(bid: AutolaunchBidPosition, symbol: string | null) {
   return symbol ? `Get unspent ${symbol} back` : 'Get unspent money back';
 }
 
+function nonZero(value: string | null) {
+  return value !== null && Number.parseFloat(value) > 0 ? value : null;
+}
+
 function collectOutcome(bid: AutolaunchBidPosition, currency: string | null, token: string | null) {
   const parts: string[] = [];
-  if (bid.settlement.tokens_claimed) {
-    parts.push(`${amountWords(bid.settlement.tokens_claimed, token)} to collect`);
+  const tokens = nonZero(bid.settlement.tokens_claimed);
+  const refund = nonZero(bid.settlement.currency_refunded);
+  if (tokens) {
+    parts.push(`${amountWords(tokens, token)} to collect`);
   }
-  if (bid.settlement.currency_refunded) {
-    parts.push(`${amountWords(bid.settlement.currency_refunded, currency)} back`);
+  if (refund) {
+    parts.push(`${amountWords(refund, currency)} back`);
   }
   return parts.join(' · ');
 }

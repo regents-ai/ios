@@ -321,7 +321,7 @@ export type AutolaunchAuctionPosition = {
   claim_block: number;
   phase: AutolaunchAuctionPhase;
   graduated: boolean;
-  /** The maximum price the auction accepts, used when a bid names none. */
+  /** The highest price a bid can carry, on the auction's price grid; used when a bid names none. */
   max_bid_price: string;
   wallet_address: Address;
   wallet_currency_balance_raw: string;
@@ -941,6 +941,23 @@ async function settlementFor(client: Client, auction: Address, bid: BidRecord, e
 }
 
 /**
+ * Whether the auction graduated as its final checkpoint records it. The stored
+ * flag only turns once someone checkpoints after the end, so it is read after
+ * a simulated `checkpoint()`, exactly as the first settlement would see it.
+ */
+async function finalGraduation(client: Client, auction: Address, blockNumber: bigint) {
+  const [, graduatedCall] = await simulate(client, blockNumber, [
+    { to: auction, data: encodeFunctionData({ abi: continuousClearingAuctionAbi, functionName: 'checkpoint' }) },
+    { to: auction, data: encodeFunctionData({ abi: continuousClearingAuctionAbi, functionName: 'isGraduated' }) },
+  ]);
+  if (graduatedCall!.status !== 'success') {
+    throw new Refused('settlement_reverted');
+  }
+
+  return decodeFunctionResult({ abi: continuousClearingAuctionAbi, functionName: 'isGraduated', data: graduatedCall!.data });
+}
+
+/**
  * One wallet's picture of one auction, every figure read at the same Base
  * block: where the auction stands, the wallet's currency, and each of its
  * bids with what settling it would do right now.
@@ -954,6 +971,8 @@ export async function readAutolaunchPosition(
     const facts = await auctionFacts(client, auction, blockNumber);
     const money = await walletCurrency(client, facts.currency, wallet, auction, blockNumber);
     const phase = phaseAt(blockNumber, { start: facts.startBlock, end: facts.endBlock, claim: facts.claimBlock });
+    const graduated =
+      phase === 'ended' || phase === 'claimable' ? await finalGraduation(client, auction, blockNumber) : facts.graduated;
     const lastBidBlock = blockNumber < facts.endBlock ? blockNumber : facts.endBlock;
     const ids = await walletBids(client, auction, wallet, facts.startBlock, lastBidBlock);
     const records = await bidRecords(client, auction, ids, blockNumber);
@@ -982,8 +1001,8 @@ export async function readAutolaunchPosition(
       end_block: Number(facts.endBlock),
       claim_block: Number(facts.claimBlock),
       phase,
-      graduated: facts.graduated,
-      max_bid_price: priceDecimalFromQ96(facts.maxBidPrice, money.decimals),
+      graduated,
+      max_bid_price: priceDecimalFromQ96((facts.maxBidPrice / facts.tickSpacing) * facts.tickSpacing, money.decimals),
       wallet_address: wallet,
       wallet_currency_balance_raw: money.balance.toString(),
       wallet_currency_balance: formatUnits(money.balance, money.decimals),

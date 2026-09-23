@@ -2789,7 +2789,7 @@ components:
         graduated:
           type: boolean
         max_bid_price:
-          description: The highest price per token the auction accepts, in whole currency units.
+          description: The highest price per token a bid can carry, on the auction's price grid, in whole currency units.
           type: string
         wallet_address:
           type: string
