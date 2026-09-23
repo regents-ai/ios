@@ -238,7 +238,7 @@ export default function OnboardingWelcomeScreen() {
             style={styles.optionRow}
             onPress={() => {
               setPostAuthDestination('/agent/add');
-              finish('/agent/add');
+              finish('/auth/login');
             }}
           >
             <View style={styles.optionIcon}>

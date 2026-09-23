@@ -10,7 +10,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { CoinbaseAlert } from '../components/ui/CoinbaseAlerts';
 import { RegentPressable } from '../components/ui/RegentPressable';
-import { resolvePostAuthLanding } from '../utils/state/postAuthDestination';
+import { landAfterSignIn } from '../utils/state/postAuthDestination';
 import { setVerifiedPhone } from '../utils/state/verificationState';
 
 export default function PhoneCodeScreen() {
@@ -123,7 +123,7 @@ export default function PhoneCodeScreen() {
         await setVerifiedPhone(phone, user?.id || regentsUserId || undefined);
 
         if (mode === 'signin') {
-          router.replace(resolvePostAuthLanding());
+          landAfterSignIn(router);
         } else {
           setAlert({
             visible: true,

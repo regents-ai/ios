@@ -34,3 +34,23 @@ export function clearPostAuthDestination() {
 export function resolvePostAuthLanding(): PostAuthDestination | typeof DEFAULT_LANDING {
   return pendingDestination ?? DEFAULT_LANDING;
 }
+
+type LandingRouter = {
+  replace(href: '/(tabs)/agents' | PostAuthDestination | typeof DEFAULT_LANDING): void;
+  push(href: '/agent/add'): void;
+};
+
+/**
+ * Moves a freshly signed-in person to their landing. "Add an agent" is a
+ * screen pushed over the agents tab, so Back returns to the list and the tab
+ * bar stays underneath; every other landing replaces the sign-in screen.
+ */
+export function landAfterSignIn(router: LandingRouter) {
+  const landing = resolvePostAuthLanding();
+  if (landing === '/agent/add') {
+    router.replace('/(tabs)/agents');
+    router.push('/agent/add');
+    return;
+  }
+  router.replace(landing);
+}
