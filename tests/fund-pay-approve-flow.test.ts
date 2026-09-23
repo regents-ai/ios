@@ -6,19 +6,20 @@ function read(path: string) {
   return readFileSync(path, 'utf8');
 }
 
-test('main mobile tabs lead with fund, pay, and earn', () => {
+test('main mobile tabs are Home, Fund, Pay and Earn, in that order', () => {
   const layout = read('app/(tabs)/_layout.tsx');
   const sendTab = read('app/(tabs)/send.tsx');
   const earnTab = read('app/(tabs)/earn.tsx');
   const profileButton = read('components/navigation/ProfileButton.tsx');
 
-  assert.match(layout, /name="wallet"[\s\S]*title: 'Fund'/);
-  assert.match(layout, /name="send"[\s\S]*title: 'Pay'/);
-  assert.match(layout, /name="earn"[\s\S]*title: 'Earn'/);
+  assert.match(
+    layout,
+    /name="index"[\s\S]*title: 'Home'[\s\S]*name="wallet"[\s\S]*title: 'Fund'[\s\S]*name="send"[\s\S]*title: 'Pay'[\s\S]*name="earn"[\s\S]*title: 'Earn'/
+  );
   assert.match(layout, /name="agents"[\s\S]*href: null/);
   assert.match(layout, /name="autolaunch"[\s\S]*href: null/);
   assert.match(sendTab, /export \{ default \} from '\.\.\/wallet\/send'/);
-  assert.match(earnTab, /Bring people into Regents/);
+  assert.match(earnTab, /regentApi\.getRegentStaking\(/);
   assert.match(profileButton, /accessibilityLabel="Open profile"/);
 });
 

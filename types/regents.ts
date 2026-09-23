@@ -27,6 +27,23 @@ export type MobileAgentPairingStatus =
   | { status: 'needs_confirmation'; walletAddress: string; expiresAt: string }
   | { status: 'expired' };
 
+/** One wallet's Base holdings and REGENT staking position, as decimal token amounts. */
+export type BaseWalletHoldings = {
+  wallet_address: string;
+  eth_balance: string;
+  usdc_balance: string;
+  regent_balance: string;
+  staked_regent: string;
+  claimable_usdc: string;
+  claimable_regent: string;
+};
+
+export type BasePortfolio = {
+  chain_id: 8453;
+  block_number: number;
+  wallets: BaseWalletHoldings[];
+};
+
 export type RegentStakingAction =
   | 'stake'
   | 'unstake'

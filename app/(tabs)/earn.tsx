@@ -1,36 +1,85 @@
 import { useDialContentClearance } from '@/components/dial/dialLayout';
+import { LiveValueFlash } from '@/components/motion/LiveValueFlash';
 import { ProfileButton } from '@/components/navigation/ProfileButton';
+import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { RegentPressable } from '@/components/ui/RegentPressable';
 import { useTheme, type Theme } from '@/theme/ThemeProvider';
-import { routes } from '@/utils/navigation/routes';
+import { useCoinbaseAlert } from '@/hooks/useCoinbaseAlert';
+import { RegentStakingAction, RegentStakingState } from '@/types/regents';
+import { ProgressToast } from '@/components/ui/ProgressToast';
+import { describeApiError } from '@/utils/apiError';
+import {
+  dismissToast,
+  resolveToastSuccess,
+  showProgressToast,
+  type ProgressToastState,
+} from '@/utils/progressToast';
+import { regentApi } from '@/utils/regentApi/client';
+import {
+  needsStakingApproval,
+  stakingActionCall,
+  stakingApprovalCall,
+  stakingNetworkForChain,
+} from '@/utils/onchain/stakingWalletAction';
+import { displayTokenAmount } from '@/utils/onchain/tokenDisplay';
+import { useCurrentUser, useSendUserOperation } from '@coinbase/cdp-hooks';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
-import { useMemo } from 'react';
-import { Linking, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 
-const EARN_PATHS = [
-  {
-    title: 'Bring in a builder',
-    body: 'Show a team how to fund an agent working balance and pay for real work.',
-    icon: 'people-outline',
-    action: 'Open Regents',
-    route: '/agents' as const,
-  },
-  {
-    title: 'Grow Techtree',
-    body: 'Turn useful agent research into a shared path others can build on.',
-    icon: 'git-branch-outline',
-    action: 'Open Techtree',
-    route: '/techtree' as const,
-  },
-  {
-    title: 'Back launches',
-    body: 'Follow new agent companies as they move from story to outside support.',
-    icon: 'rocket-outline',
-    action: 'Open Autolaunch',
-    route: '/autolaunch' as const,
-  },
-] as const;
+function smartWalletAddress(value?: string | null): `0x${string}` | null {
+  const trimmed = value?.trim();
+  return trimmed && /^0x[a-fA-F0-9]{40}$/.test(trimmed) ? trimmed as `0x${string}` : null;
+}
+
+function actionTitle(action: RegentStakingAction) {
+  switch (action) {
+    case 'stake':
+      return 'Stake sent';
+    case 'unstake':
+      return 'Unstake sent';
+    case 'claim_usdc':
+      return 'USDC claim sent';
+    case 'claim_regent':
+      return 'REGENT claim sent';
+    case 'claim_and_restake_regent':
+      return 'Claim and restake sent';
+  }
+}
+
+function actionLoadingCopy(action: RegentStakingAction, approval?: boolean) {
+  if (approval) {
+    return 'Approving REGENT...';
+  }
+
+  switch (action) {
+    case 'stake':
+      return 'Opening stake review...';
+    case 'unstake':
+      return 'Opening unstake review...';
+    case 'claim_usdc':
+      return 'Opening USDC claim...';
+    case 'claim_regent':
+      return 'Opening REGENT claim...';
+    case 'claim_and_restake_regent':
+      return 'Opening claim and restake...';
+  }
+}
+
+function positiveDecimal(value: string) {
+  return /^\d+(\.\d+)?$/.test(value.trim()) && Number.parseFloat(value) > 0;
+}
 
 export default function EarnTab() {
   const router = useRouter();
@@ -38,75 +87,295 @@ export default function EarnTab() {
   const { colors } = theme;
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const dialClearance = useDialContentClearance();
+  const { currentUser } = useCurrentUser();
+  const { sendUserOperation } = useSendUserOperation();
+  const smartAccount = smartWalletAddress(currentUser?.evmSmartAccounts?.[0] as string | undefined);
+  const [staking, setStaking] = useState<RegentStakingState | null>(null);
+  const [amount, setAmount] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [pendingAction, setPendingAction] = useState<RegentStakingAction | null>(null);
+  const [approvalStep, setApprovalStep] = useState(false);
+  const { alertProps, showAlert, dismissAlert } = useCoinbaseAlert();
+  const [toast, setToast] = useState<ProgressToastState | null>(null);
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleToastDismiss = useCallback(() => {
+    setToast(dismissToast());
+  }, []);
+
+  const clearScheduledRefresh = useCallback(() => {
+    if (refreshTimerRef.current) {
+      clearTimeout(refreshTimerRef.current);
+      refreshTimerRef.current = null;
+    }
+  }, []);
+
+  const loadStaking = useCallback(async (refresh = false) => {
+    if (!smartAccount) {
+      setStaking(null);
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+
+    try {
+      if (refresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+
+      setStaking(await regentApi.getRegentStaking({ walletAddress: smartAccount }));
+    } catch (error) {
+      showAlert({
+        title: 'Staking is not available',
+        message: describeApiError(error).message,
+        type: 'error',
+      });
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [smartAccount]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadStaking();
+      return clearScheduledRefresh;
+    }, [clearScheduledRefresh, loadStaking])
+  );
+
+  // Only a missing amount holds a button back: every other press reaches the
+  // wallet and the contract decides the outcome, including a repeat press
+  // while an earlier one is still pending.
+  const hasAmount = positiveDecimal(amount);
+  const pendingCopy = pendingAction ? actionLoadingCopy(pendingAction, approvalStep) : null;
+
+  const metricRows = useMemo(() => [
+    { label: 'Your stake', value: `${displayTokenAmount(staking?.wallet_stake_balance)} REGENT` },
+    { label: 'REGENT in wallet', value: `${displayTokenAmount(staking?.wallet_token_balance)} REGENT` },
+    { label: 'USDC ready', value: `${displayTokenAmount(staking?.wallet_claimable_usdc)} USDC` },
+    { label: 'REGENT ready', value: `${displayTokenAmount(staking?.wallet_claimable_regent)} REGENT` },
+  ], [staking]);
+
+  const runStakingAction = useCallback(async (action: RegentStakingAction) => {
+    if (!smartAccount) {
+      showAlert({
+        title: 'Wallet is not ready',
+        message: 'Open Wallet first, then come back to staking.',
+        type: 'error',
+      });
+      return;
+    }
+
+    try {
+      setPendingAction(action);
+      setApprovalStep(false);
+      setToast(showProgressToast(actionLoadingCopy(action)));
+      const walletAddress = smartAccount;
+      const response =
+        action === 'stake'
+          ? await regentApi.stakeRegent({ walletAddress, amount })
+          : action === 'unstake'
+            ? await regentApi.unstakeRegent({ walletAddress, amount })
+            : action === 'claim_usdc'
+              ? await regentApi.claimRegentStakingUsdc({ walletAddress })
+              : action === 'claim_regent'
+                ? await regentApi.claimRegentStakingRegent({ walletAddress })
+                : await regentApi.claimAndRestakeRegent({ walletAddress });
+
+      const walletAction = response.wallet_action;
+      const network = stakingNetworkForChain(walletAction.chain_id);
+      const approvalRequired = await needsStakingApproval(walletAction, walletAddress);
+      const approvalCall = stakingApprovalCall(walletAction, walletAddress);
+
+      if (approvalRequired && approvalCall) {
+        setApprovalStep(true);
+        await sendUserOperation({
+          evmSmartAccount: walletAddress,
+          network,
+          calls: [approvalCall],
+          useCdpPaymaster: false,
+        });
+      }
+
+      setApprovalStep(false);
+      await sendUserOperation({
+        evmSmartAccount: walletAddress,
+        network,
+        calls: [stakingActionCall(walletAction, walletAddress)],
+        useCdpPaymaster: false,
+      });
+
+      setToast((current) => resolveToastSuccess(current, actionTitle(action), Date.now()));
+      setAmount('');
+      clearScheduledRefresh();
+      refreshTimerRef.current = setTimeout(() => {
+        refreshTimerRef.current = null;
+        void loadStaking(true);
+      }, 2200);
+    } catch (error) {
+      setToast(dismissToast());
+      showAlert({
+        title: 'Staking did not finish',
+        message: describeApiError(error).message,
+        type: 'error',
+      });
+    } finally {
+      setPendingAction(null);
+      setApprovalStep(false);
+    }
+  }, [amount, clearScheduledRefresh, loadStaking, sendUserOperation, smartAccount]);
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView
-        style={styles.scroller}
-        contentInsetAdjustmentBehavior="automatic"
-        contentContainerStyle={[styles.content, { paddingBottom: dialClearance }]}
-      >
-        <View style={styles.header}>
-          <View style={styles.titleGroup}>
-            <Text style={styles.eyebrow}>Earn</Text>
-            <Text style={styles.title}>Bring people into Regents</Text>
-            <Text style={styles.subtitle}>
-              Help people fund agents, publish what agents learn, and find launches worth backing.
-            </Text>
+    <View style={styles.container}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.keyboardWrap}>
+        <ScrollView
+          contentContainerStyle={[styles.content, { paddingBottom: dialClearance }]}
+          contentInsetAdjustmentBehavior="automatic"
+          keyboardShouldPersistTaps="handled"
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadStaking(true)} tintColor={colors.accent} />}
+        >
+          <View style={styles.headerRow}>
+            <View style={styles.headerCopy}>
+              <Text style={styles.eyebrow}>REGENT staking</Text>
+              <Text style={styles.title}>Stake, claim, and compound</Text>
+            </View>
+            <ProfileButton />
           </View>
-          <ProfileButton />
-        </View>
 
-        <View style={styles.heroCard}>
-          <View style={styles.heroIcon}>
-            <Ionicons name="sparkles-outline" size={22} color={colors.accent} />
-          </View>
-          <Text style={styles.heroTitle}>Earn by growing the agent network</Text>
-          <Text style={styles.heroBody}>
-            Regents, Techtree, and Autolaunch work together: fund agent work, turn the work into durable knowledge, then help promising agents find their first believers.
-          </Text>
-          <View style={styles.heroActions}>
-            <RegentPressable style={styles.primaryButton} onPress={() => router.push(routes.staking())}>
-              <Text style={styles.primaryButtonText}>Track rewards</Text>
-            </RegentPressable>
-            <RegentPressable style={styles.secondaryButton} onPress={() => Linking.openURL('https://regents.sh')}>
-              <Text style={styles.secondaryButtonText}>Open regents.sh</Text>
-            </RegentPressable>
-          </View>
-        </View>
-
-        <View style={styles.pathList}>
-          {EARN_PATHS.map((path) => (
-            <RegentPressable
-              key={path.title}
-              pressStyle="card"
-              style={styles.pathCard}
-              onPress={() => router.push(path.route)}
-            >
-              <View style={styles.pathIcon}>
-                <Ionicons name={path.icon} size={19} color={colors.accent} />
+          {loading ? (
+            <View style={styles.centerState}>
+              <ActivityIndicator size="large" color={colors.accent} />
+              <Text style={styles.loadingText}>Loading staking...</Text>
+            </View>
+          ) : !smartAccount ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="wallet-outline" size={30} color={colors.accent} />
+              <Text style={styles.emptyTitle}>Open Wallet first</Text>
+              <Text style={styles.emptyText}>Your staking controls appear after your mobile wallet is ready.</Text>
+              <RegentPressable style={styles.primaryButton} onPress={() => router.push('/wallet')}>
+                <Text style={styles.primaryButtonText}>Open Wallet</Text>
+              </RegentPressable>
+            </View>
+          ) : (
+            <>
+              <View style={styles.heroPanel}>
+                <View style={styles.heroTopRow}>
+                  <View style={styles.heroCopy}>
+                    <Text style={styles.heroLabel}>Total staked</Text>
+                    <LiveValueFlash value={`total-${staking?.total_staked || '0'}`}>
+                      <Text style={styles.heroValue}>{displayTokenAmount(staking?.total_staked)} REGENT</Text>
+                    </LiveValueFlash>
+                  </View>
+                  <View style={[styles.statusPill, staking?.paused && styles.statusPillWarning]}>
+                    <View style={[styles.statusDot, staking?.paused && styles.statusDotWarning]} />
+                    <Text style={styles.statusText}>{staking?.paused ? 'Paused' : 'Base'}</Text>
+                  </View>
+                </View>
+                <Text style={styles.heroBody}>
+                  Rewards come from the live REGENT staking pool on Base. Your numbers update each time you open this screen.
+                </Text>
               </View>
-              <View style={styles.pathCopy}>
-                <Text style={styles.pathTitle}>{path.title}</Text>
-                <Text style={styles.pathBody}>{path.body}</Text>
-                <Text style={styles.pathAction}>{path.action}</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-            </RegentPressable>
-          ))}
-        </View>
 
-        <View style={styles.noteCard}>
-          <View style={styles.noteBadge}>
-            <Ionicons name="checkmark-circle-outline" size={16} color={colors.success} />
-            <Text style={styles.noteBadgeText}>Keep it useful</Text>
-          </View>
-          <Text style={styles.noteText}>
-            The strongest invite is simple: help someone give an agent a working balance, get a result, and share what changed.
-          </Text>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+              <View style={styles.metricGrid}>
+                {metricRows.map((metric) => (
+                  <View key={metric.label} style={styles.metricTile}>
+                    <Text style={styles.metricLabel}>{metric.label}</Text>
+                    <LiveValueFlash value={`${metric.label}-${metric.value}`}>
+                      <Text style={styles.metricValue}>{metric.value}</Text>
+                    </LiveValueFlash>
+                  </View>
+                ))}
+              </View>
+
+              {pendingCopy ? (
+                <View style={styles.noticeRow}>
+                  <ActivityIndicator size="small" color={colors.accent} />
+                  <Text style={styles.noticeText}>{pendingCopy}</Text>
+                </View>
+              ) : null}
+
+              <View style={styles.formSection}>
+                <Text style={styles.sectionTitle}>Amount</Text>
+                <TextInput
+                  value={amount}
+                  onChangeText={setAmount}
+                  placeholder="0.00"
+                  placeholderTextColor={colors.textMuted}
+                  keyboardType="decimal-pad"
+                  style={styles.amountInput}
+                />
+              </View>
+
+              <View style={styles.actionGrid}>
+                <ActionButton
+                  label="Stake"
+                  icon="lock-closed-outline"
+                  disabled={!hasAmount}
+                  onPress={() => void runStakingAction('stake')}
+                />
+                <ActionButton
+                  label="Unstake"
+                  icon="lock-open-outline"
+                  disabled={!hasAmount}
+                  onPress={() => void runStakingAction('unstake')}
+                />
+                <ActionButton
+                  label="Claim USDC"
+                  icon="cash-outline"
+                  onPress={() => void runStakingAction('claim_usdc')}
+                />
+                <ActionButton
+                  label="Claim REGENT"
+                  icon="sparkles-outline"
+                  onPress={() => void runStakingAction('claim_regent')}
+                />
+              </View>
+
+              <RegentPressable
+                style={styles.compoundButton}
+                onPress={() => void runStakingAction('claim_and_restake_regent')}
+              >
+                <Ionicons name="sync-outline" size={18} color={colors.onAccent} />
+                <Text style={styles.compoundButtonText}>Claim and restake REGENT</Text>
+              </RegentPressable>
+            </>
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      <ProgressToast toast={toast} onDismiss={handleToastDismiss} />
+      <CoinbaseAlert {...alertProps} onCancel={dismissAlert} />
+    </View>
+  );
+}
+
+function ActionButton({
+  disabled = false,
+  icon,
+  label,
+  onPress,
+}: {
+  disabled?: boolean;
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  onPress: () => void;
+}) {
+  const theme = useTheme();
+  const { colors } = theme;
+  const styles = useMemo(() => makeStyles(theme), [theme]);
+  return (
+    <RegentPressable
+      disabled={disabled}
+      pressStyle="card"
+      style={[styles.actionButton, disabled && styles.disabledButton]}
+      onPress={onPress}
+    >
+      <Ionicons name={icon} size={18} color={disabled ? colors.textMuted : colors.accent} />
+      <Text style={[styles.actionButtonText, disabled && styles.disabledText]}>{label}</Text>
+    </RegentPressable>
   );
 }
 
@@ -116,167 +385,255 @@ function makeStyles({ colors, fonts }: Theme) {
     flex: 1,
     backgroundColor: colors.bg,
   },
-  scroller: {
+  keyboardWrap: {
     flex: 1,
   },
   content: {
     paddingHorizontal: 20,
     gap: 16,
   },
-  header: {
+  headerRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 16,
-    paddingTop: 8,
+    alignItems: 'center',
+    gap: 14,
+    paddingTop: 10,
   },
-  titleGroup: {
+  headerCopy: {
     flex: 1,
-    minWidth: 0,
-    gap: 6,
+    gap: 3,
   },
   eyebrow: {
     color: colors.accent,
     fontSize: 12,
-    textTransform: 'uppercase',
     fontFamily: fonts.ui,
+    textTransform: 'uppercase',
   },
   title: {
     color: colors.text,
-    fontSize: 32,
-    lineHeight: 38,
+    fontSize: 25,
+    lineHeight: 30,
     fontFamily: fonts.title,
   },
-  subtitle: {
-    color: colors.textMuted,
-    fontSize: 15,
-    lineHeight: 21,
-    fontFamily: fonts.ui,
-  },
-  heroCard: {
-    backgroundColor: colors.surfaceElevated,
-    borderWidth: 1,
-    borderColor: colors.hairlineStrong,
-    borderRadius: 24,
-    padding: 20,
-    gap: 13,
-  },
-  heroIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.accentWash,
-    borderWidth: 1,
-    borderColor: colors.hairlineStrong,
+  centerState: {
+    minHeight: 420,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 12,
   },
-  heroTitle: {
+  loadingText: {
+    color: colors.textMuted,
+    fontSize: 14,
+    fontFamily: fonts.ui,
+  },
+  emptyState: {
+    minHeight: 420,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    padding: 24,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: colors.hairlineStrong,
+    backgroundColor: colors.surfaceElevated,
+  },
+  emptyTitle: {
     color: colors.text,
-    fontSize: 24,
-    lineHeight: 29,
+    fontSize: 22,
+    fontFamily: fonts.title,
+  },
+  emptyText: {
+    color: colors.textMuted,
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
+    fontFamily: fonts.ui,
+  },
+  heroPanel: {
+    padding: 20,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: colors.hairlineStrong,
+    backgroundColor: colors.surfaceElevated,
+    gap: 14,
+  },
+  heroTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 16,
+  },
+  heroCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 6,
+  },
+  heroLabel: {
+    color: colors.textMuted,
+    fontSize: 13,
+    fontFamily: fonts.ui,
+  },
+  heroValue: {
+    color: colors.text,
+    fontSize: 28,
+    lineHeight: 33,
     fontFamily: fonts.title,
   },
   heroBody: {
     color: colors.textMuted,
     fontSize: 14,
-    lineHeight: 21,
+    lineHeight: 20,
     fontFamily: fonts.ui,
   },
-  heroActions: {
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.hairlineStrong,
+  },
+  statusPillWarning: {
+    backgroundColor: colors.warningWash,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 99,
+    backgroundColor: colors.success,
+  },
+  statusDotWarning: {
+    backgroundColor: colors.warning,
+  },
+  statusText: {
+    color: colors.text,
+    fontSize: 12,
+    fontFamily: fonts.ui,
+  },
+  metricGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
   },
-  primaryButton: {
-    backgroundColor: colors.accent,
+  metricTile: {
+    flexGrow: 1,
+    flexBasis: '47%',
+    minHeight: 92,
+    padding: 14,
+    borderRadius: 18,
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: colors.hairlineStrong,
+    gap: 6,
+  },
+  metricLabel: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontFamily: fonts.ui,
+  },
+  metricValue: {
+    color: colors.text,
+    fontSize: 17,
+    lineHeight: 22,
+    fontFamily: fonts.title,
+  },
+  noticeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 14,
+    borderRadius: 18,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.hairlineStrong,
+  },
+  noticeText: {
+    color: colors.text,
+    fontSize: 13,
+    fontFamily: fonts.ui,
+  },
+  formSection: {
+    gap: 12,
+    padding: 18,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: colors.hairlineStrong,
+    backgroundColor: colors.surfaceElevated,
+  },
+  sectionTitle: {
+    color: colors.text,
+    fontSize: 19,
+    fontFamily: fonts.title,
+  },
+  amountInput: {
+    minHeight: 58,
+    paddingHorizontal: 16,
     borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.hairlineStrong,
+    backgroundColor: colors.surface,
+    color: colors.text,
+    fontSize: 22,
+    fontFamily: fonts.title,
+  },
+  actionGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  actionButton: {
+    flexGrow: 1,
+    flexBasis: '47%',
+    minHeight: 60,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: colors.hairlineStrong,
+    backgroundColor: colors.surface,
+  },
+  actionButtonText: {
+    color: colors.text,
+    fontSize: 14,
+    fontFamily: fonts.ui,
+  },
+  compoundButton: {
+    minHeight: 58,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 9,
+    paddingHorizontal: 16,
+    borderRadius: 18,
+    backgroundColor: colors.accent,
+  },
+  compoundButtonText: {
+    color: colors.onAccent,
+    fontSize: 15,
+    fontFamily: fonts.ui,
+  },
+  disabledButton: {
+    opacity: 0.48,
+  },
+  disabledText: {
+    color: colors.textMuted,
+  },
+  primaryButton: {
+    minHeight: 48,
     paddingHorizontal: 18,
-    paddingVertical: 13,
+    borderRadius: 16,
+    backgroundColor: colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   primaryButtonText: {
     color: colors.onAccent,
     fontSize: 14,
-    fontFamily: fonts.ui,
-  },
-  secondaryButton: {
-    backgroundColor: colors.surfaceElevated,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.hairlineStrong,
-    paddingHorizontal: 18,
-    paddingVertical: 13,
-  },
-  secondaryButtonText: {
-    color: colors.text,
-    fontSize: 14,
-    fontFamily: fonts.ui,
-  },
-  pathList: {
-    gap: 12,
-  },
-  pathCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 13,
-    backgroundColor: colors.surfaceElevated,
-    borderWidth: 1,
-    borderColor: colors.hairlineStrong,
-    borderRadius: 20,
-    padding: 16,
-  },
-  pathIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pathCopy: {
-    flex: 1,
-    minWidth: 0,
-    gap: 5,
-  },
-  pathTitle: {
-    color: colors.text,
-    fontSize: 18,
-    lineHeight: 22,
-    fontFamily: fonts.title,
-  },
-  pathBody: {
-    color: colors.textMuted,
-    fontSize: 13,
-    lineHeight: 19,
-    fontFamily: fonts.ui,
-  },
-  pathAction: {
-    color: colors.accent,
-    fontSize: 13,
-    fontFamily: fonts.ui,
-  },
-  noteCard: {
-    backgroundColor: colors.accentWash,
-    borderWidth: 1,
-    borderColor: colors.hairlineStrong,
-    borderRadius: 20,
-    padding: 16,
-    gap: 9,
-  },
-  noteBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-  },
-  noteBadgeText: {
-    color: colors.text,
-    fontSize: 14,
-    fontFamily: fonts.title,
-  },
-  noteText: {
-    color: colors.textMuted,
-    fontSize: 14,
-    lineHeight: 20,
     fontFamily: fonts.ui,
   },
   });

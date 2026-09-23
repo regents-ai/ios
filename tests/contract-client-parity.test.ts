@@ -10,7 +10,7 @@ test('OpenAPI operations have stable operation IDs', () => {
   const operations = [...contract.matchAll(/^    (get|post|put|patch|delete):$/gm)];
   const operationIds = [...contract.matchAll(/^\s+operationId:\s+([A-Za-z0-9_]+)$/gm)].map((match) => match[1]);
 
-  assert.equal(operations.length, 37);
+  assert.equal(operations.length, 38);
   assert.equal(operationIds.length, operations.length);
   assert.equal(new Set(operationIds).size, operationIds.length);
 });
@@ -98,6 +98,17 @@ test('Regent staking contract and client use the live staking surface only', () 
   assert.match(regentClient, /claimRegentStakingUsdc\(input:/);
   assert.match(regentClient, /claimRegentStakingRegent\(input:/);
   assert.match(regentClient, /claimAndRestakeRegent\(input:/);
+});
+
+test('portfolio contract and client read Base holdings for up to five wallets', () => {
+  assert.match(contract, /\/mobile\/portfolio:[\s\S]*operationId: getMobilePortfolio[\s\S]*name: wallets/);
+  assert.match(contract, /BasePortfolio:[\s\S]*required: \[chain_id, block_number, wallets\]/);
+  assert.match(
+    contract,
+    /BaseWalletHoldings:[\s\S]*- wallet_address\n\s+- eth_balance\n\s+- usdc_balance\n\s+- regent_balance\n\s+- staked_regent\n\s+- claimable_usdc\n\s+- claimable_regent/
+  );
+  assert.match(regentClient, /getPortfolio\(input: \{ wallets: string\[\] \}\): Promise<BasePortfolio>/);
+  assert.match(regentTypes, /export type BaseWalletHoldings = \{/);
 });
 
 test('staking wallet-action contract uses even-byte calldata constraints', () => {

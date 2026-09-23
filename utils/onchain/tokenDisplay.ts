@@ -53,3 +53,20 @@ export function getUsdEstimate(selectedToken: TokenChoiceLike, amount: string): 
 
   return estimate.toFixed(2);
 }
+
+/**
+ * A decimal token amount for reading: at most four decimal places, cut (never
+ * rounded up) and without trailing zeros. A missing amount reads as zero.
+ */
+export function displayTokenAmount(value?: string | null) {
+  if (!value) {
+    return '0';
+  }
+
+  const [whole, decimal] = value.split('.');
+  if (!decimal) {
+    return whole;
+  }
+
+  return `${whole}.${decimal.slice(0, 4)}`.replace(/\.?0+$/, '');
+}

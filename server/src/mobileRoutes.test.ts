@@ -3,11 +3,15 @@ import test from 'node:test';
 import type { Request, Response } from 'express';
 import { decodeFunctionData, erc20Abi, parseUnits } from 'viem';
 
+import type { BasePortfolioReader } from './basePortfolio.js';
 import { createMobileRoutes } from './mobileRoutes.js';
 import { REGENT_STAKING_ADDRESS, REGENT_TOKEN_ADDRESS, regentRevenueStakingAbi } from './regentStaking.js';
 
-async function requestStakingRoute(input: { method: 'GET' | 'POST'; url: string; body?: unknown }) {
-  const router = createMobileRoutes() as unknown as {
+async function requestStakingRoute(
+  input: { method: 'GET' | 'POST'; url: string; body?: unknown },
+  routes = createMobileRoutes(),
+) {
+  const router = routes as unknown as {
     handle(request: Request, response: Response, next: (error?: unknown) => void): void;
   };
 
@@ -97,4 +101,54 @@ test('prepared staking calls target the staking contract with the wallet as sign
     body: { walletAddress: wallet, amount: '0' },
   });
   assert.equal(rejected.status, 400);
+});
+
+const holdings = (wallet: string) => ({
+  wallet_address: wallet as `0x${string}`,
+  eth_balance: '0.01',
+  usdc_balance: '12.5',
+  regent_balance: '100',
+  staked_regent: '50',
+  claimable_usdc: '0.25',
+  claimable_regent: '1',
+});
+
+test('the portfolio route reads the listed wallets and refuses an empty, long or malformed list', async () => {
+  const walletA = '0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e';
+  const walletB = '0x6f89bcA4eA5931EdFCB09786267b251DeE752b07';
+  const requested: string[][] = [];
+  const readPortfolio: BasePortfolioReader = async (wallets) => {
+    requested.push(wallets);
+    return { kind: 'ok', portfolio: { chain_id: 8453, block_number: 7, wallets: wallets.map(holdings) } };
+  };
+  const routes = createMobileRoutes({ readPortfolio });
+
+  const ok = await requestStakingRoute({ method: 'GET', url: `/mobile/portfolio?wallets=${walletA},${walletB}` }, routes);
+  assert.equal(ok.status, 200);
+  assert.deepEqual(requested, [[walletA, walletB]]);
+  assert.deepEqual(ok.body, { portfolio: { chain_id: 8453, block_number: 7, wallets: [holdings(walletA), holdings(walletB)] } });
+
+  const six = Array.from({ length: 6 }, (_, index) => `0x${String(index + 1).repeat(40)}`).join(',');
+  for (const query of ['', '?wallets=', `?wallets=${six}`, '?wallets=0x1234', `?wallets=${walletA},`]) {
+    const refused = await requestStakingRoute({ method: 'GET', url: `/mobile/portfolio${query}` }, routes);
+    assert.equal(refused.status, 400, query);
+  }
+  assert.equal(requested.length, 1);
+});
+
+test('the portfolio route answers in plain words when Base cannot be read', async () => {
+  const wallet = '0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e';
+  const missing = await requestStakingRoute(
+    { method: 'GET', url: `/mobile/portfolio?wallets=${wallet}` },
+    createMobileRoutes({ readPortfolio: async () => ({ kind: 'missing_rpc', requiredEnv: 'BASE_RPC_URL' }) }),
+  );
+  assert.equal(missing.status, 503);
+  assert.equal(missing.body.error.message, 'Balances are unavailable right now.');
+
+  const failed = await requestStakingRoute(
+    { method: 'GET', url: `/mobile/portfolio?wallets=${wallet}` },
+    createMobileRoutes({ readPortfolio: async () => ({ kind: 'rpc_error', name: 'HttpRequestError' }) }),
+  );
+  assert.equal(failed.status, 502);
+  assert.equal(failed.body.error.message, 'Balances could not be read from Base right now.');
 });

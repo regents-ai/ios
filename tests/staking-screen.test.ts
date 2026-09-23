@@ -6,8 +6,8 @@ import { fileURLToPath } from 'node:url';
 
 const testDir = dirname(fileURLToPath(import.meta.url));
 
-test('staking screen clears delayed refreshes when it is left', () => {
-  const screen = readFileSync(resolve(testDir, '../app/staking.tsx'), 'utf8');
+test('the Earn tab clears delayed staking refreshes when it is left', () => {
+  const screen = readFileSync(resolve(testDir, '../app/(tabs)/earn.tsx'), 'utf8');
 
   assert.match(screen, /refreshTimerRef = useRef<ReturnType<typeof setTimeout> \| null>\(null\)/);
   assert.match(screen, /clearTimeout\(refreshTimerRef\.current\)/);

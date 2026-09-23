@@ -151,7 +151,7 @@ export default function WalletScreen() {
       label: 'Rewards',
       detail: 'Track REGENT and claim rewards',
       icon: 'sparkles-outline',
-      onPress: () => router.push(routes.staking()),
+      onPress: () => router.push(routes.earn()),
     },
     {
       label: 'Settings',

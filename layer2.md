@@ -97,7 +97,7 @@ Regents Mobile is the iPhone entry path for Regent. It owns the iOS app, the mob
 
 - This repo owns the mobile wallet experience and the person's agents list
 - This repo does not own any agent's conversations, work records, or runtime. It keeps only the list entries a person adds and the pairing codes they create.
-- `api-contract.openapiv3.yaml` is the current formal mobile product contract and covers the agents, staking, and pairing routes that the app exposes today
+- `api-contract.openapiv3.yaml` is the current formal mobile product contract and covers the portfolio, agents, staking, and pairing routes that the app exposes today
 - `mobile-services-contract.openapiv3.yaml` is empty on purpose for Phase 0 because this repo does not yet ship any shared mobile service routes
 - `vendor/happy-app/` is donor material for future mobile ideas. It is not the current product surface or source of truth
 

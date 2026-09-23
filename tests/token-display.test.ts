@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { getTokenBalance, getUsdEstimate, parseTokenDecimals } from '../utils/onchain/tokenDisplay';
+import { displayTokenAmount, getTokenBalance, getUsdEstimate, parseTokenDecimals } from '../utils/onchain/tokenDisplay';
 
 test('token decimals parse only as non-negative integers', () => {
   assert.equal(parseTokenDecimals(6), 6);
@@ -42,4 +42,13 @@ test('USD estimate requires finite prices and valid decimals', () => {
   assert.equal(getUsdEstimate({ amount: { amount: '2000000', decimals: 'abc' }, usdValue: 2 }, '1'), null);
   assert.equal(getUsdEstimate({ amount: { amount: 'abc', decimals: '6' }, usdValue: 2 }, '1'), null);
   assert.equal(getUsdEstimate(token, 'abc'), null);
+});
+
+test('token amounts read with at most four decimals, cut and without trailing zeros', () => {
+  assert.equal(displayTokenAmount('1234.56789'), '1234.5678');
+  assert.equal(displayTokenAmount('12.5'), '12.5');
+  assert.equal(displayTokenAmount('100'), '100');
+  assert.equal(displayTokenAmount('100.00009'), '100');
+  assert.equal(displayTokenAmount('0.00001'), '0');
+  assert.equal(displayTokenAmount(null), '0');
 });

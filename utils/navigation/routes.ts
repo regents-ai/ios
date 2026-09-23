@@ -26,8 +26,16 @@ export const routes = {
       : '/wallet/send';
   },
 
-  staking(): Href {
-    return '/staking';
+  earn(): Href {
+    return '/earn';
+  },
+
+  autolaunch(): Href {
+    return '/autolaunch';
+  },
+
+  techtree(): Href {
+    return '/techtree';
   },
 
   auction(reference: string): Href {

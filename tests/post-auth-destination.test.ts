@@ -21,9 +21,9 @@ function recordingRouter() {
   };
 }
 
-test('sign-in lands on the agents list when no path was chosen', () => {
+test('sign-in lands on Home when no path was chosen', () => {
   clearPostAuthDestination();
-  assert.equal(resolvePostAuthLanding(), '/agents');
+  assert.equal(resolvePostAuthLanding(), '/');
 });
 
 test('a chosen onboarding path survives to the post-sign-in landing', () => {
@@ -42,7 +42,7 @@ test('adding an agent after sign-in is pushed over the agents tab so Back and th
   clearPostAuthDestination();
   const plain = recordingRouter();
   landAfterSignIn(plain);
-  assert.deepEqual(plain.calls, ['replace /agents']);
+  assert.deepEqual(plain.calls, ['replace /']);
 });
 
 test('Nous Portal pairing survives the sign-in round trip', () => {
@@ -68,5 +68,5 @@ test('choosing a new path replaces the previous one', () => {
 test('skipping onboarding clears the intent back to the default landing', () => {
   setPostAuthDestination('/agent/add');
   clearPostAuthDestination();
-  assert.equal(resolvePostAuthLanding(), '/agents');
+  assert.equal(resolvePostAuthLanding(), '/');
 });
