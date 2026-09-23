@@ -28,6 +28,7 @@ export default function AgentsTab() {
   const { colors } = theme;
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const [agents, setAgents] = useState<MobileAgent[]>([]);
+  const [balancesAvailable, setBalancesAvailable] = useState(true);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const { alertProps, showAlert } = useCoinbaseAlert();
@@ -39,7 +40,9 @@ export default function AgentsTab() {
       } else {
         setLoading(true);
       }
-      setAgents(await regentApi.listAgents());
+      const list = await regentApi.listAgents();
+      setAgents(list.agents);
+      setBalancesAvailable(list.balancesAvailable);
     } catch (error) {
       showAlert({
         title: 'Could not load your agents',
@@ -101,6 +104,12 @@ export default function AgentsTab() {
           ) : (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Your agents</Text>
+              {balancesAvailable ? null : (
+                <View style={styles.noticeCard}>
+                  <Ionicons name="information-circle-outline" size={18} color={colors.textMuted} />
+                  <Text style={styles.noticeText}>{"Balances aren't available right now."}</Text>
+                </View>
+              )}
               <View style={styles.agentList}>
                 {agents.map((agent) => (
                   <RegentPressable
@@ -230,6 +239,20 @@ function makeStyles({ colors, fonts }: Theme) {
       color: colors.text,
       fontSize: 22,
       fontFamily: fonts.title,
+    },
+    noticeCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      backgroundColor: colors.surface,
+      borderRadius: 14,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+    },
+    noticeText: {
+      color: colors.textMuted,
+      fontSize: 13,
+      fontFamily: fonts.ui,
     },
     agentList: {
       gap: 10,

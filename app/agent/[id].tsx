@@ -54,7 +54,7 @@ export default function AgentDetailScreen() {
       } else {
         setLoading(true);
       }
-      const agents = await regentApi.listAgents();
+      const { agents } = await regentApi.listAgents();
       setAgent(agents.find((candidate) => candidate.id === agentId) ?? null);
     } catch (error) {
       showAlert({
@@ -248,7 +248,9 @@ export default function AgentDetailScreen() {
                 <LiveValueFlash value={`balance-${agent.usdcBalance ?? 'none'}`}>
                   <Text style={styles.balanceValue}>{formatUsdcBalance(agent.usdcBalance)}</Text>
                 </LiveValueFlash>
-                <Text style={styles.metaHint}>Base USDC held by the wallet of this agent.</Text>
+                <Text style={styles.metaHint}>
+                  {agent.usdcBalance === null ? "Balances aren't available right now." : 'Base USDC held by the wallet of this agent.'}
+                </Text>
               </View>
               <View style={styles.heroActions}>
                 <RegentPressable style={styles.primaryButton} onPress={openAddFunds}>
@@ -266,7 +268,7 @@ export default function AgentDetailScreen() {
           <View style={[styles.card, styles.pairCard]}>
             <Text style={styles.sectionTitle}>Pair this agent</Text>
             <Text style={styles.sectionHint}>
-              Pairing lets the agent prove it owns this wallet. You will get a code to give it.
+              Pairing lets the agent prove it owns this wallet. You will get a code to give it, then confirm the address it signs in with.
             </Text>
             <RegentPressable
               style={styles.primaryButton}

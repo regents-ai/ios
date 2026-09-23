@@ -3,6 +3,8 @@ import {
   MobileAgent,
   MobileAgentKind,
   MobileAgentPairingCode,
+  MobileAgentPairingStatus,
+  MobileAgentsList,
   RegentStakingActionResponse,
   RegentStakingState,
 } from '@/types/regents';
@@ -75,17 +77,19 @@ const jsonInit = (method: 'POST' | 'PATCH', body: unknown): RequestInit => ({
 const mobileAgentPath = (agentId: string): `${typeof mobileAgentsPath}/${string}` =>
   `${mobileAgentsPath}/${encodeURIComponent(agentId)}`;
 
+const mobileAgentPairingCodePath = (code: string, suffix = ''): `${typeof mobileAgentsPath}/${string}` =>
+  `${mobileAgentPairingCodesPath}/${encodeURIComponent(code)}${suffix}`;
+
 const mobileRegentStakingWithWalletPath = (walletAddress: string): `${typeof mobileRegentStakingPath}?walletAddress=${string}` =>
   `${mobileRegentStakingPath}?walletAddress=${encodeURIComponent(walletAddress)}`;
 
 export const regentApi = {
-  async listAgents(): Promise<MobileAgent[]> {
-    const payload = await requestJson<{ agents: MobileAgent[] }>(
+  listAgents(): Promise<MobileAgentsList> {
+    return requestJson<MobileAgentsList>(
       mobileAgentsPath,
       undefined,
       'Unable to load your agents right now.'
     );
-    return payload.agents;
   },
 
   async addAgent(input: { name: string; kind: MobileAgentKind; walletAddress: string }): Promise<MobileAgent> {
@@ -119,6 +123,31 @@ export const regentApi = {
       mobileAgentPairingCodesPath,
       jsonInit('POST', input),
       'Unable to create a pairing code right now.'
+    );
+  },
+
+  getAgentPairingStatus(code: string): Promise<MobileAgentPairingStatus> {
+    return requestJson<MobileAgentPairingStatus>(
+      mobileAgentPairingCodePath(code),
+      undefined,
+      'Unable to check this pairing code right now.'
+    );
+  },
+
+  async confirmAgentPairing(code: string): Promise<MobileAgent> {
+    const payload = await requestJson<{ agent: MobileAgent }>(
+      mobileAgentPairingCodePath(code, '/confirm'),
+      { method: 'POST' },
+      'Unable to confirm this agent right now.'
+    );
+    return payload.agent;
+  },
+
+  async discardAgentPairingCode(code: string): Promise<void> {
+    await requestJson<{ discarded: true }>(
+      mobileAgentPairingCodePath(code),
+      { method: 'DELETE' },
+      'Unable to discard this pairing code right now.'
     );
   },
 

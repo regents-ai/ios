@@ -17,7 +17,7 @@ export function isAgentKind(value: unknown): value is MobileAgentKind {
 
 export function formatUsdcBalance(balance: string | null) {
   if (balance === null) {
-    return 'Balance unavailable';
+    return '—';
   }
   const amount = Number(balance);
   return `${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC`;

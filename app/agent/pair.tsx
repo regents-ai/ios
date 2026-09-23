@@ -3,7 +3,7 @@ import { RegentPressable } from '@/components/ui/RegentPressable';
 import { getBaseUrl } from '@/constants/BASE_URL';
 import { useCoinbaseAlert } from '@/hooks/useCoinbaseAlert';
 import { useTheme, type Theme } from '@/theme/ThemeProvider';
-import type { MobileAgent, MobileAgentKind, MobileAgentPairingCode } from '@/types/regents';
+import type { MobileAgentKind, MobileAgentPairingCode, MobileAgentPairingStatus } from '@/types/regents';
 import { agentKindLabel, isAgentKind } from '@/utils/agents/kinds';
 import { describeApiError } from '@/utils/apiError';
 import { routes } from '@/utils/navigation/routes';
@@ -11,7 +11,7 @@ import { regentApi } from '@/utils/regentApi/client';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Clipboard from 'expo-clipboard';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   SafeAreaView,
@@ -26,6 +26,7 @@ const NODE_CLIENT_URL = 'https://raw.githubusercontent.com/regents-ai/elixir-uti
 const PYTHON_CLIENT_URL = 'https://raw.githubusercontent.com/regents-ai/elixir-utils/main/siwa/siwa-elixir/agent/siwa_agent.py';
 const SIWA_SERVER_URL = 'https://siwa-server.fly.dev';
 const POLL_INTERVAL_MS = 3000;
+const EXPIRED_MESSAGE = 'This code expired. Make a new one.';
 
 function pairingInstruction(code: string, expiresAt: string) {
   const pairUrl = `${getBaseUrl()}/agent/pair`;
@@ -48,17 +49,17 @@ function pairingInstruction(code: string, expiresAt: string) {
   ].join('\n');
 }
 
-function pairedIds(agents: MobileAgent[]) {
-  return new Set(agents.filter((agent) => agent.paired).map((agent) => agent.id));
-}
-
 function expiryCopy(expiresAt: string, now: number) {
   const remainingMs = new Date(expiresAt).getTime() - now;
   if (remainingMs <= 0) {
-    return 'This code has expired.';
+    return EXPIRED_MESSAGE;
   }
   const minutes = Math.ceil(remainingMs / 60000);
   return minutes === 1 ? 'Expires in about a minute.' : `Expires in ${minutes} minutes.`;
+}
+
+function shortAddress(address: string) {
+  return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
 
 export default function AgentPairingScreen() {
@@ -72,19 +73,19 @@ export default function AgentPairingScreen() {
   const { alertProps, showAlert } = useCoinbaseAlert();
 
   const [pairingCode, setPairingCode] = useState<MobileAgentPairingCode | null>(null);
+  const [status, setStatus] = useState<MobileAgentPairingStatus>({ status: 'expired' });
   const [creating, setCreating] = useState(true);
+  const [deciding, setDeciding] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const [copiedField, setCopiedField] = useState<'code' | 'instruction' | null>(null);
-  const knownPairedIdsRef = useRef<Set<string> | null>(null);
-  const pairedAgentRef = useRef<MobileAgent | null>(null);
 
   const createCode = useCallback(async () => {
     setCreating(true);
     try {
-      // Snapshot before the code exists so the first agent paired with it is
-      // the one that gets recognised, even if the list read races the pairing.
-      knownPairedIdsRef.current = pairedIds(await regentApi.listAgents());
-      setPairingCode(await regentApi.createAgentPairingCode({ name, kind }));
+      const created = await regentApi.createAgentPairingCode({ name, kind });
+      setPairingCode(created);
+      setStatus({ status: 'waiting', expiresAt: created.expiresAt });
+      setNow(Date.now());
     } catch (error) {
       showAlert({ title: 'Could not create a pairing code', message: describeApiError(error).message, type: 'error' });
     } finally {
@@ -101,26 +102,21 @@ export default function AgentPairingScreen() {
     return () => clearInterval(ticker);
   }, []);
 
+  const expired = !pairingCode || status.status === 'expired' || new Date(pairingCode.expiresAt).getTime() <= now;
+
+  // While the code is live and the screen is showing, ask the backend whether
+  // an agent has signed in with it. Polling stops once the code expires.
   useFocusEffect(
     useCallback(() => {
-      if (!pairingCode) {
+      if (!pairingCode || expired || status.status === 'needs_confirmation') {
         return;
       }
 
       let active = true;
       const poll = async () => {
-        const known = knownPairedIdsRef.current;
-        if (!known || pairedAgentRef.current) {
-          return;
-        }
-        const agents = await regentApi.listAgents().catch(() => null);
-        if (!active || !agents) {
-          return;
-        }
-        const justPaired = agents.find((agent) => agent.paired && !known.has(agent.id));
-        if (justPaired) {
-          pairedAgentRef.current = justPaired;
-          router.replace(routes.agent(justPaired.id));
+        const next = await regentApi.getAgentPairingStatus(pairingCode.code).catch(() => null);
+        if (active && next) {
+          setStatus(next);
         }
       };
 
@@ -130,8 +126,38 @@ export default function AgentPairingScreen() {
         active = false;
         clearInterval(interval);
       };
-    }, [pairingCode, router])
+    }, [expired, pairingCode, status.status])
   );
+
+  const confirm = useCallback(async () => {
+    if (!pairingCode) {
+      return;
+    }
+    setDeciding(true);
+    try {
+      const agent = await regentApi.confirmAgentPairing(pairingCode.code);
+      router.replace(routes.agent(agent.id));
+    } catch (error) {
+      showAlert({ title: 'Could not confirm this agent', message: describeApiError(error).message, type: 'error' });
+      setDeciding(false);
+    }
+  }, [pairingCode, router, showAlert]);
+
+  const notMine = useCallback(async () => {
+    if (!pairingCode) {
+      return;
+    }
+    setDeciding(true);
+    try {
+      await regentApi.discardAgentPairingCode(pairingCode.code);
+      setPairingCode(null);
+      setStatus({ status: 'expired' });
+    } catch (error) {
+      showAlert({ title: 'Could not discard this code', message: describeApiError(error).message, type: 'error' });
+    } finally {
+      setDeciding(false);
+    }
+  }, [pairingCode, showAlert]);
 
   const copy = useCallback(async (field: 'code' | 'instruction') => {
     if (!pairingCode) {
@@ -144,7 +170,7 @@ export default function AgentPairingScreen() {
     setTimeout(() => setCopiedField((current) => (current === field ? null : current)), 2000);
   }, [pairingCode]);
 
-  const expired = pairingCode ? new Date(pairingCode.expiresAt).getTime() <= now : false;
+  const awaitingDecision = pairingCode && !expired && status.status === 'needs_confirmation' ? status : null;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -163,54 +189,80 @@ export default function AgentPairingScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.card}>
-          <Text style={styles.eyebrow}>{agentKindLabel(kind)}</Text>
-          <Text style={styles.title}>{name}</Text>
-          <Text style={styles.hint}>
-            Give this code to your agent. Once it checks in, it appears in your list as paired.
-          </Text>
-
-          {creating || !pairingCode ? (
-            <View style={styles.codeBlock}>
-              {creating ? (
-                <ActivityIndicator color={colors.accent} />
-              ) : (
-                <RegentPressable style={styles.primaryButton} onPress={createCode}>
-                  <Text style={styles.primaryButtonText}>Try again</Text>
-                </RegentPressable>
-              )}
+        {awaitingDecision ? (
+          <View style={styles.card}>
+            <Text style={styles.eyebrow}>{agentKindLabel(kind)}</Text>
+            <Text style={styles.title}>{name}</Text>
+            <View style={styles.confirmBlock}>
+              <Ionicons name="finger-print-outline" size={28} color={colors.accent} />
+              <Text style={styles.confirmTitle}>An agent signed in with address {shortAddress(awaitingDecision.walletAddress)}.</Text>
+              <Text selectable style={styles.confirmAddress}>{awaitingDecision.walletAddress}</Text>
+              <Text style={styles.confirmQuestion}>Is this your agent?</Text>
             </View>
-          ) : (
-            <>
+            <View style={styles.actions}>
+              <RegentPressable style={styles.primaryButton} onPress={confirm} disabled={deciding}>
+                {deciding ? <ActivityIndicator color={colors.onAccent} /> : <Text style={styles.primaryButtonText}>Confirm</Text>}
+              </RegentPressable>
+              <RegentPressable style={styles.secondaryButton} onPress={notMine} disabled={deciding}>
+                <Text style={styles.secondaryButtonText}>Not mine</Text>
+              </RegentPressable>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.card}>
+            <Text style={styles.eyebrow}>{agentKindLabel(kind)}</Text>
+            <Text style={styles.title}>{name}</Text>
+            <Text style={styles.hint}>
+              Give this code to your agent. Once it signs in, you confirm the address it used and it appears in your list as paired.
+            </Text>
+
+            {creating || !pairingCode ? (
               <View style={styles.codeBlock}>
-                <Text selectable style={[styles.code, expired && styles.codeExpired]} accessibilityLabel={`Pairing code ${pairingCode.code}`}>
-                  {pairingCode.code}
-                </Text>
-                <Text style={[styles.expiry, expired && styles.expiryExpired]}>{expiryCopy(pairingCode.expiresAt, now)}</Text>
-              </View>
-              <View style={styles.actions}>
-                {expired ? (
-                  <RegentPressable style={styles.primaryButton} onPress={createCode}>
-                    <Text style={styles.primaryButtonText}>New code</Text>
-                  </RegentPressable>
+                {creating ? (
+                  <ActivityIndicator color={colors.accent} />
                 ) : (
                   <>
-                    <RegentPressable style={styles.primaryButton} onPress={() => copy('instruction')}>
-                      <Text style={styles.primaryButtonText}>
-                        {copiedField === 'instruction' ? 'Copied' : 'Copy instructions for the agent'}
-                      </Text>
-                    </RegentPressable>
-                    <RegentPressable style={styles.secondaryButton} onPress={() => copy('code')}>
-                      <Text style={styles.secondaryButtonText}>{copiedField === 'code' ? 'Copied' : 'Copy code only'}</Text>
+                    <Text style={styles.expiry}>No code right now.</Text>
+                    <RegentPressable style={styles.primaryButton} onPress={createCode}>
+                      <Text style={styles.primaryButtonText}>New code</Text>
                     </RegentPressable>
                   </>
                 )}
               </View>
-            </>
-          )}
-        </View>
+            ) : (
+              <>
+                <View style={styles.codeBlock}>
+                  <Text selectable style={[styles.code, expired && styles.codeExpired]} accessibilityLabel={`Pairing code ${pairingCode.code}`}>
+                    {pairingCode.code}
+                  </Text>
+                  <Text style={[styles.expiry, expired && styles.expiryExpired]}>
+                    {expired ? EXPIRED_MESSAGE : expiryCopy(pairingCode.expiresAt, now)}
+                  </Text>
+                </View>
+                <View style={styles.actions}>
+                  {expired ? (
+                    <RegentPressable style={styles.primaryButton} onPress={createCode}>
+                      <Text style={styles.primaryButtonText}>New code</Text>
+                    </RegentPressable>
+                  ) : (
+                    <>
+                      <RegentPressable style={styles.primaryButton} onPress={() => copy('instruction')}>
+                        <Text style={styles.primaryButtonText}>
+                          {copiedField === 'instruction' ? 'Copied' : 'Copy instructions for the agent'}
+                        </Text>
+                      </RegentPressable>
+                      <RegentPressable style={styles.secondaryButton} onPress={() => copy('code')}>
+                        <Text style={styles.secondaryButtonText}>{copiedField === 'code' ? 'Copied' : 'Copy code only'}</Text>
+                      </RegentPressable>
+                    </>
+                  )}
+                </View>
+              </>
+            )}
+          </View>
+        )}
 
-        {pairingCode && !expired ? (
+        {pairingCode && !expired && !awaitingDecision ? (
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>What to send the agent</Text>
             <Text style={styles.hint}>Paste this into the chat or terminal of the agent. It has everything it needs.</Text>
@@ -218,10 +270,10 @@ export default function AgentPairingScreen() {
           </View>
         ) : null}
 
-        {pairingCode && !expired ? (
+        {pairingCode && !expired && !awaitingDecision ? (
           <View style={styles.waitingRow}>
             <ActivityIndicator size="small" color={colors.accent} />
-            <Text style={styles.waitingText}>Waiting for the agent to check in…</Text>
+            <Text style={styles.waitingText}>Waiting for the agent to sign in…</Text>
           </View>
         ) : null}
       </ScrollView>
@@ -325,6 +377,33 @@ function makeStyles({ colors, fonts }: Theme) {
     },
     expiryExpired: {
       color: colors.error,
+    },
+    confirmBlock: {
+      backgroundColor: colors.surface,
+      borderRadius: 18,
+      paddingVertical: 22,
+      paddingHorizontal: 16,
+      alignItems: 'center',
+      gap: 8,
+    },
+    confirmTitle: {
+      color: colors.text,
+      fontSize: 17,
+      lineHeight: 23,
+      textAlign: 'center',
+      fontFamily: fonts.title,
+    },
+    confirmAddress: {
+      color: colors.textMuted,
+      fontSize: 12,
+      textAlign: 'center',
+      fontFamily: fonts.ui,
+    },
+    confirmQuestion: {
+      color: colors.text,
+      fontSize: 15,
+      textAlign: 'center',
+      fontFamily: fonts.ui,
     },
     actions: {
       gap: 10,

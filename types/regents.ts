@@ -11,10 +11,21 @@ export type MobileAgent = {
   usdcBalance: string | null;
 };
 
+export type MobileAgentsList = {
+  agents: MobileAgent[];
+  /** False when Base USDC balances could not be read; every usdcBalance is then null. */
+  balancesAvailable: boolean;
+};
+
 export type MobileAgentPairingCode = {
   code: string;
   expiresAt: string;
 };
+
+export type MobileAgentPairingStatus =
+  | { status: 'waiting'; expiresAt: string }
+  | { status: 'needs_confirmation'; walletAddress: string; expiresAt: string }
+  | { status: 'expired' };
 
 export type RegentStakingAction =
   | 'stake'
