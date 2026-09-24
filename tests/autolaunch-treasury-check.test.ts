@@ -28,20 +28,25 @@ afterEach(() => {
 });
 
 test('a successful answer with ok true passes, read from the auction treasury check on autolaunch.sh', async () => {
-  answerWith(json(200, { ok: true }));
+  answerWith(json(200, { data: { ok: true } }));
 
   assert.deepEqual(await checkAutolaunchTreasury(AUCTION_ID), { ok: true });
   assert.deepEqual(requests, [{ url: CHECK_URL, method: 'GET' }]);
 });
 
 test('an answer with ok false carries the website reason', async () => {
-  answerWith(json(200, { ok: false, reason: 'treasury_source_reorged' }));
+  answerWith(json(200, { data: { ok: false, reason: 'treasury_source_reorged' } }));
 
   assert.deepEqual(await checkAutolaunchTreasury(AUCTION_ID), { ok: false, reason: 'treasury_source_reorged' });
 });
 
 test('anything other than ok true does not pass', async () => {
-  answerWith(json(200, { ok: 'true' }), json(200, {}), json(200, null), json(200, { ok: false }));
+  answerWith(
+    json(200, { data: { ok: 'true' } }),
+    json(200, { data: {} }),
+    json(200, { data: null }),
+    json(200, { data: { ok: false } })
+  );
 
   assert.deepEqual(await checkAutolaunchTreasury(AUCTION_ID), { ok: false, reason: 'check_unavailable' });
   assert.deepEqual(await checkAutolaunchTreasury(AUCTION_ID), { ok: false, reason: 'check_unavailable' });
@@ -60,7 +65,7 @@ test('a missing check on the website (404) does not pass', async () => {
 });
 
 test('an error status does not pass, even with ok true in the body', async () => {
-  answerWith(json(500, { ok: true }));
+  answerWith(json(500, { data: { ok: true } }));
 
   assert.deepEqual(await checkAutolaunchTreasury(AUCTION_ID), { ok: false, reason: 'check_unavailable' });
 });
@@ -74,13 +79,16 @@ test('a dropped connection does not pass', async () => {
 });
 
 test('a reply that is not JSON does not pass', async () => {
-  answerWith(async () => new Response('{"ok": tru', { status: 200 }));
+  answerWith(async () => new Response('{"data": {"ok": tru', { status: 200 }));
 
   assert.deepEqual(await checkAutolaunchTreasury(AUCTION_ID), { ok: false, reason: 'check_unavailable' });
 });
 
 test('every check asks the website again, so a pass is never reused', async () => {
-  answerWith(json(200, { ok: true }), json(200, { ok: false, reason: 'treasury_safe_changed' }));
+  answerWith(
+    json(200, { data: { ok: true } }),
+    json(200, { data: { ok: false, reason: 'treasury_safe_changed' } })
+  );
 
   assert.deepEqual(await checkAutolaunchTreasury(AUCTION_ID), { ok: true });
   assert.deepEqual(await checkAutolaunchTreasury(AUCTION_ID), { ok: false, reason: 'treasury_safe_changed' });

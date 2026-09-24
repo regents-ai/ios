@@ -7,8 +7,9 @@
  * guard and the admitted fallback handler.
  *
  * The website runs that check and answers it at
- * GET /api/v1/auctions/:id/treasury-check. Only a successful JSON answer with
- * `ok: true` passes. A JSON answer with a `reason` fails with that reason;
+ * GET /api/v1/auctions/:id/treasury-check, inside `data` like the rest of its
+ * API. Only a successful JSON answer with `ok: true` passes. A JSON answer
+ * with a `reason` fails with that reason;
  * anything else (no answer, an error status, a reply that is not JSON)
  * fails as `check_unavailable`. Every call asks the website again: a pass is
  * never kept for a later press.

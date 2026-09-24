@@ -80,7 +80,8 @@ export async function quoteAutolaunchBid(input: {
  * decides what it means.
  */
 export async function getAutolaunchTreasuryCheck(auctionId: string): Promise<{ ok?: unknown; reason?: unknown } | null> {
-  return autolaunchFetch<{ ok?: unknown; reason?: unknown } | null>(
+  const body = await autolaunchFetch<{ data: { ok?: unknown; reason?: unknown } | null }>(
     `/api/v1/auctions/${encodeURIComponent(auctionId)}/treasury-check`
   );
+  return body.data;
 }
