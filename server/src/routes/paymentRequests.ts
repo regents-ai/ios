@@ -246,6 +246,10 @@ export function createPaymentRequestRoutes(input: {
       console.error('❌ [PAYMENT REQUESTS] Coinbase wallet check failed:', { name: wallet.name });
       return sendError(res, 502, 'WalletCheckFailed', 'Your wallet could not be checked right now. Try again in a moment.');
     }
+    if (wallet.kind === 'sign_in_ended') {
+      console.warn('⚠️ [PAYMENT REQUESTS] Coinbase refused the wallet access token:', { message: wallet.coinbaseMessage });
+      return sendError(res, 403, 'WalletSignInEnded', 'Your wallet sign-in has ended. Open your wallet, then check the payment again.');
+    }
     if (wallet.kind === 'not_yours') {
       return sendError(res, 403, 'WalletNotYours', 'This wallet is not signed in as you. Sign in again, then check the payment.');
     }

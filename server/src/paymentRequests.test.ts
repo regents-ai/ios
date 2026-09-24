@@ -64,6 +64,12 @@ function createHarness() {
         if (coinbaseDown) {
           throw new Error('coinbase down');
         }
+        if (token === 'expired') {
+          throw Object.assign(new Error('Invalid JWT'), { statusCode: 401, errorMessage: 'Token is expired.' });
+        }
+        if (token === 'unknown') {
+          throw Object.assign(new Error('Not found'), { statusCode: 404, errorMessage: 'End user not found.' });
+        }
         const [sub, wallet] = token.split('|');
         return { authenticationMethods: [{ type: 'jwt', kid: 'regents-mobile', sub: sub! }], evmSmartAccounts: wallet ? [wallet] : [] };
       },
@@ -334,6 +340,16 @@ test('checking a payment needs the person\'s own wallet', async () => {
 
   const noWallet = await checkPaid('owner', id, TX_HASH, '');
   assert.equal(noWallet.body.error.code, 'WalletNotYours');
+
+  const withToken = (walletAccessToken: string) =>
+    request({ method: 'POST', url: `/mobile/payment-requests/${id}/paid`, userId: 'owner', body: { txHash: TX_HASH, walletAccessToken } });
+  const expired = await withToken('expired');
+  assert.equal(expired.status, 403);
+  assert.deepEqual(
+    [expired.body.error.code, expired.body.error.message],
+    ['WalletSignInEnded', 'Your wallet sign-in has ended. Open your wallet, then check the payment again.'],
+  );
+  assert.equal((await withToken('unknown')).body.error.code, 'WalletNotYours');
 
   coinbaseDown(true);
   const down = await checkPaid('owner', id, TX_HASH);

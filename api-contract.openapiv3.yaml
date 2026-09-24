@@ -1633,7 +1633,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '403':
-          description: The wallet access token does not belong to the signed-in user (WalletNotYours)
+          description: The wallet sign-in has ended (WalletSignInEnded), or the wallet access token does not belong to the signed-in user (WalletNotYours)
           content:
             application/json:
               schema:
