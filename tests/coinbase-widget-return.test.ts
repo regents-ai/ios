@@ -65,7 +65,7 @@ test('Coinbase onramp create requests carry app-owned idempotency keys', () => {
   assert.match(createSession, /operation: 'onramp_session'/);
   assert.match(createSession, /partnerUserRef/);
   assert.match(quote, /buildOnrampIdempotencyKey\('session', quoteIdempotencyPayload, 'widget-quote'\)/);
-  assert.match(quote, /partnerUserRef: payload\.partnerUserRef/);
+  assert.match(quote, /const \{ partnerUserRef, \.\.\.request \} = payload;/);
   assert.match(quote, /isQuote: true/);
   assert.match(quote, /idempotencyKey: quoteIdempotencyKey/);
   assert.doesNotMatch(`${proxy}\n${createOrder}\n${createSession}\n${quote}`, /url: ['"`]https:\/\/api\./);
@@ -88,6 +88,13 @@ test('Coinbase onramp create requests carry app-owned idempotency keys', () => {
   assert.equal(second, first);
   assert.notEqual(nextPurchase, first);
   assert.notEqual(buildOnrampIdempotencyKey('order', { ...orderPayload, isQuote: true }, orderPayload.agreementAcceptedAt), first);
+
+  // Paying $25 and buying exactly 25 USDC are different purchases.
+  const { paymentAmount, ...orderWithoutAmount } = orderPayload;
+  assert.notEqual(
+    buildOnrampIdempotencyKey('order', { ...orderWithoutAmount, purchaseAmount: paymentAmount }, orderPayload.agreementAcceptedAt),
+    first
+  );
 
   const quotePayload = {
     partnerUserRef: 'user-1',

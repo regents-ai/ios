@@ -10,9 +10,9 @@ export const routes = {
     return '/wallet';
   },
 
-  /** Adds USDC on Base to the phone wallet, starting from `amount` dollars. */
-  addUsdc(amount: string): Href {
-    return { pathname: '/add-usdc', params: { amount } };
+  /** Adds USDC on Base to the phone wallet, with `amount` USDC filled in when it is known. */
+  addUsdc(amount?: string): Href {
+    return amount ? { pathname: '/add-usdc', params: { amount } } : '/add-usdc';
   },
 
   pay(): Href {

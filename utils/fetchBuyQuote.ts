@@ -4,10 +4,11 @@ import { sendOnrampProxyRequest } from './network/onrampProxy';
 import { buildOnrampIdempotencyKey } from './onramp/idempotency';
 import { getCountry, getSubdivision } from './state/locationState';
 
-export async function fetchBuyQuote(payload: {
+type QuoteAmount = { paymentAmount: string } | { purchaseAmount: string };
+
+export async function fetchBuyQuote(payload: QuoteAmount & {
   paymentCurrency: string;
   purchaseCurrency: string;
-  paymentAmount: string;
   destinationNetwork: string;
   destinationAddress: string;
   paymentMethod: string;
@@ -52,19 +53,16 @@ export async function fetchBuyQuote(payload: {
     const country = getCountry();
     const subdivision = getSubdivision();
 
+    const { partnerUserRef, ...request } = payload;
     const v2Payload = {
+      ...request,
       country,
       subdivision,
-      paymentCurrency: payload.paymentCurrency,
-      purchaseCurrency: payload.purchaseCurrency,
-      destinationNetwork: payload.destinationNetwork,
-      paymentAmount: payload.paymentAmount,
-      destinationAddress: payload.destinationAddress,
       paymentMethod: payload.paymentMethod === 'COINBASE_WIDGET' ? 'CARD' : payload.paymentMethod
     };
     const quoteIdempotencyPayload = {
       ...v2Payload,
-      partnerUserRef: payload.partnerUserRef,
+      partnerUserRef,
       isQuote: true,
     };
     const quoteIdempotencyKey = buildOnrampIdempotencyKey('session', quoteIdempotencyPayload, 'widget-quote');
@@ -76,7 +74,7 @@ export async function fetchBuyQuote(payload: {
       context: 'fetchBuyQuote',
       idempotencyKey: quoteIdempotencyKey,
       operation: 'onramp_session',
-      partnerUserRef: payload.partnerUserRef,
+      partnerUserRef,
       body: v2Payload,
     });
     const quote = data?.quote;

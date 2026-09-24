@@ -84,7 +84,7 @@ export default function AgentsTab() {
               <RegentPressable onPress={() => router.push(routes.addAgent())} style={styles.primaryButton}>
                 <Text style={styles.primaryButtonText}>Add agent</Text>
               </RegentPressable>
-              <RegentPressable onPress={() => router.push(routes.wallet())} style={styles.secondaryButton}>
+              <RegentPressable onPress={() => router.push(routes.addUsdc())} style={styles.secondaryButton}>
                 <Text style={styles.secondaryButtonText}>Add USDC</Text>
               </RegentPressable>
             </View>
@@ -95,7 +95,7 @@ export default function AgentsTab() {
               <Ionicons name="people-outline" size={28} color={colors.accent} />
               <Text style={styles.emptyTitle}>Add your first agent</Text>
               <Text style={styles.emptyText}>
-                Give an agent a pairing code, or paste its wallet address, and it will show up here with its USDC balance.
+                Give an agent a pairing code, or paste its wallet address, and it will show up here with the USDC in its wallet.
               </Text>
               <RegentPressable onPress={() => router.push(routes.addAgent())} style={styles.primaryButton}>
                 <Text style={styles.primaryButtonText}>Add agent</Text>
@@ -107,7 +107,7 @@ export default function AgentsTab() {
               {balancesAvailable ? null : (
                 <View style={styles.noticeCard}>
                   <Ionicons name="information-circle-outline" size={18} color={colors.textMuted} />
-                  <Text style={styles.noticeText}>{"Balances aren't available right now."}</Text>
+                  <Text style={styles.noticeText}>{"Agent USDC isn't available right now."}</Text>
                 </View>
               )}
               <View style={styles.agentList}>

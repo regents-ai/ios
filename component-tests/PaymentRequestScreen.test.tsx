@@ -10,6 +10,7 @@ const mockGetPaymentRequest = jest.fn();
 const mockGetPortfolio = jest.fn();
 const mockPreparePaymentRequest = jest.fn();
 const mockPush = jest.fn();
+let mockSmartAccounts: string[] = [];
 let mockFocusCallback: (() => void) | null = null;
 
 jest.mock('expo-router', () => ({
@@ -21,7 +22,7 @@ jest.mock('expo-router', () => ({
 }));
 
 jest.mock('@coinbase/cdp-hooks', () => ({
-  useCurrentUser: () => ({ currentUser: { evmSmartAccounts: ['0xAbCdEf1111111111111111111111111111111111'] } }),
+  useCurrentUser: () => ({ currentUser: { evmSmartAccounts: mockSmartAccounts } }),
   useSendUserOperation: () => ({ sendUserOperation: jest.fn(), status: 'idle', data: undefined, error: undefined }),
   useGetAccessToken: () => ({ getAccessToken: jest.fn() }),
 }));
@@ -80,6 +81,7 @@ async function renderScreen() {
 describe('Payment request screen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockSmartAccounts = ['0xAbCdEf1111111111111111111111111111111111'];
     phoneWalletHolds('100');
     mockPreparePaymentRequest.mockRejectedValue(new Error('not needed here'));
   });
@@ -166,5 +168,17 @@ describe('Payment request screen', () => {
       fireEvent.press(screen.getByText('Pay 5.00 USDC'));
     });
     expect(mockPreparePaymentRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it('sends a person without a phone wallet yet to add the requested USDC', async () => {
+    mockSmartAccounts = [];
+    mockGetPaymentRequest.mockResolvedValueOnce(request());
+
+    const screen = await renderScreen();
+
+    await waitFor(() => expect(screen.getByText('Add USDC')).toBeTruthy());
+    expect(screen.queryByText('Pay 5.00 USDC')).toBeNull();
+    fireEvent.press(screen.getByText('Add USDC'));
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/add-usdc', params: { amount: '5.00' } });
   });
 });

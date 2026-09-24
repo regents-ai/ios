@@ -4,25 +4,28 @@ import React, { useCallback, useEffect, useState } from 'react';
 
 import { APIGuestCheckoutWidget } from '@/components/onramp/APIGuestCheckoutWidget';
 import { OnrampForm } from '@/components/onramp/OnrampForm';
-import { PURCHASE_ASSET, PURCHASE_NETWORK } from '@/components/onramp/onramp-form-types';
+import { purchaseSummary, type AmountUnit } from '@/components/onramp/onramp-form-types';
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { WalletOptionsError } from '@/components/wallet/home/wallet-options-error';
 import { useOnramp } from '@/hooks/useOnramp';
 import { useRegentsAuth } from '@/hooks/useRegentsAuth';
 import { usePendingOnrampResume } from '@/hooks/onramp/use-pending-onramp-resume';
 import { useWalletOnrampSubmit } from '@/hooks/onramp/use-wallet-onramp-submit';
-import { getNetworkLabel } from '@/utils/onchain/networkDisplay';
 import { getCountry, getSubdivision } from '@/utils/state/locationState';
 
 type Props = {
+  amountUnit: AmountUnit;
   destinationAddress: string;
   destinationLabel: string;
   initialAmount?: string;
   onSwipeActiveChange?: (active: boolean) => void;
 };
 
-/** Buys USDC on Base with Apple Pay or card and delivers it to one fixed address. */
-export function AddUsdc({ destinationAddress, destinationLabel, initialAmount = '', onSwipeActiveChange }: Props) {
+/**
+ * Buys USDC on Base with Apple Pay or card and delivers it to one fixed address.
+ * `amountUnit` says whether the typed amount is money paid or USDC received.
+ */
+export function AddUsdc({ amountUnit, destinationAddress, destinationLabel, initialAmount = '', onSwipeActiveChange }: Props) {
   const [amount, setAmount] = useState(initialAmount);
   const [regionKey, setRegionKey] = useState(() => `${getCountry()}-${getSubdivision()}`);
 
@@ -73,14 +76,7 @@ export function AddUsdc({ destinationAddress, destinationLabel, initialAmount = 
     createWidgetSession,
     currentUser,
     effectiveIsSignedIn: isAuthenticated,
-    onTransactionPrepared: (formData) => {
-      setCurrentTransaction({
-        amount: formData.amount,
-        paymentCurrency: formData.paymentCurrency || 'USD',
-        asset: PURCHASE_ASSET,
-        network: PURCHASE_NETWORK,
-      });
-    },
+    onTransactionPrepared: setCurrentTransaction,
     setAlertState,
     showSupportError,
   });
@@ -109,6 +105,7 @@ export function AddUsdc({ destinationAddress, destinationLabel, initialAmount = 
 
       <OnrampForm
         amount={amount}
+        amountUnit={amountUnit}
         buyConfig={buyConfig}
         currentQuote={currentQuote}
         destinationAddress={destinationAddress}
@@ -131,9 +128,7 @@ export function AddUsdc({ destinationAddress, destinationLabel, initialAmount = 
           onClose={closeGuestCheckout}
           setIsProcessingPayment={setIsProcessingPayment}
           onAlert={(title, message, type) => {
-            const transactionSummary = currentTransaction
-              ? `\n\n${currentTransaction.amount} ${currentTransaction.paymentCurrency} → ${currentTransaction.asset} (${getNetworkLabel(currentTransaction.network)})`
-              : '';
+            const transactionSummary = currentTransaction ? `\n\n${purchaseSummary(currentTransaction)}` : '';
 
             setAlertState({
               visible: true,

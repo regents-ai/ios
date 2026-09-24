@@ -101,7 +101,7 @@ export const regentApi = {
     const payload = await requestJson<{ portfolio: BasePortfolio }>(
       `${mobilePortfolioPath}?wallets=${input.wallets.map(encodeURIComponent).join(',')}`,
       undefined,
-      'Unable to load balances right now.'
+      'Unable to load wallet holdings right now.'
     );
 
     return payload.portfolio;

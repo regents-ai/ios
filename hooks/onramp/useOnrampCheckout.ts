@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 
-import { PURCHASE_ASSET, PURCHASE_NETWORK, type OnrampFormData } from '@/components/onramp/onramp-form-types';
+import { amountField, PURCHASE_ASSET, PURCHASE_NETWORK, type OnrampFormData } from '@/components/onramp/onramp-form-types';
 import { createGuestCheckoutOrder } from '@/utils/createGuestCheckoutOrder';
 import { createOnrampSession } from '@/utils/createOnrampSession';
 import { getAccessTokenGlobal } from '@/utils/getAccessTokenGlobal';
@@ -82,7 +82,7 @@ export function useOnrampCheckout({
         }
 
         const result = await createGuestCheckoutOrder({
-          paymentAmount: formData.amount,
+          ...amountField(formData.amountUnit, formData.amount),
           paymentCurrency: formData.paymentCurrency,
           purchaseCurrency: PURCHASE_ASSET,
           paymentMethod: paymentMethodValue,
@@ -137,7 +137,7 @@ export function useOnrampCheckout({
             purchaseCurrency: PURCHASE_ASSET,
             destinationNetwork: PURCHASE_NETWORK,
             destinationAddress: formData.address,
-            paymentAmount: formData.amount,
+            ...amountField(formData.amountUnit, formData.amount),
             paymentCurrency: formData.paymentCurrency,
             country,
             subdivision,

@@ -49,6 +49,7 @@ import { useSolanaTransfer } from '@/hooks/wallet/useSolanaTransfer';
 import { useTransferAlert } from '@/hooks/wallet/useTransferAlert';
 import { useUserOpStatusAlerts } from '@/hooks/wallet/useUserOpStatusAlerts';
 import { routes } from '@/utils/navigation/routes';
+import { usdcTopUp } from '@/utils/onchain/baseUsdc';
 import { formatAddressPreview, getNetworkLabel, isSolanaNetwork } from '@/utils/onchain/networkDisplay';
 import { getEnsResolutionCopy } from '@/utils/onchain/recipient';
 import { getInsufficientBalanceError, getSelfSendError } from '@/utils/onchain/sendValidation';
@@ -271,7 +272,7 @@ export default function TransferScreen() {
 
       const balanceError = getInsufficientBalanceError(selectedToken, amount);
       if (balanceError) {
-        showAlert('Not enough balance', balanceError, 'error');
+        showAlert('Not enough in your phone wallet', balanceError, 'error');
         return;
       }
 
@@ -336,6 +337,7 @@ export default function TransferScreen() {
     (!isAgentFundingFlow || !!recipientAddress);
   const noBaseUsdcForFunding = isAgentFundingFlow && !loadingFundingBalance && !selectedToken && !fundingBalanceError;
   const noBaseUsdcForSend = isDefaultSendFlow && !loadingFundingBalance && !selectedToken && !fundingBalanceError;
+  const addUsdcRoute = routes.addUsdc(usdcTopUp(amount, '0') ?? undefined);
   let alertConfirmText = 'Got it';
   if (explorerUrl) {
     alertConfirmText = isAgentFundingFlow || isDefaultSendFlow ? 'View payment' : 'View send';
@@ -388,7 +390,7 @@ export default function TransferScreen() {
             </Text>
             <Text style={styles.screenSubtitle}>
               {isAgentFundingFlow
-                ? 'Send Base USDC to this agent so it has a working balance for tools, services, and work.'
+                ? 'Send Base USDC to the agent\'s wallet so it can pay for tools, services, and work.'
                 : 'Paste an Ethereum address, use an ENS name, or choose a QR photo. You will review before you pay.'}
             </Text>
           </EaseView>
@@ -562,7 +564,7 @@ export default function TransferScreen() {
                   {loadingFundingBalance
                     ? 'Checking Base USDC...'
                     : tokenBalanceUnavailable
-                      ? 'We could not read this balance. Close this screen and try again.'
+                      ? 'We could not read how much your phone wallet holds. Close this screen and try again.'
                       : `Available: ${tokenBalance} ${selectedToken?.token?.symbol || ''}`}
                 </Text>
               </LiveValueFlash>
@@ -601,7 +603,7 @@ export default function TransferScreen() {
               <Text style={styles.noticeText}>
                 This agent accepts Base USDC. Add USDC, then come back to send it to {fundingTarget}.
               </Text>
-              <RegentPressable style={styles.inlinePrimaryButton} onPress={() => router.push(routes.wallet())}>
+              <RegentPressable style={styles.inlinePrimaryButton} onPress={() => router.push(addUsdcRoute)}>
                 <Text style={styles.inlinePrimaryButtonText}>Add USDC</Text>
               </RegentPressable>
             </EaseView>
@@ -618,7 +620,7 @@ export default function TransferScreen() {
               <Text style={styles.noticeText}>
                 Pay uses Base USDC. Add funds, then come back to pay.
               </Text>
-              <RegentPressable style={styles.inlinePrimaryButton} onPress={() => router.push(routes.wallet())}>
+              <RegentPressable style={styles.inlinePrimaryButton} onPress={() => router.push(addUsdcRoute)}>
                 <Text style={styles.inlinePrimaryButtonText}>Add USDC</Text>
               </RegentPressable>
             </EaseView>

@@ -158,6 +158,7 @@ export default function WalletScreen() {
             <StaggerItem order={3}>
               {regentsBalanceWallet ? (
                 <AddUsdc
+                  amountUnit="payment"
                   destinationAddress={regentsBalanceWallet}
                   destinationLabel="your Regents Balance"
                   onSwipeActiveChange={setIsSwipeActive}

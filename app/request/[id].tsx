@@ -17,6 +17,7 @@ import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { ProgressToast } from '@/components/ui/ProgressToast';
 import { RegentPressable } from '@/components/ui/RegentPressable';
 import { AddUsdcToPay } from '@/components/wallet/AddUsdcToPay';
+import { usdcTopUp } from '@/utils/onchain/baseUsdc';
 import { showUpdatedPaymentRequest } from '@/hooks/usePaymentRequests';
 import { useCoinbaseAlert } from '@/hooks/useCoinbaseAlert';
 import { useTheme, type Theme } from '@/theme/ThemeProvider';
@@ -384,9 +385,12 @@ export default function PaymentRequestScreen() {
         ) : (
           <View style={styles.actions}>
             {settledNote ? <Text style={styles.settledNote}>{settledNote}</Text> : null}
-            <Text style={styles.metaHint}>Requests are paid from your mobile wallet. Open Wallet first, then come back here.</Text>
-            <RegentPressable style={styles.primaryButton} onPress={() => router.push(routes.wallet())}>
-              <Text style={styles.primaryButtonText}>Open Wallet</Text>
+            <Text style={styles.metaHint}>Requests are paid from your phone wallet. Add USDC to it, then come back here.</Text>
+            <RegentPressable
+              style={styles.primaryButton}
+              onPress={() => router.push(routes.addUsdc(usdcTopUp(request.amount, '0') ?? undefined))}
+            >
+              <Text style={styles.primaryButtonText}>Add USDC</Text>
             </RegentPressable>
             {request.status === 'waiting' ? (
               <RegentPressable style={styles.secondaryButton} onPress={() => void decline()}>

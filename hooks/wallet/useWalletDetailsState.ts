@@ -116,7 +116,7 @@ export function useWalletDetailsState() {
         return;
       }
       console.warn('Failed to load wallet balances:', error);
-      setBalancesError('Unable to load your balances right now.');
+      setBalancesError('Unable to load your phone wallet right now.');
     } finally {
       if (isLatestRequest()) {
         setLoadingBalances(false);

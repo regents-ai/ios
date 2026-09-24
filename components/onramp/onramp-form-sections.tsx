@@ -7,9 +7,12 @@ import { LiveValueFlash } from '@/components/motion/LiveValueFlash';
 import { RegentPressable } from '@/components/ui/RegentPressable';
 import { useTheme, type Theme } from '@/theme/ThemeProvider';
 
+import { PURCHASE_ASSET, type AmountUnit } from './onramp-form-types';
+
 export function AmountQuoteSection({
   amount,
   amountError,
+  amountUnit,
   currentQuote,
   isApplePay,
   isGooglePay,
@@ -25,6 +28,7 @@ export function AmountQuoteSection({
 }: {
   amount: string;
   amountError: string | null;
+  amountUnit: AmountUnit;
   currentQuote: any;
   isApplePay: boolean;
   isGooglePay: boolean;
@@ -60,11 +64,20 @@ export function AmountQuoteSection({
             selectionColor={colors.accent}
             style={styles.amountInput}
           />
-          <RegentPressable haptic="selection" pressStyle="chip" style={styles.selectChip} onPress={onOpenPaymentCurrencyPicker}>
-            <Text style={styles.selectChipText}>{paymentCurrency}</Text>
-            <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
-          </RegentPressable>
+          {amountUnit === 'purchase' ? (
+            <View style={styles.selectChip}>
+              <Text style={styles.selectChipText}>{PURCHASE_ASSET}</Text>
+            </View>
+          ) : (
+            <RegentPressable haptic="selection" pressStyle="chip" style={styles.selectChip} onPress={onOpenPaymentCurrencyPicker}>
+              <Text style={styles.selectChipText}>{paymentCurrency}</Text>
+              <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
+            </RegentPressable>
+          )}
         </View>
+        {amountUnit === 'purchase' && isValidAmount ? (
+          <Text style={styles.helper}>Buy {amount} {PURCHASE_ASSET}. Coinbase shows the total with fees before you pay.</Text>
+        ) : null}
         {amountError ? (
           <Text style={styles.errorText}>{amountError}</Text>
         ) : (

@@ -157,7 +157,7 @@ export function WalletDetailsSection({ walletDetails }: { walletDetails: WalletD
             </View>
           </View>
           <Text style={styles.featuredBody}>
-            Use Base USDC to fund agents quickly, then keep other balances nearby when you need them.
+            Use Base USDC to fund agents quickly, then keep your other tokens nearby when you need them.
           </Text>
           <View style={styles.featuredStats}>
             <View style={styles.featuredStat}>
@@ -240,8 +240,8 @@ export function WalletDetailsSection({ walletDetails }: { walletDetails: WalletD
       <View style={styles.card}>
         <RegentPressable haptic="selection" pressStyle="card" style={styles.cardHeader} onPress={() => setBalancesExpanded((current) => !current)}>
           <View style={styles.cardHeaderCopy}>
-            <Text style={styles.cardTitle}>Balances</Text>
-            <Text style={styles.cardHint}>Base stays at the top, with pay and cash-out actions close to each balance.</Text>
+            <Text style={styles.cardTitle}>Holdings</Text>
+            <Text style={styles.cardHint}>Base stays at the top, with pay and cash-out actions close to each token.</Text>
           </View>
           <Ionicons name={balancesExpanded ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} />
         </RegentPressable>

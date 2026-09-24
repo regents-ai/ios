@@ -1,7 +1,6 @@
-type GuestCheckoutQuoteInput = {
+type GuestCheckoutQuoteInput = ({ paymentAmount: string } | { purchaseAmount: string }) & {
   paymentCurrency: string;
   purchaseCurrency: string;
-  paymentAmount: string;
   destinationNetwork: string;
   paymentMethod: string;
   partnerUserRef: string;

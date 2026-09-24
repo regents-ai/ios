@@ -57,7 +57,7 @@ export function useFundingChoices({
           return;
         }
         setSelectedToken(null);
-        setFundingBalanceError('We could not check your Base USDC balance. Try again in a moment.');
+        setFundingBalanceError('We could not check how much Base USDC your phone wallet holds. Try again in a moment.');
       })
       .finally(() => {
         if (active) {

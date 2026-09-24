@@ -244,12 +244,12 @@ export default function AgentDetailScreen() {
           ) : (
             <>
               <View style={styles.balanceBlock}>
-                <Text style={styles.metaLabel}>USDC balance</Text>
+                <Text style={styles.metaLabel}>USDC in its wallet</Text>
                 <LiveValueFlash value={`balance-${agent.usdcBalance ?? 'none'}`}>
                   <Text style={styles.balanceValue}>{formatUsdcBalance(agent.usdcBalance)}</Text>
                 </LiveValueFlash>
                 <Text style={styles.metaHint}>
-                  {agent.usdcBalance === null ? "Balances aren't available right now." : 'Base USDC held by the wallet of this agent.'}
+                  {agent.usdcBalance === null ? "Its USDC isn't available right now." : 'Base USDC held by the wallet of this agent.'}
                 </Text>
               </View>
               <View style={styles.heroActions}>

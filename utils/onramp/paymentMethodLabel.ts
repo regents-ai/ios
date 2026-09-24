@@ -4,8 +4,8 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
   APPLE_PAY: 'Apple Pay',
   GOOGLE_PAY: 'Google Pay',
   PAYPAL: 'PayPal',
-  FIAT_WALLET: 'Coinbase balance',
-  CRYPTO_ACCOUNT: 'Coinbase balance',
+  FIAT_WALLET: 'Coinbase account',
+  CRYPTO_ACCOUNT: 'Coinbase account',
 };
 
 /** Turns a payment method id such as ACH_BANK_ACCOUNT into words for the screen. */

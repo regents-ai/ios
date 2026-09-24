@@ -22,11 +22,12 @@ import {
   LocationSection,
   PaymentMethodSection,
 } from './onramp-form-sections';
-import type { OnrampFormData } from './onramp-form-types';
+import { PURCHASE_ASSET, type AmountUnit, type OnrampFormData } from './onramp-form-types';
 import { PickerSheet } from './picker-sheet';
 
 type OnrampFormProps = {
   amount: string;
+  amountUnit: AmountUnit;
   buyConfig?: any;
   currentQuote: any;
   destinationAddress: string;
@@ -46,6 +47,7 @@ type SheetKey = 'country' | 'currency' | 'payment' | 'subdivision' | null;
 
 export function OnrampForm({
   amount,
+  amountUnit,
   buyConfig,
   currentQuote,
   destinationAddress,
@@ -218,14 +220,15 @@ export function OnrampForm({
     if (!currencyLimits || !amount || !Number.isFinite(amountNumber)) {
       return null;
     }
+    const unit = amountUnit === 'purchase' ? PURCHASE_ASSET : currencyLimits.currency;
     if (amountNumber < currencyLimits.min) {
-      return `Minimum amount is ${currencyLimits.min.toLocaleString()} ${currencyLimits.currency}`;
+      return `Minimum amount is ${currencyLimits.min.toLocaleString()} ${unit}`;
     }
     if (amountNumber > currencyLimits.max) {
-      return `Maximum amount is ${currencyLimits.max.toLocaleString()} ${currencyLimits.currency}`;
+      return `Maximum amount is ${currencyLimits.max.toLocaleString()} ${unit}`;
     }
     return null;
-  }, [amount, amountNumber, currencyLimits]);
+  }, [amount, amountNumber, amountUnit, currencyLimits]);
 
   useEffect(() => {
     if (isGuestCheckout && paymentCurrency !== 'USD') {
@@ -287,6 +290,7 @@ export function OnrampForm({
       const quoteMethod = currencyLimits?.quotePaymentMethod || 'CARD';
       fetchQuote({
         amount,
+        amountUnit,
         destinationAddress,
         paymentCurrency,
         paymentMethod: paymentMethod === 'COINBASE_WIDGET' ? quoteMethod : paymentMethod,
@@ -295,7 +299,7 @@ export function OnrampForm({
     }, 500);
 
     return () => clearTimeout(timeoutId);
-  }, [amount, currencyLimits?.quotePaymentMethod, destinationAddress, fetchQuote, fetchUserLimitsData, paymentCurrency, paymentMethod]);
+  }, [amount, amountUnit, currencyLimits?.quotePaymentMethod, destinationAddress, fetchQuote, fetchUserLimitsData, paymentCurrency, paymentMethod]);
 
   const handleSwipeConfirm = useCallback(
     (reset: () => void) => {
@@ -306,13 +310,14 @@ export function OnrampForm({
 
       onSubmit({
         amount,
+        amountUnit,
         address: destinationAddress,
         paymentMethod,
         paymentCurrency,
         agreementAcceptedAt: new Date().toISOString(),
       });
     },
-    [amount, destinationAddress, isFormValidWithLimits, onSubmit, paymentCurrency, paymentMethod]
+    [amount, amountUnit, destinationAddress, isFormValidWithLimits, onSubmit, paymentCurrency, paymentMethod]
   );
 
   const notices = useMemo(() => {
@@ -411,6 +416,7 @@ export function OnrampForm({
       <AmountQuoteSection
         amount={amount}
         amountError={amountError}
+        amountUnit={amountUnit}
         currentQuote={currentQuote}
         isApplePay={isApplePay}
         isGooglePay={isGooglePay}

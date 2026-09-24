@@ -62,6 +62,8 @@ The Regents Balance is the USDC on Base in the wallet a person signs in with on 
 
 The phone wallet is separate. It pays agent requests and bids, and can send USDC to the Regents Balance at any time.
 
+Every "Add USDC" button for something the phone wallet pays (a request, a USDC auction bid, a send, an agent) opens the Add USDC screen, which fills the phone wallet. When the screen knows what is missing it fills that in. Its amount is the USDC to receive, with Coinbase's fees added on top, and it never goes below Coinbase's smallest purchase. Fund's Regents Balance form takes a dollar amount instead.
+
 ## My Agents
 
 The agents list is owned by the phone backend under `server/`. Pasting a wallet address lists an agent straight away. A pairing code (single-use, ten minutes) lets an agent that can run commands prove it holds its wallet key: it sends a signed request to `POST /agent/pair`, the backend checks the signature with the SIWA server for the `regents-mobile` audience and records the verified address as waiting. The pairing screen shows the exact instructions to paste to the agent, then asks the person to confirm the address the agent signed in with; only a confirmed address is listed as paired. If balances cannot be read, the list still loads and says so.

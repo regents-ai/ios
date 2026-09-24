@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { type Href, useRouter } from 'expo-router';
 
 import { useRegentsAuth } from '@/hooks/useRegentsAuth';
-import { PURCHASE_ASSET, PURCHASE_NETWORK, type OnrampFormData } from '@/components/onramp/onramp-form-types';
+import { PURCHASE_ASSET, PURCHASE_NETWORK, type OnrampFormData, type PurchaseRecord } from '@/components/onramp/onramp-form-types';
 import { routes } from '@/utils/navigation/routes';
 import {
   clearPendingForm,
@@ -49,12 +49,7 @@ export function useWalletOnrampSubmit({
   const router = useRouter();
   const { linkedPhone } = useRegentsAuth();
   const partnerUserRef = currentUser?.userId;
-  const [currentTransaction, setCurrentTransaction] = useState<{
-    amount: string;
-    paymentCurrency: string;
-    asset: string;
-    network: string;
-  } | null>(null);
+  const [currentTransaction, setCurrentTransaction] = useState<PurchaseRecord | null>(null);
   const [alertState, setAlertState] = useState<AlertState>({
     visible: false,
     title: '',
@@ -90,10 +85,10 @@ export function useWalletOnrampSubmit({
         confirmText: 'Email Support',
         onConfirmCallback: async () => {
           const debugInfo = createGuestCheckoutDebugInfo({
-            asset: currentTransaction?.asset,
-            network: currentTransaction?.network,
+            asset: PURCHASE_ASSET,
+            network: PURCHASE_NETWORK,
             amount: currentTransaction?.amount,
-            currency: currentTransaction?.paymentCurrency,
+            currency: currentTransaction?.amountUnit === 'purchase' ? PURCHASE_ASSET : currentTransaction?.paymentCurrency,
             errorMessage,
             debugMessage,
           });
@@ -110,12 +105,7 @@ export function useWalletOnrampSubmit({
       setIsProcessingPayment(true);
 
       try {
-        setCurrentTransaction({
-          amount: formData.amount,
-          paymentCurrency: formData.paymentCurrency || 'USD',
-          asset: PURCHASE_ASSET,
-          network: PURCHASE_NETWORK,
-        });
+        setCurrentTransaction(formData);
 
         if ((formData.paymentMethod || '').toUpperCase() === 'COINBASE_WIDGET') {
           const url = await createWidgetSession(formData);

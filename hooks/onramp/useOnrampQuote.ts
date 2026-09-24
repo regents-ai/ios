@@ -1,11 +1,12 @@
 import { useCallback, useRef, useState } from 'react';
 
-import { PURCHASE_ASSET, PURCHASE_NETWORK } from '@/components/onramp/onramp-form-types';
+import { amountField, PURCHASE_ASSET, PURCHASE_NETWORK, type AmountUnit } from '@/components/onramp/onramp-form-types';
 import { fetchBuyQuote } from '@/utils/fetchBuyQuote';
 import { createLatestRequestGate, type LatestRequestGate } from '@/utils/async/latestRequestGate';
 
 type QuoteRequest = {
   amount: string;
+  amountUnit: AmountUnit;
   destinationAddress: string;
   paymentCurrency: string;
   paymentMethod?: string;
@@ -43,7 +44,7 @@ export function useOnrampQuote({
         const userId = regentsUserId || 'unknown-user';
 
         const quote = await fetchBuyQuote({
-          paymentAmount: formData.amount,
+          ...amountField(formData.amountUnit, formData.amount),
           paymentCurrency: formData.paymentCurrency,
           purchaseCurrency: PURCHASE_ASSET,
           destinationNetwork: PURCHASE_NETWORK,

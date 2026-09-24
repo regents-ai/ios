@@ -42,6 +42,7 @@ import {
 } from '@/utils/autolaunch/bidApi';
 import { quoteAutolaunchBid } from '@/utils/autolaunch/client';
 import { autolaunchNetworkForChain, autolaunchWalletCalls } from '@/utils/onchain/autolaunchWalletAction';
+import { routes } from '@/utils/navigation/routes';
 import { isBaseUsdc } from '@/utils/onchain/baseUsdc';
 import {
   dismissToast,
@@ -373,14 +374,27 @@ export function AuctionBidding({ auction, showAlert, setToast, openOnAutolaunch 
     [auction.id, sendUserOperation, setToast, showAlert, smartAccount]
   );
 
+  const bidsInBaseUsdc = isBaseUsdc(auction.chain_id, auction.quote_token.address);
+
   if (!smartAccount) {
     return (
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Take part</Text>
-        <Text style={styles.sectionBody}>Bids are placed from your mobile wallet. Open Wallet first, then come back here.</Text>
-        <RegentPressable style={styles.primaryButton} onPress={() => router.push('/wallet')}>
-          <Text style={styles.primaryButtonText}>Open Wallet</Text>
-        </RegentPressable>
+        {bidsInBaseUsdc ? (
+          <>
+            <Text style={styles.sectionBody}>Bids are placed from your phone wallet. Add USDC to it, then come back here.</Text>
+            <RegentPressable style={styles.primaryButton} onPress={() => router.push(routes.addUsdc())}>
+              <Text style={styles.primaryButtonText}>Add USDC</Text>
+            </RegentPressable>
+          </>
+        ) : (
+          <>
+            <Text style={styles.sectionBody}>Bids are placed from your phone wallet. Open Wallet first, then come back here.</Text>
+            <RegentPressable style={styles.primaryButton} onPress={() => router.push('/wallet')}>
+              <Text style={styles.primaryButtonText}>Open Wallet</Text>
+            </RegentPressable>
+          </>
+        )}
       </View>
     );
   }
@@ -390,7 +404,6 @@ export function AuctionBidding({ auction, showAlert, setToast, openOnAutolaunch 
   const stateCopy = position ? phaseCopy(position) : null;
   const estimateCopy = estimateWords(quote, quoteState, tokenSymbol);
   const canReview = hasAmount && hasMaxPrice;
-  const bidsInBaseUsdc = isBaseUsdc(auction.chain_id, auction.quote_token.address);
   const addUsdcOffer =
     position && bidsInBaseUsdc && hasAmount ? (
       <AddUsdcToPay held={position.wallet_currency_balance} needed={amount.trim()} />

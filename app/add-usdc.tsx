@@ -1,6 +1,7 @@
 /**
  * Adds USDC on Base to the phone wallet, the wallet that pays agent requests
- * and bids. Opened from "Add USDC to pay this" with the missing amount filled in.
+ * and bids. The amount is the USDC to receive, with Coinbase's fees on top.
+ * Screens that know what is missing open it with that amount filled in.
  */
 
 import { AddUsdc } from '@/components/onramp/AddUsdc';
@@ -50,6 +51,7 @@ export default function AddUsdcScreen() {
           </Text>
           {phoneWallet ? (
             <AddUsdc
+              amountUnit="purchase"
               destinationAddress={phoneWallet}
               destinationLabel="your phone wallet"
               initialAmount={typeof params.amount === 'string' ? params.amount : ''}

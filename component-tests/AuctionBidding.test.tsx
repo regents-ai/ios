@@ -13,17 +13,19 @@ const mockGetPosition = jest.fn();
 const mockPrepareBid = jest.fn();
 const mockPrepareSettlement = jest.fn();
 const mockSendUserOperation = jest.fn();
+const mockPush = jest.fn();
+let mockSmartAccounts: string[] = [];
 let mockFocusCallback: (() => void) | null = null;
 
 jest.mock('expo-router', () => ({
   useFocusEffect: (callback: () => void) => {
     mockFocusCallback = callback;
   },
-  useRouter: () => ({ push: jest.fn() }),
+  useRouter: () => ({ push: mockPush }),
 }));
 
 jest.mock('@coinbase/cdp-hooks', () => ({
-  useCurrentUser: () => ({ currentUser: { evmSmartAccounts: [PHONE_WALLET] } }),
+  useCurrentUser: () => ({ currentUser: { evmSmartAccounts: mockSmartAccounts } }),
   useSendUserOperation: () => ({
     sendUserOperation: (...args: unknown[]) => mockSendUserOperation(...args),
     status: 'idle',
@@ -119,6 +121,7 @@ async function fillAndReview(screen: Awaited<ReturnType<typeof renderBidding>>) 
 describe('Auction bidding and the live treasury check', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockSmartAccounts = [PHONE_WALLET];
     mockFocusCallback = null;
     mockGetPosition.mockResolvedValue(position());
     mockPrepareBid.mockResolvedValue({ chain_id: 8453, calls: [] });
@@ -220,6 +223,15 @@ describe('Auction bidding and the live treasury check', () => {
     await waitFor(() => expect(usdcScreen.getByLabelText('Bid amount')).toBeTruthy());
     fireEvent.changeText(usdcScreen.getByLabelText('Bid amount'), '10');
     expect(usdcScreen.queryByText('Add USDC to pay this')).toBeNull();
+  });
+
+  it('sends a person without a phone wallet yet to add USDC for a USDC auction', async () => {
+    mockSmartAccounts = [];
+
+    const screen = await renderBidding(usdcAuction);
+
+    fireEvent.press(screen.getByText('Add USDC'));
+    expect(mockPush).toHaveBeenCalledWith('/add-usdc');
   });
 
   it('collects a bid while the check does not pass, without asking for it', async () => {

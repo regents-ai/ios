@@ -5,12 +5,19 @@ const IDEMPOTENCY_FIELDS = [
   'destinationNetwork',
   'destinationAddress',
   'paymentAmount',
+  'purchaseAmount',
   'paymentCurrency',
   'purchaseCurrency',
   'paymentMethod',
   'isQuote',
   'redirectUrl',
 ] as const;
+
+/** Amount segments carry their kind, so paying $25 and buying 25 USDC never share a key. */
+const SEGMENT_LABELS: Partial<Record<typeof IDEMPOTENCY_FIELDS[number], string>> = {
+  paymentAmount: 'pay',
+  purchaseAmount: 'buy',
+};
 
 function readSegment(value: unknown) {
   if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') {
@@ -32,7 +39,11 @@ export function buildOnrampIdempotencyKey(
   }
 
   const segments = IDEMPOTENCY_FIELDS
-    .map((field) => readSegment(payload[field]))
+    .map((field) => {
+      const segment = readSegment(payload[field]);
+      const label = SEGMENT_LABELS[field];
+      return segment && label ? `${label}-${segment}` : segment;
+    })
     .filter((segment): segment is string => !!segment);
 
   return ['regents-mobile', 'onramp', kind, operationSegment, ...segments].join(':');

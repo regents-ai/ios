@@ -56,7 +56,7 @@ test('agent detail starts the fund-agent send flow without a server prepare step
   assert.match(agentDetail, /routes\.agentPairing\(/);
 });
 
-test('agent funding mode prefers Base USDC and points to the Fund tab when short', () => {
+test('agent funding mode prefers Base USDC and points to Add USDC for the phone wallet when short', () => {
   const send = read('app/wallet/send.tsx');
   const fundingChoicesHook = read('hooks/wallet/useFundingChoices.ts');
   const userOpAlertsHook = read('hooks/wallet/useUserOpStatusAlerts.ts');
@@ -69,7 +69,8 @@ test('agent funding mode prefers Base USDC and points to the Fund tab when short
   assert.match(fundingChoicesHook, /choices\.find\(isBaseUsdcBalance\)/);
   assert.match(fundingChoicesHook, /setNetwork\('base'\)/);
   assert.match(send, /Add USDC first/);
-  assert.match(send, /router\.push\(routes\.wallet\(\)\)/);
+  assert.match(send, /const addUsdcRoute = routes\.addUsdc\(usdcTopUp\(amount, '0'\) \?\? undefined\);/);
+  assert.match(send, /router\.push\(addUsdcRoute\)/);
   assert.match(send, /noBaseUsdcForSend/);
   assert.match(send, /Review payment/);
   assert.match(confirmationModal, /Review payment/);
