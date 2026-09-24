@@ -6,19 +6,26 @@
  * treasury Safe still shows three owners, a threshold of two, no modules, no
  * guard and the admitted fallback handler.
  *
- * The website runs that check in its own backend; nothing the app can reach
- * runs it today. Until a website endpoint answers for the live check, the app
- * does not offer bidding at all, and this function says so with the reason.
- * The auction's own `treasury_security` view is not that check: it is a
- * recorded report, not a fresh read of the Safe.
+ * The website runs that check and answers it at
+ * GET /api/v1/auctions/:id/treasury-check. Only a successful JSON answer with
+ * `ok: true` passes. A JSON answer with a `reason` fails with that reason;
+ * anything else (no answer, an error status, a reply that is not JSON)
+ * fails as `check_unavailable`. Every call asks the website again: a pass is
+ * never kept for a later press.
  */
 
-import type { AutolaunchBaseAuction } from '@/types/autolaunch';
+import { getAutolaunchTreasuryCheck } from '@/utils/autolaunch/client';
 
-export type AutolaunchTreasuryCheck =
-  | { ok: true }
-  | { ok: false; reason: 'live_check_unavailable' };
+export type AutolaunchTreasuryCheck = { ok: true } | { ok: false; reason: string };
 
-export function checkAutolaunchTreasury(_auction: AutolaunchBaseAuction): AutolaunchTreasuryCheck {
-  return { ok: false, reason: 'live_check_unavailable' };
+export async function checkAutolaunchTreasury(auctionId: string): Promise<AutolaunchTreasuryCheck> {
+  try {
+    const answer = await getAutolaunchTreasuryCheck(auctionId);
+    if (answer?.ok === true) {
+      return { ok: true };
+    }
+    return { ok: false, reason: typeof answer?.reason === 'string' ? answer.reason : 'check_unavailable' };
+  } catch {
+    return { ok: false, reason: 'check_unavailable' };
+  }
 }

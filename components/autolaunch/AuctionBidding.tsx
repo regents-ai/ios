@@ -3,15 +3,19 @@
  * with its review step, and the wallet's bids with what collecting each
  * would do right now.
  *
- * The bid form only appears once the launch's treasury passes the live
- * check the Autolaunch website runs at every bid press; until the app can
- * run that check, a notice points to the website instead. Collecting a bid
- * needs no treasury check, on the website or here.
+ * Bidding follows the live treasury check the Autolaunch website runs at
+ * every bid press. The screen asks the website when it opens (to decide
+ * whether to show the bid form), again when the bidder opens the review, and
+ * again when they press Place bid, right before the wallet is asked to sign.
+ * If any of those answers is not a pass, the bid form and review give way to
+ * a notice pointing to the website, and that press does not reach the
+ * wallet. This is the one check that holds a bid back, by the founder's
+ * decision. Collecting a bid needs no treasury check, on the website or here.
  *
- * Only invalid input or an auction state that makes the call impossible
- * holds a button back, and the screen says why. Every other press reaches
- * the wallet; the auction decides the outcome, including a repeat press
- * while an earlier one is still pending. After a send, the screen follows
+ * Otherwise only invalid input or an auction state that makes the call
+ * impossible holds a button back, and the screen says why. Every other press
+ * reaches the wallet; the auction decides the outcome, including a repeat
+ * press while an earlier one is still pending. After a send, the screen follows
  * the wallet's own report of the operation and says whether it went
  * through; nothing about a send is stored.
  */
@@ -27,6 +31,7 @@ import type {
   AutolaunchBidQuote,
 } from '@/types/autolaunch';
 import { describeApiError } from '@/utils/apiError';
+import { createLatestRequestGate } from '@/utils/async/latestRequestGate';
 import { compactDecimal } from '@/utils/autolaunch/auctionDisplay';
 import { checkAutolaunchTreasury } from '@/utils/autolaunch/treasuryCheck';
 import {
@@ -61,6 +66,9 @@ type Props = {
 
 /** What the last send was for, so the wallet's report of it reads as a bid or a collection. */
 type SentOperation = { hash: string; kind: 'bid' | 'collect' };
+
+/** What the latest treasury check said, which decides whether bidding is offered. */
+type TreasuryState = 'checking' | 'passed' | 'failed';
 
 const SEND_COPY: Record<SentOperation['kind'], { waiting: string; done: string; failed: string }> = {
   bid: { waiting: 'Placing your bid...', done: 'Bid placed', failed: "Your bid didn't go through" },
@@ -172,13 +180,14 @@ export function AuctionBidding({ auction, showAlert, setToast, openOnAutolaunch 
   const [reviewing, setReviewing] = useState(false);
   const [quote, setQuote] = useState<AutolaunchBidQuote | null>(null);
   const [quoteState, setQuoteState] = useState<'idle' | 'loading' | 'unavailable'>('idle');
+  const [treasury, setTreasury] = useState<TreasuryState>('checking');
+  const treasuryGate = useMemo(() => createLatestRequestGate(), []);
   // The last operation this screen sent, for the feedback that follows it.
   const sentRef = useRef<SentOperation | null>(null);
   const lastHandledUserOpRef = useRef<string | null>(null);
 
   const currencySymbol = auction.quote_token.symbol;
   const tokenSymbol = auction.token_symbol;
-  const treasury = checkAutolaunchTreasury(auction);
 
   const loadPosition = useCallback(async () => {
     if (!smartAccount) {
@@ -197,10 +206,25 @@ export function AuctionBidding({ auction, showAlert, setToast, openOnAutolaunch 
     }
   }, [auction.id, smartAccount]);
 
+  // Asks the website afresh every time. The screen follows the newest answer;
+  // the caller acts on its own answer.
+  const runTreasuryCheck = useCallback(async () => {
+    const request = treasuryGate.next();
+    const { ok } = await checkAutolaunchTreasury(auction.id);
+    if (treasuryGate.isLatest(request)) {
+      setTreasury(ok ? 'passed' : 'failed');
+      if (!ok) {
+        setReviewing(false);
+      }
+    }
+    return ok;
+  }, [auction.id, treasuryGate]);
+
   useFocusEffect(
     useCallback(() => {
       void loadPosition();
-    }, [loadPosition])
+      void runTreasuryCheck();
+    }, [loadPosition, runTreasuryCheck])
   );
 
   // The wallet reports on the last operation it sent; each report is acted
@@ -268,6 +292,15 @@ export function AuctionBidding({ auction, showAlert, setToast, openOnAutolaunch 
     };
   }, [amount, auction.id, hasAmount, quoteMaxPrice]);
 
+  const openReview = useCallback(async () => {
+    setToast(() => showProgressToast('Checking this auction...'));
+    const ok = await runTreasuryCheck();
+    setToast(() => dismissToast());
+    if (ok) {
+      setReviewing(true);
+    }
+  }, [runTreasuryCheck, setToast]);
+
   const placeBid = useCallback(async () => {
     if (!smartAccount) {
       return;
@@ -281,6 +314,11 @@ export function AuctionBidding({ auction, showAlert, setToast, openOnAutolaunch 
         amount: amount.trim(),
         maxPrice: maxPrice.trim(),
       });
+
+      if (!(await runTreasuryCheck())) {
+        setToast(() => dismissToast());
+        return;
+      }
 
       const { userOperationHash } = await sendUserOperation({
         evmSmartAccount: smartAccount,
@@ -299,7 +337,7 @@ export function AuctionBidding({ auction, showAlert, setToast, openOnAutolaunch 
       const failure = describeApiError(error);
       showAlert({ title: failure.title, message: failure.message, type: 'error' });
     }
-  }, [amount, auction.id, maxPrice, sendUserOperation, setToast, showAlert, smartAccount]);
+  }, [amount, auction.id, maxPrice, runTreasuryCheck, sendUserOperation, setToast, showAlert, smartAccount]);
 
   const collectBid = useCallback(
     async (bid: AutolaunchBidPosition) => {
@@ -363,11 +401,14 @@ export function AuctionBidding({ auction, showAlert, setToast, openOnAutolaunch 
 
         {position && !biddingOpen ? <Text style={styles.sectionBody}>{stateCopy ?? 'Bidding is closed.'}</Text> : null}
 
-        {position && biddingOpen && !treasury.ok ? (
+        {position && biddingOpen && treasury === 'checking' ? (
+          <Text style={styles.sectionBody}>Checking whether you can bid from the app...</Text>
+        ) : null}
+
+        {position && biddingOpen && treasury === 'failed' ? (
           <>
             <Text style={styles.sectionBody}>
-              Bidding in the app opens once the live treasury check is available here. You can bid on the Autolaunch
-              website now.
+              Bidding from the app isn&apos;t available for this auction right now. You can bid on autolaunch.sh.
             </Text>
             <RegentPressable
               accessibilityHint="Opens in your browser"
@@ -381,7 +422,7 @@ export function AuctionBidding({ auction, showAlert, setToast, openOnAutolaunch 
           </>
         ) : null}
 
-        {position && biddingOpen && treasury.ok && !reviewing ? (
+        {position && biddingOpen && treasury === 'passed' && !reviewing ? (
           <>
             <View style={styles.fieldHeader}>
               <Text style={styles.fieldLabel}>Amount{currencySymbol ? ` in ${currencySymbol}` : ''}</Text>
@@ -423,7 +464,7 @@ export function AuctionBidding({ auction, showAlert, setToast, openOnAutolaunch 
             <RegentPressable
               style={[styles.primaryButton, !canReview && styles.disabledButton]}
               disabled={!canReview}
-              onPress={() => setReviewing(true)}
+              onPress={() => void openReview()}
             >
               <Text style={styles.primaryButtonText}>Review bid</Text>
             </RegentPressable>
@@ -431,7 +472,7 @@ export function AuctionBidding({ auction, showAlert, setToast, openOnAutolaunch 
           </>
         ) : null}
 
-        {position && biddingOpen && treasury.ok && reviewing ? (
+        {position && biddingOpen && treasury === 'passed' && reviewing ? (
           <>
             <View style={styles.reviewRow}>
               <Text style={styles.reviewLabel}>You bid</Text>
