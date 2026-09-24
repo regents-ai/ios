@@ -13,7 +13,8 @@ import { ApiError, apiFailureKindForStatus } from '@/utils/apiError';
 type AutolaunchPath =
   | '/api/v1/auctions'
   | `/api/v1/auctions/${string}`
-  | `/api/v1/auctions/${string}/bid-quote`;
+  | `/api/v1/auctions/${string}/bid-quote`
+  | `/api/v1/auctions/${string}/treasury-check`;
 
 async function autolaunchFetch<T>(path: AutolaunchPath, params?: Record<string, string>): Promise<T> {
   const response = await fetch(`${AUTOLAUNCH_URL}${path}`, {
@@ -71,4 +72,15 @@ export async function quoteAutolaunchBid(input: {
     { amount: input.amount, max_price: input.maxPrice }
   );
   return body.data;
+}
+
+/**
+ * The site's live treasury check for one Base auction, the same check it runs
+ * at every bid press. The answer is read as-is; utils/autolaunch/treasuryCheck.ts
+ * decides what it means.
+ */
+export async function getAutolaunchTreasuryCheck(auctionId: string): Promise<{ ok?: unknown; reason?: unknown } | null> {
+  return autolaunchFetch<{ ok?: unknown; reason?: unknown } | null>(
+    `/api/v1/auctions/${encodeURIComponent(auctionId)}/treasury-check`
+  );
 }
