@@ -201,3 +201,35 @@ test('the wallet index follows confirmed pairings and removals', async () => {
   assert.equal((await request({ method: 'DELETE', url: `/mobile/agents/${friendAgent.id}`, userId: 'friend' })).status, 200);
   assert.deepEqual(indexed(), []);
 });
+
+// Invariant: a code that was never issued is refused, and when two agents
+// race for one code exactly one wins; the person is only ever asked about
+// the winner.
+test('two agents racing for one code: one wins, the other is told it was used', async () => {
+  const otherWallet = '0x1111111111111111111111111111111111111111';
+  const { request } = createHarness({
+    verifier: async (signed) => ({ kind: 'verified', walletAddress: signed.headers['x-agent-wallet-address']! }),
+  });
+  const redeem = (code: string, walletAddress: string) =>
+    request({
+      method: 'POST',
+      url: '/agent/pair',
+      rawBody: JSON.stringify({ code }),
+      headers: { ...PROOF_HEADERS, 'x-agent-wallet-address': walletAddress },
+    });
+
+  const neverIssued = await redeem('ZZZZ-9999', AGENT_WALLET);
+  assert.deepEqual([neverIssued.status, neverIssued.body.error.code], [409, 'PairingCodeExpired']);
+
+  const issued = await request({ method: 'POST', url: '/mobile/agents/pairing-codes', userId: 'owner', body: { name: 'Muse', kind: 'muse' } });
+  const code: string = issued.body.code;
+  const answers = await Promise.all([redeem(code, AGENT_WALLET), redeem(code, otherWallet)]);
+  assert.deepEqual(answers.map((answer) => answer.status).sort(), [200, 409]);
+  const winner = answers[0]!.status === 200 ? AGENT_WALLET : otherWallet;
+  assert.equal(answers.find((answer) => answer.status === 409)!.body.error.code, 'PairingCodeUsed');
+
+  const status = await request({ method: 'GET', url: `/mobile/agents/pairing-codes/${code}`, userId: 'owner' });
+  assert.deepEqual([status.body.status, status.body.walletAddress], ['needs_confirmation', winner]);
+  const confirmed = await request({ method: 'POST', url: `/mobile/agents/pairing-codes/${code}/confirm`, userId: 'owner' });
+  assert.equal(confirmed.body.agent.walletAddress, winner);
+});

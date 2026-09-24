@@ -67,14 +67,14 @@ function hasWellFormedProofHeaders(req: Request, required: readonly string[]) {
 async function verifiedWallet(
   req: Request,
   res: Response,
-  body: string,
+  body: string | null,
   input: { verify: SignedAgentRequestVerifier; unavailableMessage: string },
 ): Promise<string | null> {
   const verification = await input.verify({
     method: req.method,
     path: req.originalUrl || req.url,
     headers: forwardedHeaders(req),
-    body,
+    ...(body === null ? {} : { body }),
   });
 
   if (verification.kind === 'missing_config') {
@@ -141,7 +141,11 @@ export async function readSignedAgentJson<T>(
   return walletAddress === null ? null : { walletAddress, body: parsed.data };
 }
 
-/** A signed request without a body. Returns the verified wallet, or null once answered. */
+/**
+ * A signed request without a body, verified with no body: the SIWA server
+ * treats any body, even an empty one, as needing a content digest. Returns
+ * the verified wallet, or null once answered.
+ */
 export async function readSignedAgentRead(
   req: Request,
   res: Response,
@@ -151,5 +155,5 @@ export async function readSignedAgentRead(
     sendError(res, 400, 'BadRequest', PROOF_HEADERS_MESSAGE);
     return null;
   }
-  return verifiedWallet(req, res, rawBody(req), input);
+  return verifiedWallet(req, res, null, input);
 }
