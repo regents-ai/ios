@@ -176,7 +176,7 @@ export default function TransferScreen() {
     showAlert,
   });
 
-  const { loadingFundingBalance, fundingBalanceError } = useFundingChoices({
+  const { loadingFundingBalance, fundingBalanceError, retryFundingBalance } = useFundingChoices({
     isAgentFundingFlow,
     isDefaultSendFlow,
     hasTokenParam: !!params.token,
@@ -413,7 +413,7 @@ export default function TransferScreen() {
                 style={[styles.input, styles.recipientInput, { flex: 1 }, addressError && styles.inputError]}
                 value={recipientInput}
                 onChangeText={handleAddressChange}
-                placeholder={isSolanaNetwork(network) ? 'Solana address' : 'Ethereum address or ENS name'}
+                placeholder={isSolanaNetwork(network) ? 'Solana address' : 'Address or ENS'}
                 placeholderTextColor={colors.textMuted}
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -543,15 +543,17 @@ export default function TransferScreen() {
               </RegentPressable>
             </View>
 
-            <LiveValueFlash value={`available-${tokenBalance ?? 'unavailable'}-${selectedToken?.token?.symbol || ''}`} style={styles.availableFlash}>
-              <Text style={[styles.helper, tokenBalanceUnavailable && styles.errorText]}>
-                {loadingFundingBalance
-                  ? 'Checking Base USDC...'
-                  : tokenBalanceUnavailable
-                    ? 'We could not read this balance. Close this screen and try again.'
-                    : `Available: ${tokenBalance} ${selectedToken?.token?.symbol || ''}`}
-              </Text>
-            </LiveValueFlash>
+            {loadingFundingBalance || selectedToken ? (
+              <LiveValueFlash value={`available-${tokenBalance ?? 'unavailable'}-${selectedToken?.token?.symbol || ''}`} style={styles.availableFlash}>
+                <Text style={[styles.helper, tokenBalanceUnavailable && styles.errorText]}>
+                  {loadingFundingBalance
+                    ? 'Checking Base USDC...'
+                    : tokenBalanceUnavailable
+                      ? 'We could not read this balance. Close this screen and try again.'
+                      : `Available: ${tokenBalance} ${selectedToken?.token?.symbol || ''}`}
+                </Text>
+              </LiveValueFlash>
+            ) : null}
 
             {needsGasFee && (
               <Text style={[styles.helper, styles.warningText]}>
@@ -569,6 +571,9 @@ export default function TransferScreen() {
             >
               <Text style={styles.noticeTitle}>Base USDC is not ready</Text>
               <Text style={styles.noticeText}>{fundingBalanceError}</Text>
+              <RegentPressable style={styles.inlinePrimaryButton} onPress={retryFundingBalance}>
+                <Text style={styles.inlinePrimaryButtonText}>Try again</Text>
+              </RegentPressable>
             </EaseView>
           ) : null}
 
@@ -644,21 +649,25 @@ export default function TransferScreen() {
               <Text style={styles.detailLabel}>{isAgentFundingFlow ? 'Funds' : 'Asset'}</Text>
               <Text style={styles.detailValue}>{selectedToken?.token?.symbol || 'Choose from your wallet'}</Text>
             </View>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Available</Text>
-              <LiveValueFlash value={`from-wallet-available-${tokenBalance ?? 'unavailable'}-${selectedToken?.token?.symbol || ''}`} style={styles.detailValueFlash}>
-                <Text style={styles.detailValue}>
-                  {tokenBalance ?? 'Unavailable'} {selectedToken?.token?.symbol || ''}
-                </Text>
-              </LiveValueFlash>
-            </View>
-            {isPaymasterSupported ? (
-              <Text style={styles.helper}>No network fee will be charged for this {isDefaultSendFlow ? 'payment' : 'send'}.</Text>
-            ) : (
-              <Text style={[styles.helper, styles.warningText]}>
-                Network fees in {isNativeToken ? selectedToken?.token?.symbol : 'ETH'} will apply.
-              </Text>
-            )}
+            {selectedToken ? (
+              <>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Available</Text>
+                  <LiveValueFlash value={`from-wallet-available-${tokenBalance ?? 'unavailable'}-${selectedToken.token?.symbol || ''}`} style={styles.detailValueFlash}>
+                    <Text style={styles.detailValue}>
+                      {tokenBalance ?? 'Unavailable'} {selectedToken.token?.symbol || ''}
+                    </Text>
+                  </LiveValueFlash>
+                </View>
+                {isPaymasterSupported ? (
+                  <Text style={styles.helper}>No network fee will be charged for this {isDefaultSendFlow ? 'payment' : 'send'}.</Text>
+                ) : (
+                  <Text style={[styles.helper, styles.warningText]}>
+                    Network fees in {isNativeToken ? selectedToken.token?.symbol : 'ETH'} will apply.
+                  </Text>
+                )}
+              </>
+            ) : null}
           </EaseView>
 
           {selectedToken?.token?.mintAddress && selectedToken?.token?.symbol?.toUpperCase() !== 'SOL' && (

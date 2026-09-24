@@ -25,7 +25,7 @@ import { describeApiError } from '@/utils/apiError';
 import { routes } from '@/utils/navigation/routes';
 import { getEvmExplorerUrl } from '@/utils/onchain/networkDisplay';
 import { paymentRequestCall, paymentRequestNetworkForChain } from '@/utils/onchain/paymentRequestWalletAction';
-import { paymentRequestStatusLabel, paysAgentWallet } from '@/utils/paymentRequests/display';
+import { paymentRequestStatusLabel, paysAgentWallet, settledRequestNote } from '@/utils/paymentRequests/display';
 import {
   dismissToast,
   resolveToastSuccess,
@@ -59,6 +59,7 @@ export default function PaymentRequestScreen() {
 
   const [request, setRequest] = useState<PaymentRequest | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadFailure, setLoadFailure] = useState<{ title: string; message: string } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [toast, setToast] = useState<ProgressToastState | null>(null);
   // A payment the wallet reported as sent that Base has not yet confirmed for this request.
@@ -84,9 +85,15 @@ export default function PaymentRequestScreen() {
         setRefreshing(true);
       }
       showRequest(await regentApi.getPaymentRequest(requestId));
+      setLoadFailure(null);
     } catch (error) {
-      setRequest(null);
-      showAlert({ title: 'This request is unavailable right now', message: describeApiError(error).message, type: 'error' });
+      // With a request on screen it stays shown and the failed refresh says so;
+      // without one, the screen shows the failure and a way to try again.
+      const failure = describeApiError(error);
+      setLoadFailure(failure);
+      if (refresh) {
+        showAlert({ title: failure.title, message: failure.message, type: 'error' });
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -232,17 +239,31 @@ export default function PaymentRequestScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.centerState}>
-          <Text style={styles.emptyTitle}>This request is not in your list</Text>
-          <RegentPressable style={styles.primaryButton} onPress={() => router.back()}>
-            <Text style={styles.primaryButtonText}>Back</Text>
-          </RegentPressable>
+          <Text style={styles.emptyTitle}>{loadFailure ? loadFailure.title : 'This request is not in your list'}</Text>
+          {loadFailure ? <Text style={styles.emptyText}>{loadFailure.message}</Text> : null}
+          <View style={styles.centerActions}>
+            {loadFailure ? (
+              <RegentPressable
+                style={styles.primaryButton}
+                onPress={() => {
+                  setLoading(true);
+                  void loadRequest();
+                }}
+              >
+                <Text style={styles.primaryButtonText}>Try again</Text>
+              </RegentPressable>
+            ) : null}
+            <RegentPressable style={styles.secondaryButton} onPress={() => router.back()}>
+              <Text style={styles.secondaryButtonText}>Back</Text>
+            </RegentPressable>
+          </View>
         </View>
-        <CoinbaseAlert {...alertProps} />
       </SafeAreaView>
     );
   }
 
   const toAgent = paysAgentWallet(request);
+  const settledNote = settledRequestNote(request);
   const paidTxHash = request.status === 'paid' ? request.txHash : null;
 
   return (
@@ -284,7 +305,12 @@ export default function PaymentRequestScreen() {
             ) : request.status === 'waiting' ? (
               <StatusPill label={paymentRequestStatusLabel(request.status)} color={colors.accent} backgroundColor={colors.accentWash} showDot />
             ) : (
-              <StatusPill label={paymentRequestStatusLabel(request.status)} color={colors.textMuted} backgroundColor={colors.surface} />
+              <StatusPill
+                label={paymentRequestStatusLabel(request.status)}
+                color={colors.textMuted}
+                backgroundColor={colors.surface}
+                borderColor={colors.hairlineStrong}
+              />
             )}
           </View>
 
@@ -319,6 +345,7 @@ export default function PaymentRequestScreen() {
 
         {smartAccount ? (
           <View style={styles.actions}>
+            {settledNote ? <Text style={styles.settledNote}>{settledNote}</Text> : null}
             <RegentPressable style={styles.primaryButton} onPress={() => void pay()}>
               <Ionicons name="paper-plane-outline" size={16} color={colors.onAccent} />
               <Text style={styles.primaryButtonText}>Pay {request.amount} USDC</Text>
@@ -337,6 +364,7 @@ export default function PaymentRequestScreen() {
           </View>
         ) : (
           <View style={styles.actions}>
+            {settledNote ? <Text style={styles.settledNote}>{settledNote}</Text> : null}
             <Text style={styles.metaHint}>Requests are paid from your mobile wallet. Open Wallet first, then come back here.</Text>
             <RegentPressable style={styles.primaryButton} onPress={() => router.push(routes.wallet())}>
               <Text style={styles.primaryButtonText}>Open Wallet</Text>
@@ -412,6 +440,24 @@ function makeStyles({ colors, fonts }: Theme) {
       fontSize: 22,
       textAlign: 'center',
       fontFamily: fonts.title,
+    },
+    emptyText: {
+      color: colors.textMuted,
+      fontSize: 14,
+      lineHeight: 20,
+      textAlign: 'center',
+      fontFamily: fonts.ui,
+    },
+    centerActions: {
+      alignSelf: 'stretch',
+      gap: 10,
+      marginTop: 4,
+    },
+    settledNote: {
+      color: colors.text,
+      fontSize: 14,
+      lineHeight: 20,
+      fontFamily: fonts.ui,
     },
     card: {
       backgroundColor: colors.surfaceElevated,

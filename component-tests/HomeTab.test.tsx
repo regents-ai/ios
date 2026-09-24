@@ -1,4 +1,4 @@
-import { act, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, waitFor } from '@testing-library/react-native';
 import React from 'react';
 
 import HomeTab from '@/app/(tabs)/index';
@@ -120,6 +120,25 @@ describe('Home tab', () => {
     expect(screen.getByText('12.50 USDC in total')).toBeTruthy();
     expect(screen.getByText("Auctions aren't available right now.")).toBeTruthy();
     expect(screen.getByText('Bio climb · Sep 22, 2026')).toBeTruthy();
+  });
+
+  it('offers Try again on a card that did not load and reads only that card again', async () => {
+    const screen = await renderHome();
+
+    await waitFor(() => expect(screen.getByText("Auctions aren't available right now.")).toBeTruthy());
+    // Website wallet and Autolaunch failed, in page order.
+    const retries = screen.getAllByText('Try again');
+    expect(retries).toHaveLength(2);
+
+    mockListAuctions.mockResolvedValue([{ state: 'active' }]);
+    await act(async () => {
+      fireEvent.press(retries[1]);
+    });
+
+    await waitFor(() => expect(screen.getByText('1 auction is open now.')).toBeTruthy());
+    expect(mockListAuctions).toHaveBeenCalledTimes(2);
+    expect(mockListAgents).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByText('Try again')).toHaveLength(1);
   });
 
   it('says plainly when no website wallet is linked, without reading one', async () => {

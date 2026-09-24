@@ -89,7 +89,7 @@ test('pay flow accepts Ethereum addresses, ENS names, paste, and QR photos', () 
 
   assert.match(routes, /flow\?: 'agent-funding' \| 'send'/);
   assert.match(send, /const payTitle = isDefaultSendFlow \? 'Pay' : 'Send'/);
-  assert.match(send, /placeholder=\{isSolanaNetwork\(network\) \? 'Solana address' : 'Ethereum address or ENS name'\}/);
+  assert.match(send, /placeholder=\{isSolanaNetwork\(network\) \? 'Solana address' : 'Address or ENS'\}/);
   assert.match(recipientHook, /getEthereumRecipientAddress/);
   assert.match(recipientUtils, /isAddress\(candidate\) \? getAddress\(candidate\)/);
   assert.match(recipientHook, /resolveEnsRecipient/);

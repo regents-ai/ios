@@ -5,6 +5,7 @@ import type { PaymentRequest } from '../types/regents';
 import {
   paymentRequestStatusLabel,
   paysAgentWallet,
+  settledRequestNote,
   waitingRequestCount,
   withUpdatedRequest,
 } from '../utils/paymentRequests/display';
@@ -54,4 +55,13 @@ test('a paid or declined request replaces its copy in the list', () => {
   assert.deepEqual(updated.map((item) => item.status), ['waiting', 'paid']);
   assert.deepEqual(withUpdatedRequest(list, request({ id: 'z', status: 'declined' })), list);
   assert.equal(paymentRequestStatusLabel('declined'), 'Declined');
+});
+
+test('a settled request says what Pay does next to the button', () => {
+  assert.equal(settledRequestNote(request({ status: 'waiting' })), null);
+  assert.equal(
+    settledRequestNote(request({ status: 'paid' })),
+    'This request is already paid. Paying again sends another 5.00 USDC.',
+  );
+  assert.equal(settledRequestNote(request({ status: 'declined' })), 'You declined this request. You can still pay it.');
 });

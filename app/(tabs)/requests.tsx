@@ -1,4 +1,5 @@
 import { StatusPill } from '@/components/agent-surfaces/StatusPill';
+import { useDialContentClearance } from '@/components/dial/dialLayout';
 import { RegentPressable } from '@/components/ui/RegentPressable';
 import { refreshPaymentRequests, usePaymentRequests } from '@/hooks/usePaymentRequests';
 import { useTheme, type Theme } from '@/theme/ThemeProvider';
@@ -10,12 +11,14 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function RequestsTab() {
   const router = useRouter();
   const theme = useTheme();
   const { colors } = theme;
   const styles = useMemo(() => makeStyles(theme), [theme]);
+  const dialClearance = useDialContentClearance();
   const { requests, loaded, error } = usePaymentRequests();
   const [refreshing, setRefreshing] = useState(false);
 
@@ -39,7 +42,9 @@ export default function RequestsTab() {
       case 'paid':
         return <StatusPill label={label} color={colors.success} backgroundColor={colors.successWash} />;
       case 'declined':
-        return <StatusPill label={label} color={colors.textMuted} backgroundColor={colors.surface} />;
+        return (
+          <StatusPill label={label} color={colors.textMuted} backgroundColor={colors.surface} borderColor={colors.hairlineStrong} />
+        );
     }
   };
 
@@ -53,57 +58,65 @@ export default function RequestsTab() {
   }
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentInsetAdjustmentBehavior="automatic"
-      contentContainerStyle={styles.content}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} tintColor={colors.accent} />}
-    >
-      <View style={styles.heroCard}>
-        <Text style={styles.eyebrow}>Requests</Text>
-        <Text style={styles.heroTitle}>Money your agents asked for</Text>
-        <Text style={styles.heroBody}>Pay a request from your wallet in Base USDC, or decline it.</Text>
-      </View>
-
-      {error ? (
-        <View style={styles.noticeCard}>
-          <Ionicons name="information-circle-outline" size={18} color={colors.textMuted} />
-          <Text style={styles.noticeText}>{error}</Text>
+    <SafeAreaView edges={['top']} style={styles.container}>
+      <ScrollView
+        style={styles.container}
+        contentInsetAdjustmentBehavior="automatic"
+        contentContainerStyle={[styles.content, { paddingBottom: dialClearance }]}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} tintColor={colors.accent} />}
+      >
+        <View style={styles.heroCard}>
+          <Text style={styles.eyebrow}>Requests</Text>
+          <Text style={styles.heroTitle}>Money your agents asked for</Text>
+          <Text style={styles.heroBody}>Pay a request from your wallet in Base USDC, or decline it.</Text>
         </View>
-      ) : null}
 
-      {requests.length === 0 ? (
-        <View style={styles.emptyCard}>
-          <Ionicons name="mail-unread-outline" size={28} color={colors.accent} />
-          <Text style={styles.emptyText}>
-            No requests yet. When one of your agents asks for money, it shows up here.
-          </Text>
-        </View>
-      ) : (
-        <View style={styles.list}>
-          {requests.map((request) => (
-            <RegentPressable
-              key={request.id}
-              onPress={() => router.push(routes.paymentRequest(request.id))}
-              pressStyle="card"
-              style={styles.row}
-              accessibilityRole="button"
-              accessibilityLabel={`${request.agentName} asks for ${request.amount} USDC. ${paymentRequestStatusLabel(request.status)}.`}
-            >
-              <View style={styles.rowTop}>
-                <View style={styles.rowCopy}>
-                  <Text style={styles.agentName} numberOfLines={1}>{request.agentName}</Text>
-                  <Text style={styles.meta}>{formatRelativeTime(request.createdAt)}</Text>
-                </View>
-                {statusPill(request)}
-              </View>
-              <Text style={styles.amount}>{request.amount} USDC</Text>
-              <Text style={styles.note} numberOfLines={2}>{request.note}</Text>
+        {error ? (
+          <View style={styles.noticeCard}>
+            <View style={styles.noticeRow}>
+              <Ionicons name="information-circle-outline" size={18} color={colors.textMuted} />
+              <Text style={styles.noticeText}>{error}</Text>
+            </View>
+            <RegentPressable pressStyle="chip" style={styles.retryButton} onPress={() => void refresh()}>
+              <Ionicons name="refresh-outline" size={16} color={colors.accent} />
+              <Text style={styles.retryText}>Try again</Text>
             </RegentPressable>
-          ))}
-        </View>
-      )}
-    </ScrollView>
+          </View>
+        ) : null}
+
+        {requests.length > 0 ? (
+          <View style={styles.list}>
+            {requests.map((request) => (
+              <RegentPressable
+                key={request.id}
+                onPress={() => router.push(routes.paymentRequest(request.id))}
+                pressStyle="card"
+                style={styles.row}
+                accessibilityRole="button"
+                accessibilityLabel={`${request.agentName} asks for ${request.amount} USDC. ${paymentRequestStatusLabel(request.status)}.`}
+              >
+                <View style={styles.rowTop}>
+                  <View style={styles.rowCopy}>
+                    <Text style={styles.agentName} numberOfLines={1}>{request.agentName}</Text>
+                    <Text style={styles.meta}>{formatRelativeTime(request.createdAt)}</Text>
+                  </View>
+                  {statusPill(request)}
+                </View>
+                <Text style={styles.amount}>{request.amount} USDC</Text>
+                <Text style={styles.note} numberOfLines={2}>{request.note}</Text>
+              </RegentPressable>
+            ))}
+          </View>
+        ) : error ? null : (
+          <View style={styles.emptyCard}>
+            <Ionicons name="mail-unread-outline" size={28} color={colors.accent} />
+            <Text style={styles.emptyText}>
+              No requests yet. When one of your agents asks for money, it shows up here.
+            </Text>
+          </View>
+        )}
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
@@ -115,7 +128,7 @@ function makeStyles({ colors, fonts }: Theme) {
     },
     content: {
       paddingHorizontal: 20,
-      paddingBottom: 120,
+      paddingTop: 8,
       gap: 16,
     },
     centerState: {
@@ -159,13 +172,33 @@ function makeStyles({ colors, fonts }: Theme) {
       fontFamily: fonts.ui,
     },
     noticeCard: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
+      gap: 10,
       backgroundColor: colors.surface,
       borderRadius: 14,
       paddingHorizontal: 14,
-      paddingVertical: 10,
+      paddingVertical: 12,
+    },
+    noticeRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    retryButton: {
+      alignSelf: 'flex-start',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      minHeight: 40,
+      paddingHorizontal: 14,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.hairlineStrong,
+      backgroundColor: colors.surfaceElevated,
+    },
+    retryText: {
+      color: colors.accent,
+      fontSize: 14,
+      fontFamily: fonts.ui,
     },
     noticeText: {
       flex: 1,

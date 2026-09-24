@@ -29,6 +29,15 @@ describe('OnboardingWelcomeScreen', () => {
     expect(getByText('Create Agent in Regents Cloud')).toBeTruthy();
   });
 
+  it('places the connect sheet below the hero, never over it', () => {
+    const { getByTestId } = renderThemed(<OnboardingWelcomeScreen />);
+    const heroStyle = StyleSheet.flatten(getByTestId('onboarding-hero').props.style);
+    const sheetStyle = StyleSheet.flatten(getByTestId('onboarding-connect-sheet').props.style);
+
+    expect(heroStyle.position).toBeUndefined();
+    expect(sheetStyle.position).toBeUndefined();
+  });
+
   it('renders its large entry surfaces without transforms under reduced motion', () => {
     mockReducedMotion = true;
 

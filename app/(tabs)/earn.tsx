@@ -37,6 +37,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 function smartWalletAddress(value?: string | null): `0x${string}` | null {
   const trimmed = value?.trim();
@@ -91,6 +92,7 @@ export default function EarnTab() {
   const { sendUserOperation } = useSendUserOperation();
   const smartAccount = smartWalletAddress(currentUser?.evmSmartAccounts?.[0] as string | undefined);
   const [staking, setStaking] = useState<RegentStakingState | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [amount, setAmount] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -127,12 +129,9 @@ export default function EarnTab() {
       }
 
       setStaking(await regentApi.getRegentStaking({ walletAddress: smartAccount }));
+      setLoadError(null);
     } catch (error) {
-      showAlert({
-        title: 'Staking is not available',
-        message: describeApiError(error).message,
-        type: 'error',
-      });
+      setLoadError(describeApiError(error).message);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -226,10 +225,10 @@ export default function EarnTab() {
       setPendingAction(null);
       setApprovalStep(false);
     }
-  }, [amount, clearScheduledRefresh, loadStaking, sendUserOperation, smartAccount]);
+  }, [amount, clearScheduledRefresh, loadStaking, sendUserOperation, showAlert, smartAccount]);
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView edges={['top']} style={styles.container}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.keyboardWrap}>
         <ScrollView
           contentContainerStyle={[styles.content, { paddingBottom: dialClearance }]}
@@ -261,34 +260,51 @@ export default function EarnTab() {
             </View>
           ) : (
             <>
-              <View style={styles.heroPanel}>
-                <View style={styles.heroTopRow}>
-                  <View style={styles.heroCopy}>
-                    <Text style={styles.heroLabel}>Total staked</Text>
-                    <LiveValueFlash value={`total-${staking?.total_staked || '0'}`}>
-                      <Text style={styles.heroValue}>{displayTokenAmount(staking?.total_staked)} REGENT</Text>
-                    </LiveValueFlash>
-                  </View>
-                  <View style={[styles.statusPill, staking?.paused && styles.statusPillWarning]}>
-                    <View style={[styles.statusDot, staking?.paused && styles.statusDotWarning]} />
-                    <Text style={styles.statusText}>{staking?.paused ? 'Paused' : 'Base'}</Text>
-                  </View>
+              {loadError ? (
+                <View style={styles.loadErrorCard}>
+                  <Text style={styles.loadErrorTitle}>
+                    {staking ? 'Staking numbers could not be updated' : 'Staking numbers are not available'}
+                  </Text>
+                  <Text style={styles.loadErrorText}>{loadError}</Text>
+                  <RegentPressable pressStyle="chip" style={styles.retryButton} onPress={() => void loadStaking(true)}>
+                    <Ionicons name="refresh-outline" size={16} color={colors.accent} />
+                    <Text style={styles.retryText}>Try again</Text>
+                  </RegentPressable>
                 </View>
-                <Text style={styles.heroBody}>
-                  Rewards come from the live REGENT staking pool on Base. Your numbers update each time you open this screen.
-                </Text>
-              </View>
+              ) : null}
 
-              <View style={styles.metricGrid}>
-                {metricRows.map((metric) => (
-                  <View key={metric.label} style={styles.metricTile}>
-                    <Text style={styles.metricLabel}>{metric.label}</Text>
-                    <LiveValueFlash value={`${metric.label}-${metric.value}`}>
-                      <Text style={styles.metricValue}>{metric.value}</Text>
-                    </LiveValueFlash>
+              {staking ? (
+                <>
+                  <View style={styles.heroPanel}>
+                    <View style={styles.heroTopRow}>
+                      <View style={styles.heroCopy}>
+                        <Text style={styles.heroLabel}>Total staked</Text>
+                        <LiveValueFlash value={`total-${staking.total_staked || '0'}`}>
+                          <Text style={styles.heroValue}>{displayTokenAmount(staking.total_staked)} REGENT</Text>
+                        </LiveValueFlash>
+                      </View>
+                      <View style={[styles.statusPill, staking.paused && styles.statusPillWarning]}>
+                        <View style={[styles.statusDot, staking.paused && styles.statusDotWarning]} />
+                        <Text style={styles.statusText}>{staking.paused ? 'Paused' : 'Base'}</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.heroBody}>
+                      Rewards come from the live REGENT staking pool on Base. Your numbers update each time you open this screen.
+                    </Text>
                   </View>
-                ))}
-              </View>
+
+                  <View style={styles.metricGrid}>
+                    {metricRows.map((metric) => (
+                      <View key={metric.label} style={styles.metricTile}>
+                        <Text style={styles.metricLabel}>{metric.label}</Text>
+                        <LiveValueFlash value={`${metric.label}-${metric.value}`}>
+                          <Text style={styles.metricValue}>{metric.value}</Text>
+                        </LiveValueFlash>
+                      </View>
+                    ))}
+                  </View>
+                </>
+              ) : null}
 
               {pendingCopy ? (
                 <View style={styles.noticeRow}>
@@ -348,7 +364,7 @@ export default function EarnTab() {
 
       <ProgressToast toast={toast} onDismiss={handleToastDismiss} />
       <CoinbaseAlert {...alertProps} onCancel={dismissAlert} />
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -538,6 +554,43 @@ function makeStyles({ colors, fonts }: Theme) {
     fontSize: 17,
     lineHeight: 22,
     fontFamily: fonts.title,
+  },
+  loadErrorCard: {
+    gap: 10,
+    padding: 18,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: colors.hairlineStrong,
+    backgroundColor: colors.surfaceElevated,
+  },
+  loadErrorTitle: {
+    color: colors.text,
+    fontSize: 17,
+    lineHeight: 22,
+    fontFamily: fonts.title,
+  },
+  loadErrorText: {
+    color: colors.textMuted,
+    fontSize: 14,
+    lineHeight: 20,
+    fontFamily: fonts.ui,
+  },
+  retryButton: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    minHeight: 40,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.hairlineStrong,
+    backgroundColor: colors.surface,
+  },
+  retryText: {
+    color: colors.accent,
+    fontSize: 14,
+    fontFamily: fonts.ui,
   },
   noticeRow: {
     flexDirection: 'row',

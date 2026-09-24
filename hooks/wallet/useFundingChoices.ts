@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import type { WalletFundingChoice } from '@/types/walletFunding';
 import { fetchWalletFundingChoices } from '@/utils/fetchWalletFundingChoices';
@@ -31,6 +31,7 @@ export function useFundingChoices({
 }) {
   const [loadingFundingBalance, setLoadingFundingBalance] = useState(false);
   const [fundingBalanceError, setFundingBalanceError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     if ((!isAgentFundingFlow && !isDefaultSendFlow) || hasTokenParam || !smartAccountAddress) {
@@ -69,7 +70,10 @@ export function useFundingChoices({
     };
     // `network` is a dependency so the cleanup above discards in-flight
     // responses when the network switches, preventing stale balances.
-  }, [isAgentFundingFlow, isDefaultSendFlow, hasTokenParam, network, setNetwork, setSelectedToken, smartAccountAddress]);
+    // `attempt` reads the balance again after a failed read.
+  }, [attempt, isAgentFundingFlow, isDefaultSendFlow, hasTokenParam, network, setNetwork, setSelectedToken, smartAccountAddress]);
 
-  return { loadingFundingBalance, fundingBalanceError };
+  const retryFundingBalance = useCallback(() => setAttempt((current) => current + 1), []);
+
+  return { loadingFundingBalance, fundingBalanceError, retryFundingBalance };
 }
