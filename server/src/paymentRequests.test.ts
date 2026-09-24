@@ -17,6 +17,7 @@ import { BASE_USDC_ADDRESS } from './regentStaking.js';
 import { AGENT_WALLET, memoryEntriesStore, PROOF_HEADERS, routeRequester } from './routeHarness.testing.js';
 import { createMobileAgentRoutes } from './routes/mobileAgents.js';
 import { createPaymentRequestRoutes, type PaymentRequestNotification } from './routes/paymentRequests.js';
+import type { SignedAgentRequest } from './services/siwaHttpVerifier.js';
 
 const PHONE_WALLET: Address = '0x4B0897b0513fdC7C541B6d9D7E929C4e5364D2dB';
 const PARTNER_WALLET: Address = '0x3333333333333333333333333333333333333333';
@@ -47,7 +48,11 @@ function createHarness() {
   let verifiedWallet = AGENT_WALLET;
   let failPushes = false;
   let coinbaseDown = false;
-  const verifySignedRequest = async () => ({ kind: 'verified' as const, walletAddress: verifiedWallet });
+  const signedRequests: SignedAgentRequest[] = [];
+  const verifySignedRequest = async (signed: SignedAgentRequest) => {
+    signedRequests.push(signed);
+    return { kind: 'verified' as const, walletAddress: verifiedWallet };
+  };
 
   const request = routeRequester(
     createMobileAgentRoutes({
@@ -107,6 +112,7 @@ function createHarness() {
     kv,
     pushes,
     receipts,
+    signedRequests,
     pair,
     ask,
     agentRead,
@@ -412,4 +418,79 @@ test('a person keeps the newest hundred requests', async () => {
   assert.equal(damaged.body.error.code, 'PaymentRequestsUnavailable');
   assert.equal((await request({ method: 'POST', url: `/mobile/payment-requests/${ids[5]}/decline`, userId: 'owner' })).status, 500);
   assert.equal(entries.state.entries[damagedKey]?.value, '{"status":"lost"}');
+});
+
+// Invariant: a status read carries no body, so the SIWA server is asked to
+// check it without one; an ask is checked over its exact bytes.
+test('the agent status read is checked without a body', async () => {
+  const { pair, ask, agentRead, signedRequests } = createHarness();
+  await pair('owner', 'Muse');
+  const askBody = { to: AGENT_WALLET, amount: '5', note: 'API credits' };
+  const id: string = (await ask(askBody)).body.requestIds[0];
+  assert.deepEqual(signedRequests.at(-1)?.body, JSON.stringify(askBody));
+
+  assert.equal((await agentRead(id)).status, 200);
+  const read = signedRequests.at(-1)!;
+  assert.deepEqual([read.method, read.path, 'body' in read], ['GET', `/agent/payment-requests/${id}`, false]);
+});
+
+// Invariant: when two people pair the same agent, each gets their own request
+// and neither can see or act on the other's; it reads as not found.
+test('people who pair the same agent each get their own request', async () => {
+  const { pair, ask, request, receipts, agentRead, checkPaid, entries } = createHarness();
+  await pair('owner', 'Muse');
+  await pair('partner', 'Partner Muse');
+  const [ownerId, partnerId] = (await ask({ to: ELSEWHERE, amount: '5', note: 'Hosting' })).body.requestIds as [string, string];
+
+  const listed = async (userId: string) =>
+    (await request({ method: 'GET', url: '/mobile/payment-requests', userId })).body.requests.map((shown: any) => [shown.id, shown.agentName]);
+  assert.deepEqual(await listed('owner'), [[ownerId, 'Muse']]);
+  assert.deepEqual(await listed('partner'), [[partnerId, 'Partner Muse']]);
+
+  // Base shows a payment that would settle the partner's request from the owner's own wallet.
+  receipts.set(TX_HASH, { kind: 'ok', receipt: { status: 'success', logs: [transferLog(PHONE_WALLET, ELSEWHERE, 5_000_000n)] } });
+  for (const answer of [
+    await request({ method: 'GET', url: `/mobile/payment-requests/${partnerId}`, userId: 'owner' }),
+    await request({ method: 'POST', url: `/mobile/payment-requests/${partnerId}/prepare`, userId: 'owner', body: { walletAddress: PHONE_WALLET } }),
+    await checkPaid('owner', partnerId, TX_HASH),
+    await request({ method: 'POST', url: `/mobile/payment-requests/${partnerId}/decline`, userId: 'owner' }),
+  ]) {
+    assert.deepEqual([answer.status, answer.body.error.code], [404, 'PaymentRequestNotFound']);
+  }
+  assert.equal(entries.state.entries[`regents:payment-requests:v1:tx:${TX_HASH}`], undefined);
+  assert.equal((await request({ method: 'GET', url: `/mobile/payment-requests/${partnerId}`, userId: 'partner' })).body.request.status, 'waiting');
+
+  // The agent follows both of its requests.
+  assert.equal((await agentRead(ownerId)).body.status, 'waiting');
+  assert.equal((await agentRead(partnerId)).body.status, 'waiting');
+});
+
+// Invariant: removing an agent stops new asks reaching that person; requests
+// already made stay in their list, can still be paid or declined, and the
+// agent can still read how they ended.
+test('removing an agent keeps the requests it already made', async () => {
+  const { pair, ask, request, receipts, pushes, agentRead, checkPaid } = createHarness();
+  const ownerAgent = await pair('owner', 'Muse');
+  const friendAgent = await pair('friend', 'Shared Muse');
+  const [toPay] = (await ask({ to: ELSEWHERE, amount: '5', note: 'Hosting' })).body.requestIds as [string, string];
+  const [toDecline] = (await ask({ to: ELSEWHERE, amount: '1', note: 'Coffee' })).body.requestIds as [string, string];
+
+  assert.equal((await request({ method: 'DELETE', url: `/mobile/agents/${ownerAgent.id}`, userId: 'owner' })).status, 200);
+
+  const ownerList = (await request({ method: 'GET', url: '/mobile/payment-requests', userId: 'owner' })).body.requests;
+  assert.deepEqual(ownerList.map((shown: any) => [shown.id, shown.status]), [[toDecline, 'waiting'], [toPay, 'waiting']]);
+  assert.equal((await request({ method: 'POST', url: `/mobile/payment-requests/${toPay}/prepare`, userId: 'owner', body: { walletAddress: PHONE_WALLET } })).status, 200);
+  receipts.set(TX_HASH, { kind: 'ok', receipt: { status: 'success', logs: [transferLog(PHONE_WALLET, ELSEWHERE, 5_000_000n)] } });
+  assert.equal((await checkPaid('owner', toPay, TX_HASH)).body.request.status, 'paid');
+  assert.equal((await request({ method: 'POST', url: `/mobile/payment-requests/${toDecline}/decline`, userId: 'owner' })).body.request.status, 'declined');
+  assert.deepEqual((await agentRead(toPay)).body, { id: toPay, status: 'paid', txHash: TX_HASH });
+  assert.equal((await agentRead(toDecline)).body.status, 'declined');
+
+  // A new ask reaches only the friend, and nobody once the friend removes it too.
+  pushes.length = 0;
+  assert.equal((await ask({ to: ELSEWHERE, amount: '2', note: 'Later' })).body.requestIds.length, 1);
+  assert.deepEqual(pushes.map((push) => push.userId), ['friend']);
+  assert.equal((await request({ method: 'GET', url: '/mobile/payment-requests', userId: 'owner' })).body.requests.length, 2);
+  assert.equal((await request({ method: 'DELETE', url: `/mobile/agents/${friendAgent.id}`, userId: 'friend' })).status, 200);
+  assert.equal((await ask({ to: ELSEWHERE, amount: '2', note: 'Later' })).body.error.code, 'AgentNotPaired');
 });

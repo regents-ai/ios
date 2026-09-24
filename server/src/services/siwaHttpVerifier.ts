@@ -18,11 +18,12 @@ export const SIWA_AUDIENCE = 'regents-mobile';
 export const BASE_CHAIN_ID = 8453;
 export const SIWA_VERIFY_TIMEOUT_MS = 5000;
 
+/** A read carries no body, so it is sent without one and signs no content digest. */
 export type SignedAgentRequest = {
   method: string;
   path: string;
   headers: Record<string, string>;
-  body: string;
+  body?: string;
 };
 
 export type SiwaVerification =
