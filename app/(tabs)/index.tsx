@@ -46,7 +46,12 @@ function useSection<T>(read: () => Promise<T>) {
       setState({ status: 'failed' });
     }
   }, [read]);
-  return [state, load] as const;
+  // A retry shows the spinner again, so a second failure is seen as a new answer.
+  const retry = useCallback(() => {
+    setState({ status: 'loading' });
+    void load();
+  }, [load]);
+  return [state, load, retry] as const;
 }
 
 function smartWalletAddress(value?: string | null) {
@@ -91,11 +96,11 @@ export default function HomeTab() {
   const readAuctions = useCallback(async () => openAuctionCount(await listAutolaunchAuctions()), []);
   const readTechtree = useCallback(async () => (await fetchTechtreeResults()).cards[0] ?? null, []);
 
-  const [phone, loadPhone] = useSection(readPhoneWallet);
-  const [website, loadWebsite] = useSection(readWebsiteWallets);
-  const [agents, loadAgents] = useSection(readAgents);
-  const [auctions, loadAuctions] = useSection(readAuctions);
-  const [techtree, loadTechtree] = useSection(readTechtree);
+  const [phone, loadPhone, retryPhone] = useSection(readPhoneWallet);
+  const [website, loadWebsite, retryWebsite] = useSection(readWebsiteWallets);
+  const [agents, loadAgents, retryAgents] = useSection(readAgents);
+  const [auctions, loadAuctions, retryAuctions] = useSection(readAuctions);
+  const [techtree, loadTechtree, retryTechtree] = useSection(readTechtree);
 
   const loadAll = useCallback(
     () => Promise.all([loadPhone(), loadWebsite(), loadAgents(), loadAuctions(), loadTechtree()]),
@@ -138,7 +143,7 @@ export default function HomeTab() {
           title="Phone wallet"
           action={{ label: 'Open Earn', onPress: () => open(routes.earn()) }}
         >
-          <SectionBody state={phone} failedCopy="Balances aren't available right now.">
+          <SectionBody state={phone} onRetry={retryPhone} failedCopy="Balances aren't available right now.">
             {(holdings) =>
               holdings ? (
                 <WalletHoldings holdings={holdings} />
@@ -159,7 +164,7 @@ export default function HomeTab() {
           ) : (
             <>
               <Text style={styles.viewOnly}>View only. Manage it on regents.sh.</Text>
-              <SectionBody state={website} failedCopy="Balances aren't available right now.">
+              <SectionBody state={website} onRetry={retryWebsite} failedCopy="Balances aren't available right now.">
                 {(wallets) => (
                   <View style={styles.walletList}>
                     {wallets.map((holdings) => (
@@ -180,7 +185,7 @@ export default function HomeTab() {
           title="My agents"
           action={{ label: 'Open My agents', onPress: () => open(routes.agents()) }}
         >
-          <SectionBody state={agents} failedCopy="Your agents aren't available right now.">
+          <SectionBody state={agents} onRetry={retryAgents} failedCopy="Your agents aren't available right now.">
             {(list) => <AgentsSummary list={list} />}
           </SectionBody>
         </HomeCard>
@@ -190,7 +195,7 @@ export default function HomeTab() {
           title="Autolaunch"
           action={{ label: 'Open Autolaunch', onPress: () => open(routes.autolaunch()) }}
         >
-          <SectionBody state={auctions} failedCopy="Auctions aren't available right now.">
+          <SectionBody state={auctions} onRetry={retryAuctions} failedCopy="Auctions aren't available right now.">
             {(count) => <Text style={styles.headline}>{openAuctionsCopy(count)}</Text>}
           </SectionBody>
         </HomeCard>
@@ -200,7 +205,7 @@ export default function HomeTab() {
           title="Techtree"
           action={{ label: 'Open Techtree', onPress: () => open(routes.techtree()) }}
         >
-          <SectionBody state={techtree} failedCopy="Techtree isn't available right now.">
+          <SectionBody state={techtree} onRetry={retryTechtree} failedCopy="Techtree isn't available right now.">
             {(latest) => <LatestPublication latest={latest} />}
           </SectionBody>
         </HomeCard>
@@ -245,10 +250,12 @@ function HomeCard({
 function SectionBody<T>({
   children,
   failedCopy,
+  onRetry,
   state,
 }: {
   children: (data: T) => ReactNode;
   failedCopy: string;
+  onRetry: () => void;
   state: SectionState<T>;
 }) {
   const theme = useTheme();
@@ -261,7 +268,15 @@ function SectionBody<T>({
     );
   }
   if (state.status === 'failed') {
-    return <Notice text={failedCopy} />;
+    return (
+      <View style={styles.failed}>
+        <Notice text={failedCopy} />
+        <RegentPressable style={styles.cardAction} onPress={onRetry} accessibilityRole="button">
+          <Ionicons name="refresh-outline" size={16} color={theme.colors.accent} />
+          <Text style={styles.cardActionText}>Try again</Text>
+        </RegentPressable>
+      </View>
+    );
   }
   return <>{children(state.data)}</>;
 }
@@ -426,6 +441,9 @@ function makeStyles({ colors, fonts }: Theme) {
       minHeight: 32,
       alignItems: 'flex-start',
       justifyContent: 'center',
+    },
+    failed: {
+      gap: 6,
     },
     notice: {
       flexDirection: 'row',

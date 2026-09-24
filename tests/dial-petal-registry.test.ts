@@ -41,7 +41,7 @@ test('signed-in screens resolve the default petals', () => {
   assert.equal(resolveDialPetals('/agent/add'), DEFAULT_DIAL_PETALS);
 });
 
-test('pre-auth, onboarding, verification and send contexts resolve to no dial petals', () => {
+test('pre-auth, onboarding, verification, send and payment request contexts resolve to no dial petals', () => {
   const hiddenPaths = [
     '/auth/login',
     '/auth/recovery',
@@ -53,6 +53,7 @@ test('pre-auth, onboarding, verification and send contexts resolve to no dial pe
     '/phone-code',
     '/send',
     '/wallet/send',
+    '/request/req-1',
   ];
 
   for (const pathname of hiddenPaths) {

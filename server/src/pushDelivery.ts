@@ -78,7 +78,8 @@ async function createDefaultApnsNotification(input: PushNotificationInput) {
     alert: { title: input.title, body: input.body },
     topic: 'com.regentslabs.mobile',
     sound: 'default',
-    payload: input.data,
+    // The app reads a pushed notification's data from its `body` key.
+    payload: { body: input.data },
     category: input.category,
   });
 }

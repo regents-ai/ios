@@ -65,7 +65,8 @@ export function getDialRouteContext(pathname: string): DialRouteContext {
   if (
     /^\/(?:auth|onboarding)(?:\/|$)/.test(pathname) ||
     /^\/(?:email|phone)-(?:verify|code)\/?$/.test(pathname) ||
-    /^\/(?:wallet\/)?send\/?$/.test(pathname)
+    /^\/(?:wallet\/)?send\/?$/.test(pathname) ||
+    /^\/request\//.test(pathname)
   ) {
     return 'hidden';
   }

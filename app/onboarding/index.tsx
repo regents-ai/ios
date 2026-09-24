@@ -20,12 +20,13 @@ import {
   Animated,
   Easing,
   Image,
-  SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
   View,
   useWindowDimensions,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AgentFundHero } from '@/components/agents/AgentFundHero';
 import { useReducedMotion } from '@/components/motion/useReducedMotion';
@@ -178,142 +179,145 @@ export default function OnboardingWelcomeScreen() {
         </Animated.View>
       </View>
 
-      {/* Hero: headline, agents and sliding crowns. */}
-      <Animated.View
-        testID="onboarding-hero"
-        style={[
-          styles.heroLayer,
-          {
-            opacity: reducedMotion ? 1 : heroDriver,
-            transform: reducedMotion
-              ? undefined
-              : [
-                  { translateY: heroDriver.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) },
-                ],
-          },
-        ]}
-      >
-        <SafeAreaView>
-          <View style={styles.hero}>
-            <AgentFundHero />
-          </View>
-        </SafeAreaView>
-      </Animated.View>
-
-      {/* Connect sheet. */}
-      <Animated.View
-        testID="onboarding-connect-sheet"
-        style={[
-          styles.sheet,
-          {
-            opacity: reducedMotion ? 1 : sheetDriver,
-            transform: reducedMotion
-              ? undefined
-              : [
-                  { translateY: sheetDriver.interpolate({ inputRange: [0, 1], outputRange: [440, 0] }) },
-                ],
-          },
-        ]}
-      >
-        <SafeAreaView>
-          <View style={styles.sheetHeaderRow}>
-            <Image source={require('@/assets/images/icon.png')} style={styles.appIcon} />
-            <RegentPressable
-              haptic="selection"
-              pressStyle="chip"
-              style={styles.skipPill}
-              onPress={() => {
-                clearPostAuthDestination();
-                finish('/auth/login');
-              }}
-            >
-              <Text style={styles.skipText}>Skip</Text>
-            </RegentPressable>
-          </View>
-
-          <Text style={styles.sheetTitle}>Connect</Text>
-          <Text style={styles.sheetSubtitle}>Choose how you want to start with Regents.</Text>
-
-          <View style={styles.divider} />
-
-          <RegentPressable
-            haptic="selection"
-            pressStyle="card"
-            style={styles.optionRow}
-            onPress={() => {
-              setPostAuthDestination('/agent/add');
-              finish('/auth/login');
+      {/* Hero above the sheet; on a short phone the page scrolls so neither covers the other. */}
+      <SafeAreaView edges={['top']} style={styles.scroller}>
+        <ScrollView
+          alwaysBounceVertical={false}
+          contentInsetAdjustmentBehavior="never"
+          contentContainerStyle={styles.page}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Hero: headline, agents and sliding crowns. */}
+          <Animated.View
+            testID="onboarding-hero"
+            style={{
+              opacity: reducedMotion ? 1 : heroDriver,
+              transform: reducedMotion
+                ? undefined
+                : [{ translateY: heroDriver.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }],
             }}
           >
-            <View style={styles.optionIcon}>
-              <Ionicons name="people-outline" size={22} color={colors.accent} />
+            <View style={styles.hero}>
+              <AgentFundHero />
             </View>
-            <View style={styles.optionCopy}>
-              <Text style={styles.optionTitle}>Add an agent</Text>
-              <Text style={styles.optionDetail}>Pair an agent or paste its wallet address</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-          </RegentPressable>
+          </Animated.View>
 
-          <View style={styles.rowDivider} />
-
-          <RegentPressable
-            haptic="selection"
-            pressStyle="card"
-            style={styles.optionRow}
-            onPress={() => {
-              setPostAuthDestination('/onboarding/connect-portal');
-              router.push('/onboarding/connect-portal');
-            }}
+          {/* Connect sheet. */}
+          <Animated.View
+            testID="onboarding-connect-sheet"
+            style={[
+              styles.sheet,
+              {
+                opacity: reducedMotion ? 1 : sheetDriver,
+                transform: reducedMotion
+                  ? undefined
+                  : [
+                      { translateY: sheetDriver.interpolate({ inputRange: [0, 1], outputRange: [440, 0] }) },
+                    ],
+              },
+            ]}
           >
-            <View style={styles.optionIcon}>
-              <Ionicons name="link-outline" size={22} color={colors.accent} />
-            </View>
-            <View style={styles.optionCopy}>
-              <Text style={styles.optionTitle}>Nous Portal</Text>
-              <Text style={styles.optionDetail}>Pair your Nous Portal account</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-          </RegentPressable>
+            <SafeAreaView edges={['bottom']}>
+              <View style={styles.sheetHeaderRow}>
+                <Image source={require('@/assets/images/icon.png')} style={styles.appIcon} />
+                <RegentPressable
+                  haptic="selection"
+                  pressStyle="chip"
+                  style={styles.skipPill}
+                  onPress={() => {
+                    clearPostAuthDestination();
+                    finish('/auth/login');
+                  }}
+                >
+                  <Text style={styles.skipText}>Skip</Text>
+                </RegentPressable>
+              </View>
 
-          <View style={styles.rowDivider} />
+              <Text style={styles.sheetTitle}>Connect</Text>
+              <Text style={styles.sheetSubtitle}>Choose how you want to start with Regents.</Text>
 
-          <RegentPressable
-            haptic="selection"
-            pressStyle="card"
-            style={styles.optionRow}
-            onPress={() => {
-              setPostAuthDestination('/onboarding/create-cloud-agent');
-              router.push('/onboarding/create-cloud-agent');
-            }}
-          >
-            <View style={styles.optionIcon}>
-              <Ionicons name="cloud-outline" size={22} color={colors.accent} />
-            </View>
-            <View style={styles.optionCopy}>
-              <Text style={styles.optionTitle}>Create Agent in Regents Cloud</Text>
-              <Text style={styles.optionDetail}>Set up a new agent, hosted for you</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-          </RegentPressable>
+              <View style={styles.divider} />
 
-          <View style={styles.rowDivider} />
+              <RegentPressable
+                haptic="selection"
+                pressStyle="card"
+                style={styles.optionRow}
+                onPress={() => {
+                  setPostAuthDestination('/agent/add');
+                  finish('/auth/login');
+                }}
+              >
+                <View style={styles.optionIcon}>
+                  <Ionicons name="people-outline" size={22} color={colors.accent} />
+                </View>
+                <View style={styles.optionCopy}>
+                  <Text style={styles.optionTitle}>Add an agent</Text>
+                  <Text style={styles.optionDetail}>Pair an agent or paste its wallet address</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+              </RegentPressable>
 
-          {/* Deliberately quieter third path. */}
-          <RegentPressable
-            haptic="selection"
-            pressStyle="card"
-            style={styles.tertiaryRow}
-            onPress={() => {
-              setPostAuthDestination('/(tabs)/wallet');
-              finish('/(tabs)/wallet');
-            }}
-          >
-            <Ionicons name="cash-outline" size={16} color={colors.textMuted} />
-            <Text style={styles.tertiaryText}>Add USDC for an agent</Text>
-          </RegentPressable>
-        </SafeAreaView>
-      </Animated.View>
+              <View style={styles.rowDivider} />
+
+              <RegentPressable
+                haptic="selection"
+                pressStyle="card"
+                style={styles.optionRow}
+                onPress={() => {
+                  setPostAuthDestination('/onboarding/connect-portal');
+                  router.push('/onboarding/connect-portal');
+                }}
+              >
+                <View style={styles.optionIcon}>
+                  <Ionicons name="link-outline" size={22} color={colors.accent} />
+                </View>
+                <View style={styles.optionCopy}>
+                  <Text style={styles.optionTitle}>Nous Portal</Text>
+                  <Text style={styles.optionDetail}>Pair your Nous Portal account</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+              </RegentPressable>
+
+              <View style={styles.rowDivider} />
+
+              <RegentPressable
+                haptic="selection"
+                pressStyle="card"
+                style={styles.optionRow}
+                onPress={() => {
+                  setPostAuthDestination('/onboarding/create-cloud-agent');
+                  router.push('/onboarding/create-cloud-agent');
+                }}
+              >
+                <View style={styles.optionIcon}>
+                  <Ionicons name="cloud-outline" size={22} color={colors.accent} />
+                </View>
+                <View style={styles.optionCopy}>
+                  <Text style={styles.optionTitle}>Create Agent in Regents Cloud</Text>
+                  <Text style={styles.optionDetail}>Set up a new agent, hosted for you</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+              </RegentPressable>
+
+              <View style={styles.rowDivider} />
+
+              {/* Deliberately quieter third path. */}
+              <RegentPressable
+                haptic="selection"
+                pressStyle="card"
+                style={styles.tertiaryRow}
+                onPress={() => {
+                  setPostAuthDestination('/(tabs)/wallet');
+                  finish('/(tabs)/wallet');
+                }}
+              >
+                <Ionicons name="cash-outline" size={16} color={colors.textMuted} />
+                <Text style={styles.tertiaryText}>Add USDC for an agent</Text>
+              </RegentPressable>
+            </SafeAreaView>
+          </Animated.View>
+        </ScrollView>
+      </SafeAreaView>
     </View>
   );
 }
@@ -333,20 +337,16 @@ function makeStyles({ colors, fonts, type, space, radius }: Theme) {
     glowBand: {
       position: 'absolute',
     },
-    heroLayer: {
-      position: 'absolute',
-      top: 0,
-      left: 0,
-      right: 0,
+    scroller: { flex: 1 },
+    page: {
+      flexGrow: 1,
+      justifyContent: 'space-between',
     },
     hero: {
       paddingTop: space.s2,
+      paddingBottom: space.s4,
     },
     sheet: {
-      position: 'absolute',
-      left: 0,
-      right: 0,
-      bottom: 0,
       backgroundColor: colors.surfaceElevated,
       borderTopLeftRadius: 28,
       borderTopRightRadius: 28,
