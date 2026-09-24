@@ -98,9 +98,10 @@ test('release runtime requires complete APNs config', async () => {
   assert.equal(await createApnsProviderFromEnv({}, false), null);
 });
 
-// Invariant: a notification's category reaches the phone on both delivery
-// paths, so its action buttons show whichever way it was sent.
-test('the notification category is carried by Expo and by APNs', async () => {
+// Invariant: a notification's category and data reach the phone on both delivery
+// paths, so its action buttons show and a tap opens the right screen whichever
+// way it was sent.
+test('the notification category and data are carried by Expo and by APNs', async () => {
   const withCategory = {
     title: 'Muse asks for 5.00 USDC',
     body: 'API credits',
@@ -115,7 +116,9 @@ test('the notification category is carried by Expo and by APNs', async () => {
       return new Response(JSON.stringify({ data: { status: 'ok' } }), { status: 200 });
     },
   });
-  assert.equal((expoBodies[0] as { categoryId?: string }).categoryId, 'payment_request');
+  const expoBody = expoBodies[0] as { categoryId?: string; data?: unknown };
+  assert.equal(expoBody.categoryId, 'payment_request');
+  assert.deepEqual(expoBody.data, withCategory.data);
 
   const apnsPayloads: unknown[] = [];
   await sendPushNotification(nativeToken, withCategory, {
@@ -126,8 +129,8 @@ test('the notification category is carried by Expo and by APNs', async () => {
       },
     },
   });
-  const payload = apnsPayloads[0] as { aps: { category?: string; alert: unknown }; type: string; requestId: string };
+  const payload = apnsPayloads[0] as { aps: { category?: string; alert: unknown }; body: unknown };
   assert.equal(payload.aps.category, 'payment_request');
   assert.deepEqual(payload.aps.alert, { title: withCategory.title, body: withCategory.body });
-  assert.deepEqual([payload.type, payload.requestId], ['payment_request', 'req-1']);
+  assert.deepEqual(payload.body, withCategory.data);
 });
