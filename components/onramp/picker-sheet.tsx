@@ -2,7 +2,6 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useMemo, useState } from 'react';
 import { EaseView } from 'react-native-ease';
 import {
-  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -17,7 +16,6 @@ import { useReducedMotion } from '@/components/motion/useReducedMotion';
 import { RegentPressable } from '@/components/ui/RegentPressable';
 
 type Item = {
-  iconUrl?: string | null;
   key: string;
   label: string;
   selected?: boolean;
@@ -26,13 +24,12 @@ type Item = {
 type Props = {
   emptyLabel?: string;
   items: Item[];
-  loadingLabel?: string;
   onClose: () => void;
   onSelect: (key: string) => void;
   visible: boolean;
 };
 
-export function PickerSheet({ emptyLabel = 'No options available', items, loadingLabel, onClose, onSelect, visible }: Props) {
+export function PickerSheet({ emptyLabel = 'No options available', items, onClose, onSelect, visible }: Props) {
   const theme = useTheme();
   const { colors } = theme;
   const styles = useMemo(() => makeStyles(theme), [theme]);
@@ -76,11 +73,7 @@ export function PickerSheet({ emptyLabel = 'No options available', items, loadin
         >
           <View style={styles.handle} />
           <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator style={styles.scrollView}>
-            {!items.length && loadingLabel ? (
-              <View style={styles.item}>
-                <Text style={styles.text}>{loadingLabel}</Text>
-              </View>
-            ) : items.length ? (
+            {items.length ? (
               items.map(item => (
                 <RegentPressable
                   key={item.key}
@@ -94,7 +87,6 @@ export function PickerSheet({ emptyLabel = 'No options available', items, loadin
                 >
                   <View style={styles.itemContent}>
                     <View style={styles.itemLeft}>
-                      {item.iconUrl ? <Image source={{ uri: item.iconUrl }} style={styles.icon} /> : null}
                       <Text style={[styles.text, item.selected && styles.selectedText]}>{item.label}</Text>
                     </View>
                     {item.selected ? (
@@ -179,12 +171,6 @@ function makeStyles({ colors, fonts }: Theme) {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-  },
-  icon: {
-    width: 32,
-    height: 32,
-    marginRight: 16,
-    borderRadius: 16,
   },
   text: {
     fontSize: 17,

@@ -8,14 +8,8 @@ export type PaymentMethodOption = { display: string; value: string };
 export function useOnramp() {
   const { linkedEmail, linkedPhone, regentsUserId } = useRegentsAuth();
   const optionsState = useOnrampOptions();
-  const quoteState = useOnrampQuote({
-    getAssetSymbolFromName: optionsState.getAssetSymbolFromName,
-    getNetworkNameFromDisplayName: optionsState.getNetworkNameFromDisplayName,
-    regentsUserId,
-  });
+  const quoteState = useOnrampQuote({ regentsUserId });
   const checkoutState = useOnrampCheckout({
-    getAssetSymbolFromName: optionsState.getAssetSymbolFromName,
-    getNetworkNameFromDisplayName: optionsState.getNetworkNameFromDisplayName,
     linkedEmail,
     linkedPhone,
     regentsUserId,

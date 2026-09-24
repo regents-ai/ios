@@ -3,30 +3,23 @@ import { buildGuestCheckoutQuotePayload } from './guestCheckout';
 import { sendOnrampProxyRequest } from './network/onrampProxy';
 import { buildOnrampIdempotencyKey } from './onramp/idempotency';
 import { getCountry, getSubdivision } from './state/locationState';
-import { getWalletAddressForNetwork } from './state/walletRuntimeState';
 
 export async function fetchBuyQuote(payload: {
   paymentCurrency: string;
   purchaseCurrency: string;
   paymentAmount: string;
   destinationNetwork: string;
+  destinationAddress: string;
   paymentMethod: string;
   partnerUserRef: string;
 }) {
-  const destinationAddress = getWalletAddressForNetwork(payload.destinationNetwork);
-
-  if (!destinationAddress) {
-    console.log(`No wallet address available for network: ${payload.destinationNetwork}`);
-    return null;
-  }
-
   const isGuestCheckout = payload.paymentMethod === 'GUEST_CHECKOUT_APPLE_PAY'
     || payload.paymentMethod === 'GUEST_CHECKOUT_GOOGLE_PAY';
 
   if (isGuestCheckout) {
     try {
       const response = await createGuestCheckoutOrder(
-        buildGuestCheckoutQuotePayload(payload, destinationAddress)
+        buildGuestCheckoutQuotePayload(payload, payload.destinationAddress)
       );
 
       const order = response?.order ?? response;
@@ -66,7 +59,7 @@ export async function fetchBuyQuote(payload: {
       purchaseCurrency: payload.purchaseCurrency,
       destinationNetwork: payload.destinationNetwork,
       paymentAmount: payload.paymentAmount,
-      destinationAddress,
+      destinationAddress: payload.destinationAddress,
       paymentMethod: payload.paymentMethod === 'COINBASE_WIDGET' ? 'CARD' : payload.paymentMethod
     };
     const quoteIdempotencyPayload = {

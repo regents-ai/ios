@@ -1,30 +1,23 @@
-import { useCurrentUser, useEvmAddress, useSignOut, useSolanaAddress } from '@coinbase/cdp-hooks';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'expo-router';
+import React, { useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Platform, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { APIGuestCheckoutWidget, OnrampForm, useOnramp } from '@/components';
 import { AgentFundHero } from '@/components/agents/AgentFundHero';
 import { useDialContentClearance } from '@/components/dial/dialLayout';
 import { LiveValueFlash } from '@/components/motion/LiveValueFlash';
 import { StaggerGroup } from '@/components/motion/StaggerGroup';
 import { StaggerItem } from '@/components/motion/StaggerItem';
-import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
+import { AddUsdc } from '@/components/onramp/AddUsdc';
 import { RegentPressable } from '@/components/ui/RegentPressable';
-import { WalletOptionsError } from '@/components/wallet/home/wallet-options-error';
 import { WalletScreenHeader } from '@/components/wallet/home/wallet-screen-header';
+import { RegentsBalanceSetup } from '@/components/wallet/RegentsBalanceSetup';
 import { WalletDetailsSection } from '@/components/wallet/WalletDetailsSection';
 import { useTheme, type Theme } from '@/theme/ThemeProvider';
-import { useRegentsAuth } from '@/hooks/useRegentsAuth';
-import { usePendingOnrampResume } from '@/hooks/onramp/use-pending-onramp-resume';
-import { useWalletAddresses } from '@/hooks/onramp/use-wallet-addresses';
-import { useWalletOnrampSubmit } from '@/hooks/onramp/use-wallet-onramp-submit';
+import { useRegentsBalanceWallet } from '@/hooks/useRegentsBalanceWallet';
 import { useWalletDetailsState } from '@/hooks/wallet/useWalletDetailsState';
 import { routes } from '@/utils/navigation/routes';
-import { getCountry, getSubdivision } from '@/utils/state/locationState';
-import { getNetworkLabel } from '@/utils/onchain/networkDisplay';
 
 
 function formatAddress(address: string) {
@@ -38,108 +31,11 @@ export default function WalletScreen() {
   const { colors } = theme;
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const dialClearance = useDialContentClearance();
-  const [amount, setAmount] = useState('');
-  const [regionKey, setRegionKey] = useState(() => `${getCountry()}-${getSubdivision()}`);
   const [isSwipeActive, setIsSwipeActive] = useState(false);
 
-  const { isAuthenticated, signOut: signOutIdentity } = useRegentsAuth();
-  const { currentUser } = useCurrentUser();
-  const { evmAddress } = useEvmAddress();
-  const { solanaAddress } = useSolanaAddress();
-  const { signOut: signOutWallet } = useSignOut();
-  const effectiveIsSignedIn = isAuthenticated;
+  const regentsBalanceWallet = useRegentsBalanceWallet();
   const walletDetails = useWalletDetailsState();
   const refreshingWallet = walletDetails.loadingBalances;
-
-  const { address, onNetworkChange, setAddress } = useWalletAddresses({
-    currentUser,
-    effectiveIsSignedIn,
-    evmAddress,
-    solanaAddress,
-  });
-
-  const {
-    activePaymentMethod,
-    buyConfig,
-    closeGuestCheckout,
-    createOrder,
-    createWidgetSession,
-    currentQuote,
-    fetchOptions,
-    fetchQuote,
-    getAssetSymbolFromName,
-    getAvailableAssets,
-    getAvailableNetworks,
-    getNetworkNameFromDisplayName,
-    guestCheckoutVisible,
-    hostedUrl,
-    isLoadingOptions,
-    isLoadingQuote,
-    isProcessingPayment,
-    options,
-    optionsError,
-    paymentCurrencies,
-    setIsProcessingPayment,
-  } = useOnramp();
-
-  const {
-    alertState,
-    currentTransaction,
-    handleAlertCancel,
-    handleAlertConfirm,
-    handleSubmit,
-    setAlertState,
-    setCurrentTransaction,
-    showSupportError,
-  } = useWalletOnrampSubmit({
-    createOrder,
-    createWidgetSession,
-    currentUser,
-    evmAddress,
-    getAssetSymbolFromName,
-    getNetworkNameFromDisplayName,
-    setIsProcessingPayment,
-    signOutIdentity,
-    signOutWallet,
-    solanaAddress,
-  });
-
-  usePendingOnrampResume({
-    createOrder,
-    createWidgetSession,
-    currentUser,
-    effectiveIsSignedIn,
-    evmAddress,
-    getAssetSymbolFromName,
-    getNetworkNameFromDisplayName,
-    onTransactionPrepared: (formData) => {
-      setCurrentTransaction({
-        amount: formData.amount,
-        paymentCurrency: formData.paymentCurrency || 'USD',
-        asset: formData.asset,
-        network: formData.network,
-      });
-    },
-    setAlertState,
-    showSupportError,
-    solanaAddress,
-  });
-
-  useEffect(() => {
-    if (!effectiveIsSignedIn) {
-      return;
-    }
-
-    void fetchOptions();
-  }, [effectiveIsSignedIn, fetchOptions, regionKey]);
-
-  useFocusEffect(
-    useCallback(() => {
-      if (effectiveIsSignedIn) {
-        void fetchOptions();
-      }
-    }, [effectiveIsSignedIn, fetchOptions])
-  );
 
   const quickActions = [
     {
@@ -195,28 +91,28 @@ export default function WalletScreen() {
               <View style={styles.summaryCard}>
                 <View style={styles.summaryTopRow}>
                   <View style={styles.summaryCopy}>
-                    <Text style={styles.summaryEyebrow}>Agent funding</Text>
-                    <Text style={styles.summaryTitle}>Add funds for agent work.</Text>
+                    <Text style={styles.summaryEyebrow}>Regents Balance</Text>
+                    <Text style={styles.summaryTitle}>Add to your Regents Balance.</Text>
                     <Text style={styles.summaryBody}>
-                      Use Apple Pay to add USDC on Base, then send it to an agent working balance.
+                      Buy USDC on Base with Apple Pay or a card. It goes to the wallet you sign in with on regents.sh.
                     </Text>
                   </View>
                   <View style={styles.statusPill}>
-                    <View style={[styles.statusDot, !effectiveIsSignedIn && styles.statusDotIdle]} />
-                    <Text style={styles.statusText}>{effectiveIsSignedIn ? 'Ready' : 'Sign in'}</Text>
+                    <View style={[styles.statusDot, !regentsBalanceWallet && styles.statusDotIdle]} />
+                    <Text style={styles.statusText}>{regentsBalanceWallet ? 'Ready' : 'Set up'}</Text>
                   </View>
                 </View>
 
                 <View style={styles.summaryStats}>
                   <View style={styles.summaryStat}>
-                    <Text style={styles.summaryStatLabel}>Best path</Text>
-                    <Text style={styles.summaryStatValue}>Apple Pay to USDC on Base</Text>
+                    <Text style={styles.summaryStatLabel}>You add</Text>
+                    <Text style={styles.summaryStatValue}>USDC on Base</Text>
                   </View>
                   <View style={styles.summaryStat}>
-                    <Text style={styles.summaryStatLabel}>Wallet address</Text>
-                    <LiveValueFlash value={address ? formatAddress(address) : 'choose-wallet-address'}>
+                    <Text style={styles.summaryStatLabel}>It goes to</Text>
+                    <LiveValueFlash value={regentsBalanceWallet ? formatAddress(regentsBalanceWallet) : 'regents-balance-setup'}>
                       <Text style={styles.summaryStatValue}>
-                        {address ? formatAddress(address) : 'Choose a wallet address in Settings'}
+                        {regentsBalanceWallet ? formatAddress(regentsBalanceWallet) : 'Sign in on regents.sh with a wallet'}
                       </Text>
                     </LiveValueFlash>
                   </View>
@@ -248,91 +144,47 @@ export default function WalletScreen() {
               </View>
             </StaggerItem>
 
-            {optionsError && !isLoadingOptions ? (
-              <StaggerItem order={2}>
-                <WalletOptionsError message={optionsError} onRetry={() => void fetchOptions()} />
-              </StaggerItem>
-            ) : null}
+            <StaggerItem order={2}>
+              <View style={styles.sectionIntro}>
+                <Text style={styles.sectionTitle}>Add to your Regents Balance</Text>
+                {regentsBalanceWallet ? (
+                  <Text style={styles.sectionBody}>
+                    Pick an amount, choose Apple Pay when available, and review before USDC is added.
+                  </Text>
+                ) : null}
+              </View>
+            </StaggerItem>
 
             <StaggerItem order={3}>
-              <View style={styles.sectionIntro}>
-                <Text style={styles.sectionTitle}>Add USDC</Text>
-                <Text style={styles.sectionBody}>
-                  Pick an amount, choose Apple Pay when available, and review before USDC is added.
-                </Text>
-              </View>
+              {regentsBalanceWallet ? (
+                <AddUsdc
+                  destinationAddress={regentsBalanceWallet}
+                  destinationLabel="your Regents Balance"
+                  onSwipeActiveChange={setIsSwipeActive}
+                />
+              ) : (
+                <View style={styles.setupCard}>
+                  <RegentsBalanceSetup />
+                </View>
+              )}
             </StaggerItem>
 
             <StaggerItem order={4}>
-              <OnrampForm
-                address={address}
-                amount={amount}
-                buyConfig={buyConfig}
-                currentQuote={currentQuote}
-                fetchQuote={fetchQuote}
-                getAvailableAssets={getAvailableAssets}
-                getAvailableNetworks={getAvailableNetworks}
-                isLoading={isProcessingPayment}
-                isLoadingOptions={isLoadingOptions}
-                isLoadingQuote={isLoadingQuote}
-                onAddressChange={setAddress}
-                onAmountChange={setAmount}
-                onNetworkChange={onNetworkChange}
-                onRegionChange={(country, subdivision) => setRegionKey(`${country}-${subdivision || ''}`)}
-                onSubmit={handleSubmit}
-                onSwipeActiveChange={setIsSwipeActive}
-                options={options}
-                paymentCurrencies={paymentCurrencies}
-              />
-            </StaggerItem>
-
-            <StaggerItem order={5}>
               <View style={styles.sectionIntro}>
-                <Text style={styles.sectionTitle}>Wallet details</Text>
+                <Text style={styles.sectionTitle}>Phone wallet</Text>
                 <Text style={styles.sectionBody}>
-                  See your funds, copy your address, and send USDC when an agent needs a budget.
+                  Your phone wallet pays agent requests and bids. Send USDC from it to your Regents Balance any time.
                 </Text>
               </View>
             </StaggerItem>
 
-            <StaggerItem order={6}>
+            <StaggerItem order={5}>
               <WalletDetailsSection walletDetails={walletDetails} />
             </StaggerItem>
           </StaggerGroup>
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {guestCheckoutVisible && activePaymentMethod ? (
-        <APIGuestCheckoutWidget
-          paymentUrl={hostedUrl}
-          paymentMethod={activePaymentMethod as 'GUEST_CHECKOUT_APPLE_PAY' | 'GUEST_CHECKOUT_GOOGLE_PAY'}
-          onClose={closeGuestCheckout}
-          setIsProcessingPayment={setIsProcessingPayment}
-          onAlert={(title, message, type) => {
-            const transactionSummary = currentTransaction
-              ? `\n\n${currentTransaction.amount} ${currentTransaction.paymentCurrency} → ${currentTransaction.asset} (${getNetworkLabel(currentTransaction.network)})`
-              : '';
-
-            setAlertState({
-              visible: true,
-              title,
-              message: `${message}${transactionSummary}`,
-              type,
-            });
-          }}
-        />
-      ) : null}
-
-      <CoinbaseAlert
-        visible={alertState.visible}
-        title={alertState.title}
-        message={alertState.message}
-        type={alertState.type}
-        confirmText={alertState.confirmText}
-        cancelText={alertState.cancelText || 'Dismiss'}
-        onConfirm={() => void handleAlertConfirm()}
-        onCancel={handleAlertCancel}
-      />
     </SafeAreaView>
   );
 }
@@ -474,6 +326,14 @@ function makeStyles({ colors, fonts }: Theme) {
     fontSize: 12,
     lineHeight: 18,
     fontFamily: fonts.ui,
+  },
+  setupCard: {
+    marginHorizontal: 16,
+    padding: 16,
+    borderRadius: 20,
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: colors.hairlineStrong,
   },
   sectionIntro: {
     marginHorizontal: 16,

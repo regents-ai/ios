@@ -17,7 +17,6 @@ import { getMotionPreset } from '@/components/motion/easePresets';
 import { useReducedMotion } from '@/components/motion/useReducedMotion';
 import { setCountry, setSubdivision } from '@/utils/state/locationState';
 import { clearPostAuthDestination, landAfterSignIn } from '@/utils/state/postAuthDestination';
-import { setCurrentSolanaAddress, setCurrentWalletAddress } from '@/utils/state/walletRuntimeState';
 import { useIsInitialized, useSignOut } from '@coinbase/cdp-hooks';
 import { router, useRootNavigationState, useSegments } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -63,8 +62,6 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error('Sign out failed:', error);
     } finally {
-      setCurrentWalletAddress(null);
-      setCurrentSolanaAddress(null);
       setCountry('US');
       setSubdivision('CA');
       setStartupTimeoutReached(false);

@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { type Href, useRouter } from 'expo-router';
 
 import { useRegentsAuth } from '@/hooks/useRegentsAuth';
-import type { OnrampFormData } from '@/components/onramp/onramp-form-types';
+import { PURCHASE_ASSET, PURCHASE_NETWORK, type OnrampFormData } from '@/components/onramp/onramp-form-types';
 import { routes } from '@/utils/navigation/routes';
 import {
   clearPendingForm,
@@ -10,7 +10,6 @@ import {
 } from '@/utils/state/flowRuntimeState';
 import { openCoinbaseWidgetSession } from '@/utils/onramp/openCoinbaseWidgetSession';
 import { getVerifiedPhone } from '@/utils/state/verificationState';
-import { getWalletAddressForNetwork } from '@/utils/state/walletRuntimeState';
 import { userFacingMessage } from '@/utils/userFacingError';
 import {
   createGuestCheckoutDebugInfo,
@@ -34,26 +33,18 @@ type Params = {
   createOrder: (formData: OnrampFormData) => Promise<void>;
   createWidgetSession: (formData: OnrampFormData) => Promise<string | undefined>;
   currentUser: any;
-  evmAddress?: string | null;
-  getAssetSymbolFromName: (assetName: string) => string;
-  getNetworkNameFromDisplayName: (displayName: string) => string;
   setIsProcessingPayment: (value: boolean) => void;
   signOutIdentity: () => Promise<void>;
   signOutWallet: () => Promise<void>;
-  solanaAddress?: string | null;
 };
 
 export function useWalletOnrampSubmit({
   createOrder,
   createWidgetSession,
   currentUser,
-  evmAddress,
-  getAssetSymbolFromName,
-  getNetworkNameFromDisplayName,
   setIsProcessingPayment,
   signOutIdentity,
   signOutWallet,
-  solanaAddress,
 }: Params) {
   const router = useRouter();
   const { linkedPhone } = useRegentsAuth();
@@ -114,36 +105,20 @@ export function useWalletOnrampSubmit({
     [currentTransaction]
   );
 
-  const resolveTargetAddress = useCallback(
-    (networkApiName: string, fallbackAddress: string) => {
-      return getWalletAddressForNetwork(networkApiName) ?? fallbackAddress;
-    },
-    []
-  );
-
   const handleSubmit = useCallback(
     async (formData: OnrampFormData) => {
       setIsProcessingPayment(true);
 
-      const networkApiName = getNetworkNameFromDisplayName(formData.network);
-      const assetApiName = getAssetSymbolFromName(formData.asset);
-      const updatedFormData = {
-        ...formData,
-        network: networkApiName,
-        asset: assetApiName,
-        address: resolveTargetAddress(networkApiName, formData.address),
-      };
-
       try {
         setCurrentTransaction({
-          amount: updatedFormData.amount,
-          paymentCurrency: updatedFormData.paymentCurrency || 'USD',
-          asset: assetApiName,
-          network: networkApiName,
+          amount: formData.amount,
+          paymentCurrency: formData.paymentCurrency || 'USD',
+          asset: PURCHASE_ASSET,
+          network: PURCHASE_NETWORK,
         });
 
         if ((formData.paymentMethod || '').toUpperCase() === 'COINBASE_WIDGET') {
-          const url = await createWidgetSession(updatedFormData);
+          const url = await createWidgetSession(formData);
           if (url) {
             await openCoinbaseWidgetSession({
               router,
@@ -154,13 +129,13 @@ export function useWalletOnrampSubmit({
           return;
         }
 
-        await createOrder(updatedFormData);
+        await createOrder(formData);
       } catch (error: any) {
         const isGooglePay = formData.paymentMethod === 'GUEST_CHECKOUT_GOOGLE_PAY';
         const paymentLabel = isGooglePay ? 'Google Pay' : 'Apple Pay';
 
         if (error.code === 'MISSING_EMAIL') {
-          setPendingForm(updatedFormData);
+          setPendingForm(formData);
           setAlertState({
             visible: true,
             title: `Link Email for ${paymentLabel}`,
@@ -173,7 +148,7 @@ export function useWalletOnrampSubmit({
         }
 
         if (error.code === 'MISSING_PHONE') {
-          setPendingForm(updatedFormData);
+          setPendingForm(formData);
           const cdpPhone = linkedPhone;
 
           if (cdpPhone) {
@@ -227,7 +202,7 @@ export function useWalletOnrampSubmit({
         }
 
         if (error.code === 'PHONE_EXPIRED') {
-          setPendingForm(updatedFormData);
+          setPendingForm(formData);
           const expiredPhone = getVerifiedPhone();
           const isUSPhone = expiredPhone?.startsWith('+1');
           const disclaimer = isUSPhone
@@ -289,11 +264,8 @@ export function useWalletOnrampSubmit({
     [
       createOrder,
       createWidgetSession,
-      getAssetSymbolFromName,
-      getNetworkNameFromDisplayName,
       linkedPhone,
       partnerUserRef,
-      resolveTargetAddress,
       router,
       setIsProcessingPayment,
       showSupportError,

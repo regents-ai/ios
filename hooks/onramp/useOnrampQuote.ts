@@ -1,25 +1,21 @@
 import { useCallback, useRef, useState } from 'react';
 
+import { PURCHASE_ASSET, PURCHASE_NETWORK } from '@/components/onramp/onramp-form-types';
 import { fetchBuyQuote } from '@/utils/fetchBuyQuote';
 import { createLatestRequestGate, type LatestRequestGate } from '@/utils/async/latestRequestGate';
 
 type QuoteRequest = {
   amount: string;
-  asset: string;
-  network: string;
+  destinationAddress: string;
   paymentCurrency: string;
   paymentMethod?: string;
 };
 
 type UseOnrampQuoteArgs = {
-  getAssetSymbolFromName: (assetName: string) => string;
-  getNetworkNameFromDisplayName: (displayName: string) => string;
   regentsUserId?: string | null;
 };
 
 export function useOnrampQuote({
-  getAssetSymbolFromName,
-  getNetworkNameFromDisplayName,
   regentsUserId,
 }: UseOnrampQuoteArgs) {
   const [currentQuote, setCurrentQuote] = useState<any>(null);
@@ -36,7 +32,7 @@ export function useOnrampQuote({
       const isLatestRequest = () => quoteRequestGate.isLatest(requestId);
       const amount = Number.parseFloat(formData?.amount as any);
 
-      if (!formData.amount || !formData.asset || !formData.network || !Number.isFinite(amount) || amount <= 0) {
+      if (!formData.amount || !Number.isFinite(amount) || amount <= 0) {
         setCurrentQuote(null);
         setIsLoadingQuote(false);
         return;
@@ -44,15 +40,14 @@ export function useOnrampQuote({
 
       try {
         setIsLoadingQuote(true);
-        const assetSymbol = getAssetSymbolFromName(formData.asset);
-        const networkName = getNetworkNameFromDisplayName(formData.network);
         const userId = regentsUserId || 'unknown-user';
 
         const quote = await fetchBuyQuote({
           paymentAmount: formData.amount,
           paymentCurrency: formData.paymentCurrency,
-          purchaseCurrency: assetSymbol,
-          destinationNetwork: networkName,
+          purchaseCurrency: PURCHASE_ASSET,
+          destinationNetwork: PURCHASE_NETWORK,
+          destinationAddress: formData.destinationAddress,
           paymentMethod: formData.paymentMethod || 'COINBASE_WIDGET',
           partnerUserRef: userId,
         });
@@ -65,7 +60,7 @@ export function useOnrampQuote({
         if (!isLatestRequest()) {
           return;
         }
-        console.log('Failed to fetch quote (unsupported network or demo address unavailable):', error);
+        console.log('Failed to fetch quote:', error);
         setCurrentQuote(null);
       } finally {
         if (isLatestRequest()) {
@@ -73,7 +68,7 @@ export function useOnrampQuote({
         }
       }
     },
-    [getAssetSymbolFromName, getNetworkNameFromDisplayName, quoteRequestGate, regentsUserId]
+    [quoteRequestGate, regentsUserId]
   );
 
   return {

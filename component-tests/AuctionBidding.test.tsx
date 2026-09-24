@@ -93,9 +93,14 @@ function position(overrides: Partial<AutolaunchAuctionPosition> = {}): Autolaunc
 const PASS = { ok: true };
 const FAIL = { ok: false, reason: 'check_unavailable' };
 
-async function renderBidding() {
+const usdcAuction: AutolaunchBaseAuction = {
+  ...auction,
+  quote_token: { address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', symbol: 'USDC', decimals: 6 },
+};
+
+async function renderBidding(shown: AutolaunchBaseAuction = auction) {
   const screen = renderThemed(
-    <AuctionBidding auction={auction} showAlert={jest.fn()} setToast={jest.fn()} openOnAutolaunch={jest.fn()} />
+    <AuctionBidding auction={shown} showAlert={jest.fn()} setToast={jest.fn()} openOnAutolaunch={jest.fn()} />
   );
   await act(async () => {
     mockFocusCallback?.();
@@ -180,6 +185,41 @@ describe('Auction bidding and the live treasury check', () => {
       maxPrice: '0.5',
     });
     expect(mockSendUserOperation).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers to add the missing USDC on a USDC auction, and Place bid still reaches the wallet', async () => {
+    mockCheckTreasury.mockResolvedValue(PASS);
+    mockGetPosition.mockResolvedValue(position({ wallet_currency_balance: '4' }));
+
+    const screen = await renderBidding(usdcAuction);
+    await waitFor(() => expect(screen.getByLabelText('Bid amount')).toBeTruthy());
+    fireEvent.changeText(screen.getByLabelText('Bid amount'), '10');
+    expect(screen.getByText('Your phone wallet holds 4.00 USDC. This needs 10.00 USDC.')).toBeTruthy();
+    expect(screen.getByText('Add USDC to pay this')).toBeTruthy();
+
+    await fillAndReview(screen);
+    expect(screen.getByText('Add USDC to pay this')).toBeTruthy();
+    await act(async () => {
+      fireEvent.press(screen.getByText('Place bid'));
+    });
+    expect(mockSendUserOperation).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers no USDC when the auction takes another currency or the wallet holds enough', async () => {
+    mockCheckTreasury.mockResolvedValue(PASS);
+    mockGetPosition.mockResolvedValue(position({ wallet_currency_balance: '4' }));
+
+    const regentScreen = await renderBidding();
+    await waitFor(() => expect(regentScreen.getByLabelText('Bid amount')).toBeTruthy());
+    fireEvent.changeText(regentScreen.getByLabelText('Bid amount'), '10');
+    expect(regentScreen.queryByText('Add USDC to pay this')).toBeNull();
+    regentScreen.unmount();
+
+    mockGetPosition.mockResolvedValue(position({ wallet_currency_balance: '10' }));
+    const usdcScreen = await renderBidding(usdcAuction);
+    await waitFor(() => expect(usdcScreen.getByLabelText('Bid amount')).toBeTruthy());
+    fireEvent.changeText(usdcScreen.getByLabelText('Bid amount'), '10');
+    expect(usdcScreen.queryByText('Add USDC to pay this')).toBeNull();
   });
 
   it('collects a bid while the check does not pass, without asking for it', async () => {

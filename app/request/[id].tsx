@@ -16,6 +16,7 @@ import { SpinningRefreshIcon } from '@/components/motion/SpinningRefreshIcon';
 import { CoinbaseAlert } from '@/components/ui/CoinbaseAlerts';
 import { ProgressToast } from '@/components/ui/ProgressToast';
 import { RegentPressable } from '@/components/ui/RegentPressable';
+import { AddUsdcToPay } from '@/components/wallet/AddUsdcToPay';
 import { showUpdatedPaymentRequest } from '@/hooks/usePaymentRequests';
 import { useCoinbaseAlert } from '@/hooks/useCoinbaseAlert';
 import { useTheme, type Theme } from '@/theme/ThemeProvider';
@@ -62,6 +63,8 @@ export default function PaymentRequestScreen() {
   const [loadFailure, setLoadFailure] = useState<{ title: string; message: string } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [toast, setToast] = useState<ProgressToastState | null>(null);
+  // The phone wallet's USDC, or null until it is read or when it can't be.
+  const [walletUsdc, setWalletUsdc] = useState<string | null>(null);
   // A payment the wallet reported as sent that Base has not yet confirmed for this request.
   const [uncheckedTxHash, setUncheckedTxHash] = useState<string | null>(null);
   // The last payment this screen sent.
@@ -100,10 +103,25 @@ export default function PaymentRequestScreen() {
     }
   }, [requestId, showAlert, showRequest]);
 
+  const loadWalletUsdc = useCallback(async () => {
+    if (!smartAccount) {
+      setWalletUsdc(null);
+      return;
+    }
+
+    try {
+      const portfolio = await regentApi.getPortfolio({ wallets: [smartAccount] });
+      setWalletUsdc(portfolio.wallets[0]?.usdc_balance ?? null);
+    } catch {
+      setWalletUsdc(null);
+    }
+  }, [smartAccount]);
+
   useFocusEffect(
     useCallback(() => {
       void loadRequest();
-    }, [loadRequest])
+      void loadWalletUsdc();
+    }, [loadRequest, loadWalletUsdc])
   );
 
   // The server confirms the payment came from this person's own wallet, so
@@ -346,6 +364,7 @@ export default function PaymentRequestScreen() {
         {smartAccount ? (
           <View style={styles.actions}>
             {settledNote ? <Text style={styles.settledNote}>{settledNote}</Text> : null}
+            {walletUsdc !== null ? <AddUsdcToPay held={walletUsdc} needed={request.amount} /> : null}
             <RegentPressable style={styles.primaryButton} onPress={() => void pay()}>
               <Ionicons name="paper-plane-outline" size={16} color={colors.onAccent} />
               <Text style={styles.primaryButtonText}>Pay {request.amount} USDC</Text>

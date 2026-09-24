@@ -1,45 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useMemo } from 'react';
-import { Image, StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { SwipeToConfirm } from '@/components/ui/SwipeToConfirm';
 import { LiveValueFlash } from '@/components/motion/LiveValueFlash';
 import { RegentPressable } from '@/components/ui/RegentPressable';
 import { useTheme, type Theme } from '@/theme/ThemeProvider';
-
-export function FocusPathSection({
-  isBaseUsdcPath,
-  onPress,
-}: {
-  isBaseUsdcPath: boolean;
-  onPress: () => void;
-}) {
-  const theme = useTheme();
-  const styles = useMemo(() => makeStyles(theme), [theme]);
-  return (
-    <RegentPressable haptic="selection" pressStyle="card" style={[styles.focusCard, isBaseUsdcPath && styles.focusCardActive]} onPress={onPress}>
-      <View style={styles.focusHeader}>
-        <View style={styles.focusCopy}>
-          <Text style={styles.eyebrow}>Apple Pay to USDC on Base</Text>
-          <Text style={styles.focusTitle}>Fund an agent working balance.</Text>
-        </View>
-        <View style={[styles.badge, isBaseUsdcPath && styles.badgeActive]}>
-          <Text style={[styles.badgeText, isBaseUsdcPath && styles.badgeTextActive]}>
-            {isBaseUsdcPath ? 'Ready' : 'Use this'}
-          </Text>
-        </View>
-      </View>
-      <Text style={styles.bodyText}>Add USDC, then send it to an agent for tools, services, and work.</Text>
-      <View style={styles.tagRow}>
-        {['Apple Pay', 'USDC on Base', 'Agent budget'].map(tag => (
-          <View key={tag} style={styles.tag}>
-            <Text style={styles.tagText}>{tag}</Text>
-          </View>
-        ))}
-      </View>
-    </RegentPressable>
-  );
-}
 
 export function AmountQuoteSection({
   amount,
@@ -182,54 +148,6 @@ function QuoteRow({ label, total, value }: { label: string; total?: boolean; val
   );
 }
 
-export function AssetNetworkSection({
-  asset,
-  assetIconUrl,
-  isBaseUsdcPath,
-  network,
-  networkIconUrl,
-  onOpenAssetPicker,
-  onOpenNetworkPicker,
-}: {
-  asset: string;
-  assetIconUrl?: string | null;
-  isBaseUsdcPath: boolean;
-  network: string;
-  networkIconUrl?: string | null;
-  onOpenAssetPicker: () => void;
-  onOpenNetworkPicker: () => void;
-}) {
-  const theme = useTheme();
-  const { colors } = theme;
-  const styles = useMemo(() => makeStyles(theme), [theme]);
-  return (
-    <View style={styles.card}>
-      <RegentPressable haptic="selection" pressStyle="chip" style={styles.selectChipLarge} onPress={onOpenAssetPicker}>
-        <View style={styles.selectContent}>
-          {assetIconUrl ? <Image source={{ uri: assetIconUrl }} style={styles.coinIcon} /> : null}
-          <Text style={styles.selectText}>{asset}</Text>
-        </View>
-        <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
-      </RegentPressable>
-      <Text style={styles.helper}>
-        {isBaseUsdcPath
-          ? 'This keeps your agent funding path on Base with USDC.'
-          : 'Base USDC is the quickest path for most agent payments.'}
-      </Text>
-      <View style={[styles.rowBetween, styles.dividerTop]}>
-        <Text style={styles.label}>Network</Text>
-        <RegentPressable haptic="selection" pressStyle="chip" style={styles.selectChipLarge} onPress={onOpenNetworkPicker}>
-          <View style={styles.selectContent}>
-            {networkIconUrl ? <Image source={{ uri: networkIconUrl }} style={styles.coinIcon} /> : null}
-            <Text style={styles.selectText}>{network}</Text>
-          </View>
-          <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
-        </RegentPressable>
-      </View>
-    </View>
-  );
-}
-
 export function PaymentMethodSection({
   paymentMethodLabel,
   onOpenPaymentPicker,
@@ -324,8 +242,6 @@ export function LocationSection({
 
 export function ConfirmationSection({
   disabled,
-  footerContent,
-  isBaseUsdcPath,
   isLoading,
   onOpenGuestCheckoutTerms,
   onOpenPrivacyPolicy,
@@ -335,8 +251,6 @@ export function ConfirmationSection({
   onSwipeStart,
 }: {
   disabled: boolean;
-  footerContent?: React.ReactNode;
-  isBaseUsdcPath: boolean;
   isLoading: boolean;
   onOpenGuestCheckoutTerms: () => void;
   onOpenPrivacyPolicy: () => void;
@@ -350,7 +264,7 @@ export function ConfirmationSection({
   return (
     <>
       <SwipeToConfirm
-        label={isBaseUsdcPath ? 'Swipe to add USDC' : 'Swipe to add funds'}
+        label="Swipe to add USDC"
         disabled={disabled}
         onConfirm={onSwipeConfirm}
         isLoading={isLoading}
@@ -365,7 +279,6 @@ export function ConfirmationSection({
           <Text style={styles.termsLink} onPress={onOpenPrivacyPolicy}>Privacy Policy</Text>
         </Text>
       </View>
-      {footerContent}
     </>
   );
 }
@@ -379,82 +292,6 @@ function makeStyles({ colors, fonts }: Theme) {
     borderColor: colors.hairlineStrong,
     padding: 16,
     gap: 12,
-  },
-  focusCard: {
-    backgroundColor: colors.accentWash,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: colors.hairlineStrong,
-    padding: 18,
-    gap: 12,
-  },
-  focusCardActive: {
-    backgroundColor: colors.surfaceElevated,
-  },
-  focusHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: 12,
-  },
-  focusCopy: {
-    flex: 1,
-    gap: 4,
-  },
-  focusTitle: {
-    color: colors.text,
-    fontSize: 24,
-    lineHeight: 28,
-    fontFamily: fonts.title,
-  },
-  eyebrow: {
-    color: colors.accent,
-    fontSize: 12,
-    fontFamily: fonts.title,
-  },
-  badge: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: colors.surfaceElevated,
-    borderWidth: 1,
-    borderColor: colors.hairlineStrong,
-  },
-  badgeActive: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
-  },
-  badgeText: {
-    color: colors.accent,
-    fontSize: 11,
-    fontFamily: fonts.ui,
-  },
-  badgeTextActive: {
-    color: colors.onAccent,
-  },
-  bodyText: {
-    color: colors.textMuted,
-    fontSize: 13,
-    lineHeight: 20,
-    fontFamily: fonts.ui,
-  },
-  tagRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  tag: {
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 999,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.hairlineStrong,
-  },
-  tagText: {
-    color: colors.text,
-    fontSize: 11,
-    fontFamily: fonts.ui,
   },
   rowBetween: {
     flexDirection: 'row',
@@ -625,26 +462,10 @@ function makeStyles({ colors, fonts }: Theme) {
     lineHeight: 16,
     fontFamily: fonts.ui,
   },
-  selectContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flexShrink: 1,
-  },
   selectText: {
     color: colors.text,
     fontSize: 14,
     fontFamily: fonts.ui,
-  },
-  coinIcon: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-  },
-  dividerTop: {
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: colors.hairlineStrong,
   },
   alertCard: {
     borderRadius: 16,

@@ -13,10 +13,6 @@ import {
   setSubdivision,
 } from '@/utils/state/locationState';
 import {
-  setCurrentSolanaAddress,
-  setCurrentWalletAddress,
-} from '@/utils/state/walletRuntimeState';
-import {
   daysUntilExpiry,
   getLifetimeTransactionThreshold,
   getVerifiedPhone,
@@ -182,8 +178,6 @@ export default function SettingsScreen() {
     } catch (error) {
       console.error('Sign out failed:', error);
     } finally {
-      setCurrentWalletAddress(null);
-      setCurrentSolanaAddress(null);
       setCountry('US');
       setSubdivision('CA');
       router.replace('/auth/login');

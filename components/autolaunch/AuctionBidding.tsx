@@ -22,6 +22,7 @@
 
 import { LiveValueFlash } from '@/components/motion/LiveValueFlash';
 import { RegentPressable } from '@/components/ui/RegentPressable';
+import { AddUsdcToPay } from '@/components/wallet/AddUsdcToPay';
 import { useTheme, type Theme } from '@/theme/ThemeProvider';
 import type { CoinbaseAlertInput } from '@/hooks/useCoinbaseAlert';
 import type {
@@ -41,6 +42,7 @@ import {
 } from '@/utils/autolaunch/bidApi';
 import { quoteAutolaunchBid } from '@/utils/autolaunch/client';
 import { autolaunchNetworkForChain, autolaunchWalletCalls } from '@/utils/onchain/autolaunchWalletAction';
+import { isBaseUsdc } from '@/utils/onchain/baseUsdc';
 import {
   dismissToast,
   resolveToastSuccess,
@@ -388,6 +390,11 @@ export function AuctionBidding({ auction, showAlert, setToast, openOnAutolaunch 
   const stateCopy = position ? phaseCopy(position) : null;
   const estimateCopy = estimateWords(quote, quoteState, tokenSymbol);
   const canReview = hasAmount && hasMaxPrice;
+  const bidsInBaseUsdc = isBaseUsdc(auction.chain_id, auction.quote_token.address);
+  const addUsdcOffer =
+    position && bidsInBaseUsdc && hasAmount ? (
+      <AddUsdcToPay held={position.wallet_currency_balance} needed={amount.trim()} />
+    ) : null;
 
   return (
     <>
@@ -441,6 +448,7 @@ export function AuctionBidding({ auction, showAlert, setToast, openOnAutolaunch 
               style={styles.input}
               accessibilityLabel="Bid amount"
             />
+            {addUsdcOffer}
 
             <Text style={styles.fieldLabel}>Most to pay per token{currencySymbol ? ` in ${currencySymbol}` : ''}</Text>
             <TextInput
@@ -483,6 +491,7 @@ export function AuctionBidding({ auction, showAlert, setToast, openOnAutolaunch 
               <Text style={styles.reviewValue}>{amountWords(maxPrice.trim(), currencySymbol)}</Text>
             </View>
             {estimateCopy ? <Text style={styles.estimateText}>{estimateCopy}</Text> : null}
+            {addUsdcOffer}
             <Text style={styles.fieldHint}>
               Your wallet asks you to confirm once. The auction fills bids block by block at each block&apos;s
               clearing price, never above your maximum, and unspent money comes back after the close.

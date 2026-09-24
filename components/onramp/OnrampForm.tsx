@@ -1,5 +1,4 @@
-import { useCurrentUser } from '@coinbase/cdp-hooks';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Linking, Platform, StyleSheet, View } from 'react-native';
 
 import { useTheme, type Theme } from '@/theme/ThemeProvider';
@@ -13,15 +12,13 @@ import {
   getVerifiedPhone,
   isPhoneFresh60d,
 } from '@/utils/state/verificationState';
-import { getCurrentWalletAddress, setCurrentNetwork } from '@/utils/state/walletRuntimeState';
 import { paymentMethodLabel as describePaymentMethod } from '@/utils/onramp/paymentMethodLabel';
+import { MAX_PURCHASE_USD, MIN_PURCHASE_USD } from '@/utils/onramp/purchaseLimits';
 
 import {
   AmountQuoteSection,
-  AssetNetworkSection,
   ConfirmationSection,
   EligibilityNoticeSection,
-  FocusPathSection,
   LocationSection,
   PaymentMethodSection,
 } from './onramp-form-sections';
@@ -29,20 +26,15 @@ import type { OnrampFormData } from './onramp-form-types';
 import { PickerSheet } from './picker-sheet';
 
 type OnrampFormProps = {
-  address: string;
   amount: string;
   buyConfig?: any;
   currentQuote: any;
+  destinationAddress: string;
+  destinationLabel: string;
   fetchQuote: (formData: any) => void;
-  footerContent?: React.ReactNode;
-  getAvailableAssets: (selectedNetwork?: string) => any[];
-  getAvailableNetworks: (selectedAsset?: string) => any[];
   isLoading: boolean;
-  isLoadingOptions: boolean;
   isLoadingQuote: boolean;
-  onAddressChange: (address: string) => void;
   onAmountChange: (amount: string) => void;
-  onNetworkChange?: (network: string) => void;
   onRegionChange?: (country: string, subdivision: string) => void;
   onSwipeActiveChange?: (active: boolean) => void;
   onSubmit: (data: OnrampFormData) => void;
@@ -50,23 +42,18 @@ type OnrampFormProps = {
   paymentCurrencies: string[];
 };
 
-type SheetKey = 'asset' | 'country' | 'currency' | 'network' | 'payment' | 'subdivision' | null;
+type SheetKey = 'country' | 'currency' | 'payment' | 'subdivision' | null;
 
 export function OnrampForm({
-  address,
   amount,
   buyConfig,
   currentQuote,
+  destinationAddress,
+  destinationLabel,
   fetchQuote,
-  footerContent,
-  getAvailableAssets,
-  getAvailableNetworks,
   isLoading,
-  isLoadingOptions,
   isLoadingQuote,
-  onAddressChange,
   onAmountChange,
-  onNetworkChange,
   onRegionChange,
   onSwipeActiveChange,
   onSubmit,
@@ -76,11 +63,7 @@ export function OnrampForm({
   const theme = useTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const { isAuthenticated, linkedEmail, linkedPhone } = useRegentsAuth();
-  const { currentUser } = useCurrentUser();
-  const prevNetworkRef = useRef('Base');
 
-  const [asset, setAsset] = useState('USDC');
-  const [network, setNetwork] = useState('Base');
   const [paymentMethod, setPaymentMethod] = useState('GUEST_CHECKOUT_APPLE_PAY');
   const [paymentCurrency, setPaymentCurrency] = useState('USD');
   const [country, setCountryLocal] = useState(getCountry());
@@ -92,7 +75,6 @@ export function OnrampForm({
   const isApplePay = paymentMethod === 'GUEST_CHECKOUT_APPLE_PAY';
   const isGooglePay = paymentMethod === 'GUEST_CHECKOUT_GOOGLE_PAY';
   const isGuestCheckout = isApplePay || isGooglePay;
-  const isBaseUsdcPath = asset === 'USDC' && network === 'Base';
 
   const countries = useMemo(() => {
     const source = buyConfig?.countries ?? options?.countries;
@@ -103,9 +85,6 @@ export function OnrampForm({
     const source = buyConfig?.countries ?? options?.countries;
     return source?.find((entry: any) => entry.id === 'US')?.subdivisions ?? [];
   }, [buyConfig, options]);
-
-  const availableNetworks = useMemo(() => getAvailableNetworks(asset), [asset, getAvailableNetworks]);
-  const availableAssets = useMemo(() => getAvailableAssets(network), [getAvailableAssets, network]);
 
   const displayCurrencies = useMemo(() => {
     const list = Array.isArray(paymentCurrencies) && paymentCurrencies.length ? paymentCurrencies : ['USD'];
@@ -141,48 +120,7 @@ export function OnrampForm({
   const needsGuestCheckoutVerification = guestCheckoutBlocker === 'verification';
   const isUnsupportedGuestCheckoutRegion = guestCheckoutBlocker === 'region';
 
-  const isEvmNetwork = useMemo(() => {
-    const normalized = network.toLowerCase();
-    return [
-      'ethereum',
-      'base',
-      'polygon',
-      'arbitrum',
-      'optimism',
-      'avalanche',
-      'avax',
-      'bsc',
-      'fantom',
-      'linea',
-      'zksync',
-      'scroll',
-    ].some(key => normalized.includes(key));
-  }, [network]);
-
-  const isSolanaNetwork = useMemo(() => {
-    const normalized = network.toLowerCase();
-    return ['solana', 'sol'].some(key => normalized.includes(key));
-  }, [network]);
-
-  const smartAccount = useMemo(() => {
-    return currentUser?.evmSmartAccounts?.[0] as string | undefined;
-  }, [currentUser]);
-
   const isAmountValid = Number.isFinite(amountNumber) && amountNumber > 0;
-  const isEvmAddressValid = /^0x[0-9a-fA-F]{40}$/.test(address);
-  const isSolanaAddressValid =
-    !!address &&
-    address.length >= 32 &&
-    address.length <= 44 &&
-    /^[1-9A-HJ-NP-Za-km-z]+$/.test(address);
-  const needsSmartAccount = isEvmNetwork;
-  const hasSmartAccount = !!smartAccount;
-  const hasValidAddress = isEvmNetwork
-    ? isEvmAddressValid
-    : isSolanaNetwork
-      ? isSolanaAddressValid
-      : false;
-  const isFormValid = isAmountValid && !!network && !!asset && hasValidAddress && (!needsSmartAccount || hasSmartAccount);
 
   const currencyLimits = useMemo(() => {
     if (!options?.payment_currencies) {
@@ -196,10 +134,10 @@ export function OnrampForm({
 
     if (isGuestCheckout) {
       return {
-        min: 2,
-        max: 1000,
+        min: MIN_PURCHASE_USD,
+        max: MAX_PURCHASE_USD,
         currency: paymentCurrency,
-        display: `$2 - $1000 ${paymentCurrency}`,
+        display: `$${MIN_PURCHASE_USD} - $${MAX_PURCHASE_USD} ${paymentCurrency}`,
         quotePaymentMethod: paymentMethod,
       };
     }
@@ -274,7 +212,7 @@ export function OnrampForm({
     return { isValid: true, error: null, warning: null };
   }, [amountNumber, isAmountValid, isGuestCheckout, userLimits]);
 
-  const isFormValidWithLimits = isFormValid && limitsValidation.isValid && !guestCheckoutBlocker;
+  const isFormValidWithLimits = isAmountValid && limitsValidation.isValid && !guestCheckoutBlocker;
 
   const amountError = useMemo(() => {
     if (!currencyLimits || !amount || !Number.isFinite(amountNumber)) {
@@ -306,51 +244,6 @@ export function OnrampForm({
       setPaymentMethod(methods[0]?.value || 'COINBASE_WIDGET');
     }
   }, [methods, paymentMethod]);
-
-  useEffect(() => {
-    setCurrentNetwork(network);
-    onNetworkChange?.(network);
-  }, [network, onNetworkChange]);
-
-  useEffect(() => {
-    if (prevNetworkRef.current === network) {
-      return;
-    }
-
-    prevNetworkRef.current = network;
-    if (isEvmNetwork || isSolanaNetwork) {
-      const nextAddress = getCurrentWalletAddress();
-      if (nextAddress && nextAddress !== address) {
-        onAddressChange(nextAddress);
-      }
-    }
-  }, [address, isEvmNetwork, isSolanaNetwork, network, onAddressChange]);
-
-  useEffect(() => {
-    if (!isEvmNetwork && !isSolanaNetwork && address) {
-      onAddressChange('');
-    }
-  }, [address, isEvmNetwork, isSolanaNetwork, onAddressChange]);
-
-  useEffect(() => {
-    if (asset && availableNetworks.length > 0) {
-      const exists = availableNetworks.some((entry: any) => entry.display_name === network || entry.name === network);
-      if (!exists) {
-        const nextNetwork = availableNetworks[0];
-        setNetwork(nextNetwork?.display_name || nextNetwork?.name || '');
-      }
-    }
-  }, [asset, availableNetworks, network]);
-
-  useEffect(() => {
-    if (network && availableAssets.length > 0) {
-      const exists = availableAssets.some((entry: any) => entry.name === asset || entry.symbol === asset);
-      if (!exists) {
-        const nextAsset = availableAssets[0];
-        setAsset(nextAsset?.name || nextAsset?.symbol || '');
-      }
-    }
-  }, [asset, availableAssets, network]);
 
   const fetchUserLimitsData = useCallback(async () => {
     const freshPhone = getVerifiedPhone();
@@ -387,15 +280,14 @@ export function OnrampForm({
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {
-      if (!amount || !asset || !network) {
+      if (!amount) {
         return;
       }
 
       const quoteMethod = currencyLimits?.quotePaymentMethod || 'CARD';
       fetchQuote({
         amount,
-        asset,
-        network,
+        destinationAddress,
         paymentCurrency,
         paymentMethod: paymentMethod === 'COINBASE_WIDGET' ? quoteMethod : paymentMethod,
       });
@@ -403,7 +295,7 @@ export function OnrampForm({
     }, 500);
 
     return () => clearTimeout(timeoutId);
-  }, [amount, asset, currencyLimits?.quotePaymentMethod, fetchQuote, fetchUserLimitsData, network, paymentCurrency, paymentMethod]);
+  }, [amount, currencyLimits?.quotePaymentMethod, destinationAddress, fetchQuote, fetchUserLimitsData, paymentCurrency, paymentMethod]);
 
   const handleSwipeConfirm = useCallback(
     (reset: () => void) => {
@@ -414,24 +306,14 @@ export function OnrampForm({
 
       onSubmit({
         amount,
-        asset,
-        network,
-        address,
+        address: destinationAddress,
         paymentMethod,
         paymentCurrency,
         agreementAcceptedAt: new Date().toISOString(),
       });
     },
-    [address, amount, asset, isFormValidWithLimits, network, onSubmit, paymentCurrency, paymentMethod]
+    [amount, destinationAddress, isFormValidWithLimits, onSubmit, paymentCurrency, paymentMethod]
   );
-
-  const applyBaseUsdcPath = useCallback(() => {
-    setAsset('USDC');
-    setNetwork('Base');
-    if (paymentCurrency !== 'USD') {
-      setPaymentCurrency('USD');
-    }
-  }, [paymentCurrency]);
 
   const notices = useMemo(() => {
     const nextNotices: { title: string; message: string; tone?: 'warning' | 'error' | 'info' }[] = [];
@@ -457,31 +339,10 @@ export function OnrampForm({
       });
     }
 
-    if (!isEvmNetwork && !isSolanaNetwork) {
-      nextNotices.push({
-        title: 'Choose a supported network',
-        message:
-          'This wallet can buy on Base, Ethereum, and Solana right now.',
-        tone: 'warning',
-      });
-    } else if (needsSmartAccount && !hasSmartAccount) {
-      nextNotices.push({
-        title: 'Wallet setup needed',
-        message: 'This network is almost ready. Finish setting up your wallet, then come back to buy.',
-        tone: 'error',
-      });
-    } else if (!hasValidAddress) {
-      nextNotices.push({
-        title: 'Wallet needed',
-        message: `Connect a valid ${isEvmNetwork ? 'Base or Ethereum' : isSolanaNetwork ? 'Solana' : 'wallet'} address to continue.`,
-        tone: 'error',
-      });
-    } else if (isAuthenticated) {
+    if (isAuthenticated) {
       nextNotices.push({
         title: 'Real money',
-        message: address
-          ? `Successful purchases will move real money.\n\nBuying to: ${address}`
-          : 'Successful purchases will move real money.',
+        message: `Successful purchases will move real money.\n\nUSDC on Base goes to ${destinationLabel}: ${destinationAddress}`,
         tone: 'error',
       });
     }
@@ -494,24 +355,17 @@ export function OnrampForm({
 
     return nextNotices;
   }, [
-    address,
-    hasSmartAccount,
-    hasValidAddress,
+    destinationAddress,
+    destinationLabel,
     isAuthenticated,
-    isEvmNetwork,
-    isSolanaNetwork,
     isUnsupportedGuestCheckoutRegion,
     limitsValidation.error,
     limitsValidation.warning,
     linkedEmail,
     linkedPhone,
     needsGuestCheckoutVerification,
-    needsSmartAccount,
   ]);
 
-  const assetIconUrl = availableAssets.find((entry: any) => entry.name === asset || entry.symbol === asset)?.icon_url || null;
-  const networkIconUrl =
-    availableNetworks.find((entry: any) => entry.display_name === network || entry.name === network)?.icon_url || null;
   const paymentMethodLabel = methods.find(method => method.value === paymentMethod)?.display || paymentMethod;
 
   const openGuestCheckoutTerms = useCallback(() => Linking.openURL('https://www.coinbase.com/legal/guest-checkout/us'), []);
@@ -554,7 +408,6 @@ export function OnrampForm({
 
   return (
     <View style={styles.content}>
-      <FocusPathSection isBaseUsdcPath={isBaseUsdcPath} onPress={applyBaseUsdcPath} />
       <AmountQuoteSection
         amount={amount}
         amountError={amountError}
@@ -575,21 +428,10 @@ export function OnrampForm({
         }
         userLimits={userLimits}
       />
-      <AssetNetworkSection
-        asset={asset}
-        assetIconUrl={assetIconUrl}
-        isBaseUsdcPath={isBaseUsdcPath}
-        network={network}
-        networkIconUrl={networkIconUrl}
-        onOpenAssetPicker={() => setActiveSheet('asset')}
-        onOpenNetworkPicker={() => setActiveSheet('network')}
-      />
       <PaymentMethodSection paymentMethodLabel={paymentMethodLabel} onOpenPaymentPicker={() => setActiveSheet('payment')} />
       <EligibilityNoticeSection notices={notices} />
       <ConfirmationSection
         disabled={!isFormValidWithLimits}
-        footerContent={footerContent}
-        isBaseUsdcPath={isBaseUsdcPath}
         isLoading={isLoading}
         onOpenGuestCheckoutTerms={openGuestCheckoutTerms}
         onOpenPrivacyPolicy={openPrivacyPolicy}
@@ -610,29 +452,6 @@ export function OnrampForm({
         onClose={() => setActiveSheet(null)}
         items={displayCurrencies.map(currency => ({ key: currency, label: currency, selected: currency === paymentCurrency }))}
         onSelect={setPaymentCurrency}
-      />
-      <PickerSheet
-        visible={activeSheet === 'asset'}
-        onClose={() => setActiveSheet(null)}
-        items={availableAssets.map((entry: any, index: number) => ({
-          key: entry.name || entry.symbol || `asset-${index}`,
-          label: entry.name || entry.symbol || 'Unknown Asset',
-          iconUrl: entry.icon_url,
-          selected: (entry.name || entry.symbol) === asset,
-        }))}
-        onSelect={(item) => setAsset(item)}
-      />
-      <PickerSheet
-        visible={activeSheet === 'network'}
-        onClose={() => setActiveSheet(null)}
-        items={availableNetworks.map((entry: any, index: number) => ({
-          key: entry.display_name || entry.name || `network-${index}`,
-          label: entry.display_name || entry.name || 'Unknown Network',
-          iconUrl: entry.icon_url,
-          selected: (entry.display_name || entry.name) === network,
-        }))}
-        onSelect={(item) => setNetwork(item)}
-        loadingLabel={isLoadingOptions ? 'Loading networks...' : undefined}
       />
       <PickerSheet
         visible={activeSheet === 'payment'}

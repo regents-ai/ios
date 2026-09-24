@@ -44,8 +44,9 @@ The app also keeps "My agents": the list of agents a person funds. An agent is a
 ## What You Can Do Today
 
 - Open a mobile wallet after signing in.
-- Add USDC on Base, with Apple Pay shown when it is available for the user and region.
-- Send funds to another wallet or fund one of your agents.
+- See your Regents Balance on Home and add to it from Fund, buying USDC on Base with Apple Pay when it is available for the user and region.
+- Add the USDC the phone wallet is missing for a payment request or a USDC auction bid, straight from that screen.
+- Send funds to another wallet, to your Regents Balance, or to one of your agents.
 - Keep a list of your agents: add one by wallet address or pair it with a code, and see its Base USDC balance.
 - Pay or decline the USDC your paired agents ask for, from the Requests tab or straight from the notification.
 - Receive funds by copying the Base and Ethereum wallet address.
@@ -54,6 +55,12 @@ The app also keeps "My agents": the list of agents a person funds. An agent is a
 - Check $REGENT staking and reward actions from the Earn tab.
 
 Base USDC is the primary route for agent funding. Other balances may appear in the wallet detail view, but Base USDC remains the recommended path.
+
+## Regents Balance
+
+The Regents Balance is the USDC on Base in the wallet a person signs in with on regents.sh: the most recently verified Ethereum wallet on their account, other than the phone wallet. The app shows it on Home and adds to it from Fund, and never signs with it. With no such wallet, Home and Fund ask the person to sign in on regents.sh with a wallet.
+
+The phone wallet is separate. It pays agent requests and bids, and can send USDC to the Regents Balance at any time.
 
 ## My Agents
 

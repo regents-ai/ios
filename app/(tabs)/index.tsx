@@ -1,7 +1,8 @@
 import { useDialContentClearance } from '@/components/dial/dialLayout';
 import { ProfileButton } from '@/components/navigation/ProfileButton';
 import { RegentPressable } from '@/components/ui/RegentPressable';
-import { useRegentsAuth } from '@/hooks/useRegentsAuth';
+import { RegentsBalanceSetup } from '@/components/wallet/RegentsBalanceSetup';
+import { useRegentsBalanceWallet } from '@/hooks/useRegentsBalanceWallet';
 import { useTheme, type Theme } from '@/theme/ThemeProvider';
 import type { BaseWalletHoldings, MobileAgentsList } from '@/types/regents';
 import { formatWalletAddress } from '@/utils/agent-surfaces/formatters';
@@ -10,10 +11,8 @@ import { listAutolaunchAuctions } from '@/utils/autolaunch/client';
 import {
   agentCountCopy,
   agentsUsdcTotal,
-  MAX_PORTFOLIO_WALLETS,
   openAuctionCount,
   openAuctionsCopy,
-  websiteWalletAddresses,
 } from '@/utils/home/homeSummary';
 import { routes } from '@/utils/navigation/routes';
 import { displayTokenAmount } from '@/utils/onchain/tokenDisplay';
@@ -25,7 +24,6 @@ import { useFocusEffect, useRouter, type Href } from 'expo-router';
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
-  Linking,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -66,13 +64,8 @@ export default function HomeTab() {
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const dialClearance = useDialContentClearance();
   const { currentUser } = useCurrentUser();
-  const { privyUser } = useRegentsAuth();
   const phoneWallet = smartWalletAddress(currentUser?.evmSmartAccounts?.[0] as string | undefined);
-  const websiteWallets = useMemo(
-    () => websiteWalletAddresses(privyUser?.linked_accounts ?? [], phoneWallet),
-    [phoneWallet, privyUser?.linked_accounts],
-  );
-  const websiteWalletsKey = websiteWallets.join(',');
+  const regentsBalanceWallet = useRegentsBalanceWallet();
   const [refreshing, setRefreshing] = useState(false);
 
   const readPhoneWallet = useCallback(async () => {
@@ -83,28 +76,27 @@ export default function HomeTab() {
     return portfolio.wallets[0] ?? null;
   }, [phoneWallet]);
 
-  const readWebsiteWallets = useCallback(async () => {
-    const wallets = websiteWalletsKey ? websiteWalletsKey.split(',').slice(0, MAX_PORTFOLIO_WALLETS) : [];
-    if (wallets.length === 0) {
-      return [];
+  const readRegentsBalance = useCallback(async () => {
+    if (!regentsBalanceWallet) {
+      return null;
     }
-    const portfolio = await regentApi.getPortfolio({ wallets });
-    return portfolio.wallets;
-  }, [websiteWalletsKey]);
+    const portfolio = await regentApi.getPortfolio({ wallets: [regentsBalanceWallet] });
+    return portfolio.wallets[0] ?? null;
+  }, [regentsBalanceWallet]);
 
   const readAgents = useCallback(() => regentApi.listAgents(), []);
   const readAuctions = useCallback(async () => openAuctionCount(await listAutolaunchAuctions()), []);
   const readTechtree = useCallback(async () => (await fetchTechtreeResults()).cards[0] ?? null, []);
 
   const [phone, loadPhone, retryPhone] = useSection(readPhoneWallet);
-  const [website, loadWebsite, retryWebsite] = useSection(readWebsiteWallets);
+  const [regentsBalance, loadRegentsBalance, retryRegentsBalance] = useSection(readRegentsBalance);
   const [agents, loadAgents, retryAgents] = useSection(readAgents);
   const [auctions, loadAuctions, retryAuctions] = useSection(readAuctions);
   const [techtree, loadTechtree, retryTechtree] = useSection(readTechtree);
 
   const loadAll = useCallback(
-    () => Promise.all([loadPhone(), loadWebsite(), loadAgents(), loadAuctions(), loadTechtree()]),
-    [loadAgents, loadAuctions, loadPhone, loadTechtree, loadWebsite],
+    () => Promise.all([loadRegentsBalance(), loadPhone(), loadAgents(), loadAuctions(), loadTechtree()]),
+    [loadAgents, loadAuctions, loadPhone, loadRegentsBalance, loadTechtree],
   );
 
   useFocusEffect(
@@ -139,11 +131,28 @@ export default function HomeTab() {
         </View>
 
         <HomeCard
+          icon="wallet-outline"
+          title="Regents Balance"
+          action={regentsBalanceWallet ? { label: 'Add to Regents Balance', onPress: () => open(routes.wallet()) } : undefined}
+        >
+          {regentsBalanceWallet ? (
+            <>
+              <SectionBody state={regentsBalance} onRetry={retryRegentsBalance} failedCopy="Your Regents Balance isn't available right now.">
+                {(holdings) => (holdings ? <RegentsBalanceHoldings holdings={holdings} /> : null)}
+              </SectionBody>
+              <Text style={styles.viewOnly}>View only here. Add to it from Fund.</Text>
+            </>
+          ) : (
+            <RegentsBalanceSetup />
+          )}
+        </HomeCard>
+
+        <HomeCard
           icon="phone-portrait-outline"
           title="Phone wallet"
           action={{ label: 'Open Earn', onPress: () => open(routes.earn()) }}
         >
-          <SectionBody state={phone} onRetry={retryPhone} failedCopy="Balances aren't available right now.">
+          <SectionBody state={phone} onRetry={retryPhone} failedCopy="Your phone wallet isn't available right now.">
             {(holdings) =>
               holdings ? (
                 <WalletHoldings holdings={holdings} />
@@ -152,32 +161,6 @@ export default function HomeTab() {
               )
             }
           </SectionBody>
-        </HomeCard>
-
-        <HomeCard
-          icon="globe-outline"
-          title={websiteWallets.length > 1 ? 'Website wallets' : 'Website wallet'}
-          action={websiteWallets.length > 0 ? { label: 'Open regents.sh', onPress: () => void Linking.openURL('https://regents.sh') } : undefined}
-        >
-          {websiteWallets.length === 0 ? (
-            <Notice text="No website wallet is linked to your account." />
-          ) : (
-            <>
-              <Text style={styles.viewOnly}>View only. Manage it on regents.sh.</Text>
-              <SectionBody state={website} onRetry={retryWebsite} failedCopy="Balances aren't available right now.">
-                {(wallets) => (
-                  <View style={styles.walletList}>
-                    {wallets.map((holdings) => (
-                      <WalletHoldings key={holdings.wallet_address} holdings={holdings} />
-                    ))}
-                    {websiteWallets.length > MAX_PORTFOLIO_WALLETS ? (
-                      <Notice text={`Showing ${MAX_PORTFOLIO_WALLETS} of ${websiteWallets.length} wallets.`} />
-                    ) : null}
-                  </View>
-                )}
-              </SectionBody>
-            </>
-          )}
         </HomeCard>
 
         <HomeCard
@@ -292,6 +275,33 @@ function Notice({ text }: { text: string }) {
   );
 }
 
+/** The Regents Balance: its USDC first and large, then everything else the wallet holds. */
+function RegentsBalanceHoldings({ holdings }: { holdings: BaseWalletHoldings }) {
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
+  const figures = [
+    { label: 'ETH', value: displayTokenAmount(holdings.eth_balance) },
+    { label: 'REGENT', value: displayTokenAmount(holdings.regent_balance) },
+    { label: 'Staked REGENT', value: displayTokenAmount(holdings.staked_regent) },
+    { label: 'USDC rewards ready', value: displayTokenAmount(holdings.claimable_usdc) },
+    { label: 'REGENT rewards ready', value: displayTokenAmount(holdings.claimable_regent) },
+  ];
+  return (
+    <View style={styles.holdings}>
+      <Text style={styles.usdcHeadline}>{formatUsdcBalance(holdings.usdc_balance)}</Text>
+      <Text style={styles.address}>{formatWalletAddress(holdings.wallet_address)}</Text>
+      <View style={styles.figureGrid}>
+        {figures.map((figure) => (
+          <View key={figure.label} style={styles.figure}>
+            <Text style={styles.figureLabel}>{figure.label}</Text>
+            <Text style={styles.figureValue}>{figure.value}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 function WalletHoldings({ holdings }: { holdings: BaseWalletHoldings }) {
   const theme = useTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
@@ -330,7 +340,7 @@ function AgentsSummary({ list }: { list: MobileAgentsList }) {
       {list.balancesAvailable ? (
         <Text style={styles.detail}>{formatUsdcBalance(agentsUsdcTotal(list.agents))} in total</Text>
       ) : (
-        <Notice text="Balances aren't available right now." />
+        <Notice text="Agent funds aren't available right now." />
       )}
     </View>
   );
@@ -463,11 +473,14 @@ function makeStyles({ colors, fonts }: Theme) {
       lineHeight: 18,
       fontFamily: fonts.ui,
     },
-    walletList: {
-      gap: 14,
-    },
     holdings: {
       gap: 8,
+    },
+    usdcHeadline: {
+      color: colors.text,
+      fontSize: 30,
+      lineHeight: 36,
+      fontFamily: fonts.title,
     },
     address: {
       color: colors.text,

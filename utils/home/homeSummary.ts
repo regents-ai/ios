@@ -9,35 +9,38 @@ import { formatUnits, parseUnits } from 'viem';
 import type { AutolaunchAuction } from '../../types/autolaunch';
 import type { MobileAgent } from '../../types/regents';
 
-/** The most wallets one portfolio read covers. */
-export const MAX_PORTFOLIO_WALLETS = 5;
-
 const USDC_DECIMALS = 6;
 
 /**
- * The Ethereum wallets linked to the person's Regents account (the same
- * account regents.sh signs in with), other than the phone wallet, in the
- * order they were linked and without repeats.
+ * The wallet that holds the person's Regents Balance: the Ethereum wallet they
+ * sign in to the Regents websites with. The websites treat the most recently
+ * verified linked wallet as the signed-in one, so this picks the linked
+ * Ethereum wallet, other than the phone wallet, with the latest
+ * `latest_verified_at`. A wallet that was never verified is never the
+ * signed-in one. Null when no such wallet is linked.
  */
-export function websiteWalletAddresses(
+export function regentsBalanceWallet(
   linkedAccounts: PrivyUser['linked_accounts'],
   phoneWallet: string | null,
-): string[] {
-  const seen = new Set(phoneWallet ? [phoneWallet.toLowerCase()] : []);
-  const wallets: string[] = [];
+): string | null {
+  const phoneKey = phoneWallet?.toLowerCase();
+  let chosen: { address: string; verifiedAt: number } | null = null;
 
   for (const account of linkedAccounts) {
-    if (account.type !== 'wallet' || account.chain_type !== 'ethereum') {
+    if (
+      account.type !== 'wallet' ||
+      account.chain_type !== 'ethereum' ||
+      account.latest_verified_at === null ||
+      account.address.toLowerCase() === phoneKey
+    ) {
       continue;
     }
-    const key = account.address.toLowerCase();
-    if (!seen.has(key)) {
-      seen.add(key);
-      wallets.push(account.address);
+    if (!chosen || account.latest_verified_at > chosen.verifiedAt) {
+      chosen = { address: account.address, verifiedAt: account.latest_verified_at };
     }
   }
 
-  return wallets;
+  return chosen?.address ?? null;
 }
 
 /** The exact USDC total across the agents whose balance could be read. */

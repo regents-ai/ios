@@ -35,10 +35,9 @@ test('my agents list and wallet screens use the agent money story', () => {
   assert.match(agents, /formatUsdcBalance\(agent\.usdcBalance\)/);
   assert.match(agents, /label="Paired"/);
 
-  assert.match(wallet, /Add funds for agent work/);
+  assert.match(wallet, /Add to your Regents Balance/);
   assert.match(wallet, /label: 'Pay'/);
-  assert.match(wallet, /Apple Pay to USDC on Base/);
-  assert.match(onramp, /Fund an agent working balance/);
+  assert.match(wallet, /destinationLabel="your Regents Balance"/);
   assert.match(onramp, /Swipe to add USDC/);
 });
 

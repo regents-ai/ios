@@ -1,8 +1,6 @@
 import { useCallback, useState } from 'react';
 
-import { useCurrentUser } from '@coinbase/cdp-hooks';
-
-import type { OnrampFormData } from '@/components/onramp/onramp-form-types';
+import { PURCHASE_ASSET, PURCHASE_NETWORK, type OnrampFormData } from '@/components/onramp/onramp-form-types';
 import { createGuestCheckoutOrder } from '@/utils/createGuestCheckoutOrder';
 import { createOnrampSession } from '@/utils/createOnrampSession';
 import { getAccessTokenGlobal } from '@/utils/getAccessTokenGlobal';
@@ -14,8 +12,6 @@ import { getVerifiedPhone, getVerifiedPhoneAt, isPhoneFresh60d } from '@/utils/s
 import { UserFacingError } from '@/utils/userFacingError';
 
 type UseOnrampCheckoutArgs = {
-  getAssetSymbolFromName: (assetName: string) => string;
-  getNetworkNameFromDisplayName: (displayName: string) => string;
   linkedEmail?: string | null;
   linkedPhone?: string | null;
   regentsUserId?: string | null;
@@ -33,13 +29,10 @@ async function registerTransactionPushToken(partnerUserRef: string) {
 }
 
 export function useOnrampCheckout({
-  getAssetSymbolFromName,
-  getNetworkNameFromDisplayName,
   linkedEmail,
   linkedPhone,
   regentsUserId,
 }: UseOnrampCheckoutArgs) {
-  const { currentUser } = useCurrentUser();
   const [guestCheckoutVisible, setGuestCheckoutVisible] = useState(false);
   const [activePaymentMethod, setActivePaymentMethod] = useState<string | null>(null);
   const [hostedUrl, setHostedUrl] = useState('');
@@ -88,30 +81,13 @@ export function useOnrampCheckout({
           throw error;
         }
 
-        const networkName = getNetworkNameFromDisplayName(formData.network);
-        const isEvmNetwork = ['base', 'ethereum', 'polygon', 'arbitrum', 'optimism', 'avalanche', 'linea', 'zksync'].includes(
-          networkName.toLowerCase()
-        );
-
-        let destinationAddress = formData.address;
-
-        if (isEvmNetwork) {
-          const smartAccount = currentUser?.evmSmartAccounts?.[0] as string;
-
-          if (!smartAccount) {
-            throw new UserFacingError('Your wallet is still getting ready. Try again in a moment.');
-          }
-
-          destinationAddress = smartAccount;
-        }
-
         const result = await createGuestCheckoutOrder({
           paymentAmount: formData.amount,
           paymentCurrency: formData.paymentCurrency,
-          purchaseCurrency: getAssetSymbolFromName(formData.asset),
+          purchaseCurrency: PURCHASE_ASSET,
           paymentMethod: paymentMethodValue,
-          destinationNetwork: networkName,
-          destinationAddress,
+          destinationNetwork: PURCHASE_NETWORK,
+          destinationAddress: formData.address,
           email: userEmail || 'noemail@test.com',
           phoneNumber: phone,
           phoneNumberVerifiedAt: new Date(phoneAt!).toISOString(),
@@ -136,7 +112,7 @@ export function useOnrampCheckout({
         throw error;
       }
     },
-    [currentUser, getAssetSymbolFromName, getNetworkNameFromDisplayName, linkedEmail, linkedPhone, regentsUserId]
+    [linkedEmail, linkedPhone, regentsUserId]
   );
 
   const createWidgetSession = useCallback(
@@ -144,8 +120,6 @@ export function useOnrampCheckout({
       setIsProcessingPayment(true);
 
       try {
-        const assetSymbol = getAssetSymbolFromName(formData.asset);
-        const networkName = getNetworkNameFromDisplayName(formData.network);
         const country = getCountry();
         let subdivision = getSubdivision();
 
@@ -158,36 +132,11 @@ export function useOnrampCheckout({
         setCurrentPartnerUserRef(partnerUserRef);
         await registerTransactionPushToken(partnerUserRef);
 
-        const isEvmNetwork = ['base', 'ethereum', 'polygon', 'arbitrum', 'optimism', 'avalanche', 'linea', 'zksync'].includes(
-          networkName.toLowerCase()
-        );
-        const isSolanaNetwork = networkName.toLowerCase().includes('solana');
-
-        let destinationAddress = formData.address;
-
-        if (isEvmNetwork) {
-          const smartAccount = currentUser?.evmSmartAccounts?.[0] as string;
-
-          if (!smartAccount) {
-            throw new UserFacingError('Your wallet is still getting ready. Try again in a moment.');
-          }
-
-          destinationAddress = smartAccount;
-        } else if (isSolanaNetwork) {
-          const solanaAddress = currentUser?.solanaAccounts?.[0] as string;
-
-          if (!solanaAddress) {
-            throw new UserFacingError('Your Solana wallet is still getting ready. Try again in a moment.');
-          }
-
-          destinationAddress = solanaAddress;
-        }
-
         const response = await createOnrampSession(
           {
-            purchaseCurrency: assetSymbol,
-            destinationNetwork: networkName,
-            destinationAddress,
+            purchaseCurrency: PURCHASE_ASSET,
+            destinationNetwork: PURCHASE_NETWORK,
+            destinationAddress: formData.address,
             paymentAmount: formData.amount,
             paymentCurrency: formData.paymentCurrency,
             country,
@@ -209,7 +158,7 @@ export function useOnrampCheckout({
         setIsProcessingPayment(false);
       }
     },
-    [currentUser, getAssetSymbolFromName, getNetworkNameFromDisplayName, regentsUserId]
+    [regentsUserId]
   );
 
   const closeGuestCheckout = useCallback(() => {

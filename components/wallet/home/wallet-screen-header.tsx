@@ -11,7 +11,7 @@ export function WalletScreenHeader() {
     <View style={styles.header}>
       <View style={styles.copy}>
         <Text style={styles.title}>Fund</Text>
-        <Text style={styles.subtitle}>Add USDC for agent work, then pay or cash out when you need to.</Text>
+        <Text style={styles.subtitle}>Add to your Regents Balance. Pay and cash out from your phone wallet.</Text>
       </View>
       <ProfileButton />
     </View>

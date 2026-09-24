@@ -41,6 +41,7 @@ import {
 } from '@/components/wallet/sendTransitions';
 import { useDialContentClearance } from '@/components/dial/dialLayout';
 import { useTheme } from '@/theme/ThemeProvider';
+import { useRegentsBalanceWallet } from '@/hooks/useRegentsBalanceWallet';
 import { useEvmTransfer } from '@/hooks/wallet/useEvmTransfer';
 import { useFundingChoices } from '@/hooks/wallet/useFundingChoices';
 import { useRecipientResolution } from '@/hooks/wallet/useRecipientResolution';
@@ -108,6 +109,7 @@ export default function TransferScreen() {
   } = useRecipientResolution({ network, showAlert });
 
   const { solanaAddress } = useSolanaAddress();
+  const regentsBalanceWallet = useRegentsBalanceWallet();
   const { currentUser } = useCurrentUser();
 
   // Get smart account address (where balances are stored for both Base and Ethereum)
@@ -458,6 +460,17 @@ export default function TransferScreen() {
                   )}
                   <Text style={styles.recipientActionText}>QR photo</Text>
                 </RegentPressable>
+                {regentsBalanceWallet && !isSolanaNetwork(network) ? (
+                  <RegentPressable
+                    haptic="selection"
+                    pressStyle="chip"
+                    style={styles.recipientActionButton}
+                    onPress={() => handleAddressChange(regentsBalanceWallet)}
+                  >
+                    <Ionicons name="wallet-outline" size={18} color={colors.accent} />
+                    <Text style={styles.recipientActionText}>Your Regents Balance</Text>
+                  </RegentPressable>
+                ) : null}
               </View>
             ) : null}
 

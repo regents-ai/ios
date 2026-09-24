@@ -11,7 +11,6 @@ import { createLatestRequestGate, type LatestRequestGate } from '@/utils/async/l
 import { authenticatedFetch } from '@/utils/authenticatedFetch';
 import { createOfframpSession } from '@/utils/createOfframpSession';
 import { setPendingOfframpBalance } from '@/utils/state/flowRuntimeState';
-import { setCurrentSolanaAddress, setCurrentWalletAddress } from '@/utils/state/walletRuntimeState';
 import { consumeWalletRefreshRequest, subscribeWalletRefresh } from '@/utils/walletRefresh';
 import { UserFacingError, userFacingMessage } from '@/utils/userFacingError';
 
@@ -82,11 +81,6 @@ export function useWalletDetailsState() {
     message: '',
     type: 'info',
   });
-
-  useEffect(() => {
-    setCurrentWalletAddress(primaryAddress ?? null);
-    setCurrentSolanaAddress(solanaAddress ?? null);
-  }, [primaryAddress, solanaAddress]);
 
   const fetchBalances = useCallback(async () => {
     if (!primaryAddress && !solanaAddress) {

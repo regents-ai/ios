@@ -8,7 +8,6 @@ import {
   getPendingForm,
 } from '@/utils/state/flowRuntimeState';
 import { getVerifiedPhone, isPhoneFresh60d } from '@/utils/state/verificationState';
-import { getWalletAddressForNetwork } from '@/utils/state/walletRuntimeState';
 import { userFacingMessage } from '@/utils/userFacingError';
 
 type Params = {
@@ -16,13 +15,9 @@ type Params = {
   createWidgetSession: (formData: OnrampFormData) => Promise<string | undefined>;
   currentUser: any;
   effectiveIsSignedIn: boolean;
-  evmAddress?: string | null;
-  getAssetSymbolFromName: (assetName: string) => string;
-  getNetworkNameFromDisplayName: (displayName: string) => string;
   onTransactionPrepared: (formData: OnrampFormData) => void;
   setAlertState: (state: any) => void;
   showSupportError: (title: string, errorMessage: string, debugMessage: string) => void;
-  solanaAddress?: string | null;
 };
 
 export function usePendingOnrampResume({
@@ -30,21 +25,11 @@ export function usePendingOnrampResume({
   createWidgetSession,
   currentUser,
   effectiveIsSignedIn,
-  evmAddress,
-  getAssetSymbolFromName,
-  getNetworkNameFromDisplayName,
   onTransactionPrepared,
   setAlertState,
   showSupportError,
-  solanaAddress,
 }: Params) {
   const router = useRouter();
-  const resolvePendingAddress = useCallback(
-    (networkApiName: string, fallbackAddress: string) => {
-      return getWalletAddressForNetwork(networkApiName) ?? fallbackAddress;
-    },
-    []
-  );
 
   useFocusEffect(
     useCallback(() => {
@@ -79,14 +64,9 @@ export function usePendingOnrampResume({
             return;
           }
 
-          const networkApiName = getNetworkNameFromDisplayName(pendingForm.network);
-          const assetApiName = getAssetSymbolFromName(pendingForm.asset);
           const updatedFormData = {
             ...pendingForm,
-            network: networkApiName,
-            asset: assetApiName,
-            phoneNumber: verifiedPhone || pendingForm.phoneNumber,
-            address: resolvePendingAddress(networkApiName, pendingForm.address),
+            phoneNumber: verifiedPhone,
           };
 
           onTransactionPrepared(updatedFormData);
@@ -109,10 +89,7 @@ export function usePendingOnrampResume({
       createWidgetSession,
       effectiveIsSignedIn,
       currentUser?.userId,
-      getAssetSymbolFromName,
-      getNetworkNameFromDisplayName,
       onTransactionPrepared,
-      resolvePendingAddress,
       router,
       setAlertState,
       showSupportError,
