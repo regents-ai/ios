@@ -43,6 +43,7 @@ import {
 } from '@/utils/dialConstants';
 import {
   getDialBloomEasing,
+  getDialPetalMotionStyle,
   getDialPetalSize,
   shouldChangeDialHighlight,
   shouldRunDialSelectionHaptic,
@@ -115,32 +116,19 @@ function AnimatedPetal({
     () => getDialPetalPosition(index, petalCount, radius, angleStep),
     [angleStep, index, petalCount, radius]
   );
-  const animatedStyle = useAnimatedStyle(() => {
-    if (reducedMotionEnabled) {
-      return { opacity: progress.value };
-    }
-
-    const phase = petalCount <= 1 ? 0 : index / petalCount;
-    const floatOffset =
-      Math.sin((floatProgress.value + phase) * Math.PI * 2) *
-      floatAmplitude *
-      progress.value;
-    return {
-      opacity: progress.value,
-      transform: [
-        { translateX: position.x * (progress.value - 1) },
-        { translateY: position.y * (progress.value - 1) + floatOffset },
-        { scale: 0.78 + progress.value * 0.22 },
-      ],
-    };
-  }, [
-    floatAmplitude,
-    index,
-    petalCount,
-    position.x,
-    position.y,
-    reducedMotionEnabled,
-  ]);
+  const animatedStyle = useAnimatedStyle(
+    () =>
+      getDialPetalMotionStyle({
+        floatAmplitude,
+        floatProgress: floatProgress.value,
+        index,
+        petalCount,
+        position,
+        progress: progress.value,
+        reducedMotion: reducedMotionEnabled,
+      }),
+    [floatAmplitude, index, petalCount, position, reducedMotionEnabled]
+  );
 
   return (
     <Animated.View

@@ -6,6 +6,7 @@ import { DIAL_SELECTION_HAPTIC_MIN_INTERVAL_MS } from '../utils/dialConstants';
 import {
   getDialBloomEasing,
   getDialBloomEasingLabel,
+  getDialPetalMotionStyle,
   getDialPetalSize,
   shouldChangeDialHighlight,
   shouldRunDialSelectionHaptic,
@@ -88,4 +89,33 @@ test('petal growth is capped only when the full bloom cannot fit the viewport', 
   assert.equal(constrained.growthCapped, true);
   assert.ok(constrained.petalSize < 152);
   assert.ok(constrained.canvasSize <= constrained.availableCanvasSize);
+});
+
+test('reduced motion puts a folded petal back in its resting place', () => {
+  const input = {
+    floatAmplitude: 4,
+    floatProgress: 0.25,
+    index: 1,
+    petalCount: 4,
+    position: { x: -120, y: -40 },
+    progress: 0,
+  };
+  const moving = getDialPetalMotionStyle({ ...input, reducedMotion: false });
+  const still = getDialPetalMotionStyle({ ...input, reducedMotion: true });
+
+  // The folded petal sits over the center button.
+  assert.deepEqual(moving.transform, [
+    { translateX: 120 },
+    { translateY: 40 },
+    { scale: 0.78 },
+  ]);
+  // Switching to reduced motion must overwrite every key the moving style set,
+  // or the petal stays folded behind the center button.
+  assert.deepEqual(Object.keys(still), Object.keys(moving));
+  assert.deepEqual(
+    still.transform.map((entry) => Object.keys(entry)),
+    moving.transform.map((entry) => Object.keys(entry))
+  );
+  assert.deepEqual(still.transform, [{ translateX: 0 }, { translateY: 0 }, { scale: 1 }]);
+  assert.equal(getDialPetalMotionStyle({ ...input, progress: 1, reducedMotion: true }).opacity, 1);
 });

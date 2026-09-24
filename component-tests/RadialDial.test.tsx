@@ -361,7 +361,7 @@ describe('RadialDial', () => {
     }
   });
 
-  it('uses opacity-only crossfades and no floating transform under reduced motion', () => {
+  it('shows petals in their resting place with no floating under reduced motion', () => {
     mockReducedMotionEnabled = true;
     const { getByLabelText, getByTestId } = renderThemed(
       <RadialDial
@@ -376,7 +376,11 @@ describe('RadialDial', () => {
     const positionStyle = StyleSheet.flatten(
       getByTestId('dial-petal-position-first-agents').props.style
     );
-    expect(positionStyle.transform).toBeUndefined();
+    expect(positionStyle.transform).toEqual([
+      { translateX: 0 },
+      { translateY: 0 },
+      { scale: 1 },
+    ]);
   });
 
   it('rate-limits selection ticks during fast circular drags', async () => {
