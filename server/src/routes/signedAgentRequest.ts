@@ -17,8 +17,8 @@ import type { SignedAgentRequestVerifier } from '../services/siwaHttpVerifier.js
 // steer the check. Mirrors Keyfleet's signed-agent plug. A request without a
 // body signs no content digest.
 const PROOF_HEADERS = [
-  'signature',
-  'signature-input',
+  'x-siwa-signature',
+  'x-siwa-signature-input',
   'content-digest',
   'x-siwa-receipt',
   'x-key-id',

@@ -1269,8 +1269,8 @@ paths:
       description: |
         Called by the agent itself, not the app. The request is a SIWA-signed HTTP request for the
         `regents-mobile` audience (headers `x-siwa-receipt`, `x-key-id`, `x-timestamp`,
-        `x-agent-wallet-address`, `x-agent-chain-id`, `content-digest`, `signature-input`,
-        `signature`), each exactly once and with no other `x-agent-*` or `x-siwa-*` headers, with a
+        `x-agent-wallet-address`, `x-agent-chain-id`, `content-digest`, `x-siwa-signature-input`,
+        `x-siwa-signature`), each exactly once and with no other `x-agent-*` or `x-siwa-*` headers, with a
         JSON body of at most 4 KiB. The backend verifies the envelope with the SIWA server for the
         Base wallet principal and, when the code is valid, records the verified wallet address as
         waiting for the user who created the code to confirm it in the app. Each signed request and

@@ -41,7 +41,7 @@ test('a pairing code is redeemed once, confirmed by its owner, and expires', asy
   assert.equal((await request({ method: 'GET', url: `/mobile/agents/pairing-codes/${code}`, userId: 'owner' })).body.status, 'waiting');
 
   // A request missing a proof header, or carrying a stray agent header, never reaches the verifier.
-  const { signature: _omitted, ...withoutSignature } = PROOF_HEADERS;
+  const { 'x-siwa-signature': _omitted, ...withoutSignature } = PROOF_HEADERS;
   assert.equal((await request({ method: 'POST', url: '/agent/pair', rawBody: JSON.stringify({ code }), headers: withoutSignature })).status, 400);
   assert.equal(
     (await request({ method: 'POST', url: '/agent/pair', rawBody: JSON.stringify({ code }), headers: { ...PROOF_HEADERS, 'x-agent-role': 'admin' } })).status,

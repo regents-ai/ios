@@ -8,8 +8,8 @@ export const AGENT_WALLET = '0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e';
 
 /** A SIWA-signed request's headers, each present once. */
 export const PROOF_HEADERS = {
-  signature: 'sig1=:abc:',
-  'signature-input': 'sig1=("@method" "@path")',
+  'x-siwa-signature': 'sig1=:abc:',
+  'x-siwa-signature-input': 'sig1=("@method" "@path")',
   'content-digest': 'sha-256=:abc:',
   'x-siwa-receipt': 'receipt',
   'x-key-id': AGENT_WALLET,
