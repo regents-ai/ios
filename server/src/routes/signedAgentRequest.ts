@@ -47,13 +47,33 @@ function isJsonContentType(value: string | undefined) {
   return typeof value === 'string' && /^application\/json\s*(;.*)?$/i.test(value.trim());
 }
 
-/** Every required proof header present exactly once, and no proof header repeated. */
-function hasWellFormedProofHeaders(req: Request, required: readonly string[]) {
+/**
+ * Why the proof headers cannot be checked, as the contract and the template name
+ * it, or null when every required one is present once and none is repeated.
+ */
+function proofHeadersProblem(req: Request, required: readonly string[]) {
   const counts = req.headersDistinct;
-  return (
-    required.every((name) => counts[name]?.length === 1) &&
-    PROOF_HEADERS.every((name) => (counts[name]?.length ?? 1) === 1)
-  );
+  if (PROOF_HEADERS.some((name) => (counts[name]?.length ?? 0) > 1)) {
+    return 'duplicate_proof';
+  }
+  if (!required.every((name) => counts[name]?.length === 1)) {
+    return 'http_headers_missing';
+  }
+  return null;
+}
+
+/** Answers a signed request this backend refuses before asking the SIWA server. */
+function refuseUnchecked(req: Request, res: Response, required: readonly string[]) {
+  if (hasQuery(req)) {
+    sendError(res, 401, 'unsupported_query', QUERY_MESSAGE);
+    return true;
+  }
+  const problem = proofHeadersProblem(req, required);
+  if (problem !== null) {
+    sendError(res, 401, problem, PROOF_HEADERS_MESSAGE);
+    return true;
+  }
+  return false;
 }
 
 /** The signed path is the path alone; this backend signs no query string. */
@@ -112,16 +132,11 @@ export async function readSignedAgentJson<T>(
     unavailableMessage: string;
   },
 ): Promise<{ walletAddress: string; body: T } | null> {
-  if (hasQuery(req)) {
-    sendError(res, 401, 'SignedRequestRejected', QUERY_MESSAGE);
+  if (refuseUnchecked(req, res, PROOF_HEADERS)) {
     return null;
   }
   if (!isJsonContentType(req.headers['content-type'])) {
     sendError(res, 415, 'UnsupportedMediaType', input.notJsonMessage);
-    return null;
-  }
-  if (!hasWellFormedProofHeaders(req, PROOF_HEADERS)) {
-    sendError(res, 401, 'SignedRequestRejected', PROOF_HEADERS_MESSAGE);
     return null;
   }
 
@@ -153,12 +168,7 @@ export async function readSignedAgentRead(
   res: Response,
   input: { verify: SignedAgentRequestVerifier; unavailableMessage: string },
 ): Promise<string | null> {
-  if (hasQuery(req)) {
-    sendError(res, 401, 'SignedRequestRejected', QUERY_MESSAGE);
-    return null;
-  }
-  if (!hasWellFormedProofHeaders(req, BODYLESS_PROOF_HEADERS)) {
-    sendError(res, 401, 'SignedRequestRejected', PROOF_HEADERS_MESSAGE);
+  if (refuseUnchecked(req, res, BODYLESS_PROOF_HEADERS)) {
     return null;
   }
   const body = rawBody(req);

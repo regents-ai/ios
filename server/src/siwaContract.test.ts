@@ -55,6 +55,7 @@ async function check(request: FixtureRequest) {
     header: () => undefined,
   } as unknown as Request;
   let status = 200;
+  let code: string | null = null;
   const res = {
     req,
     setHeader() {},
@@ -62,7 +63,8 @@ async function check(request: FixtureRequest) {
       status = code;
       return res;
     },
-    json() {
+    json(body: { error?: { code: string } }) {
+      code = body.error?.code ?? null;
       return res;
     },
   } as unknown as Response;
@@ -78,7 +80,7 @@ async function check(request: FixtureRequest) {
       ? (await readSignedAgentJson(req, res, { verify, schema: z.unknown(), notJsonMessage: '', bodyMessage: '', unavailableMessage }))
           ?.walletAddress
       : await readSignedAgentRead(req, res, { verify, unavailableMessage });
-  return { status, sent, wallet: wallet ?? null };
+  return { status, code, sent, wallet: wallet ?? null };
 }
 
 /** What the SIWA server must be sent for a fixture request: its proof headers, path and body, unchanged. */
@@ -100,6 +102,7 @@ test('every signed fixture reaches the SIWA server byte for byte, or is refused 
     if (query === 'signed') {
       // This backend signs no query string, so a request with one is refused here.
       assert.equal(result.status, 401, name);
+      assert.equal(result.code, 'unsupported_query', name);
       assert.deepEqual(result.sent, [], name);
     } else {
       assert.deepEqual(result.sent, [forwardedAs(request)], name);
@@ -112,10 +115,11 @@ test('every signed fixture reaches the SIWA server byte for byte, or is refused 
 // Invariant: every refused fixture is refused, here or by the SIWA server, which this
 // backend asks with the request unchanged so the tampering is what it checks.
 test('every refused fixture is refused here or sent unchanged to the SIWA server', async () => {
-  for (const { name, query, request, checked_by } of fixtures.refused) {
+  for (const { name, query, request, checked_by, reason } of fixtures.refused) {
     const result = await check(request);
     if (checked_by === 'site_plug' || query === 'signed') {
       assert.equal(result.status, 401, name);
+      assert.equal(result.code, checked_by === 'site_plug' ? reason : 'unsupported_query', name);
       assert.deepEqual(result.sent, [], name);
     } else {
       assert.deepEqual(result.sent, [forwardedAs(request)], name);
