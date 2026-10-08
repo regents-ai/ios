@@ -46,7 +46,7 @@ test('a pairing code is redeemed once, confirmed by its owner, and expires', asy
 
   // A request missing a proof header never reaches the verifier.
   const { 'x-siwa-signature': _omitted, ...withoutSignature } = PROOF_HEADERS;
-  assert.equal((await request({ method: 'POST', url: '/agent/pair', rawBody: JSON.stringify({ code }), headers: withoutSignature })).status, 400);
+  assert.equal((await request({ method: 'POST', url: '/agent/pair', rawBody: JSON.stringify({ code }), headers: withoutSignature })).status, 401);
   assert.equal(
     (await request({ method: 'POST', url: '/agent/pair', rawBody: JSON.stringify({ code }), headers: { ...PROOF_HEADERS, 'content-type': 'text/plain' } })).status,
     415,

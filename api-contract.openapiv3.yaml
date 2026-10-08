@@ -1290,13 +1290,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/PairMobileAgentAccepted'
         '400':
-          description: Body is not JSON with a pairing code, or the proof headers are missing, repeated or accompanied by unknown agent headers
+          description: Body is not JSON with a pairing code
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '401':
-          description: The signed request was rejected by the SIWA server
+          description: The proof headers are missing or repeated, the request carries a query string, or the SIWA server rejected the signature
           content:
             application/json:
               schema:
@@ -1352,13 +1352,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/AgentPaymentRequestCreated'
         '400':
-          description: Body is not JSON with a valid address, amount and note, or the proof headers are not in the expected shape
+          description: Body is not JSON with a valid address, amount and note
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '401':
-          description: The signed request was rejected by the SIWA server
+          description: The proof headers are missing or repeated, the request carries a query string, or the SIWA server rejected the signature
           content:
             application/json:
               schema:
@@ -1422,14 +1422,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AgentPaymentRequestStatus'
-        '400':
-          description: The proof headers are not in the expected shape
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
         '401':
-          description: The signed request was rejected by the SIWA server
+          description: The proof headers are missing or repeated, the request carries a query string, or the SIWA server rejected the signature
           content:
             application/json:
               schema:

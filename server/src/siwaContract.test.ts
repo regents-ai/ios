@@ -99,7 +99,7 @@ test('every signed fixture reaches the SIWA server byte for byte, or is refused 
     const result = await check(request);
     if (query === 'signed') {
       // This backend signs no query string, so a request with one is refused here.
-      assert.equal(result.status, 400, name);
+      assert.equal(result.status, 401, name);
       assert.deepEqual(result.sent, [], name);
     } else {
       assert.deepEqual(result.sent, [forwardedAs(request)], name);
@@ -115,7 +115,7 @@ test('every refused fixture is refused here or sent unchanged to the SIWA server
   for (const { name, query, request, checked_by } of fixtures.refused) {
     const result = await check(request);
     if (checked_by === 'site_plug' || query === 'signed') {
-      assert.equal(result.status, 400, name);
+      assert.equal(result.status, 401, name);
       assert.deepEqual(result.sent, [], name);
     } else {
       assert.deepEqual(result.sent, [forwardedAs(request)], name);

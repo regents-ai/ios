@@ -113,7 +113,7 @@ export async function readSignedAgentJson<T>(
   },
 ): Promise<{ walletAddress: string; body: T } | null> {
   if (hasQuery(req)) {
-    sendError(res, 400, 'BadRequest', QUERY_MESSAGE);
+    sendError(res, 401, 'SignedRequestRejected', QUERY_MESSAGE);
     return null;
   }
   if (!isJsonContentType(req.headers['content-type'])) {
@@ -121,7 +121,7 @@ export async function readSignedAgentJson<T>(
     return null;
   }
   if (!hasWellFormedProofHeaders(req, PROOF_HEADERS)) {
-    sendError(res, 400, 'BadRequest', PROOF_HEADERS_MESSAGE);
+    sendError(res, 401, 'SignedRequestRejected', PROOF_HEADERS_MESSAGE);
     return null;
   }
 
@@ -154,11 +154,11 @@ export async function readSignedAgentRead(
   input: { verify: SignedAgentRequestVerifier; unavailableMessage: string },
 ): Promise<string | null> {
   if (hasQuery(req)) {
-    sendError(res, 400, 'BadRequest', QUERY_MESSAGE);
+    sendError(res, 401, 'SignedRequestRejected', QUERY_MESSAGE);
     return null;
   }
   if (!hasWellFormedProofHeaders(req, BODYLESS_PROOF_HEADERS)) {
-    sendError(res, 400, 'BadRequest', PROOF_HEADERS_MESSAGE);
+    sendError(res, 401, 'SignedRequestRejected', PROOF_HEADERS_MESSAGE);
     return null;
   }
   const body = rawBody(req);
