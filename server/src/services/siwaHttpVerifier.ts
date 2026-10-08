@@ -7,7 +7,7 @@
  * receipt, the signature over the covered components, the content digest and
  * replay state, and answers with the verified wallet principal.
  *
- * The answer is read the way KeyFleet reads it: only a Base (8453) wallet
+ * The answer is read the way Keyfleet reads it: only a Base (8453) wallet
  * principal for this audience whose address matches the request's own
  * wallet header is accepted. A replay is told apart from a rejection, and a
  * SIWA server that is down, slow or erroring is "unavailable", never

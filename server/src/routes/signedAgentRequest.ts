@@ -14,7 +14,7 @@ import type { SignedAgentRequestVerifier } from '../services/siwaHttpVerifier.js
 
 // The headers a SIWA-signed request carries, each exactly once. Any other
 // x-agent-* or x-siwa-* header is refused: nothing outside the proof may
-// steer the check. Mirrors KeyFleet's signed-agent plug. A request without a
+// steer the check. Mirrors Keyfleet's signed-agent plug. A request without a
 // body signs no content digest.
 const PROOF_HEADERS = [
   'signature',
