@@ -3,6 +3,7 @@ import type { z } from 'zod';
 
 import { sendError } from '../httpResponses.js';
 import type { SignedAgentRequestVerifier } from '../services/siwaHttpVerifier.js';
+import contract from '../siwa/contract.json' with { type: 'json' };
 
 /**
  * The agent side of the phone backend: every `/agent/*` request is a
@@ -10,26 +11,21 @@ import type { SignedAgentRequestVerifier } from '../services/siwaHttpVerifier.js
  * it. The headers are checked first, then the body (for requests that carry
  * one), then the SIWA server verifies the signature and answers with the
  * agent's Base wallet.
+ *
+ * The header names come from the SIWA signing contract, a generated copy of
+ * elixir-utils' `siwa/contract/contract.json` (`npm run siwa:contract`).
  */
 
-// The headers a SIWA-signed request carries, each exactly once. Only these
+// The headers a SIWA-signed request carries, each at most once. Only these
 // reach the SIWA server, so no other header can steer the check, and routes
 // act only on the wallet it verifies. A request without a body signs no
 // content digest.
-const PROOF_HEADERS = [
-  'x-siwa-signature',
-  'x-siwa-signature-input',
-  'content-digest',
-  'x-siwa-receipt',
-  'x-key-id',
-  'x-timestamp',
-  'x-agent-wallet-address',
-  'x-agent-chain-id',
-] as const;
-const BODYLESS_PROOF_HEADERS = PROOF_HEADERS.filter((name) => name !== 'content-digest');
+const PROOF_HEADERS: readonly string[] = contract.forwarded_headers;
+const BODYLESS_PROOF_HEADERS = PROOF_HEADERS.filter((name) => name !== contract.body.component);
 
 const PROOF_HEADERS_MESSAGE =
   'The signed request headers are not in the expected shape. Sign the request again and resend it.';
+const QUERY_MESSAGE = 'Signed requests here carry no query string. Sign the request without one and resend it.';
 
 /** The proof headers the request carries; Express lowercases header names. */
 function forwardedHeaders(req: Request) {
@@ -51,10 +47,18 @@ function isJsonContentType(value: string | undefined) {
   return typeof value === 'string' && /^application\/json\s*(;.*)?$/i.test(value.trim());
 }
 
-/** Every required proof header present exactly once. */
+/** Every required proof header present exactly once, and no proof header repeated. */
 function hasWellFormedProofHeaders(req: Request, required: readonly string[]) {
   const counts = req.headersDistinct;
-  return required.every((name) => counts[name]?.length === 1);
+  return (
+    required.every((name) => counts[name]?.length === 1) &&
+    PROOF_HEADERS.every((name) => (counts[name]?.length ?? 1) === 1)
+  );
+}
+
+/** The signed path is the path alone; this backend signs no query string. */
+function hasQuery(req: Request) {
+  return (req.originalUrl || req.url).includes('?');
 }
 
 /** Answers the request itself and returns null unless the SIWA server verified the agent's wallet. */
@@ -108,6 +112,10 @@ export async function readSignedAgentJson<T>(
     unavailableMessage: string;
   },
 ): Promise<{ walletAddress: string; body: T } | null> {
+  if (hasQuery(req)) {
+    sendError(res, 400, 'BadRequest', QUERY_MESSAGE);
+    return null;
+  }
   if (!isJsonContentType(req.headers['content-type'])) {
     sendError(res, 415, 'UnsupportedMediaType', input.notJsonMessage);
     return null;
@@ -136,18 +144,23 @@ export async function readSignedAgentJson<T>(
 }
 
 /**
- * A signed request without a body, verified with no body: the SIWA server
- * treats any body, even an empty one, as needing a content digest. Returns
- * the verified wallet, or null once answered.
+ * A signed read. It is verified with no body; a body sent anyway goes to the
+ * SIWA server with it, which refuses one the signature does not cover.
+ * Returns the verified wallet, or null once answered.
  */
 export async function readSignedAgentRead(
   req: Request,
   res: Response,
   input: { verify: SignedAgentRequestVerifier; unavailableMessage: string },
 ): Promise<string | null> {
+  if (hasQuery(req)) {
+    sendError(res, 400, 'BadRequest', QUERY_MESSAGE);
+    return null;
+  }
   if (!hasWellFormedProofHeaders(req, BODYLESS_PROOF_HEADERS)) {
     sendError(res, 400, 'BadRequest', PROOF_HEADERS_MESSAGE);
     return null;
   }
-  return verifiedWallet(req, res, null, input);
+  const body = rawBody(req);
+  return verifiedWallet(req, res, body === '' ? null : body, input);
 }
