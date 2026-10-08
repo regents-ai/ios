@@ -12,10 +12,10 @@ import type { SignedAgentRequestVerifier } from '../services/siwaHttpVerifier.js
  * agent's Base wallet.
  */
 
-// The headers a SIWA-signed request carries, each exactly once. Any other
-// x-agent-* or x-siwa-* header is refused: nothing outside the proof may
-// steer the check. Mirrors Keyfleet's signed-agent plug. A request without a
-// body signs no content digest.
+// The headers a SIWA-signed request carries, each exactly once. Only these
+// reach the SIWA server, so no other header can steer the check, and routes
+// act only on the wallet it verifies. A request without a body signs no
+// content digest.
 const PROOF_HEADERS = [
   'x-siwa-signature',
   'x-siwa-signature-input',
@@ -31,14 +31,13 @@ const BODYLESS_PROOF_HEADERS = PROOF_HEADERS.filter((name) => name !== 'content-
 const PROOF_HEADERS_MESSAGE =
   'The signed request headers are not in the expected shape. Sign the request again and resend it.';
 
-/** Express lowercases header names; multi-value headers join the way HTTP does. */
+/** The proof headers the request carries; Express lowercases header names. */
 function forwardedHeaders(req: Request) {
   const headers: Record<string, string> = {};
-  for (const [name, value] of Object.entries(req.headers)) {
+  for (const name of PROOF_HEADERS) {
+    const value = req.headers[name];
     if (typeof value === 'string') {
       headers[name] = value;
-    } else if (Array.isArray(value)) {
-      headers[name] = value.join(', ');
     }
   }
   return headers;
@@ -52,15 +51,10 @@ function isJsonContentType(value: string | undefined) {
   return typeof value === 'string' && /^application\/json\s*(;.*)?$/i.test(value.trim());
 }
 
-/** Every required proof header present once, and no stray agent or SIWA headers. */
+/** Every required proof header present exactly once. */
 function hasWellFormedProofHeaders(req: Request, required: readonly string[]) {
   const counts = req.headersDistinct;
-  const once = required.every((name) => counts[name]?.length === 1);
-  const stray = Object.keys(counts).some(
-    (name) =>
-      (name.startsWith('x-agent-') || name.startsWith('x-siwa-')) && !(PROOF_HEADERS as readonly string[]).includes(name),
-  );
-  return once && !stray;
+  return required.every((name) => counts[name]?.length === 1);
 }
 
 /** Answers the request itself and returns null unless the SIWA server verified the agent's wallet. */

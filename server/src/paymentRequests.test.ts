@@ -200,7 +200,8 @@ test('an ask must be a signed JSON body with an address, an amount and a short n
   assert.equal((await raw({ ...PROOF_HEADERS, 'content-type': 'text/plain' })).status, 415);
   const { 'x-siwa-signature': _omitted, ...withoutSignature } = PROOF_HEADERS;
   assert.equal((await raw(withoutSignature)).status, 400);
-  assert.equal((await raw({ ...PROOF_HEADERS, 'x-agent-role': 'admin' })).status, 400);
+  // An unsigned extra header is not refused and grants nothing beyond the verified agent.
+  assert.equal((await raw({ ...PROOF_HEADERS, 'x-agent-role': 'admin' })).status, 201);
 });
 
 // Invariant: a push that cannot be delivered never loses the request.
