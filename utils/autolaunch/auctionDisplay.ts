@@ -35,7 +35,7 @@ export function auctionStatus(state: AutolaunchAuctionState): AuctionStatus {
 }
 
 export function launchKindLabel(kind: AutolaunchAuctionKind) {
-  return kind === 'stocks' ? 'Memestake' : 'Revstake';
+  return kind === 'stocks' ? 'Memestock' : 'Revstake';
 }
 
 export function chainLabel(chain: AutolaunchAuction['chain']) {
