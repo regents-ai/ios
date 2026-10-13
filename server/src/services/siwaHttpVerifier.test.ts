@@ -9,7 +9,7 @@ const request: SignedAgentRequest = {
   method: 'POST',
   path: '/agent/pair',
   headers: { 'x-agent-wallet-address': wallet, 'content-type': 'application/json' },
-  body: '{"code":"ABCD-EFGH"}',
+  body_digest: 'sha-256=:47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=:',
 };
 
 function verifiedPayload(overrides: Record<string, unknown> = {}, principalOverrides: Record<string, unknown> = {}) {

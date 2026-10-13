@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import test from 'node:test';
 import {
   decodeFunctionData,
@@ -422,17 +423,18 @@ test('a person keeps the newest hundred requests', async () => {
 });
 
 // Invariant: a status read carries no body, so the SIWA server is asked to
-// check it without one; an ask is checked over its exact bytes.
-test('the agent status read is checked without a body', async () => {
+// check it without a digest; an ask is checked by the digest of its exact bytes.
+test('the agent status read is checked without a body digest', async () => {
   const { pair, ask, agentRead, signedRequests } = createHarness();
   await pair('owner', 'Muse');
   const askBody = { to: AGENT_WALLET, amount: '5', note: 'API credits' };
   const id: string = (await ask(askBody)).body.requestIds[0];
-  assert.deepEqual(signedRequests.at(-1)?.body, JSON.stringify(askBody));
+  const askDigest = `sha-256=:${createHash('sha256').update(JSON.stringify(askBody)).digest('base64')}:`;
+  assert.deepEqual(signedRequests.at(-1)?.body_digest, askDigest);
 
   assert.equal((await agentRead(id)).status, 200);
   const read = signedRequests.at(-1)!;
-  assert.deepEqual([read.method, read.path, 'body' in read], ['GET', `/agent/payment-requests/${id}`, false]);
+  assert.deepEqual([read.method, read.path, 'body_digest' in read], ['GET', `/agent/payment-requests/${id}`, false]);
 });
 
 // Invariant: when two people pair the same agent, each gets their own request

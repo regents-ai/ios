@@ -24,6 +24,7 @@ const lock: { files: Record<string, { copy: string; sha256: string }> } = JSON.p
 );
 const sha256 = (path: string) => createHash('sha256').update(readFileSync(new URL(`../${path}`, import.meta.url))).digest('hex');
 const forwarded = new Set<string>(contract.forwarded_headers);
+const contentDigest = (body: string) => `sha-256=:${createHash('sha256').update(body).digest('base64')}:`;
 
 // Invariant: the contract this backend reads is the pinned, generated file, never a hand edit.
 test('the SIWA contract copies are the pinned files', () => {
@@ -83,20 +84,21 @@ async function check(request: FixtureRequest) {
   return { status, code, sent, wallet: wallet ?? null };
 }
 
-/** What the SIWA server must be sent for a fixture request: its proof headers, path and body, unchanged. */
+/** What the SIWA server must be sent for a fixture request: its proof headers and path unchanged, and its body's digest. */
 function forwardedAs(request: FixtureRequest): SignedAgentRequest {
   const headers = request.headers.map(([name, value]) => [name!.toLowerCase(), value!]);
   return {
     method: request.method,
     path: request.path,
     headers: Object.fromEntries(headers.filter(([name]) => forwarded.has(name!))),
-    ...(request.body === null ? {} : { body: request.body }),
+    ...(request.body === null ? {} : { body_digest: contentDigest(request.body) }),
   };
 }
 
 // Invariant: a request this backend takes reaches the SIWA server exactly as the agent
-// signed it; one it cannot take is refused before the SIWA server is asked.
-test('every signed fixture reaches the SIWA server byte for byte, or is refused here when it signs a query', async () => {
+// signed it, its body as the digest of the bytes received; one it cannot take is refused
+// before the SIWA server is asked.
+test('every signed fixture reaches the SIWA server as signed, or is refused here when it signs a query', async () => {
   for (const { name, query, request } of fixtures.signed) {
     const result = await check(request);
     if (query === 'signed') {
@@ -113,7 +115,8 @@ test('every signed fixture reaches the SIWA server byte for byte, or is refused 
 });
 
 // Invariant: every refused fixture is refused, here or by the SIWA server, which this
-// backend asks with the request unchanged so the tampering is what it checks.
+// backend asks with the request unchanged (its body as the digest of the bytes received)
+// so the tampering is what it checks.
 test('every refused fixture is refused here or sent unchanged to the SIWA server', async () => {
   for (const { name, query, request, checked_by, reason } of fixtures.refused) {
     const result = await check(request);

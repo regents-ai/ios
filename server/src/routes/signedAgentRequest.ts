@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import type { Request, Response } from 'express';
 import type { z } from 'zod';
 
@@ -9,7 +11,8 @@ import contract from '../siwa/contract.json' with { type: 'json' };
  * The agent side of the phone backend: every `/agent/*` request is a
  * SIWA-signed HTTP request, checked here the same way before a route acts on
  * it. The headers are checked first, then the body (for requests that carry
- * one), then the SIWA server verifies the signature and answers with the
+ * one), then the SIWA server verifies the signature against the content digest
+ * of the exact bytes received (never the body itself) and answers with the
  * agent's Base wallet.
  *
  * The header names come from the SIWA signing contract, a generated copy of
@@ -39,8 +42,13 @@ function forwardedHeaders(req: Request) {
   return headers;
 }
 
-function rawBody(req: Request) {
-  return Buffer.isBuffer(req.body) ? req.body.toString('utf8') : '';
+function rawBytes(req: Request) {
+  return Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+}
+
+/** The content digest of the exact bytes received, in the form the agent signs (RFC 9530). */
+function contentDigest(bytes: Buffer) {
+  return `sha-256=:${createHash('sha256').update(bytes).digest('base64')}:`;
 }
 
 function isJsonContentType(value: string | undefined) {
@@ -85,14 +93,14 @@ function hasQuery(req: Request) {
 async function verifiedWallet(
   req: Request,
   res: Response,
-  body: string | null,
+  bodyDigest: string | null,
   input: { verify: SignedAgentRequestVerifier; unavailableMessage: string },
 ): Promise<string | null> {
   const verification = await input.verify({
     method: req.method,
     path: req.originalUrl || req.url,
     headers: forwardedHeaders(req),
-    ...(body === null ? {} : { body }),
+    ...(bodyDigest === null ? {} : { body_digest: bodyDigest }),
   });
 
   if (verification.kind === 'missing_config') {
@@ -140,10 +148,10 @@ export async function readSignedAgentJson<T>(
     return null;
   }
 
-  const body = rawBody(req);
+  const bytes = rawBytes(req);
   let json: unknown;
   try {
-    json = JSON.parse(body);
+    json = JSON.parse(bytes.toString('utf8'));
   } catch {
     sendError(res, 400, 'BadRequest', input.bodyMessage);
     return null;
@@ -154,13 +162,13 @@ export async function readSignedAgentJson<T>(
     return null;
   }
 
-  const walletAddress = await verifiedWallet(req, res, body, input);
+  const walletAddress = await verifiedWallet(req, res, contentDigest(bytes), input);
   return walletAddress === null ? null : { walletAddress, body: parsed.data };
 }
 
 /**
- * A signed read. It is verified with no body; a body sent anyway goes to the
- * SIWA server with it, which refuses one the signature does not cover.
+ * A signed read. It is verified with no body digest; a body sent anyway goes to
+ * the SIWA server as its digest, which is refused when the signature covers none.
  * Returns the verified wallet, or null once answered.
  */
 export async function readSignedAgentRead(
@@ -171,6 +179,6 @@ export async function readSignedAgentRead(
   if (refuseUnchecked(req, res, BODYLESS_PROOF_HEADERS)) {
     return null;
   }
-  const body = rawBody(req);
-  return verifiedWallet(req, res, body === '' ? null : body, input);
+  const bytes = rawBytes(req);
+  return verifiedWallet(req, res, bytes.length === 0 ? null : contentDigest(bytes), input);
 }
