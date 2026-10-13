@@ -1,80 +1,106 @@
+import { createHash } from 'node:crypto';
+
 import type { Request, Response } from 'express';
 import type { z } from 'zod';
 
 import { sendError } from '../httpResponses.js';
 import type { SignedAgentRequestVerifier } from '../services/siwaHttpVerifier.js';
+import contract from '../siwa/contract.json' with { type: 'json' };
 
 /**
  * The agent side of the phone backend: every `/agent/*` request is a
  * SIWA-signed HTTP request, checked here the same way before a route acts on
  * it. The headers are checked first, then the body (for requests that carry
- * one), then the SIWA server verifies the signature and answers with the
+ * one), then the SIWA server verifies the signature against the content digest
+ * of the exact bytes received (never the body itself) and answers with the
  * agent's Base wallet.
+ *
+ * The header names come from the SIWA signing contract, a generated copy of
+ * elixir-utils' `siwa/contract/contract.json` (`npm run siwa:contract`).
  */
 
-// The headers a SIWA-signed request carries, each exactly once. Any other
-// x-agent-* or x-siwa-* header is refused: nothing outside the proof may
-// steer the check. Mirrors KeyFleet's signed-agent plug. A request without a
-// body signs no content digest.
-const PROOF_HEADERS = [
-  'signature',
-  'signature-input',
-  'content-digest',
-  'x-siwa-receipt',
-  'x-key-id',
-  'x-timestamp',
-  'x-agent-wallet-address',
-  'x-agent-chain-id',
-] as const;
-const BODYLESS_PROOF_HEADERS = PROOF_HEADERS.filter((name) => name !== 'content-digest');
+// The headers a SIWA-signed request carries, each at most once. Only these
+// reach the SIWA server, so no other header can steer the check, and routes
+// act only on the wallet it verifies. A request without a body signs no
+// content digest.
+const PROOF_HEADERS: readonly string[] = contract.forwarded_headers;
+const BODYLESS_PROOF_HEADERS = PROOF_HEADERS.filter((name) => name !== contract.body.component);
 
 const PROOF_HEADERS_MESSAGE =
   'The signed request headers are not in the expected shape. Sign the request again and resend it.';
+const QUERY_MESSAGE = 'Signed requests here carry no query string. Sign the request without one and resend it.';
 
-/** Express lowercases header names; multi-value headers join the way HTTP does. */
+/** The proof headers the request carries; Express lowercases header names. */
 function forwardedHeaders(req: Request) {
   const headers: Record<string, string> = {};
-  for (const [name, value] of Object.entries(req.headers)) {
+  for (const name of PROOF_HEADERS) {
+    const value = req.headers[name];
     if (typeof value === 'string') {
       headers[name] = value;
-    } else if (Array.isArray(value)) {
-      headers[name] = value.join(', ');
     }
   }
   return headers;
 }
 
-function rawBody(req: Request) {
-  return Buffer.isBuffer(req.body) ? req.body.toString('utf8') : '';
+function rawBytes(req: Request) {
+  return Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+}
+
+/** The content digest of the exact bytes received, in the form the agent signs (RFC 9530). */
+function contentDigest(bytes: Buffer) {
+  return `sha-256=:${createHash('sha256').update(bytes).digest('base64')}:`;
 }
 
 function isJsonContentType(value: string | undefined) {
   return typeof value === 'string' && /^application\/json\s*(;.*)?$/i.test(value.trim());
 }
 
-/** Every required proof header present once, and no stray agent or SIWA headers. */
-function hasWellFormedProofHeaders(req: Request, required: readonly string[]) {
+/**
+ * Why the proof headers cannot be checked, as the contract and the template name
+ * it, or null when every required one is present once and none is repeated.
+ */
+function proofHeadersProblem(req: Request, required: readonly string[]) {
   const counts = req.headersDistinct;
-  const once = required.every((name) => counts[name]?.length === 1);
-  const stray = Object.keys(counts).some(
-    (name) =>
-      (name.startsWith('x-agent-') || name.startsWith('x-siwa-')) && !(PROOF_HEADERS as readonly string[]).includes(name),
-  );
-  return once && !stray;
+  if (PROOF_HEADERS.some((name) => (counts[name]?.length ?? 0) > 1)) {
+    return 'duplicate_proof';
+  }
+  if (!required.every((name) => counts[name]?.length === 1)) {
+    return 'http_headers_missing';
+  }
+  return null;
+}
+
+/** Answers a signed request this backend refuses before asking the SIWA server. */
+function refuseUnchecked(req: Request, res: Response, required: readonly string[]) {
+  if (hasQuery(req)) {
+    sendError(res, 401, 'unsupported_query', QUERY_MESSAGE);
+    return true;
+  }
+  const problem = proofHeadersProblem(req, required);
+  if (problem !== null) {
+    sendError(res, 401, problem, PROOF_HEADERS_MESSAGE);
+    return true;
+  }
+  return false;
+}
+
+/** The signed path is the path alone; this backend signs no query string. */
+function hasQuery(req: Request) {
+  return (req.originalUrl || req.url).includes('?');
 }
 
 /** Answers the request itself and returns null unless the SIWA server verified the agent's wallet. */
 async function verifiedWallet(
   req: Request,
   res: Response,
-  body: string | null,
+  bodyDigest: string | null,
   input: { verify: SignedAgentRequestVerifier; unavailableMessage: string },
 ): Promise<string | null> {
   const verification = await input.verify({
     method: req.method,
     path: req.originalUrl || req.url,
     headers: forwardedHeaders(req),
-    ...(body === null ? {} : { body }),
+    ...(bodyDigest === null ? {} : { body_digest: bodyDigest }),
   });
 
   if (verification.kind === 'missing_config') {
@@ -114,19 +140,18 @@ export async function readSignedAgentJson<T>(
     unavailableMessage: string;
   },
 ): Promise<{ walletAddress: string; body: T } | null> {
+  if (refuseUnchecked(req, res, PROOF_HEADERS)) {
+    return null;
+  }
   if (!isJsonContentType(req.headers['content-type'])) {
     sendError(res, 415, 'UnsupportedMediaType', input.notJsonMessage);
     return null;
   }
-  if (!hasWellFormedProofHeaders(req, PROOF_HEADERS)) {
-    sendError(res, 400, 'BadRequest', PROOF_HEADERS_MESSAGE);
-    return null;
-  }
 
-  const body = rawBody(req);
+  const bytes = rawBytes(req);
   let json: unknown;
   try {
-    json = JSON.parse(body);
+    json = JSON.parse(bytes.toString('utf8'));
   } catch {
     sendError(res, 400, 'BadRequest', input.bodyMessage);
     return null;
@@ -137,23 +162,23 @@ export async function readSignedAgentJson<T>(
     return null;
   }
 
-  const walletAddress = await verifiedWallet(req, res, body, input);
+  const walletAddress = await verifiedWallet(req, res, contentDigest(bytes), input);
   return walletAddress === null ? null : { walletAddress, body: parsed.data };
 }
 
 /**
- * A signed request without a body, verified with no body: the SIWA server
- * treats any body, even an empty one, as needing a content digest. Returns
- * the verified wallet, or null once answered.
+ * A signed read. It is verified with no body digest; a body sent anyway goes to
+ * the SIWA server as its digest, which is refused when the signature covers none.
+ * Returns the verified wallet, or null once answered.
  */
 export async function readSignedAgentRead(
   req: Request,
   res: Response,
   input: { verify: SignedAgentRequestVerifier; unavailableMessage: string },
 ): Promise<string | null> {
-  if (!hasWellFormedProofHeaders(req, BODYLESS_PROOF_HEADERS)) {
-    sendError(res, 400, 'BadRequest', PROOF_HEADERS_MESSAGE);
+  if (refuseUnchecked(req, res, BODYLESS_PROOF_HEADERS)) {
     return null;
   }
-  return verifiedWallet(req, res, null, input);
+  const bytes = rawBytes(req);
+  return verifiedWallet(req, res, bytes.length === 0 ? null : contentDigest(bytes), input);
 }

@@ -28,9 +28,13 @@ function createHarness(input?: { verifier?: SignedAgentRequestVerifier; now?: ()
 test('a pairing code is redeemed once, confirmed by its owner, and expires', async () => {
   let currentTime = 1_700_000_000_000;
   const verifiedWallet = PROOF_HEADERS['x-agent-wallet-address'];
+  const checked: Record<string, string>[] = [];
   const { request } = createHarness({
     now: () => currentTime,
-    verifier: async () => ({ kind: 'verified', walletAddress: verifiedWallet }),
+    verifier: async (signed) => {
+      checked.push(signed.headers);
+      return { kind: 'verified', walletAddress: verifiedWallet };
+    },
   });
   const redeem = (code: string) =>
     request({ method: 'POST', url: '/agent/pair', rawBody: JSON.stringify({ code }), headers: PROOF_HEADERS });
@@ -40,20 +44,24 @@ test('a pairing code is redeemed once, confirmed by its owner, and expires', asy
   const code: string = issued.body.code;
   assert.equal((await request({ method: 'GET', url: `/mobile/agents/pairing-codes/${code}`, userId: 'owner' })).body.status, 'waiting');
 
-  // A request missing a proof header, or carrying a stray agent header, never reaches the verifier.
-  const { signature: _omitted, ...withoutSignature } = PROOF_HEADERS;
-  assert.equal((await request({ method: 'POST', url: '/agent/pair', rawBody: JSON.stringify({ code }), headers: withoutSignature })).status, 400);
-  assert.equal(
-    (await request({ method: 'POST', url: '/agent/pair', rawBody: JSON.stringify({ code }), headers: { ...PROOF_HEADERS, 'x-agent-role': 'admin' } })).status,
-    400,
-  );
+  // A request missing a proof header never reaches the verifier.
+  const { 'x-siwa-signature': _omitted, ...withoutSignature } = PROOF_HEADERS;
+  assert.equal((await request({ method: 'POST', url: '/agent/pair', rawBody: JSON.stringify({ code }), headers: withoutSignature })).status, 401);
   assert.equal(
     (await request({ method: 'POST', url: '/agent/pair', rawBody: JSON.stringify({ code }), headers: { ...PROOF_HEADERS, 'content-type': 'text/plain' } })).status,
     415,
   );
 
-  const redeemed = await redeem(code);
+  // Unsigned extra headers, and a platform's own bot signature, are not refused, never reach the
+  // verifier, and grant nothing: the pairing names only the wallet the verifier returned.
+  const redeemed = await request({
+    method: 'POST',
+    url: '/agent/pair',
+    rawBody: JSON.stringify({ code }),
+    headers: { ...PROOF_HEADERS, 'x-agent-role': 'admin', signature: 'sig1=:platform:', 'signature-input': 'sig1=("@authority")' },
+  });
   assert.equal(redeemed.status, 200);
+  assert.deepEqual(Object.keys(checked.at(-1)!).sort(), Object.keys(PROOF_HEADERS).sort());
   assert.equal(redeemed.body.status, 'awaiting_confirmation');
   assert.deepEqual(await request({ method: 'GET', url: `/mobile/agents/pairing-codes/${code}`, userId: 'owner' }).then((r) => r.body), {
     status: 'needs_confirmation',

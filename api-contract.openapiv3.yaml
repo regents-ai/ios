@@ -1269,9 +1269,9 @@ paths:
       description: |
         Called by the agent itself, not the app. The request is a SIWA-signed HTTP request for the
         `regents-mobile` audience (headers `x-siwa-receipt`, `x-key-id`, `x-timestamp`,
-        `x-agent-wallet-address`, `x-agent-chain-id`, `content-digest`, `signature-input`,
-        `signature`), each exactly once and with no other `x-agent-*` or `x-siwa-*` headers, with a
-        JSON body of at most 4 KiB. The backend verifies the envelope with the SIWA server for the
+        `x-agent-wallet-address`, `x-agent-chain-id`, `content-digest`, `x-siwa-signature-input`,
+        `x-siwa-signature`), each exactly once, with a JSON body of at most 4 KiB. Other headers are not
+        signed and are never read. The backend verifies the envelope with the SIWA server for the
         Base wallet principal and, when the code is valid, records the verified wallet address as
         waiting for the user who created the code to confirm it in the app. Each signed request and
         each code can be used once.
@@ -1290,13 +1290,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/PairMobileAgentAccepted'
         '400':
-          description: Body is not JSON with a pairing code, or the proof headers are missing, repeated or accompanied by unknown agent headers
+          description: Body is not JSON with a pairing code
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '401':
-          description: The signed request was rejected by the SIWA server
+          description: The proof headers are missing or repeated, the request carries a query string, or the SIWA server rejected the signature
           content:
             application/json:
               schema:
@@ -1333,8 +1333,8 @@ paths:
       summary: Ask the people who paired this agent for Base USDC (called by the agent)
       description: |
         Called by the agent itself, not the app, with a SIWA-signed request for the `regents-mobile`
-        audience, checked exactly as `/agent/pair` checks it (every proof header once, no other
-        `x-agent-*` or `x-siwa-*` headers, a JSON body of at most 4 KiB). The verified wallet must be
+        audience, checked exactly as `/agent/pair` checks it (every proof header once, a JSON body
+        of at most 4 KiB; other headers are never read). The verified wallet must be
         paired with at least one person; each of them gets their own request and a push notification
         with Pay and Decline buttons. Requests do not expire.
       security: []
@@ -1352,13 +1352,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/AgentPaymentRequestCreated'
         '400':
-          description: Body is not JSON with a valid address, amount and note, or the proof headers are not in the expected shape
+          description: Body is not JSON with a valid address, amount and note
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '401':
-          description: The signed request was rejected by the SIWA server
+          description: The proof headers are missing or repeated, the request carries a query string, or the SIWA server rejected the signature
           content:
             application/json:
               schema:
@@ -1422,14 +1422,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AgentPaymentRequestStatus'
-        '400':
-          description: The proof headers are not in the expected shape
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
         '401':
-          description: The signed request was rejected by the SIWA server
+          description: The proof headers are missing or repeated, the request carries a query string, or the SIWA server rejected the signature
           content:
             application/json:
               schema:

@@ -1,0 +1,14 @@
+{
+  "repository": "regents-ai/elixir-utils",
+  "commit": "fe3aa1d512a98c9de57b7a1be46fb1852b1a9224",
+  "files": {
+    "siwa/contract/contract.json": {
+      "copy": "src/siwa/contract.json",
+      "sha256": "53180b0986ba37fe13685d1a9fb0345605e926b5e6367d8d485174f524716060"
+    },
+    "siwa/contract/fixtures.json": {
+      "copy": "src/siwa/fixtures.json",
+      "sha256": "808b8112d56ae485cdf267fd424b344e3c054fb4c9231319ec88c0631e6bb0e5"
+    }
+  }
+}

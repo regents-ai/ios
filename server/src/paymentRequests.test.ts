@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import test from 'node:test';
 import {
   decodeFunctionData,
@@ -198,9 +199,10 @@ test('an ask must be a signed JSON body with an address, an amount and a short n
   const raw = (headers: Record<string, string>) =>
     request({ method: 'POST', url: '/agent/payment-requests', rawBody: JSON.stringify({ to: AGENT_WALLET, amount: '5', note: 'x' }), headers });
   assert.equal((await raw({ ...PROOF_HEADERS, 'content-type': 'text/plain' })).status, 415);
-  const { signature: _omitted, ...withoutSignature } = PROOF_HEADERS;
-  assert.equal((await raw(withoutSignature)).status, 400);
-  assert.equal((await raw({ ...PROOF_HEADERS, 'x-agent-role': 'admin' })).status, 400);
+  const { 'x-siwa-signature': _omitted, ...withoutSignature } = PROOF_HEADERS;
+  assert.equal((await raw(withoutSignature)).status, 401);
+  // An unsigned extra header is not refused and grants nothing beyond the verified agent.
+  assert.equal((await raw({ ...PROOF_HEADERS, 'x-agent-role': 'admin' })).status, 201);
 });
 
 // Invariant: a push that cannot be delivered never loses the request.
@@ -421,17 +423,18 @@ test('a person keeps the newest hundred requests', async () => {
 });
 
 // Invariant: a status read carries no body, so the SIWA server is asked to
-// check it without one; an ask is checked over its exact bytes.
-test('the agent status read is checked without a body', async () => {
+// check it without a digest; an ask is checked by the digest of its exact bytes.
+test('the agent status read is checked without a body digest', async () => {
   const { pair, ask, agentRead, signedRequests } = createHarness();
   await pair('owner', 'Muse');
   const askBody = { to: AGENT_WALLET, amount: '5', note: 'API credits' };
   const id: string = (await ask(askBody)).body.requestIds[0];
-  assert.deepEqual(signedRequests.at(-1)?.body, JSON.stringify(askBody));
+  const askDigest = `sha-256=:${createHash('sha256').update(JSON.stringify(askBody)).digest('base64')}:`;
+  assert.deepEqual(signedRequests.at(-1)?.body_digest, askDigest);
 
   assert.equal((await agentRead(id)).status, 200);
   const read = signedRequests.at(-1)!;
-  assert.deepEqual([read.method, read.path, 'body' in read], ['GET', `/agent/payment-requests/${id}`, false]);
+  assert.deepEqual([read.method, read.path, 'body_digest' in read], ['GET', `/agent/payment-requests/${id}`, false]);
 });
 
 // Invariant: when two people pair the same agent, each gets their own request
