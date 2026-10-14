@@ -16,24 +16,34 @@ process.env.REGENTS_MOBILE_STATE_DIR = mkdtempSync(join(tmpdir(), 'regents-mobil
 // Importing the real app: without REDIS_URL and outside release runtime it
 // boots on in-memory state, which is exactly what these route tests need.
 const { default: app } = await import('./app.js');
+const { metricsApp } = await import('./metrics.js');
 
 let server: Server;
+let metricsServer: Server;
 let baseUrl: string;
+let metricsUrl: string;
 
-before(async () => {
-  await new Promise<void>((resolveListen) => {
-    server = app.listen(0, () => resolveListen());
+async function listen(serve: typeof app) {
+  const listening = await new Promise<Server>((resolveListen) => {
+    const started = serve.listen(0, () => resolveListen(started));
   });
 
-  const address = server.address();
+  const address = listening.address();
   assert.ok(address && typeof address === 'object');
-  baseUrl = `http://127.0.0.1:${address.port}`;
+  return { listening, url: `http://127.0.0.1:${address.port}` };
+}
+
+before(async () => {
+  ({ listening: server, url: baseUrl } = await listen(app));
+  ({ listening: metricsServer, url: metricsUrl } = await listen(metricsApp));
 });
 
 after(() => {
   // Keep-alive sockets from fetch would otherwise hold the process open.
-  server.closeAllConnections();
-  server.close();
+  for (const open of [server, metricsServer]) {
+    open.closeAllConnections();
+    open.close();
+  }
 });
 
 function signedWebhookRequest(payload: Record<string, unknown>) {
@@ -65,7 +75,7 @@ test('GET /readyz reports readiness without auth', async () => {
   assert.deepEqual(await response.json(), { ok: true, redis: 'not_configured' });
 });
 
-test('a verified buy settlement increments mobile_buy_total and /metrics serves it', async () => {
+test('a verified buy settlement increments mobile_buy_total and the metrics port serves it', async () => {
   const request = signedWebhookRequest({
     eventType: 'onramp.transaction.success',
     transactionId: 'tx-metrics-1',
@@ -83,7 +93,7 @@ test('a verified buy settlement increments mobile_buy_total and /metrics serves 
   assert.equal(webhookResponse.status, 200);
   assert.deepEqual(await webhookResponse.json(), { received: true });
 
-  const metricsResponse = await fetch(`${baseUrl}/metrics`);
+  const metricsResponse = await fetch(`${metricsUrl}/metrics`);
   assert.equal(metricsResponse.status, 200);
   assert.match(metricsResponse.headers.get('content-type') || '', /text\/plain/);
 
@@ -109,7 +119,7 @@ test('a verified cash-out failure increments mobile_cash_out_total{result="faile
   });
   assert.equal(webhookResponse.status, 200);
 
-  const text = await (await fetch(`${baseUrl}/metrics`)).text();
+  const text = await (await fetch(`${metricsUrl}/metrics`)).text();
   assert.match(text, /mobile_cash_out_total\{result="failed"\} 1/);
 });
 
@@ -131,6 +141,6 @@ test('duplicate webhook deliveries do not double count settlements', async () =>
   assert.equal(duplicateResponse.status, 200);
   assert.deepEqual(await duplicateResponse.json(), { received: true, duplicate: true });
 
-  const text = await (await fetch(`${baseUrl}/metrics`)).text();
+  const text = await (await fetch(`${metricsUrl}/metrics`)).text();
   assert.match(text, /mobile_buy_total\{result="ok"\} 1/);
 });

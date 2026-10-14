@@ -132,7 +132,6 @@ function isPublicRoute(req: Request) {
   return (
     req.path === '/healthz' ||
     req.path === '/readyz' ||
-    req.path === '/metrics' ||
     req.path === '/.well-known/jwks.json' ||
     req.path.startsWith('/webhooks') ||
     req.path.startsWith('/agent/') ||

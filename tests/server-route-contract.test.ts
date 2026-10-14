@@ -58,7 +58,6 @@ test('served backend routes stay declared in the mobile API contract', () => {
   const routePaths = [
     '/healthz',
     '/readyz',
-    '/metrics',
     '/.well-known/jwks.json',
     '/auth/me',
     '/auth/cdp-token',

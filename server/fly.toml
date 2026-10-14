@@ -9,6 +9,7 @@ kill_timeout = "5s"
 [env]
   NODE_ENV = "production"
   PORT = "8080"
+  METRICS_PORT = "9091"
   # Verifies SIWA-signed agent pairing requests (POST /agent/pair).
   SIWA_SERVER_URL = "https://siwa-server.fly.dev"
 
@@ -33,9 +34,10 @@ kill_timeout = "5s"
     path = "/readyz"
 
 # Fly managed Prometheus scrapes the app registry (process, request timing,
-# and mobile product counters) and adds the `app` label itself.
+# and mobile product counters) on its own port, which no public service routes
+# to, and adds the `app` label itself.
 [metrics]
-  port = 8080
+  port = 9091
   path = "/metrics"
 
 [[vm]]

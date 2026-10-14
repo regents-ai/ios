@@ -10,7 +10,6 @@ import { createCdpCustomAuthToken, getCdpJwks } from './identity.js';
 import { resolveClientIp } from './ip.js';
 import {
   createHttpMetricsMiddleware,
-  metricsHandler,
   mobilePushRegistrationsTotal,
   mobileWalletOpenedTotal,
   recordTransactionWebhookOutcome,
@@ -143,7 +142,8 @@ const PORT = Number(process.env.PORT || 3000);
 app.set('trust proxy', 1);
 
 // Request timing for every response, labeled by the matched route pattern
-// (never the raw URL) and status class. Served at GET /metrics below.
+// (never the raw URL) and status class. Served on the private metrics port
+// (`metricsApp` in src/metrics.ts), never here.
 app.use(createHttpMetricsMiddleware());
 
 const webhookRateLimiter = createWebhookRateLimiter();
@@ -220,10 +220,6 @@ app.get('/readyz', async (_req, res) => {
   res.status(readiness.ok ? 200 : 503).json(readiness);
 });
 
-// Prometheus metrics (no auth required): scraped by Fly managed Prometheus
-// via the [metrics] section in fly.toml. Labels are bounded; see src/metrics.ts.
-app.get('/metrics', metricsHandler);
-
 app.get('/.well-known/jwks.json', publicReadRateLimiter, (_req, res) => {
   try {
     res.json(getCdpJwks());
@@ -236,11 +232,10 @@ app.get('/.well-known/jwks.json', publicReadRateLimiter, (_req, res) => {
 // 🔒 GLOBAL AUTHENTICATION MIDDLEWARE
 // All routes except public health and verification routes require a valid app access token
 app.use((req, res, next) => {
-  // Skip authentication for health checks, metrics, webhooks, and debug endpoints
+  // Skip authentication for health checks, webhooks, and debug endpoints
   if (
     req.path === '/healthz' ||
     req.path === '/readyz' ||
-    req.path === '/metrics' ||
     req.path === '/.well-known/jwks.json' ||
     req.path === '/oauth/callback' ||
     req.path.startsWith('/webhooks') ||

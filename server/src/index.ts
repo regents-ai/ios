@@ -5,9 +5,17 @@ config();
 
 const { default: app, closeAppResources } = await import('./app.js');
 const { summarizeErrorLog } = await import('./security.js');
+const { metricsApp } = await import('./metrics.js');
 
 const PORT = Number(process.env.PORT || 3000);
 const server = app.listen(PORT, () => console.log(`API listening on http://localhost:${PORT}`));
+
+// Metrics on their own port, which fly.toml [metrics] scrapes and no public
+// service routes to.
+const METRICS_PORT = Number(process.env.METRICS_PORT || 9091);
+const metricsServer = metricsApp.listen(METRICS_PORT, () =>
+  console.log(`Metrics listening on http://localhost:${METRICS_PORT}/metrics`),
+);
 
 // Fly sends SIGTERM with a 5s kill_timeout (fly.toml). Stop accepting new
 // connections, let in-flight requests (including webhook processing) finish,
@@ -28,6 +36,7 @@ function shutdown(reason: string, exitCode: number) {
   }, SHUTDOWN_GRACE_MS);
   forceExit.unref();
 
+  metricsServer.close();
   server.close(() => {
     void closeAppResources().finally(() => {
       clearTimeout(forceExit);

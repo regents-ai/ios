@@ -1,14 +1,15 @@
 /**
- * Prometheus metrics for the mobile backend, served at GET /metrics and
- * scraped by Fly managed Prometheus (fly.toml [metrics]). Fly's scraper adds
- * the `app` label, so no app label is set here.
+ * Prometheus metrics for the mobile backend, served at GET /metrics on its own
+ * private port (`metricsApp`, METRICS_PORT) and scraped there by Fly managed
+ * Prometheus (fly.toml [metrics]). The public port does not serve them. Fly's
+ * scraper adds the `app` label, so no app label is set here.
  *
  * Label discipline: every label is BOUNDED — HTTP method, the Express route
  * pattern (never the raw URL), the status class ("2xx"/"4xx"/"5xx"), and
  * result ("ok"/"failed"). Never put user ids, wallet addresses, device
  * tokens, or transaction hashes in labels.
  */
-import type { NextFunction, Request, Response } from 'express';
+import express, { type NextFunction, type Request, type Response } from 'express';
 import { collectDefaultMetrics, Counter, Histogram, Registry } from 'prom-client';
 
 export const metricsRegistry = new Registry();
@@ -105,6 +106,10 @@ export async function metricsHandler(_req: Request, res: Response) {
   res.setHeader('Content-Type', metricsRegistry.contentType);
   res.end(await metricsRegistry.metrics());
 }
+
+/** The private metrics server: GET /metrics only, every other path 404. */
+export const metricsApp = express();
+metricsApp.get('/metrics', metricsHandler);
 
 export function resetMetricsForTests() {
   metricsRegistry.resetMetrics();

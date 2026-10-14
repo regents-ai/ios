@@ -73,17 +73,6 @@ paths:
                   redis:
                     type: string
                     enum: [ok, unreachable, not_configured]
-  /metrics:
-    get:
-      operationId: getMetrics
-      summary: Read Prometheus metrics for the mobile backend
-      responses:
-        '200':
-          description: Prometheus text exposition of backend process, request, and product metrics
-          content:
-            text/plain:
-              schema:
-                type: string
   /.well-known/jwks.json:
     get:
       operationId: getCdpJwks
