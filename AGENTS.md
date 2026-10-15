@@ -8,7 +8,6 @@ Generated from `/Users/sean/Documents/regent/control/stack.yaml` and this repo's
 - Release group: `public_beta`
 - Owned areas: `mobile_wallet`, `mobile_action_signing`, `mobile_regent_records`.
 - Change API or CLI behavior in the owning YAML contract before changing code.
-- Use `bd` only for execution state: tickets, claims, blockers, dependencies, and closure evidence.
 <!-- END REGENT META GENERATED -->
 # Regents Mobile Agent Guide
 
