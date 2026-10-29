@@ -81,7 +81,7 @@ Regents Mobile is the iPhone entry path for Regent. It owns the iOS app, the mob
 
 - Privy mobile auth
 - Coinbase CDP, onramp, offramp, and wallet services
-- The SIWA server (`SIWA_SERVER_URL`) for verifying signed agent pairing requests
+- The SIWA server (`SIWA_SERVER_URL`) for verifying signed agent pairing requests, which answers only with this backend's own verify key (`SIWA_SITE_VERIFY_KEY`)
 - A Base RPC endpoint (`BASE_RPC_URL`) for live USDC balance reads
 - Base, Ethereum, and Solana balance rails used by the wallet experience
 - APNs or Expo push delivery, depending on the environment
@@ -90,7 +90,7 @@ Regents Mobile is the iPhone entry path for Regent. It owns the iOS app, the mob
 ## Secret Boundary
 
 - The iPhone app should hold only public mobile configuration values
-- The backend may hold CDP API keys, Privy verification keys, JWT signing keys, webhook secrets, push delivery secrets, and Redis connection details
+- The backend may hold CDP API keys, Privy verification keys, JWT signing keys, webhook secrets, push delivery secrets, Redis connection details, and its own SIWA verify key (`SIWA_SITE_VERIFY_KEY`)
 - This repo must not own Platform billing secrets, Autolaunch deploy secrets, or shared SIWA signing keys
 
 ## Boundary Lines

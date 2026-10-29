@@ -54,10 +54,13 @@ test('the verifier reads each SIWA server answer as one outcome', async () => {
     kind: 'site_problem',
     problem: 'verify_key_refused',
   });
-  assert.deepEqual(await verify(answering(200, verifiedPayload({}, { audience: 'patchbay' }))), {
-    kind: 'site_problem',
-    problem: 'audience_mismatch',
-  });
+  // A verdict for another audience is this server's own setup fault, whatever else it says.
+  for (const payload of [
+    verifiedPayload({}, { audience: 'patchbay' }),
+    verifiedPayload({ chainId: 1, verified: false }, { audience: 'patchbay', chain_id: 1 }),
+  ]) {
+    assert.deepEqual(await verify(answering(200, payload)), { kind: 'site_problem', problem: 'audience_mismatch' });
+  }
   assert.deepEqual(await verify(answering(503, { error: { code: 'down' } })), { kind: 'unavailable', reason: 'status_503' });
   assert.deepEqual(await verify(async () => { throw new TypeError('fetch failed'); }), { kind: 'unavailable', reason: 'unreachable' });
 

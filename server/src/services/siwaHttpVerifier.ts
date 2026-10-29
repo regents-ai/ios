@@ -61,13 +61,14 @@ function verdict(payload: unknown, requestWalletHeader: string | undefined, stat
     return { kind: 'rejected', status };
   }
   const { data } = payload;
-  if (data.verified !== true || data.chainId !== BASE_CHAIN_ID || !isRecord(data.principal)) {
-    return { kind: 'rejected', status };
-  }
-  const { kind, wallet_address: walletAddress, chain_id: chainId, audience } = data.principal;
+  const audience = isRecord(data.principal) ? data.principal.audience : undefined;
   if (typeof audience === 'string' && audience !== SIWA_AUDIENCE) {
     return { kind: 'site_problem', problem: 'audience_mismatch' };
   }
+  if (data.verified !== true || data.chainId !== BASE_CHAIN_ID || !isRecord(data.principal)) {
+    return { kind: 'rejected', status };
+  }
+  const { kind, wallet_address: walletAddress, chain_id: chainId } = data.principal;
   if (
     kind !== 'wallet' ||
     chainId !== BASE_CHAIN_ID ||
