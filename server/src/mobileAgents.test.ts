@@ -241,3 +241,18 @@ test('two agents racing for one code: one wins, the other is told it was used', 
   const confirmed = await request({ method: 'POST', url: `/mobile/agents/pairing-codes/${code}/confirm`, userId: 'owner' });
   assert.equal(confirmed.body.agent.walletAddress, winner);
 });
+
+// Invariant: a refused verify key or a verdict for another audience is this server's own
+// setup fault. The agent is told the service is unavailable, never that its request was
+// wrong, and the pairing code stays usable.
+test('a sign-in setup fault leaves the pairing code waiting', async () => {
+  for (const problem of ['verify_key_refused', 'audience_mismatch'] as const) {
+    const { request } = createHarness({ verifier: async () => ({ kind: 'site_problem', problem }) });
+    const issued = await request({ method: 'POST', url: '/mobile/agents/pairing-codes', userId: 'owner', body: { name: 'Muse', kind: 'muse' } });
+    const code: string = issued.body.code;
+    const pair = await request({ method: 'POST', url: '/agent/pair', rawBody: JSON.stringify({ code }), headers: PROOF_HEADERS });
+    assert.equal(pair.status, 503, problem);
+    assert.equal(pair.body.error.code, 'AgentRequestsUnavailable', problem);
+    assert.equal((await request({ method: 'GET', url: `/mobile/agents/pairing-codes/${code}`, userId: 'owner' })).body.status, 'waiting', problem);
+  }
+});

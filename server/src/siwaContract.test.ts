@@ -114,15 +114,29 @@ test('every signed fixture reaches the SIWA server as signed, or is refused here
   }
 });
 
+const isJson = (body: string) => {
+  try {
+    JSON.parse(body);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 // Invariant: every refused fixture is refused, here or by the SIWA server, which this
 // backend asks with the request unchanged (its body as the digest of the bytes received)
-// so the tampering is what it checks.
+// so the tampering is what it checks. A body that is not JSON is refused here first,
+// since every signed write this backend takes is JSON.
 test('every refused fixture is refused here or sent unchanged to the SIWA server', async () => {
   for (const { name, query, request, checked_by, reason } of fixtures.refused) {
     const result = await check(request);
     if (checked_by === 'site_plug' || query === 'signed') {
       assert.equal(result.status, 401, name);
       assert.equal(result.code, checked_by === 'site_plug' ? reason : 'unsupported_query', name);
+      assert.deepEqual(result.sent, [], name);
+    } else if (request.body !== null && !isJson(request.body)) {
+      assert.equal(result.status, 400, name);
+      assert.equal(result.code, 'BadRequest', name);
       assert.deepEqual(result.sent, [], name);
     } else {
       assert.deepEqual(result.sent, [forwardedAs(request)], name);
@@ -148,6 +162,7 @@ test('every refusal in the contract is read as the SIWA server means it', async 
   for (const { status, code } of contract.refusals) {
     const answer = await verifySignedAgentRequest(request, {
       siwaServerUrl: 'http://siwa.test',
+      verifyKey: 'test-regents-mobile-site-verify-key',
       fetchImpl: async () => Response.json({ error: { code } }, { status }),
     });
     const expected = status === 409 ? 'replayed' : status >= 500 ? 'unavailable' : 'rejected';

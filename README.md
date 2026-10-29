@@ -57,7 +57,7 @@ Base USDC is the primary route for agent funding. Other balances may appear in t
 
 ## My Agents
 
-The agents list is owned by the phone backend under `server/`. Pasting a wallet address lists an agent straight away. A pairing code (single-use, ten minutes) lets an agent that can run commands prove it holds its wallet key: it sends a signed request to `POST /agent/pair`, the backend checks the signature with the SIWA server for the `regents-mobile` audience and records the verified address as waiting. The pairing screen shows the exact instructions to paste to the agent, then asks the person to confirm the address the agent signed in with; only a confirmed address is listed as paired. If balances cannot be read, the list still loads and says so.
+The agents list is owned by the phone backend under `server/`. Pasting a wallet address lists an agent straight away. A pairing code (single-use, ten minutes) lets an agent that can run commands prove it holds its wallet key: it sends a signed request to `POST /agent/pair`, the backend checks the signature with the SIWA server, presenting its own verify key (`SIWA_SITE_VERIFY_KEY`, which names the `regents-mobile` audience), and records the verified address as waiting. The pairing screen shows the exact instructions to paste to the agent, then asks the person to confirm the address the agent signed in with; only a confirmed address is listed as paired. If balances cannot be read, the list still loads and says so.
 
 Funding an agent opens the wallet send flow prefilled with Base USDC and the agent's address. Balances shown in the list are live Base USDC reads.
 

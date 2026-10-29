@@ -29,12 +29,14 @@ function answering(status: number, body: unknown): typeof fetch {
   return async () => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 }
 
+const verifyKey = 'test-regents-mobile-site-verify-key';
+
 // Invariant: the SIWA server's answer maps to exactly one outcome, and only
 // a Base wallet principal for this audience that matches the request's own
 // wallet header counts as verified.
 test('the verifier reads each SIWA server answer as one outcome', async () => {
   const verify = (fetchImpl: typeof fetch, timeoutMs?: number) =>
-    verifySignedAgentRequest(request, { siwaServerUrl: 'http://siwa.test/', fetchImpl, ...(timeoutMs ? { timeoutMs } : {}) });
+    verifySignedAgentRequest(request, { siwaServerUrl: 'http://siwa.test/', verifyKey, fetchImpl, ...(timeoutMs ? { timeoutMs } : {}) });
 
   let sent: { url: string; init: RequestInit } | null = null;
   const recording: typeof fetch = async (url, init) => {
@@ -43,11 +45,19 @@ test('the verifier reads each SIWA server answer as one outcome', async () => {
   };
   assert.deepEqual(await verify(recording), { kind: 'verified', walletAddress: wallet });
   assert.equal(sent!.url, 'http://siwa.test/api/shared/siwa/http-verify');
-  assert.equal((sent!.init.headers as Record<string, string>)['x-siwa-audience'], 'regents-mobile');
+  assert.deepEqual(sent!.init.headers, { authorization: `Bearer ${verifyKey}`, 'content-type': 'application/json' });
   assert.deepEqual(JSON.parse(String(sent!.init.body)), request);
 
   assert.deepEqual(await verify(answering(401, { error: { code: 'unauthorized' } })), { kind: 'rejected', status: 401 });
   assert.deepEqual(await verify(answering(409, { error: { code: 'request_replayed' } })), { kind: 'replayed' });
+  assert.deepEqual(await verify(answering(401, { error: { code: 'site_verify_unauthorized' } })), {
+    kind: 'site_problem',
+    problem: 'verify_key_refused',
+  });
+  assert.deepEqual(await verify(answering(200, verifiedPayload({}, { audience: 'patchbay' }))), {
+    kind: 'site_problem',
+    problem: 'audience_mismatch',
+  });
   assert.deepEqual(await verify(answering(503, { error: { code: 'down' } })), { kind: 'unavailable', reason: 'status_503' });
   assert.deepEqual(await verify(async () => { throw new TypeError('fetch failed'); }), { kind: 'unavailable', reason: 'unreachable' });
 
@@ -61,7 +71,6 @@ test('the verifier reads each SIWA server answer as one outcome', async () => {
   // address differs from the request's wallet header, is a rejection.
   for (const payload of [
     verifiedPayload({ chainId: 1 }, { chain_id: 1 }),
-    verifiedPayload({}, { audience: 'patchbay' }),
     verifiedPayload({}, { kind: 'agent' }),
     verifiedPayload({ walletAddress: '0x1111111111111111111111111111111111111111' }),
     verifiedPayload({ verified: false }),
@@ -70,9 +79,13 @@ test('the verifier reads each SIWA server answer as one outcome', async () => {
   }
   const otherWallet = { ...request, headers: { 'x-agent-wallet-address': '0x1111111111111111111111111111111111111111' } };
   assert.deepEqual(
-    await verifySignedAgentRequest(otherWallet, { siwaServerUrl: 'http://siwa.test', fetchImpl: answering(200, verifiedPayload()) }),
+    await verifySignedAgentRequest(otherWallet, { siwaServerUrl: 'http://siwa.test', verifyKey, fetchImpl: answering(200, verifiedPayload()) }),
     { kind: 'rejected', status: 200 },
   );
 
-  assert.deepEqual(await verifySignedAgentRequest(request, { siwaServerUrl: '' }), { kind: 'missing_config', requiredEnv: 'SIWA_SERVER_URL' });
+  assert.deepEqual(await verifySignedAgentRequest(request, { siwaServerUrl: '', verifyKey }), { kind: 'missing_config', requiredEnv: 'SIWA_SERVER_URL' });
+  assert.deepEqual(await verifySignedAgentRequest(request, { siwaServerUrl: 'http://siwa.test', verifyKey: '' }), {
+    kind: 'missing_config',
+    requiredEnv: 'SIWA_SITE_VERIFY_KEY',
+  });
 });

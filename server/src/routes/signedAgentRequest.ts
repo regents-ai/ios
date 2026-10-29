@@ -108,6 +108,14 @@ async function verifiedWallet(
     sendError(res, 503, 'AgentRequestsUnavailable', input.unavailableMessage);
     return null;
   }
+  if (verification.kind === 'site_problem') {
+    console.error(
+      `❌ [AGENTS] The SIWA server refused this server's own settings (${verification.problem}); ` +
+        'SIWA_SITE_VERIFY_KEY must be the regents-mobile key at the SIWA server.',
+    );
+    sendError(res, 503, 'AgentRequestsUnavailable', input.unavailableMessage);
+    return null;
+  }
   if (verification.kind === 'unavailable') {
     console.warn('⚠️ [AGENTS] Sign-in service unavailable:', { reason: verification.reason });
     sendError(res, 503, 'SignInServiceBusy', 'Sign-in service is busy, try again.');

@@ -10,7 +10,8 @@ kill_timeout = "5s"
   NODE_ENV = "production"
   PORT = "8080"
   METRICS_PORT = "9091"
-  # Verifies SIWA-signed agent pairing requests (POST /agent/pair).
+  # Verifies SIWA-signed agent pairing requests (POST /agent/pair), with this
+  # server's own verify key from the SIWA_SITE_VERIFY_KEY secret.
   SIWA_SERVER_URL = "https://siwa-server.fly.dev"
 
 # All server state (agents list, pairing codes, push tokens, webhook
