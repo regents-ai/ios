@@ -8,6 +8,7 @@ const wallet = '0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e';
 const request: SignedAgentRequest = {
   method: 'POST',
   path: '/agent/pair',
+  authority: 'regents-mobile-server.fly.dev',
   headers: { 'x-agent-wallet-address': wallet, 'content-type': 'application/json' },
   body_digest: 'sha-256=:47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=:',
 };

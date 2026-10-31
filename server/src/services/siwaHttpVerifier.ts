@@ -2,12 +2,13 @@
  * Verifies a SIWA-signed agent request with the SIWA server.
  *
  * The agent signs its HTTP request for the `regents-mobile` audience; the
- * backend forwards method, path, headers and, for a request with a body, the
- * content digest of the bytes it received (never the body itself) to
- * `POST {SIWA_SERVER_URL}/api/shared/siwa/http-verify`, which checks the
- * receipt, the signature over the covered components, that the signed
- * content digest is this one, and replay state, and answers with the verified
- * wallet principal.
+ * backend forwards method, path, the host the request reached, headers and,
+ * for a request with a body, the content digest of the bytes it received
+ * (never the body itself) to `POST {SIWA_SERVER_URL}/api/shared/siwa/http-verify`,
+ * which checks the receipt, the signature over the covered components, that
+ * the signed host is one of this audience's own, that the signed content
+ * digest is this one, and replay state, and answers with the verified wallet
+ * principal.
  *
  * The answer is read the way Keyfleet reads it: only a Base (8453) wallet
  * principal for this audience whose address matches the request's own
@@ -24,6 +25,7 @@ export const SIWA_VERIFY_TIMEOUT_MS = 5000;
 export type SignedAgentRequest = {
   method: string;
   path: string;
+  authority: string;
   headers: Record<string, string>;
   body_digest?: string;
 };

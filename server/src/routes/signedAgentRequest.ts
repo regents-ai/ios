@@ -11,9 +11,9 @@ import contract from '../siwa/contract.json' with { type: 'json' };
  * The agent side of the phone backend: every `/agent/*` request is a
  * SIWA-signed HTTP request, checked here the same way before a route acts on
  * it. The headers are checked first, then the body (for requests that carry
- * one), then the SIWA server verifies the signature against the content digest
- * of the exact bytes received (never the body itself) and answers with the
- * agent's Base wallet.
+ * one), then the SIWA server verifies the signature against the host the
+ * request reached and the content digest of the exact bytes received (never
+ * the body itself), and answers with the agent's Base wallet.
  *
  * The header names come from the SIWA signing contract, a generated copy of
  * elixir-utils' `siwa/contract/contract.json` (`npm run siwa:contract`).
@@ -29,6 +29,10 @@ const BODYLESS_PROOF_HEADERS = PROOF_HEADERS.filter((name) => name !== contract.
 const PROOF_HEADERS_MESSAGE =
   'The signed request headers are not in the expected shape. Sign the request again and resend it.';
 const QUERY_MESSAGE = 'Signed requests here carry no query string. Sign the request without one and resend it.';
+const HOST_MESSAGE = "This request is not addressed to a host. Send it to this site's address and sign it again.";
+
+// A host name or a bracketed IPv6 address, with an optional port.
+const HOST_HEADER = /^(?:\[[0-9a-f:.]+\]|[a-z0-9.-]+)(?::[0-9]{1,5})?$/i;
 
 /** The proof headers the request carries; Express lowercases header names. */
 function forwardedHeaders(req: Request) {
@@ -70,18 +74,42 @@ function proofHeadersProblem(req: Request, required: readonly string[]) {
   return null;
 }
 
-/** Answers a signed request this backend refuses before asking the SIWA server. */
-function refuseUnchecked(req: Request, res: Response, required: readonly string[]) {
+/**
+ * The host the request reached, as the agent signs it in `@authority`: lowercase,
+ * with the port only when it is not the scheme's default. Null when the Host
+ * header is not a host.
+ */
+function requestAuthority(req: Request) {
+  const host = req.headers.host;
+  if (typeof host !== 'string' || !HOST_HEADER.test(host)) {
+    return null;
+  }
+  try {
+    return new URL(`${req.protocol}://${host}`).host;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The host a signed request reached, for the SIWA server to check it against, or
+ * null once a request this backend refuses before asking it has been answered.
+ */
+function authorityToCheck(req: Request, res: Response, required: readonly string[]) {
   if (hasQuery(req)) {
     sendError(res, 401, 'unsupported_query', QUERY_MESSAGE);
-    return true;
+    return null;
   }
   const problem = proofHeadersProblem(req, required);
   if (problem !== null) {
     sendError(res, 401, problem, PROOF_HEADERS_MESSAGE);
-    return true;
+    return null;
   }
-  return false;
+  const authority = requestAuthority(req);
+  if (authority === null) {
+    sendError(res, 400, 'BadRequest', HOST_MESSAGE);
+  }
+  return authority;
 }
 
 /** The signed path is the path alone; this backend signs no query string. */
@@ -93,12 +121,14 @@ function hasQuery(req: Request) {
 async function verifiedWallet(
   req: Request,
   res: Response,
+  authority: string,
   bodyDigest: string | null,
   input: { verify: SignedAgentRequestVerifier; unavailableMessage: string },
 ): Promise<string | null> {
   const verification = await input.verify({
     method: req.method,
     path: req.originalUrl || req.url,
+    authority,
     headers: forwardedHeaders(req),
     ...(bodyDigest === null ? {} : { body_digest: bodyDigest }),
   });
@@ -140,7 +170,8 @@ export async function readSignedAgentJson<T>(
     unavailableMessage: string;
   },
 ): Promise<{ walletAddress: string; body: T } | null> {
-  if (refuseUnchecked(req, res, PROOF_HEADERS)) {
+  const authority = authorityToCheck(req, res, PROOF_HEADERS);
+  if (authority === null) {
     return null;
   }
   if (!isJsonContentType(req.headers['content-type'])) {
@@ -162,7 +193,7 @@ export async function readSignedAgentJson<T>(
     return null;
   }
 
-  const walletAddress = await verifiedWallet(req, res, contentDigest(bytes), input);
+  const walletAddress = await verifiedWallet(req, res, authority, contentDigest(bytes), input);
   return walletAddress === null ? null : { walletAddress, body: parsed.data };
 }
 
@@ -176,9 +207,10 @@ export async function readSignedAgentRead(
   res: Response,
   input: { verify: SignedAgentRequestVerifier; unavailableMessage: string },
 ): Promise<string | null> {
-  if (refuseUnchecked(req, res, BODYLESS_PROOF_HEADERS)) {
+  const authority = authorityToCheck(req, res, BODYLESS_PROOF_HEADERS);
+  if (authority === null) {
     return null;
   }
   const bytes = rawBytes(req);
-  return verifiedWallet(req, res, bytes.length === 0 ? null : contentDigest(bytes), input);
+  return verifiedWallet(req, res, authority, bytes.length === 0 ? null : contentDigest(bytes), input);
 }

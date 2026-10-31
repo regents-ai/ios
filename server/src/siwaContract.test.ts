@@ -17,7 +17,7 @@ import fixtures from './siwa/fixtures.json' with { type: 'json' };
  * fixtures describe is run through this backend's signed-request check.
  */
 
-type FixtureRequest = { method: string; path: string; body: string | null; headers: string[][] };
+type FixtureRequest = { method: string; path: string; authority: string; body: string | null; headers: string[][] };
 
 const lock: { files: Record<string, { copy: string; sha256: string }> } = JSON.parse(
   readFileSync(new URL('../siwa-contract.lock.json', import.meta.url), 'utf8'),
@@ -45,11 +45,14 @@ async function check(request: FixtureRequest) {
   if (request.method === 'POST') {
     headersDistinct['content-type'] = ['application/json'];
   }
+  // The agent sent it to the host it signed.
+  headersDistinct.host = [request.authority];
   const headers = Object.fromEntries(Object.entries(headersDistinct).map(([name, values]) => [name, values.join(', ')]));
   const req = {
     method: request.method,
     url: request.path,
     originalUrl: request.path,
+    protocol: 'https',
     headers,
     headersDistinct,
     body: request.body === null ? undefined : Buffer.from(request.body),
@@ -84,12 +87,13 @@ async function check(request: FixtureRequest) {
   return { status, code, sent, wallet: wallet ?? null };
 }
 
-/** What the SIWA server must be sent for a fixture request: its proof headers and path unchanged, and its body's digest. */
+/** What the SIWA server must be sent for a fixture request: its path, host and proof headers unchanged, and its body's digest. */
 function forwardedAs(request: FixtureRequest): SignedAgentRequest {
   const headers = request.headers.map(([name, value]) => [name!.toLowerCase(), value!]);
   return {
     method: request.method,
     path: request.path,
+    authority: request.authority,
     headers: Object.fromEntries(headers.filter(([name]) => forwarded.has(name!))),
     ...(request.body === null ? {} : { body_digest: contentDigest(request.body) }),
   };
@@ -112,6 +116,17 @@ test('every signed fixture reaches the SIWA server as signed, or is refused here
       assert.equal(result.wallet, fixtures.principal.wallet_address, name);
     }
   }
+});
+
+// Invariant: the host goes to the SIWA server the way the agent signs it, lowercase and
+// without the scheme's default port, and a request addressed to no host is refused here.
+test('the host the request reached is sent as the agent signs it', async () => {
+  const { request } = fixtures.signed[0]!;
+  const sent = await check({ ...request, authority: `${request.authority.toUpperCase()}:443` });
+  assert.deepEqual(sent.sent, [forwardedAs(request)]);
+
+  const unaddressed = await check({ ...request, authority: `${request.authority}/elsewhere` });
+  assert.deepEqual([unaddressed.status, unaddressed.code, unaddressed.sent], [400, 'BadRequest', []]);
 });
 
 // Invariant: every refused fixture is refused, here or by the SIWA server, which this

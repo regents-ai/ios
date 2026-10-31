@@ -54,6 +54,7 @@ export function routeRequester(...routers: Router[]) {
     new Promise<RouteResult>((resolve, reject) => {
       let statusCode = 200;
       const headers: Record<string, string> = {
+        host: 'regents-mobile-server.fly.dev',
         ...(call.method === 'GET' ? {} : { 'content-type': 'application/json' }),
         ...(call.headers ?? {}),
       };
@@ -62,6 +63,7 @@ export function routeRequester(...routers: Router[]) {
         url: call.url,
         originalUrl: call.url,
         path: call.url,
+        protocol: 'https',
         headers,
         headersDistinct: Object.fromEntries(Object.entries(headers).map(([name, value]) => [name, [value]])),
         body: call.rawBody !== undefined ? Buffer.from(call.rawBody) : call.body,
